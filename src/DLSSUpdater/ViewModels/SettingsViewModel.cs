@@ -106,6 +106,11 @@ public sealed partial class SettingsViewModel : ObservableObject
             Views.Dialog.Show("Save preset", $"'{name}' is built in and can't be replaced. Pick another name.");
             return;
         }
+        if (GameConfig.GlobalNameError(Settings, name) is { } clash)
+        {
+            Views.Dialog.Show("Save preset", clash);
+            return;
+        }
         Settings.Presets.RemoveAll(p => p.Name.Equals(name, StringComparison.OrdinalIgnoreCase));
         Settings.Presets.Add(new ConfigPreset { Name = name, Opti = Copy(Overrides), ReShade = Copy(ReShadeOverrides) });
         Save();
@@ -130,6 +135,10 @@ public sealed partial class SettingsViewModel : ObservableObject
         ReloadPresets(null);
         _main.RefreshPresets();
     }
+
+    /// <summary>Re-reads the preset list after a game changed presets; keeps the selection if it still exists.</summary>
+    public void RefreshPresetNames() =>
+        ReloadPresets(SelectedPreset is { } sp && Settings.AllPresets.Any(p => p.Name == sp) ? sp : null);
 
     private void ReloadPresets(string? select)
     {
@@ -483,32 +492,6 @@ public sealed partial class SettingsViewModel : ObservableObject
         Settings.HiddenGames.Clear();
         Save();
         _main.RescanCommand.Execute(null);
-    }
-
-    // ---------- Seaglass ----------
-
-    [ObservableProperty] private bool _seaglassConnected = Addon.AddonRegistration.Registered;
-
-    public string SeaglassHint => SeaglassConnected
-        ? "Connected. With DLSS Updater turned on under Settings, Add-ons, Seaglass shows each game's DLSS version and puts DLSS back before a game starts when an update replaced it."
-        : Addon.AddonRegistration.SeaglassFound
-            ? "Show DLSS versions in Seaglass and put DLSS back automatically before a game starts (Seaglass builds with add-on support)."
-            : "Seaglass isn't on this PC. It's a game launcher that can use DLSS Updater as an add-on.";
-
-    [RelayCommand]
-    private void ToggleSeaglass()
-    {
-        try
-        {
-            if (SeaglassConnected) Addon.AddonRegistration.Unregister();
-            else Addon.AddonRegistration.Register();
-        }
-        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or InvalidOperationException)
-        {
-            Views.Dialog.Show("Seaglass", ex.Message);
-        }
-        SeaglassConnected = Addon.AddonRegistration.Registered;
-        OnPropertyChanged(nameof(SeaglassHint));
     }
 
     [RelayCommand]
