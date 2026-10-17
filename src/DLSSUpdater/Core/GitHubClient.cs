@@ -30,6 +30,7 @@ public sealed class GhAsset
 
 public sealed class ApiCacheEntry
 {
+    public string Url { get; set; } = "";
     public string ETag { get; set; } = "";
     public string Body { get; set; } = "";
 }
@@ -46,8 +47,6 @@ public sealed class GitHubClient
         ConnectTimeout = TimeSpan.FromSeconds(15),
     });
     private readonly HttpClient _http;
-    private readonly object _cacheGate = new();
-    private Dictionary<string, ApiCacheEntry>? _cache;
 
     public GitHubClient() => _http = SharedHttp;
 
@@ -73,14 +72,12 @@ public sealed class GitHubClient
     public List<GhRelease> CachedReleases(string repo)
     {
         var prefix = $"https://api.github.com/repos/{repo}/releases?";
-        var cache = LoadCache();
-        List<string> bodies;
-        lock (_cacheGate)
-            bodies = cache.Where(e => e.Key.StartsWith(prefix, StringComparison.OrdinalIgnoreCase)).Select(e => e.Value.Body).ToList();
         var releases = new List<GhRelease>();
-        foreach (var body in bodies)
+        if (!Directory.Exists(AppPaths.ApiCacheDir)) return releases;
+        foreach (var file in Directory.EnumerateFiles(AppPaths.ApiCacheDir, RepoPrefix(repo) + "*.json"))
         {
-            try { releases.AddRange(JsonSerializer.Deserialize(body, JsonCtx.Default.ListGhRelease) ?? []); }
+            if (ReadEntry(file) is not { } e || !e.Url.StartsWith(prefix, StringComparison.OrdinalIgnoreCase)) continue;
+            try { releases.AddRange(JsonSerializer.Deserialize(e.Body, JsonCtx.Default.ListGhRelease) ?? []); }
             catch (JsonException) { }
         }
         return releases;
@@ -108,9 +105,8 @@ public sealed class GitHubClient
 
     private async Task<string> GetApiAsync(string url, CancellationToken ct)
     {
-        var cache = LoadCache();
-        ApiCacheEntry? cached;
-        lock (_cacheGate) cache.TryGetValue(url, out cached);
+        var cacheFile = CacheFileFor(url);
+        var cached = ReadEntry(cacheFile) is { } e && e.Url == url ? e : null;
 
         using var req = new HttpRequestMessage(HttpMethod.Get, url);
         req.Headers.Accept.Add(new MediaTypeWithQualityHeaderValue("application/vnd.github+json"));
@@ -132,13 +128,7 @@ public sealed class GitHubClient
             res.EnsureSuccessStatusCode();
             var body = await res.Content.ReadAsStringAsync(cts.Token);
             if (res.Headers.ETag is { } etag)
-            {
-                lock (_cacheGate)
-                {
-                    cache[url] = new ApiCacheEntry { ETag = etag.ToString(), Body = body };
-                    SaveCache(cache);
-                }
-            }
+                WriteEntry(cacheFile, new ApiCacheEntry { Url = url, ETag = etag.ToString(), Body = body });
             return body;
         }
         catch (Exception ex) when (cached is not null && !ct.IsCancellationRequested && ex is HttpRequestException or TaskCanceledException)
@@ -188,24 +178,54 @@ public sealed class GitHubClient
         return true;
     }
 
-    private Dictionary<string, ApiCacheEntry> LoadCache()
+    // One small file per request, read only when that request runs. A single file for everything grew to tens of MB
+    // (release lists with hundreds of assets) and was loaded and rewritten whole, holding ~1 GB of buffers.
+
+    private static readonly object CacheGate = new();
+
+    /// <summary>"owner~repo~" for repo URLs, so the cached releases of one repo are found by file name.</summary>
+    private static string RepoPrefix(string repo) => repo.Replace('/', '~') + "~";
+
+    internal static string CacheFileFor(string url)
     {
-        lock (_cacheGate)
-        {
-            if (_cache is not null) return _cache;
-            try
-            {
-                if (File.Exists(AppPaths.ApiCacheFile))
-                    _cache = JsonSerializer.Deserialize(File.ReadAllText(AppPaths.ApiCacheFile), JsonCtx.Default.DictionaryStringApiCacheEntry);
-            }
-            catch (Exception ex) when (ex is JsonException or IOException) { }
-            return _cache ??= new Dictionary<string, ApiCacheEntry>();
-        }
+        const string repos = "https://api.github.com/repos/";
+        var prefix = "";
+        if (url.StartsWith(repos, StringComparison.OrdinalIgnoreCase) && url[repos.Length..].Split('/') is { Length: >= 3 } p)
+            prefix = RepoPrefix($"{p[0]}/{p[1]}");
+        var hash = Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(System.Text.Encoding.UTF8.GetBytes(url)))[..16];
+        var name = string.Concat((prefix + hash).Select(c => Path.GetInvalidFileNameChars().Contains(c) ? '_' : c));
+        return Path.Combine(AppPaths.ApiCacheDir, name.ToLowerInvariant() + ".json");
     }
 
-    private static void SaveCache(Dictionary<string, ApiCacheEntry> cache)
+    private static ApiCacheEntry? ReadEntry(string file)
     {
-        try { FileUtil.AtomicWriteText(AppPaths.ApiCacheFile, JsonSerializer.Serialize(cache, JsonCtx.Default.DictionaryStringApiCacheEntry)); }
+        DropLegacyCache();
+        try
+        {
+            if (!File.Exists(file)) return null;
+            using var fs = File.OpenRead(file);
+            return JsonSerializer.Deserialize(fs, JsonCtx.Default.ApiCacheEntry);
+        }
+        catch (Exception ex) when (ex is JsonException or IOException) { return null; }
+    }
+
+    private static void WriteEntry(string file, ApiCacheEntry entry)
+    {
+        try
+        {
+            lock (CacheGate) FileUtil.AtomicWriteText(file, JsonSerializer.Serialize(entry, JsonCtx.Default.ApiCacheEntry));
+        }
         catch (IOException) { }
+    }
+
+    private static bool _legacyChecked;
+
+    /// <summary>The old single-file cache costs one extra request per repo to drop, and nothing reads it anymore.</summary>
+    private static void DropLegacyCache()
+    {
+        if (_legacyChecked) return;
+        _legacyChecked = true;
+        try { File.Delete(AppPaths.LegacyApiCacheFile); }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) { }
     }
 }

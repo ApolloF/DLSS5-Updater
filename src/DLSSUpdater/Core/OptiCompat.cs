@@ -26,7 +26,7 @@ public sealed record CompatReport(string Tag, IReadOnlyList<string> MissingKeys,
 public static class OptiCompat
 {
     /// <summary>Newest OptiScaler-NR release the settings in this app were written against.</summary>
-    public const string TestedTag = "v0.8.91";
+    public const string TestedTag = "v0.9.51";
 
     public static async Task<CompatReport> CheckAsync(GitHubClient gh, string tag, IEnumerable<(string Section, string Key)> managed, CancellationToken ct)
     {

@@ -103,15 +103,18 @@ public sealed class Installer(ComponentStore store)
     {
         if (o.ReShadeOnly && !o.ReShade) throw new InvalidOperationException("ReShade-only mode installs ReShade as the proxy; ReShade can't be left out.");
         if (!AppSettings.IsKnownProxy(o.Proxy)) throw new ArgumentException($"\"{o.Proxy}\" is not a proxy name DLSS Updater installs under.", nameof(o));
+        EnsureNoDoubleMfgUnlock(targetDir, o);
         // Fetch everything first so a network failure never leaves a half-installed game.
         var pkg = o.Opti && !o.ReShadeOnly ? await store.EnsureOptiAsync(o.OptiTag, progress, ct) : null;
         var dlssNr = o.DlssNr;
         var nrPath = dlssNr ? store.VerifiedDlssNrPath(o.DlssNrId ?? store.SelectedDlssNr()) : null;
+        if (o.RenoDx && !o.ReShadeOnly)
+            throw new InvalidOperationException("The RenoDX DLSS add-on only works in ReShade-only mode: with OptiScaler-NR there would be two NR injectors.");
         if (o.RenoDx && (!o.ReShade || !dlssNr))
             throw new InvalidOperationException("RenoDX needs ReShade with add-on support and an imported NR runtime.");
-        if (o.RenoDx && (!game.Features.HasFlag(GameFeatures.SR) || game.Streamline.Count == 0))
-            throw new InvalidOperationException("RenoDX needs a game with native DLSS and Streamline files.");
-        var renoDx = o.RenoDx ? await store.EnsureRenoDxAsync(progress, ct) : null;
+        if (o.RenoDx && !game.Features.HasFlag(GameFeatures.SR))
+            throw new InvalidOperationException("RenoDX needs a game with native DLSS.");
+        var renoDx = o.RenoDx ? store.RequireRenoDx() : null;
         var mfg = o.Mfg ? await store.EnsureMfgAsync(o.MfgTag, progress, ct) : null;
         var addMissing = o.AddMissingDlss && o.Opti;
         var dlss = o.Dlss || addMissing ? await store.EnsureDlssAsync(o.DlssTag, progress, ct) : null;
@@ -135,9 +138,13 @@ public sealed class Installer(ComponentStore store)
                 else if (m.Mode == InstallMode.ReShadeOnly && (pkg is not null || reshade is not null)) RemoveReShadeProxy(ctx, o.Proxy);
                 if (o.ReShadeOnly || pkg is not null) m.Mode = o.Mode;
 
+                // Only a run that sets up the injectors drops the add-on; a DLSS-only update keeps it.
+                if (!o.RenoDx && m.RenoDx && (o.ReShade || pkg is not null)) RemoveRenoDx(ctx);
+
                 if (pkg is not null)
                 {
                     InstallOpti(ctx, pkg, o);
+                    if (dlssNr || m.DlssNr) DisplaceForeignNrAddons(ctx, ComponentStore.RenoDxFile, "renodx-dlss5.addon64");
                     m.Opti = true;
                     m.OptiTag = o.OptiTag ?? store.Opti?.Tag;
                     m.Proxy = o.Proxy;
@@ -163,9 +170,15 @@ public sealed class Installer(ComponentStore store)
                 }
                 if (renoDx is not null)
                 {
+                    foreach (var name in ComponentStore.ForeignNrAddons)
+                    {
+                        var other = Path.Combine(targetDir, name);
+                        if (m.Owns(ctx.Rel(other))) { RemoveOwned(ctx, other); Log.Info($"  removed {ctx.Rel(other)} (replaced by {ComponentStore.RenoDxFile})"); }
+                        else if (File.Exists(other)) Displace(ctx, other);
+                    }
                     Place(ctx, renoDx, Path.Combine(targetDir, ComponentStore.RenoDxFile));
                     m.RenoDx = true;
-                    m.RenoDxTag = store.RenoDx?.Tag;
+                    m.RenoDxTag = store.RenoDxTag;
                 }
                 if (nrPath is not null) PlaceDlssNr(ctx, nrPath);
 
@@ -262,20 +275,24 @@ public sealed class Installer(ComponentStore store)
         var path = Path.Combine(ctx.Target, "ReShade.ini");
         var rel = ctx.Rel(path);
         var exists = File.Exists(path);
-        var profile = o.ReShadeOverrides.ToList();
+        var original = exists ? File.ReadAllText(path) : null;
+        var profile = o.ReShadeOverrides
+            .Where(x => o.RenoDx || !x.Section.Trim().Equals(RenoDxSection, StringComparison.OrdinalIgnoreCase)).ToList();
         if (o.RenoDx)
         {
-            var ini = IniFile.Parse(exists ? File.ReadAllText(path) : "");
-            var addons = (ini.Get("ADDON", "LoadFromDllMain") ?? "").Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries).ToList();
+            var addons = EarlyAddons(IniFile.Parse(original ?? ""));
+            addons.RemoveAll(a => ComponentStore.LegacyRenoDxFiles.Contains(a, StringComparer.OrdinalIgnoreCase));
             if (!addons.Contains(ComponentStore.RenoDxFile, StringComparer.OrdinalIgnoreCase)) addons.Add(ComponentStore.RenoDxFile);
             profile.RemoveAll(x => x.Id.Equals("ADDON/LoadFromDllMain", StringComparison.OrdinalIgnoreCase));
             profile.Add(new("ADDON", "LoadFromDllMain", string.Join(',', addons)));
-            profile.AddRange(new IniOverride[] { new("RenoDX.DLSS5", "NRHookPoint", "1"), new("RenoDX.DLSS5", "NRPasses", "1"), new("RenoDX.DLSS5", "NRDetailStability", "2") }
-                .Where(x => !profile.Any(p => p.Id.Equals(x.Id, StringComparison.OrdinalIgnoreCase))));
         }
-        if (profile.Count == 0 && ctx.M.ReShadeIni.Count == 0) return;
 
-        var current = exists ? File.ReadAllText(path) : null;
+        // Keys an earlier version wrote for the wrong add-on go, unless the user changed them since.
+        var cleaned = IniFile.Parse(original ?? "");
+        var hadStale = DropWrittenKeys(cleaned, ctx.M.ReShadeIni, LegacyRenoDxSection);
+        if (profile.Count == 0 && ctx.M.ReShadeIni.Count == 0 && !hadStale) return;
+
+        var current = hadStale ? cleaned.ToString() : original;
         var merged = ConfigProfile.Merge(current ?? "", current, profile, carryOver: true, ctx.M.ReShadeIni,
             overwrite: o.OverwriteIni || !o.CarryOverIni);
         if (o.RenoDx)
@@ -286,12 +303,97 @@ public sealed class Installer(ComponentStore store)
             merged.Applied[early.Id] = early.Value;
             merged = merged with { Text = ini.ToString() };
         }
-        if (current == merged.Text) { ctx.M.ReShadeIni = merged.Applied; return; }
+        if (original == merged.Text) { ctx.M.ReShadeIni = merged.Applied; return; }
 
         if (exists && !ctx.M.Owns(rel) && ctx.M.BackupOf(rel) is null) Backup(ctx, path, "file", copy: true);
         FileUtil.AtomicWriteText(path, merged.Text);
         ctx.M.ReShadeIni = merged.Applied;
         if (!exists) ctx.M.AddFile(rel);
+    }
+
+    private const string RenoDxSection = "RENODX-DLSS";
+    /// <summary>The section of a different add-on (renodx-dlss5) that older versions of this app wrote by mistake.</summary>
+    private const string LegacyRenoDxSection = "RenoDX.DLSS5";
+
+    private static List<string> EarlyAddons(IniFile ini) =>
+        (ini.Get("ADDON", "LoadFromDllMain") ?? "").Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries).ToList();
+
+    /// <summary>Removes keys of <paramref name="section"/> that still hold the value we wrote, and forgets all we wrote there.</summary>
+    private static bool DropWrittenKeys(IniFile ini, Dictionary<string, string> applied, string section)
+    {
+        var dropped = false;
+        foreach (var (id, value) in applied.ToList())
+        {
+            var slash = id.IndexOf('/');
+            if (slash <= 0 || !id[..slash].Equals(section, StringComparison.OrdinalIgnoreCase)) continue;
+            var key = id[(slash + 1)..];
+            if (string.Equals(ini.Get(section, key), value, StringComparison.OrdinalIgnoreCase)) dropped |= ini.Remove(section, key);
+            applied.Remove(id);
+        }
+        return dropped;
+    }
+
+    /// <summary>
+    /// The install no longer has the RenoDX add-on: take it out (restoring what it replaced), our entry out of the
+    /// early-load list and the settings we wrote for it out of ReShade.ini.
+    /// </summary>
+    private static void RemoveRenoDx(Ctx ctx)
+    {
+        var m = ctx.M;
+        foreach (var name in new[] { ComponentStore.RenoDxFile }.Concat(ComponentStore.LegacyRenoDxFiles))
+            RemoveOwned(ctx, Path.Combine(ctx.Target, name));
+        var path = Path.Combine(ctx.Target, "ReShade.ini");
+        if (File.Exists(path))
+        {
+            var ini = IniFile.Load(path);
+            var addons = EarlyAddons(ini);
+            var kept = addons.Where(a => !a.Equals(ComponentStore.RenoDxFile, StringComparison.OrdinalIgnoreCase)
+                                         && !ComponentStore.LegacyRenoDxFiles.Contains(a, StringComparer.OrdinalIgnoreCase)).ToList();
+            var changed = kept.Count != addons.Count;
+            if (changed)
+            {
+                if (kept.Count == 0) ini.Remove("ADDON", "LoadFromDllMain");
+                else ini.Set("ADDON", "LoadFromDllMain", string.Join(',', kept));
+                if (kept.Count == 0) m.ReShadeIni.Remove("ADDON/LoadFromDllMain");
+                else if (m.ReShadeIni.ContainsKey("ADDON/LoadFromDllMain")) m.ReShadeIni["ADDON/LoadFromDllMain"] = string.Join(',', kept);
+            }
+            changed |= DropWrittenKeys(ini, m.ReShadeIni, RenoDxSection);
+            if (changed) ini.Save(path);
+        }
+        m.RenoDx = false;
+        m.RenoDxTag = null;
+        Log.Info($"  {ComponentStore.RenoDxFile} removed");
+    }
+
+    /// <summary>Another NR injector next to OptiScaler's DLSSNR would run the model twice: move the ones we don't own away.</summary>
+    private static void DisplaceForeignNrAddons(Ctx ctx, params string[] names)
+    {
+        foreach (var name in names)
+        {
+            var f = Path.Combine(ctx.Target, name);
+            if (File.Exists(f) && !ctx.M.Owns(ctx.Rel(f))) Displace(ctx, f);
+        }
+    }
+
+    /// <summary>
+    /// OptiScaler-NR v0.9+ can unlock MFG itself ([DLSSG] AdaMfgUnlock / AmpereMfgUnlock) and says never to combine that
+    /// with an external unlocker, which the MFG Unlock add-on is. Checked before anything is fetched or written.
+    /// </summary>
+    private static void EnsureNoDoubleMfgUnlock(string targetDir, InstallOptions o)
+    {
+        if (!o.Mfg || o.ReShadeOnly) return;
+        var iniPath = Path.Combine(targetDir, "OptiScaler.ini");
+        // An MFG-only update still runs next to the OptiScaler already in the game.
+        if (!o.Opti) { if (!File.Exists(iniPath)) return; o = o with { Overrides = [], CarryOverIni = true }; }
+        var current = o.CarryOverIni && File.Exists(iniPath) ? File.ReadAllText(iniPath) : null;
+        var lastApplied = InstallManifest.Read(targetDir)?.OptiIni;
+        var effective = IniFile.Parse(ConfigProfile.Merge(current ?? "", current, o.Overrides, o.CarryOverIni, lastApplied, o.OverwriteIni).Text);
+        var on = new[] { "AdaMfgUnlock", "AmpereMfgUnlock" }
+            .Where(k => effective.Get("DLSSG", k) is { } v && (v.Equals("true", StringComparison.OrdinalIgnoreCase) || v == "1")).ToList();
+        if (on.Count > 0)
+            throw new InvalidOperationException(
+                $"OptiScaler's built-in MFG unlock ([DLSSG] {string.Join(", ", on)}) is on, and it must not run together with the MFG Unlock add-on. " +
+                "Turn one of them off.");
     }
 
     /// <summary>Copies the package folder in place, skipping unchanged files and docs.</summary>

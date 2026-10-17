@@ -4,7 +4,7 @@ using System.Text.RegularExpressions;
 
 namespace DLSSUpdater.Core;
 
-public enum Component { OptiScaler, MfgUnlock, Dlss, Streamline, ReShade, RenoDx }
+public enum Component { OptiScaler, MfgUnlock, Dlss, Streamline, ReShade }
 
 public sealed class ReleaseInfo
 {
@@ -33,8 +33,6 @@ public sealed partial class ComponentStore
 {
     public const string LegacyOptiRepo = "wilsjo2/OptiScaler-DLSSNR-PreSR-Multipass";
     public const string OptiRepo = "ShyVortex/OptiScaler-DLSSNR-PreSR-Multipass";
-    public const string RenoDxRepo = "clshortfuse/renodx";
-    public const string RenoDxFile = "renodx-dlssfix.addon64";
     public const string MfgRepo = "mavismmg/MFGAdaUnlock-RenoDx";
     public const string DlssRepo = "NVIDIA/DLSS";
     public const string StreamlineRepo = "NVIDIA-RTX/Streamline";
@@ -44,6 +42,11 @@ public sealed partial class ComponentStore
     public const string DlssNrFile = "nvngx_dlssnr.dll";
     public const string ReShadeFile = "ReShade64.dll";
     public const string MfgFile = "renodx-mfgunlock.addon64";
+    /// <summary>ShortFuse's DLSS add-on with neural rendering; import-only.</summary>
+    public const string RenoDxFile = "renodx-dlss.addon64";
+    /// <summary>Other ShortFuse-family add-ons that also inject NR or replaced the add-on earlier; never installed by this app.</summary>
+    public static readonly string[] LegacyRenoDxFiles = ["renodx-dlssfix.addon64"];
+    public static readonly string[] ForeignNrAddons = ["renodx-dlssfix.addon64", "renodx-dlss5.addon64"];
     public static readonly string[] DlssFiles = ["nvngx_dlss.dll", "nvngx_dlssd.dll", "nvngx_dlssg.dll"];
 
     /// <summary>SHA-256 values published in the fork's INSTALL-DLSSNR.md.</summary>
@@ -55,6 +58,18 @@ public sealed partial class ComponentStore
         ["cdfa6c1ec784867182164c7836f324f087b5c9f374d0c9fe46f54999feabf3ed"] = "ShortFuse compat · RTX 20–50 · CUDA 13.4.3",
     };
 
+    private const string CompatHint = "Heavier on RTX 20/30: start with 1 pass and NR before upscaling.";
+    private const string OriginalHint = "RTX 50 only.";
+
+    /// <summary>Plain advice per known build, shown under the NR version picker.</summary>
+    public static readonly Dictionary<string, string> KnownDlssNrHints = new(StringComparer.OrdinalIgnoreCase)
+    {
+        ["e16bcf15e16e13f527491cdf7845b2fe6521a738d8f7c9c721866a8496e1fc8e"] = OriginalHint,
+        ["e67dee209320cdafe0e93e45675d7aa34323a53acc57a72b2e40a181581c989a"] = CompatHint,
+        ["2bc19bc09a7b89dd44f73e2ac0108fcc586e2154bdd0830f242f4f040e28789f"] = OriginalHint,
+        ["cdfa6c1ec784867182164c7836f324f087b5c9f374d0c9fe46f54999feabf3ed"] = CompatHint,
+    };
+
     private readonly GitHubClient _gh;
     private readonly Func<bool> _includePrereleases;
     private readonly Dictionary<Component, SemaphoreSlim> _locks = new()
@@ -64,7 +79,6 @@ public sealed partial class ComponentStore
         [Component.Dlss] = new(1, 1),
         [Component.Streamline] = new(1, 1),
         [Component.ReShade] = new(1, 1),
-        [Component.RenoDx] = new(1, 1),
     };
 
     public ComponentStore(GitHubClient gh, Func<bool> includePrereleases)
@@ -74,7 +88,6 @@ public sealed partial class ComponentStore
     }
 
     public ReleaseInfo? Opti { get; internal set; }
-    public ReleaseInfo? RenoDx { get; internal set; }
     public ReleaseInfo? Mfg { get; internal set; }
     public ReleaseInfo? Dlss { get; internal set; }
     public ReleaseInfo? Streamline { get; internal set; }
@@ -91,7 +104,6 @@ public sealed partial class ComponentStore
         Component.MfgUnlock => Mfg,
         Component.Streamline => Streamline,
         Component.ReShade => ReShade,
-        Component.RenoDx => RenoDx,
         _ => Dlss,
     };
 
@@ -122,8 +134,7 @@ public sealed partial class ComponentStore
             Resolve(Component.MfgUnlock, ResolveMfgAsync, v => Mfg = v, ct),
             Resolve(Component.Dlss, ResolveDlssAsync, v => Dlss = v, ct),
             Resolve(Component.Streamline, ResolveStreamlineAsync, v => Streamline = v, ct),
-            Resolve(Component.ReShade, ResolveReShadeAsync, v => ReShade = v, ct),
-            Resolve(Component.RenoDx, ResolveRenoDxAsync, v => RenoDx = v, ct));
+            Resolve(Component.ReShade, ResolveReShadeAsync, v => ReShade = v, ct));
         if (DlssReleases.Count == 0 && Dlss is not null) DlssReleases = [Dlss];
     }
 
@@ -151,7 +162,6 @@ public sealed partial class ComponentStore
             Component.MfgUnlock => MfgRepo,
             Component.Dlss => DlssRepo,
             Component.Streamline => StreamlineRepo,
-            Component.RenoDx => RenoDxRepo,
             _ => null,
         };
         var notes = repo is null ? null
@@ -558,6 +568,7 @@ public sealed partial class ComponentStore
     public void Import(string source, string fileName)
     {
         if (fileName == DlssNrFile) { ImportDlssNr(source); return; }
+        if (fileName == RenoDxFile) { ImportRenoDx(source); return; }
         if (fileName != ReShadeFile && fileName != MfgFile) throw new ArgumentException("Unsupported component.", nameof(fileName));
         Directory.CreateDirectory(AppPaths.Components);
         FileUtil.AtomicCopy(source, Path.Combine(AppPaths.Components, fileName));
@@ -570,14 +581,14 @@ public sealed partial class ComponentStore
         MigrateDlssNr();
         var dirs = new[] { Path.GetDirectoryName(Environment.ProcessPath), AppContext.BaseDirectory, Environment.CurrentDirectory }
             .Where(d => !string.IsNullOrEmpty(d)).Distinct(StringComparer.OrdinalIgnoreCase);
-        foreach (var file in new[] { DlssNrFile, ReShadeFile, MfgFile })
+        foreach (var file in new[] { DlssNrFile, ReShadeFile, MfgFile, RenoDxFile })
         {
             var dest = Path.Combine(AppPaths.Components, file);
             if (File.Exists(dest) || (file == DlssNrFile && DlssNrVersions.Count > 0)) continue;
             var src = dirs.Select(d => Path.Combine(d!, file)).FirstOrDefault(File.Exists);
             if (src is null) continue;
             try { Import(src, file); }
-            catch (IOException ex) { Log.Error($"Auto-import of {file} failed", ex); }
+            catch (Exception ex) when (ex is IOException or InvalidDataException) { Log.Error($"Auto-import of {file} failed", ex); }
         }
     }
 }
