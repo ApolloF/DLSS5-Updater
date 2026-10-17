@@ -69,12 +69,19 @@ public sealed partial class GameViewModel : ObservableObject
             new ComponentRow("reshade", "ReShade"),
             new ComponentRow("mfg", "MFG Unlock"),
             new ComponentRow("dlssnr", "DLSSNR runtime"),
+            new ComponentRow("renodx", "RenoDX DLSS add-on"),
             new ComponentRow("dlss", "DLSS SR · RR · FG"),
             new ComponentRow("streamline", "Streamline (Dynamic MFG)"),
         ];
         foreach (var c in Components) c.PropertyChanged += (_, e) =>
         {
-            if (e.PropertyName == nameof(ComponentRow.Enabled)) OnPropertyChanged(nameof(AnyEnabled));
+            if (e.PropertyName != nameof(ComponentRow.Enabled)) return;
+            if (c.Key == "renodx" && c.Enabled)
+            {
+                Components.First(r => r.Key == "dlssnr").Enabled = true;
+                Components.First(r => r.Key == "reshade").Enabled = true;
+            }
+            OnPropertyChanged(nameof(AnyEnabled));
         };
         Info = info;
         Load(info);
@@ -115,6 +122,7 @@ public sealed partial class GameViewModel : ObservableObject
     partial void OnModeChanged(InstallMode value)
     {
         ApplyModeToRows();
+        if (IsReShadeOnly && !On("renodx")) Components.First(c => c.Key == "dlssnr").Enabled = false;
         if (!ProxyNames.Contains(Proxy, StringComparer.OrdinalIgnoreCase)) Proxy = "dxgi.dll";
         if (_loading) return;
         _s.Settings.For(Id).Mode = value == _s.Settings.DefaultMode ? null : value;
@@ -126,7 +134,7 @@ public sealed partial class GameViewModel : ObservableObject
     {
         foreach (var c in Components)
         {
-            c.Visible = !(IsReShadeOnly && c.Key is "opti" or "dlssnr");
+            c.Visible = !(IsReShadeOnly && c.Key == "opti");
             c.Editable = !(IsReShadeOnly && c.Key == "reshade");
             if (!c.Editable) c.Enabled = true;
         }
@@ -137,6 +145,11 @@ public sealed partial class GameViewModel : ObservableObject
     [ObservableProperty] private string _proxy = "dxgi.dll";
     [ObservableProperty] private InstallManifest? _manifest;
     [ObservableProperty] private DlssChoice? _dlssChoice;
+    [ObservableProperty] private DlssChoice? _nrChoice;
+    public ObservableCollection<DlssChoice> NrChoices { get; } = [];
+    public string? EffectiveNrId => NrChoice?.Tag ?? _s.Settings.DlssNrId;
+    public bool CanSwitchNr => Manifest?.DlssNr == true;
+    public bool CanUndoNr => Manifest?.PreviousDlssNrId is not null;
     [ObservableProperty] private string _presetChoice = GlobalPreset;
     [ObservableProperty] private string _detailTab = "Install";
     [ObservableProperty] private DriverProfileViewModel? _driver;
@@ -252,10 +265,32 @@ public sealed partial class GameViewModel : ObservableObject
         DlssChoices.Clear();
         var global = _s.Settings.DlssTag ?? $"latest{(_s.Store.Dlss is { } l ? " · " + l.Tag : "")}";
         DlssChoices.Add(new DlssChoice(null, $"Default ({global})"));
-        foreach (var r in _s.Store.DlssReleases) DlssChoices.Add(new DlssChoice(r.Tag, r.Tag));
+        foreach (var r in _s.Store.DlssReleases.Concat(ComponentStore.CachedReleases(Component.Dlss)).DistinctBy(r => r.Tag)) DlssChoices.Add(new DlssChoice(r.Tag, r.Tag));
         if (pinned is not null && DlssChoices.All(c => c.Tag != pinned)) DlssChoices.Add(new DlssChoice(pinned, pinned));
         DlssChoice = DlssChoices.FirstOrDefault(c => c.Tag == pinned) ?? DlssChoices[0];
+        RebuildNrChoices();
         _loading = wasLoading;
+    }
+
+    public void RebuildNrChoices()
+    {
+        var loading = _loading;
+        _loading = true;
+        var pin = _s.Settings.Games.GetValueOrDefault(Id)?.DlssNrId;
+        NrChoices.Clear();
+        NrChoices.Add(new DlssChoice(null, "Default"));
+        foreach (var nr in _s.Store.DlssNrVersions) NrChoices.Add(new DlssChoice(nr.Id, nr.Label));
+        if (pin is not null && NrChoices.All(c => c.Tag != pin)) NrChoices.Add(new DlssChoice(pin, "Missing NR file · import again"));
+        NrChoice = NrChoices.FirstOrDefault(c => c.Tag == pin) ?? NrChoices[0];
+        _loading = loading;
+    }
+
+    partial void OnNrChoiceChanged(DlssChoice? value)
+    {
+        if (_loading) return;
+        _s.Settings.For(Id).DlssNrId = value?.Tag;
+        _s.Settings.Save();
+        RefreshStatus();
     }
 
     partial void OnDlssChoiceChanged(DlssChoice? value)
@@ -322,7 +357,8 @@ public sealed partial class GameViewModel : ObservableObject
         Set("opti", m?.Opti ?? true);
         Set("reshade", m?.ReShade ?? _s.Settings.InstallReShade);
         Set("mfg", m?.Mfg ?? _s.Settings.InstallMfgUnlock);
-        Set("dlssnr", m?.DlssNr ?? _s.Settings.InstallDlssNr);
+        Set("dlssnr", m?.DlssNr ?? (_s.Settings.InstallDlssNr && (!IsReShadeOnly || _s.Settings.InstallRenoDx)));
+        Set("renodx", m?.RenoDx ?? _s.Settings.InstallRenoDx);
         Set("dlss", m?.Dlss ?? HasDlss); // nothing to replace in games that don't ship DLSS
         Set("streamline", m?.Streamline ?? (_s.Settings.InstallStreamline && HasStreamline));
         ApplyModeToRows();
@@ -346,8 +382,14 @@ public sealed partial class GameViewModel : ObservableObject
         Row("opti", m?.Opti == true ? m.OptiTag : null, store.Opti?.Tag, true);
         Row("reshade", m?.ReShade == true ? InstalledVersion(ReShadeInstalledName(m)) : null, ReShadeLatest(), ReShadeCurrent(m));
         Row("mfg", m?.Mfg == true ? m.MfgTag : null, store.Mfg?.Tag, true);
-        Row("dlssnr", m?.DlssNr == true ? InstalledVersion(ComponentStore.DlssNrFile) : null, File.Exists(store.DlssNrPath) ? DlssNrLabel() : null,
-            m?.DlssNr != true || m.DlssNrSha == _s.DlssNrSha);
+        var nrPath = store.DlssNrFor(EffectiveNrId);
+        var gameNr = SelectedTarget is null ? null : Path.Combine(SelectedTarget.Dir, ComponentStore.DlssNrFile);
+        Row("dlssnr", gameNr is not null && File.Exists(gameNr) ? InstalledVersion(ComponentStore.DlssNrFile) : null,
+            File.Exists(nrPath) ? FileUtil.Format(FileUtil.ReadVersion(nrPath)) : null,
+            gameNr is null || !File.Exists(gameNr) || (File.Exists(nrPath) && FileUtil.SameFile(gameNr, nrPath)));
+        Row("renodx", m?.RenoDx == true ? ShortRenoTag(m.RenoDxTag) : null, ShortRenoTag(store.RenoDx?.Tag), m?.RenoDxTag == store.RenoDx?.Tag);
+        OnPropertyChanged(nameof(CanSwitchNr));
+        OnPropertyChanged(nameof(CanUndoNr));
 
         var latest = LatestDlss;
         DlssRows.Clear();
@@ -395,6 +437,7 @@ public sealed partial class GameViewModel : ObservableObject
         "reshade" => m.ReShade,
         "mfg" => m.Mfg,
         "dlssnr" => m.DlssNr,
+        "renodx" => m.RenoDx,
         "streamline" => m.Streamline,
         _ => m.Dlss,
     };
@@ -406,7 +449,7 @@ public sealed partial class GameViewModel : ObservableObject
         row.Latest = latest ?? "—";
         row.State = latest is null ? RowState.Missing
             : installed is null ? RowState.None
-            : key is "reshade" or "dlssnr" ? (hashMatches ? RowState.Current : RowState.Update)
+            : key is "reshade" or "dlssnr" or "renodx" ? (hashMatches ? RowState.Current : RowState.Update)
             : installed == latest ? RowState.Current : RowState.Update;
     }
 
@@ -433,11 +476,7 @@ public sealed partial class GameViewModel : ObservableObject
     private static string ReShadeInstalledName(InstallManifest m) =>
         m.Mode == InstallMode.ReShadeOnly && m.Proxy is { } p ? p : ComponentStore.ReShadeFile;
 
-    private string DlssNrLabel()
-    {
-        var v = FileUtil.Format(FileUtil.ReadVersion(_s.Store.DlssNrPath));
-        return _s.DlssNrSha is { } h && ComponentStore.KnownDlssNr.ContainsKey(h) ? v : $"{v} (unverified)";
-    }
+    private static string? ShortRenoTag(string? tag) => tag is null ? null : tag.Length > 22 ? tag[..22] : tag;
 
     private string? InstalledVersion(string file) =>
         SelectedTarget is null ? null : FileUtil.Format(FileUtil.ReadVersion(Path.Combine(SelectedTarget.Dir, file)));
@@ -448,7 +487,9 @@ public sealed partial class GameViewModel : ObservableObject
         Opti = !dlssOnly && !IsReShadeOnly && On("opti"),
         ReShade = !dlssOnly && (IsReShadeOnly || On("reshade")),
         Mfg = !dlssOnly && On("mfg"),
-        DlssNr = !dlssOnly && !IsReShadeOnly && On("dlssnr"),
+        DlssNr = !dlssOnly && On("dlssnr"),
+        DlssNrId = EffectiveNrId,
+        RenoDx = !dlssOnly && On("renodx"),
         Dlss = dlssOnly || On("dlss"),
         AddMissingDlss = _s.Settings.AddMissingDlss && !dlssOnly && !IsReShadeOnly && On("opti"),
         DlssTag = EffectiveDlssTag,
@@ -469,6 +510,8 @@ public sealed partial class GameViewModel : ObservableObject
         ReShade = m.ReShade,
         Mfg = m.Mfg,
         DlssNr = m.DlssNr,
+        DlssNrId = EffectiveNrId,
+        RenoDx = m.RenoDx,
         Dlss = m.Dlss,
         AddMissingDlss = m.Opti && m.Files.Any(f => Path.GetFileName(f).Equals("nvngx_dlss.dll", StringComparison.OrdinalIgnoreCase)),
         DlssTag = EffectiveDlssTag,
@@ -483,5 +526,5 @@ public sealed partial class GameViewModel : ObservableObject
 
     private bool On(string key) => Components.First(c => c.Key == key).Enabled;
 
-    public bool NeedsInjection(InstallOptions o) => o.Opti || o.ReShade || o.Mfg || o.DlssNr;
+    public bool NeedsInjection(InstallOptions o) => o.Opti || o.ReShade || o.Mfg || o.DlssNr || o.RenoDx;
 }

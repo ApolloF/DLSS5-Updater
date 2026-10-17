@@ -18,6 +18,8 @@ public sealed record InstallOptions
     public bool ReShade { get; init; }
     public bool Mfg { get; init; }
     public bool DlssNr { get; init; }
+    public string? DlssNrId { get; init; }
+    public bool RenoDx { get; init; }
     public bool Dlss { get; init; }
     /// <summary>Put nvngx_dlss.dll next to OptiScaler when the game has none (independent of <see cref="Dlss"/>).</summary>
     public bool AddMissingDlss { get; init; }
@@ -48,6 +50,7 @@ public sealed record InstallOptions
         OptiTag = m.OptiTag,
         Mfg = Mfg && m.MfgTag is { } mt && ComponentStore.HasMfg(mt),
         MfgTag = m.MfgTag,
+        DlssNrId = m.DlssNrId,
     };
 }
 
@@ -102,15 +105,21 @@ public sealed class Installer(ComponentStore store)
         if (!AppSettings.IsKnownProxy(o.Proxy)) throw new ArgumentException($"\"{o.Proxy}\" is not a proxy name DLSS Updater installs under.", nameof(o));
         // Fetch everything first so a network failure never leaves a half-installed game.
         var pkg = o.Opti && !o.ReShadeOnly ? await store.EnsureOptiAsync(o.OptiTag, progress, ct) : null;
-        var dlssNr = o.DlssNr && !o.ReShadeOnly;
+        var dlssNr = o.DlssNr;
+        var nrPath = dlssNr ? store.VerifiedDlssNrPath(o.DlssNrId ?? store.SelectedDlssNr()) : null;
+        if (o.RenoDx && (!o.ReShade || !dlssNr))
+            throw new InvalidOperationException("RenoDX needs ReShade with add-on support and an imported NR runtime.");
+        if (o.RenoDx && (!game.Features.HasFlag(GameFeatures.SR) || game.Streamline.Count == 0))
+            throw new InvalidOperationException("RenoDX needs a game with native DLSS and Streamline files.");
+        var renoDx = o.RenoDx ? await store.EnsureRenoDxAsync(progress, ct) : null;
         var mfg = o.Mfg ? await store.EnsureMfgAsync(o.MfgTag, progress, ct) : null;
         var addMissing = o.AddMissingDlss && o.Opti;
         var dlss = o.Dlss || addMissing ? await store.EnsureDlssAsync(o.DlssTag, progress, ct) : null;
         var sl = o.Streamline && game.Streamline.Count > 0 ? await store.EnsureStreamlineAsync(progress, ct) : null;
         if (o.Streamline && game.Streamline.Count == 0) Log.Info($"{game.Name}: no Streamline files in this game, skipped");
-        if (dlssNr && !File.Exists(store.DlssNrPath))
-            throw new FileNotFoundException("nvngx_dlssnr.dll has not been imported (Settings → Components).");
         var reshade = o.ReShade ? await store.EnsureReShadeFileAsync(progress, ct) : null;
+        if (o.RenoDx && (reshade is null || FileUtil.ReadVersion(reshade) is not { Major: >= 6 }))
+            throw new InvalidOperationException("RenoDX needs ReShade 6 or newer with full add-on support.");
 
         progress?.Report(new TransferProgress($"Installing to {game.Name}", null));
         // An unreadable or unsafe record stops the install instead of starting over and burying the originals.
@@ -122,7 +131,7 @@ public sealed class Installer(ComponentStore store)
         {
             try
             {
-                if (o.ReShadeOnly) RemoveOpti(ctx, o.Proxy);
+                if (o.ReShadeOnly) RemoveOpti(ctx, o.Proxy, keepNr: dlssNr);
                 else if (m.Mode == InstallMode.ReShadeOnly && (pkg is not null || reshade is not null)) RemoveReShadeProxy(ctx, o.Proxy);
                 if (o.ReShadeOnly || pkg is not null) m.Mode = o.Mode;
 
@@ -152,12 +161,14 @@ public sealed class Installer(ComponentStore store)
                     m.Mfg = true;
                     m.MfgTag = o.MfgTag ?? store.Mfg?.Tag ?? ComponentStore.LocalMfgTag;
                 }
-                if (dlssNr)
+                if (renoDx is not null)
                 {
-                    Place(ctx, store.DlssNrPath, Path.Combine(targetDir, ComponentStore.DlssNrFile));
-                    m.DlssNr = true;
-                    m.DlssNrSha = HashCache.Get(store.DlssNrPath);
+                    Place(ctx, renoDx, Path.Combine(targetDir, ComponentStore.RenoDxFile));
+                    m.RenoDx = true;
+                    m.RenoDxTag = store.RenoDx?.Tag;
                 }
+                if (nrPath is not null) PlaceDlssNr(ctx, nrPath);
+
                 if (dlss is not null)
                 {
                     SwapDlss(ctx, dlss, replace: o.Dlss, addMissing, exact: o.DlssTag is not null);
@@ -251,11 +262,30 @@ public sealed class Installer(ComponentStore store)
         var path = Path.Combine(ctx.Target, "ReShade.ini");
         var rel = ctx.Rel(path);
         var exists = File.Exists(path);
-        if (o.ReShadeOverrides.Count == 0 && ctx.M.ReShadeIni.Count == 0) return;
+        var profile = o.ReShadeOverrides.ToList();
+        if (o.RenoDx)
+        {
+            var ini = IniFile.Parse(exists ? File.ReadAllText(path) : "");
+            var addons = (ini.Get("ADDON", "LoadFromDllMain") ?? "").Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries).ToList();
+            if (!addons.Contains(ComponentStore.RenoDxFile, StringComparer.OrdinalIgnoreCase)) addons.Add(ComponentStore.RenoDxFile);
+            profile.RemoveAll(x => x.Id.Equals("ADDON/LoadFromDllMain", StringComparison.OrdinalIgnoreCase));
+            profile.Add(new("ADDON", "LoadFromDllMain", string.Join(',', addons)));
+            profile.AddRange(new IniOverride[] { new("RenoDX.DLSS5", "NRHookPoint", "1"), new("RenoDX.DLSS5", "NRPasses", "1"), new("RenoDX.DLSS5", "NRDetailStability", "2") }
+                .Where(x => !profile.Any(p => p.Id.Equals(x.Id, StringComparison.OrdinalIgnoreCase))));
+        }
+        if (profile.Count == 0 && ctx.M.ReShadeIni.Count == 0) return;
 
         var current = exists ? File.ReadAllText(path) : null;
-        var merged = ConfigProfile.Merge(current ?? "", current, o.ReShadeOverrides, carryOver: true, ctx.M.ReShadeIni,
+        var merged = ConfigProfile.Merge(current ?? "", current, profile, carryOver: true, ctx.M.ReShadeIni,
             overwrite: o.OverwriteIni || !o.CarryOverIni);
+        if (o.RenoDx)
+        {
+            var ini = IniFile.Parse(merged.Text);
+            var early = profile.First(x => x.Id == "ADDON/LoadFromDllMain");
+            ini.Set(early.Section, early.Key, early.Value);
+            merged.Applied[early.Id] = early.Value;
+            merged = merged with { Text = ini.ToString() };
+        }
         if (current == merged.Text) { ctx.M.ReShadeIni = merged.Applied; return; }
 
         if (exists && !ctx.M.Owns(rel) && ctx.M.BackupOf(rel) is null) Backup(ctx, path, "file", copy: true);
@@ -363,7 +393,7 @@ public sealed class Installer(ComponentStore store)
     /// Switching to ReShade-only: takes out everything an earlier OptiScaler install of ours put here (proxy, package
     /// folders, OptiScaler.ini, ReShade64.dll, DLSSNR) and puts back what those files replaced.
     /// </summary>
-    private static void RemoveOpti(Ctx ctx, string newProxy)
+    private static void RemoveOpti(Ctx ctx, string newProxy, bool keepNr)
     {
         var m = ctx.M;
         if (m.Mode == InstallMode.OptiScaler && m.Opti && m.Proxy is { } p && !p.Equals(newProxy, StringComparison.OrdinalIgnoreCase))
@@ -380,13 +410,12 @@ public sealed class Installer(ComponentStore store)
                 RemoveOwned(ctx, ctx.Full(f));
         }
         foreach (var name in new[] { "OptiScaler.ini", ComponentStore.ReShadeFile, ComponentStore.DlssNrFile })
-            RemoveOwned(ctx, Path.Combine(ctx.Target, name));
+            if (!keepNr || name != ComponentStore.DlssNrFile) RemoveOwned(ctx, Path.Combine(ctx.Target, name));
         if (m.Opti || m.DlssNr) Log.Info("  OptiScaler-NR removed (ReShade-only)");
         m.Opti = false;
         m.OptiTag = null;
         m.OptiIni.Clear();
-        m.DlssNr = false;
-        m.DlssNrSha = null;
+        if (!keepNr) { m.DlssNr = false; m.DlssNrSha = null; m.DlssNrId = null; }
     }
 
     /// <summary>Switching back from ReShade-only: the ReShade proxy goes unless OptiScaler takes over the same name.</summary>
@@ -452,6 +481,44 @@ public sealed class Installer(ComponentStore store)
             candidate = $"{name}.{i}";
         return candidate;
     }
+
+    private void PlaceDlssNr(Ctx ctx, string source)
+    {
+        var target = Path.Combine(ctx.Target, ComponentStore.DlssNrFile);
+        var selected = store.RetainDlssNr(source);
+        var previous = File.Exists(target) ? store.RetainDlssNr(target) : null;
+        Place(ctx, source, target);
+        if (previous is not null && previous.Id != selected.Id) ctx.M.PreviousDlssNrId = previous.Id;
+        ctx.M.DlssNr = true;
+        ctx.M.DlssNrId = selected.Id;
+        ctx.M.DlssNrSha = selected.Sha256;
+    }
+
+    public Task SwitchDlssNrAsync(GameInfo game, string targetDir, string? id, CancellationToken ct) => Task.Run(() =>
+    {
+        targetDir = FileUtil.Normalize(targetDir);
+        EnsureNotRunning(game.Root);
+        EnsureWritable(targetDir);
+        var m = InstallManifest.Read(targetDir) ?? throw new InvalidOperationException("Install NR in this game first.");
+        m.Contain(targetDir, game.Root);
+        if (!m.DlssNr) throw new InvalidOperationException("Install NR in this game first.");
+        var ctx = new Ctx(FileUtil.Normalize(game.Root), targetDir, m);
+        var source = store.VerifiedDlssNrPath(id ?? store.SelectedDlssNr());
+        var target = Path.Combine(targetDir, ComponentStore.DlssNrFile);
+        var previous = File.Exists(target) ? store.RetainDlssNr(target) : null;
+        try
+        {
+            PlaceDlssNr(ctx, source);
+            m.Save(targetDir);
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            // A failed record write must not leave the game on an unrecorded version.
+            if (previous is not null) FileUtil.AtomicCopy(store.VerifiedDlssNrPath(previous.Id), target);
+            else File.Delete(target);
+            throw;
+        }
+    }, ct);
 
     // ---------- uninstall / restore ----------
 

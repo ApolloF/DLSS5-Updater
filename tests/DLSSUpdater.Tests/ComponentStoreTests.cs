@@ -79,4 +79,63 @@ public class ComponentStoreTests
         Assert.DoesNotContain(gh.Requests, r => r.Contains("/main/"));
         Assert.False(ComponentStore.IsCached(Component.Dlss, "v310.2.0"));
     }
+
+    [Fact]
+    public async Task MaintainedSourceAndRenoDx_UseApiCache_KeepMutableSnapshotsSeparate()
+    {
+        var offline = false;
+        var sha = Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(new byte[] { 1, 2, 3 })).ToLowerInvariant();
+        var handler = new FakeGitHub(r =>
+        {
+            var url = r.RequestUri!.ToString();
+            if (offline) return new HttpResponseMessage(HttpStatusCode.ServiceUnavailable);
+            if (url.Contains(ComponentStore.OptiRepo + "/releases"))
+            {
+                var result = Json("""[{"tag_name":"v0.9.51","assets":[{"name":"OptiScaler-NR-v0.9.51.zip","browser_download_url":"https://example.invalid/package.zip"}]}]""");
+                result.Headers.ETag = new System.Net.Http.Headers.EntityTagHeaderValue("\"opti\"");
+                return result;
+            }
+            if (url.Contains(ComponentStore.RenoDxRepo + "/releases"))
+            {
+                var result = Json($$"""[{"tag_name":"snapshot","assets":[{"name":"{{ComponentStore.RenoDxFile}}","browser_download_url":"https://example.invalid/renodx.addon64","digest":"sha256:{{sha}}"}]}]""");
+                result.Headers.ETag = new System.Net.Http.Headers.EntityTagHeaderValue("\"reno\"");
+                return result;
+            }
+            if (url.EndsWith("renodx.addon64")) return new HttpResponseMessage(HttpStatusCode.OK) { Content = new ByteArrayContent([1, 2, 3]) };
+            if (url.StartsWith("https://api.github.com/")) return Json("[]");
+            return new HttpResponseMessage(HttpStatusCode.NotFound);
+        });
+        var store = new ComponentStore(new GitHubClient(handler), () => true);
+        await store.RefreshAsync(default);
+        Assert.Equal("v0.9.51", store.Opti?.Tag);
+        Assert.Equal("snapshot-" + sha, store.RenoDx?.Tag);
+        var addon = await store.EnsureRenoDxAsync(null, default);
+        Assert.Equal(new byte[] { 1, 2, 3 }, File.ReadAllBytes(addon));
+        offline = true;
+        await store.RefreshAsync(default);
+        Assert.Equal("v0.9.51", store.Opti?.Tag);
+        Assert.Equal(addon, await store.EnsureRenoDxAsync(null, default));
+        Assert.DoesNotContain(handler.Requests, r => r.Contains(ComponentStore.LegacyOptiRepo));
+        Assert.DoesNotContain(handler.Requests, r => r.Contains("nvngx_dlssnr.dll"));
+    }
+
+    [Fact]
+    public void RenoDxParser_RejectsOtherAssetsAndDrafts_RecognizesBothNamesAndChangedDigest()
+    {
+        GhRelease Release(string name, string tag, string digest, bool draft = false) => new()
+        {
+            TagName = tag, Draft = draft,
+            Assets = [new GhAsset { Name = name, Url = "https://example.invalid/addon", Digest = "sha256:" + digest }],
+        };
+        var sha = new string('a', 64);
+        Assert.Null(ComponentStore.ParseRenoDxRelease([Release("renodx-dlssfix.addon32", "snapshot", sha)]));
+        Assert.Null(ComponentStore.ParseRenoDxRelease([Release(ComponentStore.RenoDxFile, "unrelated", sha)]));
+        Assert.Null(ComponentStore.ParseRenoDxRelease([Release(ComponentStore.RenoDxFile, "snapshot", sha, true)]));
+        Assert.Null(ComponentStore.ParseRenoDxRelease([Release(ComponentStore.RenoDxFile, "snapshot", "")]));
+        var first = ComponentStore.ParseRenoDxRelease([Release(ComponentStore.RenoDxFile, "snapshot", sha)])!;
+        var second = ComponentStore.ParseRenoDxRelease([Release("renodx-dlss.addon64", "snapshot", new string('b', 64))])!;
+        Assert.NotEqual(first.Tag, second.Tag);
+        Assert.Equal(ComponentStore.RenoDxFile, second.Files[0].Name);
+        Assert.NotNull(ComponentStore.ParseRenoDxRelease([Release(ComponentStore.RenoDxFile, "nightly-20261017", sha)]));
+    }
 }

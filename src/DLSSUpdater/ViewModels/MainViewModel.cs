@@ -25,7 +25,7 @@ public sealed partial class MainViewModel : ObservableObject
         Log.TrimFile();
         var settings = AppSettings.Load();
         var gh = new GitHubClient { Token = settings.GitHubToken };
-        var store = new ComponentStore(gh, () => settings.IncludePrereleases) { AutoReShade = () => settings.AutoDownloadReShade };
+        var store = new ComponentStore(gh, () => settings.IncludePrereleases) { AutoReShade = () => settings.AutoDownloadReShade, SelectedDlssNr = () => settings.DlssNrId };
         S = new Services { Settings = settings, Store = store, Installer = new Installer(store) };
         Gh = gh;
         SettingsVm = new SettingsViewModel(this);
@@ -110,7 +110,7 @@ public sealed partial class MainViewModel : ObservableObject
 
     [ObservableProperty]
     [NotifyCanExecuteChangedFor(nameof(InstallCommand), nameof(DlssOnlyCommand), nameof(UninstallCommand),
-        nameof(RestoreDlssCommand), nameof(UpdateAllCommand), nameof(CheckUpdatesCommand), nameof(RescanCommand))]
+        nameof(RestoreDlssCommand), nameof(SwitchNrCommand), nameof(UndoNrCommand), nameof(UpdateAllCommand), nameof(CheckUpdatesCommand), nameof(RescanCommand))]
     private bool _isBusy;
 
     // component chips
@@ -170,6 +170,8 @@ public sealed partial class MainViewModel : ObservableObject
     public async Task InitializeAsync()
     {
         S.Store.AutoImport();
+        if (S.Settings.DlssNrId is null && S.Store.DlssNrVersions.FirstOrDefault() is { } nr)
+        { S.Settings.DlssNrId = nr.Id; S.Settings.Save(); }
         await RefreshLocalComponentsAsync();
 
         var cached = GameScanner.LoadCache();
@@ -200,7 +202,7 @@ public sealed partial class MainViewModel : ObservableObject
             : auto ? "auto" : "missing";
         // An imported ReShade doesn't follow releases, so there is nothing new to point at.
         ReShadeNews.Load(auto ? store.ReShade : null);
-        foreach (var g in Games) g.RefreshStatus();
+        foreach (var g in Games) { g.RebuildNrChoices(); g.RefreshStatus(); }
         CountUpdates();
     }
 
@@ -429,6 +431,8 @@ public sealed partial class MainViewModel : ObservableObject
         DlssOnlyCommand.NotifyCanExecuteChanged();
         UninstallCommand.NotifyCanExecuteChanged();
         RestoreDlssCommand.NotifyCanExecuteChanged();
+        SwitchNrCommand.NotifyCanExecuteChanged();
+        UndoNrCommand.NotifyCanExecuteChanged();
     }
 
     [RelayCommand(CanExecute = nameof(CanRunOnGame))]
@@ -461,6 +465,30 @@ public sealed partial class MainViewModel : ObservableObject
         await Run(dlssOnly ? $"Updating DLSS for {g.Name}" : $"Installing to {g.Name}", async () =>
         {
             await S.Installer.InstallAsync(g.Info, g.SelectedTarget.Dir, o, TransferProgress(), _cts.Token);
+            await RescanOne(g);
+        });
+    }
+
+    [RelayCommand(CanExecute = nameof(CanRunOnInstalled))]
+    private Task SwitchNr() => ChangeNr(undo: false);
+
+    [RelayCommand(CanExecute = nameof(CanRunOnInstalled))]
+    private Task UndoNr() => ChangeNr(undo: true);
+
+    private Task ChangeNr(bool undo)
+    {
+        var g = SelectedGame;
+        if (g?.SelectedTarget is null || !g.CanSwitchNr) return Task.CompletedTask;
+        var id = undo ? g.Manifest?.PreviousDlssNrId : g.EffectiveNrId;
+        if (undo && id is null) return Task.CompletedTask;
+        return Run($"Switching NR for {g.Name}", async () =>
+        {
+            await S.Installer.SwitchDlssNrAsync(g.Info, g.SelectedTarget.Dir, id, _cts.Token);
+            if (undo)
+            {
+                S.Settings.For(g.Id).DlssNrId = id;
+                S.Settings.Save();
+            }
             await RescanOne(g);
         });
     }

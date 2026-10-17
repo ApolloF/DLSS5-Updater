@@ -120,26 +120,32 @@ public sealed class GitHubClient
 
         using var cts = CancellationTokenSource.CreateLinkedTokenSource(ct);
         cts.CancelAfter(TimeSpan.FromSeconds(30));
-        using var res = await _http.SendAsync(req, cts.Token);
-
-        if (res.StatusCode == HttpStatusCode.NotModified && cached is not null) return cached.Body;
-        if (res.StatusCode is HttpStatusCode.Forbidden or HttpStatusCode.TooManyRequests && cached is not null)
+        try
         {
-            Log.Info("GitHub rate limit hit, using cached release data");
+            using var res = await _http.SendAsync(req, cts.Token);
+            if (res.StatusCode == HttpStatusCode.NotModified && cached is not null) return cached.Body;
+            if (!res.IsSuccessStatusCode && cached is not null)
+            {
+                Log.Info($"GitHub returned {(int)res.StatusCode}, using cached release data");
+                return cached.Body;
+            }
+            res.EnsureSuccessStatusCode();
+            var body = await res.Content.ReadAsStringAsync(cts.Token);
+            if (res.Headers.ETag is { } etag)
+            {
+                lock (_cacheGate)
+                {
+                    cache[url] = new ApiCacheEntry { ETag = etag.ToString(), Body = body };
+                    SaveCache(cache);
+                }
+            }
+            return body;
+        }
+        catch (Exception ex) when (cached is not null && !ct.IsCancellationRequested && ex is HttpRequestException or TaskCanceledException)
+        {
+            Log.Info($"GitHub unreachable ({ex.Message}), using cached release data");
             return cached.Body;
         }
-        res.EnsureSuccessStatusCode();
-
-        var body = await res.Content.ReadAsStringAsync(cts.Token);
-        if (res.Headers.ETag is { } etag)
-        {
-            lock (_cacheGate)
-            {
-                cache[url] = new ApiCacheEntry { ETag = etag.ToString(), Body = body };
-                SaveCache(cache);
-            }
-        }
-        return body;
     }
 
     public async Task DownloadAsync(string url, string dest, string label, IProgress<TransferProgress>? progress, CancellationToken ct)
