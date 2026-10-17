@@ -84,7 +84,7 @@ public sealed partial class IniOptionViewModel : ObservableObject
     }
 
     /// <summary>Numbers compare by value so "0.7" matches "0.700000" as OptiScaler writes it.</summary>
-    private static bool Same(string? a, string? b)
+    internal static bool Same(string? a, string? b)
     {
         if (string.Equals(a, b, StringComparison.OrdinalIgnoreCase)) return true;
         return a is not null && b is not null
