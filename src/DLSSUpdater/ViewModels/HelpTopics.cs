@@ -17,7 +17,7 @@ public static class HelpTopics
         // ---------- General ----------
         new("install-mode", "General", "Install mode",
             "OptiScaler-NR (default) is the main use: OptiScaler is the proxy, loads ReShade and its add-ons, and runs DLSSNR. " +
-            "ReShade + add-ons installs ReShade itself as the proxy (dxgi.dll by default) with MFG Unlock, the DLSS and Streamline updates, and no OptiScaler or DLSSNR. " +
+            "ReShade + add-ons installs ReShade itself as the proxy (dxgi.dll by default) with MFG Unlock, the DLSS and Streamline updates, and optional RenoDX DLSS with an imported NR runtime. " +
             "Switching a game between the two removes the other mode's files and puts back what they replaced. Each game can use its own mode."),
         new("proxy", "General", "Proxy DLL name",
             "The file name OptiScaler is saved as so the game loads it. dxgi.dll works for most DX12 games. " +
@@ -44,8 +44,15 @@ public static class HelpTopics
             "Only two keys are added because the components would otherwise do nothing: LoadReshade=true when ReShade is installed with OptiScaler and " +
             "[DlssNr] Enabled=true when the DLSSNR runtime is installed. '" + Core.ConfigProfile.RecommendedName + "' is a built-in preset with the tuned setup " +
             "(DLSS upscaler, preset override, Delete menu key, DLSSNR strengths and HDR tone mapping, ReShade tutorial skipped). Load it here or assign it to single games."),
+        new("nr-library", "General", "NR versions and sources",
+            "OptiScaler-NR updates come from ShyVortex/OptiScaler-DLSSNR-PreSR-Multipass. Existing cached releases still work. " +
+            "RenoDX DLSS comes from clshortfuse/renodx snapshot or nightly releases and needs ReShade 6+ with full add-on support, native DLSS and Streamline. " +
+            "It uses pre-upscale rendering with one pass. The runtime nvngx_dlssnr.dll is always imported by you. " +
+            "ShortFuse openNR describes compatible FP16 builds, including compat-fp16-310.9.16-cuda13.4.3 for RTX 20/30/40. " +
+            "Versions come from DLL resources; hashes distinguish originals, compat builds and unverified files. " +
+            "Choose a default in Settings or a per-game version, then Switch NR. Switch back restores the previous build without changing other components."),
         new("local-components", "General", "Local components",
-            "nvngx_dlssnr.dll (DLSS 5 neural rendering model, ShortFuse compat build for RTX 20–40) can't be downloaded automatically, so it is imported once " +
+            "nvngx_dlssnr.dll (DLSS 5 neural rendering model) is always user-supplied. ShortFuse compat-fp16-310.9.16-cuda13.4.3 targets RTX 20/30/40. Each imported version is retained locally " +
             "and copied into each game. ReShade64.dll (add-on build) is taken from the official setup on reshade.me whenever a new version is out; an imported " +
             "ReShade64.dll replaces the download until you press Use download. Import a newer file here and Update all rolls it out."),
 
@@ -190,7 +197,7 @@ public static class HelpTopics
         ["add-missing"] = "Leave on. It only adds a file to games that have none, and Uninstall removes it again.",
         ["ini-mode"] = "Keep game settings for everyday use: updates never undo tuning you did in-game. Apply app settings once after you changed something here and want " +
                        "it everywhere, then switch back. Fresh config when a game's ini got messy or a new OptiScaler release changed a lot.",
-        ["local-components"] = "After downloading a new nvngx_dlssnr.dll, import it here and press Update all. Leave ReShade on the automatic download unless you need a specific build.",
+        ["local-components"] = "Import each nvngx_dlssnr.dll to keep it in the local library. Choose the default here or a version on a game, then use Switch NR. Switch back restores its previous file. No NR binary is downloaded by this app.",
         ["keybinds"] = "Pick keys the game doesn't use: Delete, Insert, End, Page Up/Down and \\ are usually free. Avoid Home if you use ReShade's default overlay key.",
         ["skip-tutorial"] = "On, unless you are new to ReShade.",
         ["performance-mode"] = "Off while you set up effects, on for playing. With only add-ons (RenoDX, MFG Unlock) and no effects it makes no difference.",
