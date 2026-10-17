@@ -23,6 +23,12 @@ public sealed partial class ComponentRow(string key, string name) : ObservableOb
 
 public sealed record DlssRow(string RelPath, string Kind, string Current, string Latest, RowState State);
 
+/// <summary>A config base choice; Name null = the current settings. GameOnly presets belong to one game.</summary>
+public sealed record PresetChoice(string? Name, bool GameOnly, string Label)
+{
+    public override string ToString() => Label;
+}
+
 /// <summary>A DLSS version choice; Tag null = follow the default.</summary>
 public sealed record DlssChoice(string? Tag, string Label)
 {
@@ -152,7 +158,9 @@ public sealed partial class GameViewModel : ObservableObject
     public string? EffectiveNrId => NrChoice?.Tag ?? _s.Settings.DlssNrId;
     public bool CanSwitchNr => Manifest?.DlssNr == true;
     public bool CanUndoNr => Manifest?.PreviousDlssNrId is not null;
-    [ObservableProperty] private string _presetChoice = GlobalPreset;
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(IsLocalPresetSelected))]
+    private PresetChoice? _presetChoice;
     [ObservableProperty] private string _detailTab = "Install";
     [ObservableProperty] private DriverProfileViewModel? _driver;
 
@@ -161,34 +169,100 @@ public sealed partial class GameViewModel : ObservableObject
 
     partial void OnDetailTabChanged(string value)
     {
+        if (value == "Config") EnsureConfigRows();
         if (value != "Nvidia") return;
         if (Driver is null && DriverExe is { } exe) Driver = new DriverProfileViewModel(exe, Name, Features, Info.FgVersion);
         if (Driver is { Loaded: false, Busy: false } d) d.LoadCommand.Execute(null);
     }
 
     public const string GlobalPreset = "Current settings";
-    public ObservableCollection<string> PresetChoices { get; } = [];
+    public ObservableCollection<PresetChoice> PresetChoices { get; } = [];
+    public bool IsLocalPresetSelected => PresetChoice is { GameOnly: true };
 
     public void RebuildPresetChoices()
     {
         var wasLoading = _loading;
         _loading = true;
         PresetChoices.Clear();
-        PresetChoices.Add(GlobalPreset);
-        foreach (var p in _s.Settings.AllPresets) PresetChoices.Add(p.Name);
-        PresetChoice = _s.Settings.PresetFor(Id)?.Name ?? GlobalPreset;
+        PresetChoices.Add(new PresetChoice(null, false, GlobalPreset));
+        foreach (var p in _s.Settings.AllPresets) PresetChoices.Add(new PresetChoice(p.Name, false, p.Name));
+        foreach (var p in GameConfig.LocalPresets(_s.Settings, Id)) PresetChoices.Add(new PresetChoice(p.Name, true, p.Name + " · this game"));
+        var current = _s.Settings.PresetFor(Id);
+        var local = current is not null && GameConfig.LocalPresets(_s.Settings, Id).Contains(current);
+        PresetChoice = current is null ? PresetChoices[0] : PresetChoices.First(c => c.Name == current.Name && c.GameOnly == local);
         _loading = wasLoading;
     }
 
-    partial void OnPresetChoiceChanged(string value)
+    partial void OnPresetChoiceChanged(PresetChoice? value)
     {
-        if (_loading) return;
-        _s.Settings.For(Id).Preset = value == GlobalPreset ? null : value;
+        if (_loading || value is null) return;
+        _s.Settings.For(Id).Preset = value.Name;
         _s.Settings.Save();
+        RefreshConfigRows();
     }
 
-    private IReadOnlyList<IniOverride> OptiProfile => _s.Settings.PresetFor(Id)?.Opti ?? _s.Settings.IniOverrides;
-    private IReadOnlyList<IniOverride> ReShadeProfile => _s.Settings.PresetFor(Id)?.ReShade ?? _s.Settings.ReShadeOverrides;
+    public IReadOnlyList<OptionChoice> IniModeChoices { get; private set; } = [];
+
+    /// <summary>How this game treats its existing config files; the first choice follows Settings.</summary>
+    public OptionChoice IniModeChoice
+    {
+        get => IniModeChoices.FirstOrDefault(c => c.Value == _s.Settings.Games.GetValueOrDefault(Id)?.IniMode) ?? IniModeChoices[0];
+        set
+        {
+            if (value is null) return;
+            _s.Settings.For(Id).IniMode = value.Value;
+            _s.Settings.Save();
+            OnPropertyChanged();
+        }
+    }
+
+    private void RebuildIniModeChoices()
+    {
+        var global = SettingsOptions.IniModes.FirstOrDefault(m => m.Value == _s.Settings.IniMode) ?? SettingsOptions.IniModes[0];
+        IniModeChoices = [new OptionChoice($"Default ({global.Label})", null, "Follows Settings: " + global.Description), .. SettingsOptions.IniModes];
+        OnPropertyChanged(nameof(IniModeChoices));
+        OnPropertyChanged(nameof(IniModeChoice));
+    }
+
+    public ObservableCollection<GameOptionViewModel> ReShadeRows { get; } = [];
+    public ObservableCollection<GameOptionViewModel> MfgRows { get; } = [];
+    public ObservableCollection<GameOptionViewModel> RenoDxRows { get; } = [];
+    public ObservableCollection<GameOptionViewModel> NrRows { get; } = [];
+    public ObservableCollection<GameOptionViewModel> TonemapRows { get; } = [];
+    public ObservableCollection<GameOptionViewModel> HdrRows { get; } = [];
+    private IEnumerable<GameOptionViewModel> ConfigRows => ReShadeRows.Concat(MfgRows).Concat(RenoDxRows).Concat(NrRows).Concat(TonemapRows).Concat(HdrRows);
+    private bool _rowsBuilt;
+
+    /// <summary>Built when the Game config tab first opens: most games never need them.</summary>
+    private void EnsureConfigRows()
+    {
+        if (_rowsBuilt) return;
+        _rowsBuilt = true;
+        Fill(ReShadeRows, GameOptionViewModel.Definitions.ReShade, true);
+        Fill(MfgRows, GameOptionViewModel.Definitions.Mfg, true);
+        Fill(RenoDxRows, GameOptionViewModel.Definitions.RenoDx, true);
+        Fill(NrRows, GameOptionViewModel.Definitions.Nr, false);
+        Fill(TonemapRows, GameOptionViewModel.Definitions.Tonemap, false);
+        Fill(HdrRows, GameOptionViewModel.Definitions.HdrOutput, false);
+
+        void Fill(ObservableCollection<GameOptionViewModel> rows, IEnumerable<IniOptionViewModel> defs, bool reShade)
+        {
+            foreach (var d in defs) rows.Add(new GameOptionViewModel(d, reShade, _s.Settings, Id));
+        }
+    }
+
+    private void RefreshConfigRows()
+    {
+        foreach (var r in ConfigRows) r.Refresh();
+    }
+
+    /// <summary>Presets or global settings changed: rebuild what the Game config tab shows.</summary>
+    public void RefreshConfig()
+    {
+        RebuildPresetChoices();
+        RebuildIniModeChoices();
+        RefreshConfigRows();
+    }
 
     public ObservableCollection<DlssChoice> DlssChoices { get; } = [];
     public bool HasStreamline => Info.Streamline.Count > 0;
@@ -253,6 +327,7 @@ public sealed partial class GameViewModel : ObservableObject
 
         RebuildDlssChoices();
         RebuildPresetChoices();
+        RebuildIniModeChoices();
         _loading = false;
         LoadManifest();
         OnPropertyChanged(string.Empty);
@@ -280,8 +355,11 @@ public sealed partial class GameViewModel : ObservableObject
         _loading = true;
         var pin = _s.Settings.Games.GetValueOrDefault(Id)?.DlssNrId;
         NrChoices.Clear();
-        NrChoices.Add(new DlssChoice(null, "Default"));
-        foreach (var nr in _s.Store.DlssNrVersions) NrChoices.Add(new DlssChoice(nr.Id, nr.Label));
+        var versions = _s.Store.DlssNrVersions;
+        var global = _s.Settings.DlssNrId;
+        var follows = versions.FirstOrDefault(v => v.Id == global) ?? (global is null ? versions.FirstOrDefault() : null);
+        NrChoices.Add(new DlssChoice(null, $"Default ({follows?.Version ?? "none imported"})"));
+        foreach (var nr in versions) NrChoices.Add(new DlssChoice(nr.Id, nr.Label));
         if (pin is not null && NrChoices.All(c => c.Tag != pin)) NrChoices.Add(new DlssChoice(pin, "Missing NR file · import again"));
         NrChoice = NrChoices.FirstOrDefault(c => c.Tag == pin) ?? NrChoices[0];
         _loading = loading;
@@ -497,11 +575,11 @@ public sealed partial class GameViewModel : ObservableObject
         AddMissingDlss = _s.Settings.AddMissingDlss && !dlssOnly && !IsReShadeOnly && On("opti"),
         DlssTag = EffectiveDlssTag,
         Streamline = On("streamline") && HasStreamline,
-        ReShadeOverrides = ReShadeProfile,
-        CarryOverIni = _s.Settings.IniMode != "fresh",
-        OverwriteIni = _s.Settings.IniMode == "apply",
+        ReShadeOverrides = GameConfig.EffectiveReShade(_s.Settings, Id),
+        CarryOverIni = IniMode != "fresh",
+        OverwriteIni = IniMode == "apply",
         Proxy = Proxy,
-        Overrides = OptiProfile,
+        Overrides = GameConfig.EffectiveOpti(_s.Settings, Id),
         AntiCheatConfirmed = acConfirmed,
     };
 
@@ -519,13 +597,15 @@ public sealed partial class GameViewModel : ObservableObject
         AddMissingDlss = m.Opti && m.Files.Any(f => Path.GetFileName(f).Equals("nvngx_dlss.dll", StringComparison.OrdinalIgnoreCase)),
         DlssTag = EffectiveDlssTag,
         Streamline = m.Streamline && HasStreamline,
-        ReShadeOverrides = ReShadeProfile,
-        CarryOverIni = _s.Settings.IniMode != "fresh",
-        OverwriteIni = _s.Settings.IniMode == "apply",
+        ReShadeOverrides = GameConfig.EffectiveReShade(_s.Settings, Id),
+        CarryOverIni = IniMode != "fresh",
+        OverwriteIni = IniMode == "apply",
         Proxy = m.Proxy ?? Proxy,
-        Overrides = OptiProfile,
+        Overrides = GameConfig.EffectiveOpti(_s.Settings, Id),
         AntiCheatConfirmed = m.AntiCheatConfirmed,
     };
+
+    private string IniMode => GameConfig.EffectiveIniMode(_s.Settings, Id);
 
     private bool On(string key) => Components.First(c => c.Key == key).Enabled;
 

@@ -41,7 +41,7 @@ public sealed record InstallOptions
 
     /// <summary>
     /// The same install with OptiScaler-NR and MFG Unlock held at the versions the game already has, for automatic
-    /// reinstalls (a Seaglass launch) that must not pull in a release nobody chose. A component whose installed
+    /// reinstalls that must not pull in a release nobody chose. A component whose installed
     /// version is no longer cached is left as it is.
     /// </summary>
     public InstallOptions KeepingInstalledVersions(InstallManifest m) => this with

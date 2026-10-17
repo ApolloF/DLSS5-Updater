@@ -17,6 +17,14 @@ public sealed class GameOverride
     public string? Preset { get; set; }
     /// <summary>OptiScaler or ReShade-only for this game; null follows the default.</summary>
     public InstallMode? Mode { get; set; }
+    /// <summary>OptiScaler.ini changes for this game on top of its base (preset or current settings); null/empty inherits everything.</summary>
+    public List<IniOverride>? Opti { get; set; }
+    /// <summary>Same for ReShade.ini.</summary>
+    public List<IniOverride>? ReShade { get; set; }
+    /// <summary>keep | apply | fresh for this game; null follows the global choice.</summary>
+    public string? IniMode { get; set; }
+    /// <summary>Presets that only this game can use.</summary>
+    public List<ConfigPreset>? Presets { get; set; }
 }
 
 /// <summary>A named snapshot of the OptiScaler.ini and ReShade.ini settings (incl. keybinds and options).</summary>
@@ -100,8 +108,11 @@ public sealed class AppSettings
     [JsonIgnore]
     public IEnumerable<ConfigPreset> AllPresets => [ConfigProfile.RecommendedPreset(), .. Presets];
 
+    /// <summary>The game's chosen preset; its own game-only presets are looked at before the global and built-in ones.</summary>
     public ConfigPreset? PresetFor(string gameId) =>
-        Games.GetValueOrDefault(gameId)?.Preset is { } name ? AllPresets.FirstOrDefault(p => p.Name == name) : null;
+        Games.GetValueOrDefault(gameId) is { Preset: { } name } g
+            ? g.Presets?.FirstOrDefault(p => p.Name == name) ?? AllPresets.FirstOrDefault(p => p.Name == name)
+            : null;
     /// <summary>DLSS release tag to install; null = latest.</summary>
     public string? DlssTag { get; set; }
     public string? DlssNrId { get; set; }

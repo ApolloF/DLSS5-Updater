@@ -30,13 +30,23 @@ public partial class Dialog : Window
         new Dialog(title, message, "OK", null, false).ShowDialog();
 
     /// <summary>Asks for a line of text; null when cancelled or left empty.</summary>
-    public static string? Prompt(string title, string message, string initial, string ok = "Save")
+    public static string? Prompt(string title, string message, string initial, string ok = "Save") =>
+        Prompt(title, message, initial, null, false, ok)?.Text;
+
+    /// <summary>Asks for a line of text plus a checkbox; null when cancelled or left empty.</summary>
+    public static (string Text, bool Option)? Prompt(string title, string message, string initial, string? option, bool optionChecked, string ok = "Save")
     {
         var d = new Dialog(title, message, ok, "Cancel", false);
         d.InputBox.Visibility = Visibility.Visible;
         d.InputBox.Text = initial;
+        if (option is not null)
+        {
+            d.OptionBox.Visibility = Visibility.Visible;
+            d.OptionBox.Content = option;
+            d.OptionBox.IsChecked = optionChecked;
+        }
         d.Loaded += (_, _) => { d.InputBox.Focus(); d.InputBox.SelectAll(); };
-        return d.ShowDialog() == true && !string.IsNullOrWhiteSpace(d.InputBox.Text) ? d.InputBox.Text.Trim() : null;
+        return d.ShowDialog() == true && !string.IsNullOrWhiteSpace(d.InputBox.Text) ? (d.InputBox.Text.Trim(), d.OptionBox.IsChecked == true) : null;
     }
 
     private void OnOk(object sender, RoutedEventArgs e) => DialogResult = true;
