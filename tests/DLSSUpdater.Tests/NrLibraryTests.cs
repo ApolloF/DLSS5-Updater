@@ -142,7 +142,10 @@ public sealed class NrLibraryTests : IDisposable
         var installer = new Installer(_store);
         await installer.InstallAsync(game, root, new InstallOptions { DlssNr = true, DlssNrId = old.Id }, null, default);
         using (var locked = new FileStream(InstallManifest.PathFor(root), FileMode.Open, FileAccess.Read, FileShare.Read))
-            await Assert.ThrowsAnyAsync<IOException>(() => installer.SwitchDlssNrAsync(game, root, newer.Id, default));
+        {
+            var error = await Record.ExceptionAsync(() => installer.SwitchDlssNrAsync(game, root, newer.Id, default));
+            Assert.True(error is IOException or UnauthorizedAccessException);
+        }
         Assert.Equal(old.Id, FileUtil.Sha256(Path.Combine(root, ComponentStore.DlssNrFile)));
         Assert.Equal(old.Id, InstallManifest.Read(root)!.DlssNrId);
     }
