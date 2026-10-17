@@ -4,7 +4,7 @@ Windows app that keeps an OptiScaler-NR + ReShade + DLSS setup current across al
 
 It pulls the latest releases of:
 
-- [OptiScaler-DLSSNR-PreSR-Multipass](https://github.com/wilsjo2/OptiScaler-DLSSNR-PreSR-Multipass/releases) (standard package, prereleases included)
+- [OptiScaler-DLSSNR-PreSR-Multipass](https://github.com/ShyVortex/OptiScaler-DLSSNR-PreSR-Multipass/releases) (standard package, prereleases included)
 - [MFGAdaUnlock-RenoDx](https://github.com/mavismmg/MFGAdaUnlock-RenoDx/releases) (`renodx-mfgunlock.addon64`)
 - [NVIDIA DLSS](https://github.com/NVIDIA/DLSS) runtime DLLs: `nvngx_dlss.dll` (SR), `nvngx_dlssd.dll` (RR), `nvngx_dlssg.dll` (FG)
 - [NVIDIA Streamline](https://github.com/NVIDIA-RTX/Streamline) (optional, signed `sl.*.dll` set for Dynamic MFG)
@@ -99,3 +99,15 @@ Tagging `v*` (matching `<Version>` in the csproj) builds both on GitHub Actions 
 ## License
 
 DLSS Updater is released under the [MIT License](LICENSE). The third-party files it downloads and installs (OptiScaler, MFG Unlock, NVIDIA DLSS and Streamline, ReShade) and your own `nvngx_dlssnr.dll` keep their own licences.
+
+## DLSS 5 / NR library and maintained sources
+
+Import each `nvngx_dlssnr.dll` under **Settings → Local components**. Every build is kept side by side in `%LocalAppData%\DLSSUpdater\components\dlssnr`, including builds with the same version but different contents. Version numbers come from the DLL version resource; SHA-256 identifies the build. Existing single-file imports are retained automatically. NR is never downloaded or distributed by this app.
+
+Choose the global NR default in Settings, or choose a version on a game and press **Switch NR**. **Switch back** restores the previous game file; **Switch default back** restores the previous default. Changes to the default apply on the next install or update for games following it. Full uninstall still restores the game's original files. Downloaded DLSS SDK versions are also retained and available in the DLSS version picker, including offline.
+
+OptiScaler-NR now comes from [ShyVortex's maintained continuation](https://github.com/ShyVortex/OptiScaler-DLSSNR-PreSR-Multipass). Existing installs, cached releases and settings remain usable. The [janblade F5 fork](https://github.com/janblade/OptiScaler-F5-DLSSNR-Multipass) is an advanced alternative described in the research report; it is not an automatic source in this release.
+
+The optional **RenoDX DLSS add-on** comes directly from [clshortfuse/renodx snapshot or nightly releases](https://github.com/clshortfuse/renodx/releases). Enable it with ReShade 6+ (full add-on support) and an imported NR runtime in a native DLSS/Streamline game. The installer preserves other early-loaded add-ons and configures `LoadFromDllMain`, pre-upscale rendering, one NR pass and detail stability. GitHub checks share the ETag cache and fall back to cached releases offline.
+
+[ShortFuse's openNR](https://github.com/clshortfuse/openNR) describes the FP16 compatibility builds for RTX 20/30/40, including **compat-fp16-310.9.16-cuda13.4.3**. Download or build the file yourself, extract `nvngx_dlssnr.dll`, and import it. Known stock/compat hashes for 310.8.0 and 310.9.16 are labelled; other builds are marked unverified. A matching version alone does not establish hardware compatibility.

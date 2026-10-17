@@ -213,6 +213,34 @@ public sealed partial class SettingsViewModel : ObservableObject
         }
     }
 
+    public ObservableCollection<DlssChoice> NrChoices { get; } = [];
+    public DlssChoice? SelectedNr
+    {
+        get => NrChoices.FirstOrDefault(c => c.Tag == Settings.DlssNrId);
+        set
+        {
+            if (value?.Tag is null || value.Tag == Settings.DlssNrId) return;
+            Settings.SelectDlssNr(value.Tag);
+            Save();
+            _ = _main.RefreshLocalComponentsAsync();
+            OnPropertyChanged(nameof(SelectedNr));
+            OnPropertyChanged(nameof(DlssNrInfo));
+        }
+    }
+
+    [RelayCommand]
+    private void UndoNrDefault()
+    {
+        if (Settings.PreviousDlssNrId is not { } id) return;
+        SelectedNr = NrChoices.FirstOrDefault(c => c.Tag == id);
+    }
+
+    public bool InstallRenoDx
+    {
+        get => Settings.InstallRenoDx;
+        set { Settings.InstallRenoDx = value; Save(); }
+    }
+
     public string DlssNrInfo => Describe(_main.S.Store.DlssNrPath, _main.S.DlssNrSha, true);
     public string ReShadeInfo
     {
@@ -262,7 +290,7 @@ public sealed partial class SettingsViewModel : ObservableObject
         if (!File.Exists(path) || sha is null) return "Not imported";
         var v = FileUtil.Format(FileUtil.ReadVersion(path));
         var size = new FileInfo(path).Length / 1048576.0;
-        var variant = known ? (ComponentStore.KnownDlssNr.TryGetValue(sha, out var n) ? n : "unknown build, hash not in INSTALL-DLSSNR.md") : null;
+        var variant = known ? (ComponentStore.KnownDlssNr.TryGetValue(sha, out var n) ? n : "Unverified build") : null;
         return $"{v}  ·  {size:0.0} MB  ·  SHA-256 {sha[..12]}…" + (variant is null ? "" : $"\n{variant}");
     }
 
@@ -363,6 +391,22 @@ public sealed partial class SettingsViewModel : ObservableObject
     private Task ImportDlssNr() => Import(ComponentStore.DlssNrFile, "nvngx_dlssnr.dll|nvngx_dlssnr.dll|DLL|*.dll");
 
     [RelayCommand]
+    private async Task ImportDlss()
+    {
+        var dlg = new OpenFileDialog { Title = "Import DLSS SR / RR / FG", Filter = "DLSS runtimes|nvngx_dlss.dll;nvngx_dlssd.dll;nvngx_dlssg.dll" };
+        if (dlg.ShowDialog() != true) return;
+        try
+        {
+            var release = await Task.Run(() => _main.S.Store.ImportDlss(dlg.FileName));
+            Settings.DlssTag = release.Tag;
+            Save();
+            Reload();
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        { Log.Error("DLSS import failed", ex); Views.Dialog.Show("Import failed", ex.Message); }
+    }
+
+    [RelayCommand]
     private Task ImportReShade() => Import(ComponentStore.ReShadeFile, "ReShade (add-on build)|ReShade64.dll;dxgi.dll;*.dll");
 
     private async Task Import(string fileName, string filter)
@@ -372,12 +416,20 @@ public sealed partial class SettingsViewModel : ObservableObject
         try
         {
             await Task.Run(() => _main.S.Store.Import(dlg.FileName, fileName));
+            if (fileName == ComponentStore.DlssNrFile)
+            {
+                var id = FileUtil.Sha256(dlg.FileName);
+                Settings.SelectDlssNr(id);
+                Save();
+            }
+            Reload();
             await _main.RefreshLocalComponentsAsync();
             OnPropertyChanged(nameof(DlssNrInfo));
             OnPropertyChanged(nameof(ReShadeInfo));
             OnPropertyChanged(nameof(ReShadeImported));
         }
-        catch (IOException ex) { Log.Error($"Import of {fileName} failed", ex); }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        { Log.Error($"Import of {fileName} failed", ex); Views.Dialog.Show("Import failed", ex.Message); }
     }
 
     [RelayCommand]
@@ -435,10 +487,12 @@ public sealed partial class SettingsViewModel : ObservableObject
 
         ReloadPresets(SelectedPreset is { } sp && Settings.AllPresets.Any(p => p.Name == sp) ? sp : null);
 
+        NrChoices.Clear();
+        foreach (var nr in _main.S.Store.DlssNrVersions) NrChoices.Add(new DlssChoice(nr.Id, nr.Label));
         DlssChoices.Clear();
         var store = _main.S.Store;
         DlssChoices.Add(new DlssChoice(null, $"Latest{(store.Dlss is { } l ? " · " + l.Tag : "")}"));
-        foreach (var r in store.DlssReleases) DlssChoices.Add(new DlssChoice(r.Tag, r.Tag));
+        foreach (var r in store.DlssReleases.Concat(ComponentStore.CachedReleases(Component.Dlss)).DistinctBy(r => r.Tag)) DlssChoices.Add(new DlssChoice(r.Tag, r.Tag));
         if (Settings.DlssTag is { } t && DlssChoices.All(c => c.Tag != t)) DlssChoices.Add(new DlssChoice(t, t));
 
         RefreshEditors();

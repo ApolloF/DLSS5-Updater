@@ -44,6 +44,10 @@ public sealed class InstallManifest
     public string? DlssTag { get; set; }
     public bool DlssPinned { get; set; }
     public string? DlssNrSha { get; set; }
+    public string? DlssNrId { get; set; }
+    public string? PreviousDlssNrId { get; set; }
+    public bool RenoDx { get; set; }
+    public string? RenoDxTag { get; set; }
     public string? ReShadeSha { get; set; }
     public string? StreamlineTag { get; set; }
     public bool Streamline { get; set; }
