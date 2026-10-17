@@ -24,6 +24,7 @@ public sealed partial class SettingsViewModel : ObservableObject
 
         ReShadeOptions = SettingsOptions.ReShade(ReShadeOverrides);
         MfgOptions = SettingsOptions.Mfg(ReShadeOverrides);
+        RenoDxOptions = SettingsOptions.RenoDx(ReShadeOverrides);
         NrOptions = SettingsOptions.Nr(Overrides);
         TonemapOptions = SettingsOptions.Tonemap(Overrides);
         HdrOptions = SettingsOptions.HdrOutput(Overrides);
@@ -39,10 +40,11 @@ public sealed partial class SettingsViewModel : ObservableObject
     public ObservableCollection<KeybindViewModel> ReShadeKeybinds { get; }
     public IReadOnlyList<IniOptionViewModel> ReShadeOptions { get; }
     public IReadOnlyList<IniOptionViewModel> MfgOptions { get; }
+    public IReadOnlyList<IniOptionViewModel> RenoDxOptions { get; }
     public IReadOnlyList<IniOptionViewModel> NrOptions { get; }
     public IReadOnlyList<IniOptionViewModel> TonemapOptions { get; }
     public IReadOnlyList<IniOptionViewModel> HdrOptions { get; }
-    public IEnumerable<IniOptionViewModel> AllOptions => ReShadeOptions.Concat(MfgOptions).Concat(NrOptions).Concat(TonemapOptions).Concat(HdrOptions);
+    public IEnumerable<IniOptionViewModel> AllOptions => ReShadeOptions.Concat(MfgOptions).Concat(RenoDxOptions).Concat(NrOptions).Concat(TonemapOptions).Concat(HdrOptions);
     public IReadOnlyList<OptionChoice> IniModes => SettingsOptions.IniModes;
 
     public OptionChoice IniMode
@@ -224,9 +226,13 @@ public sealed partial class SettingsViewModel : ObservableObject
             Save();
             _ = _main.RefreshLocalComponentsAsync();
             OnPropertyChanged(nameof(SelectedNr));
+            OnPropertyChanged(nameof(SelectedNrHint));
             OnPropertyChanged(nameof(DlssNrInfo));
         }
     }
+
+    /// <summary>Plain advice for the chosen NR build (known hashes only).</summary>
+    public string? SelectedNrHint => _main.S.Store.DlssNrVersions.FirstOrDefault(v => v.Id == Settings.DlssNrId)?.Hint;
 
     [RelayCommand]
     private void UndoNrDefault()
@@ -255,6 +261,33 @@ public sealed partial class SettingsViewModel : ObservableObject
     }
 
     public bool ReShadeImported => _main.S.Store.ReShadeImported;
+
+    public string RenoDxInfo
+    {
+        get
+        {
+            var store = _main.S.Store;
+            return store.RenoDxImported
+                ? "Imported  ·  " + Describe(store.RenoDxPath, HashCache.Get(store.RenoDxPath), false)
+                : $"Not imported. ShortFuse's {ComponentStore.RenoDxFile} isn't published on GitHub; get it from ShortFuse's RenoDX Discord and import it here.";
+        }
+    }
+
+    public bool RenoDxImported => _main.S.Store.RenoDxImported;
+
+    [RelayCommand]
+    private Task ImportRenoDx() => Import(ComponentStore.RenoDxFile, "RenoDX DLSS add-on|renodx-dlss.addon64;*.addon64");
+
+    [RelayCommand]
+    private async Task RemoveRenoDx()
+    {
+        try { _main.S.Store.RemoveRenoDxImport(); }
+        catch (IOException ex) { Log.Error("Could not remove the imported RenoDX add-on", ex); }
+        Log.Info($"Removed imported {ComponentStore.RenoDxFile}");
+        await _main.RefreshLocalComponentsAsync();
+        OnPropertyChanged(nameof(RenoDxInfo));
+        OnPropertyChanged(nameof(RenoDxImported));
+    }
 
     public bool AutoDownloadReShade
     {
@@ -402,7 +435,7 @@ public sealed partial class SettingsViewModel : ObservableObject
             Save();
             Reload();
         }
-        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or InvalidDataException)
         { Log.Error("DLSS import failed", ex); Views.Dialog.Show("Import failed", ex.Message); }
     }
 
@@ -427,8 +460,11 @@ public sealed partial class SettingsViewModel : ObservableObject
             OnPropertyChanged(nameof(DlssNrInfo));
             OnPropertyChanged(nameof(ReShadeInfo));
             OnPropertyChanged(nameof(ReShadeImported));
+            OnPropertyChanged(nameof(RenoDxInfo));
+            OnPropertyChanged(nameof(RenoDxImported));
+            OnPropertyChanged(nameof(SelectedNrHint));
         }
-        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or InvalidDataException)
         { Log.Error($"Import of {fileName} failed", ex); Views.Dialog.Show("Import failed", ex.Message); }
     }
 

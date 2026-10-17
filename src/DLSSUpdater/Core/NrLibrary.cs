@@ -5,6 +5,7 @@ namespace DLSSUpdater.Core;
 public sealed record NrVersion(string Id, string Version, string Sha256)
 {
     public string Label => $"{Version} · {(ComponentStore.KnownDlssNr.GetValueOrDefault(Sha256) ?? "Unverified build")} · {Sha256[..8]}";
+    public string? Hint => ComponentStore.KnownDlssNrHints.GetValueOrDefault(Sha256);
     public override string ToString() => Label;
 }
 
@@ -51,10 +52,18 @@ public sealed partial class ComponentStore
     /// <summary>New imports must identify themselves through their version resource, not their renamed file.</summary>
     public NrVersion ImportDlssNr(string source)
     {
-        if (FileUtil.ReadVersion(source) is null || !string.Equals(FileUtil.OriginalFilename(source), DlssNrFile, StringComparison.OrdinalIgnoreCase))
-            throw new InvalidDataException("Choose nvngx_dlssnr.dll with a readable DLL version and matching original filename. Extract archives first.");
+        if (FileUtil.ReadVersion(source) is null || !IsDlssNr(source))
+            throw new InvalidDataException("Choose nvngx_dlssnr.dll (NVIDIA DLSSNR) with a readable DLL version. Extract archives first.");
         return RetainDlssNr(source);
     }
+
+    /// <summary>
+    /// Builds name themselves either by original filename or by internal name: 310.9.16 sets OriginalFilename
+    /// to its build changelist ("CL 39025366") and keeps InternalName "DLSSNR".
+    /// </summary>
+    internal static bool IsDlssNr(string path) =>
+        string.Equals(FileUtil.OriginalFilename(path), DlssNrFile, StringComparison.OrdinalIgnoreCase)
+        || string.Equals(FileUtil.InternalName(path), "DLSSNR", StringComparison.OrdinalIgnoreCase);
 
     /// <summary>Also retains older installs without a version resource so upgrading never destroys a way back.</summary>
     internal NrVersion RetainDlssNr(string source)

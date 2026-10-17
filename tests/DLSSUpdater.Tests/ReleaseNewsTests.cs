@@ -31,11 +31,14 @@ public class ReleaseNewsTests : IDisposable
     private static void WriteApiCache(string url, string tag, string? body)
     {
         var release = new GhRelease { TagName = tag, Body = body };
-        var cache = new Dictionary<string, ApiCacheEntry>
-        {
-            [url] = new() { ETag = "\"x\"", Body = JsonSerializer.Serialize(new List<GhRelease> { release }, JsonCtx.Default.ListGhRelease) },
-        };
-        File.WriteAllText(AppPaths.ApiCacheFile, JsonSerializer.Serialize(cache, JsonCtx.Default.DictionaryStringApiCacheEntry));
+        WriteEntry(url, JsonSerializer.Serialize(new List<GhRelease> { release }, JsonCtx.Default.ListGhRelease));
+    }
+
+    private static void WriteEntry(string url, string body)
+    {
+        var file = GitHubClient.CacheFileFor(url);
+        Directory.CreateDirectory(Path.GetDirectoryName(file)!);
+        File.WriteAllText(file, JsonSerializer.Serialize(new ApiCacheEntry { Url = url, ETag = "\"x\"", Body = body }, JsonCtx.Default.ApiCacheEntry));
     }
 
     private static void MarkDownloaded(Component c, string tag)
@@ -58,9 +61,7 @@ public class ReleaseNewsTests : IDisposable
     [Fact]
     public void CachedReleases_CorruptEntryIsSkipped()
     {
-        File.WriteAllText(AppPaths.ApiCacheFile, JsonSerializer.Serialize(
-            new Dictionary<string, ApiCacheEntry> { [DlssReleasesUrl] = new() { ETag = "\"x\"", Body = "{not json" } },
-            JsonCtx.Default.DictionaryStringApiCacheEntry));
+        WriteEntry(DlssReleasesUrl, "{not json");
 
         Assert.Empty(new GitHubClient().CachedReleases(ComponentStore.DlssRepo));
     }

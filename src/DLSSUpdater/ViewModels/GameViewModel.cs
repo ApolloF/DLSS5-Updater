@@ -69,7 +69,7 @@ public sealed partial class GameViewModel : ObservableObject
             new ComponentRow("reshade", "ReShade"),
             new ComponentRow("mfg", "MFG Unlock"),
             new ComponentRow("dlssnr", "DLSSNR runtime"),
-            new ComponentRow("renodx", "RenoDX DLSS add-on"),
+            new ComponentRow("renodx", "RenoDX DLSS add-on (replaces OptiScaler NR)"),
             new ComponentRow("dlss", "DLSS SR · RR · FG"),
             new ComponentRow("streamline", "Streamline (Dynamic MFG)"),
         ];
@@ -137,6 +137,8 @@ public sealed partial class GameViewModel : ObservableObject
             c.Visible = !(IsReShadeOnly && c.Key == "opti");
             c.Editable = !(IsReShadeOnly && c.Key == "reshade");
             if (!c.Editable) c.Enabled = true;
+            // The add-on replaces OptiScaler's NR, so it exists in ReShade-only mode alone.
+            if (c.Key == "renodx" && !IsReShadeOnly) { c.Visible = false; c.Enabled = false; }
         }
         OnPropertyChanged(nameof(AnyEnabled));
     }
@@ -387,7 +389,7 @@ public sealed partial class GameViewModel : ObservableObject
         Row("dlssnr", gameNr is not null && File.Exists(gameNr) ? InstalledVersion(ComponentStore.DlssNrFile) : null,
             File.Exists(nrPath) ? FileUtil.Format(FileUtil.ReadVersion(nrPath)) : null,
             gameNr is null || !File.Exists(gameNr) || (File.Exists(nrPath) && FileUtil.SameFile(gameNr, nrPath)));
-        Row("renodx", m?.RenoDx == true ? ShortRenoTag(m.RenoDxTag) : null, ShortRenoTag(store.RenoDx?.Tag), m?.RenoDxTag == store.RenoDx?.Tag);
+        Row("renodx", m?.RenoDx == true ? RenoDxVersionOf(m.RenoDxTag) : null, store.RenoDxVersion, m?.RenoDxTag == store.RenoDxTag);
         OnPropertyChanged(nameof(CanSwitchNr));
         OnPropertyChanged(nameof(CanUndoNr));
 
@@ -476,7 +478,8 @@ public sealed partial class GameViewModel : ObservableObject
     private static string ReShadeInstalledName(InstallManifest m) =>
         m.Mode == InstallMode.ReShadeOnly && m.Proxy is { } p ? p : ComponentStore.ReShadeFile;
 
-    private static string? ShortRenoTag(string? tag) => tag is null ? null : tag.Length > 22 ? tag[..22] : tag;
+    /// <summary>The version part of a "{version}-{sha12}" tag.</summary>
+    private static string? RenoDxVersionOf(string? tag) => tag is null ? null : tag.LastIndexOf('-') is > 0 and var i ? tag[..i] : tag;
 
     private string? InstalledVersion(string file) =>
         SelectedTarget is null ? null : FileUtil.Format(FileUtil.ReadVersion(Path.Combine(SelectedTarget.Dir, file)));
@@ -489,7 +492,7 @@ public sealed partial class GameViewModel : ObservableObject
         Mfg = !dlssOnly && On("mfg"),
         DlssNr = !dlssOnly && On("dlssnr"),
         DlssNrId = EffectiveNrId,
-        RenoDx = !dlssOnly && On("renodx"),
+        RenoDx = !dlssOnly && IsReShadeOnly && On("renodx"),
         Dlss = dlssOnly || On("dlss"),
         AddMissingDlss = _s.Settings.AddMissingDlss && !dlssOnly && !IsReShadeOnly && On("opti"),
         DlssTag = EffectiveDlssTag,

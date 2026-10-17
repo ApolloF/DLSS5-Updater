@@ -55,6 +55,8 @@ public static class ConfigProfile
     public static List<IniOverride> RecommendedReShade() =>
     [
         new("OVERLAY", "TutorialProgress", "4"),
+        new("RENODX-DLSS", "DirectNeuralRenderingHookStage", "1"),
+        new("RENODX-DLSS", "DirectNeuralRenderingPassCount", "1"),
     ];
 
     public static ConfigPreset RecommendedPreset() =>

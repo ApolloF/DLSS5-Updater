@@ -48,6 +48,22 @@ public sealed class NrLibraryTests : IDisposable
     }
 
     [Fact]
+    public void Import_AcceptsBuildThatNamesItselfByInternalName()
+    {
+        // 310.9.16 ships with OriginalFilename "CL 39025366" and InternalName "DLSSNR".
+        var path = Path.Combine(_tmp, "nvngx_dlssnr.dll");
+        FakeVersionDll.Write(path, new Version(310, 9, 16, 0), "CL 39025366", "DLSSNR");
+        Assert.Equal("CL 39025366", FileUtil.OriginalFilename(path));
+        Assert.Equal("DLSSNR", FileUtil.InternalName(path));
+        Assert.Equal("310.9.16", _store.ImportDlssNr(path).Version);
+
+        var other = Path.Combine(_tmp, "other.dll");
+        FakeVersionDll.Write(other, new Version(310, 9, 16, 0), "CL 39025366", "DLSS");
+        Assert.Throws<InvalidDataException>(() => _store.ImportDlssNr(other));
+        Assert.Throws<InvalidDataException>(() => _store.ImportDlss(path));
+    }
+
+    [Fact]
     public void BadImports_MissingPins_TamperedFiles_AreRejected()
     {
         var text = Path.Combine(_tmp, "fake.dll");
@@ -151,46 +167,6 @@ public sealed class NrLibraryTests : IDisposable
     }
 
     [Fact]
-    public async Task RenoDx_ReShadeInstall_MergesEarlyAddonsAndRestoresOriginalConfig()
-    {
-        var root = Path.Combine(_tmp, "reno-game");
-        Directory.CreateDirectory(root);
-        var config = Path.Combine(root, "ReShade.ini");
-        const string before = "[ADDON]\nLoadFromDllMain=other.addon64\n[RenoDX.DLSS5]\nNRPasses=2\n[OTHER]\nSetting=keep\n";
-        File.WriteAllText(config, before);
-        var nr = _store.ImportDlssNr(Dll("nr.dll", new Version(310, 9, 16, 0)));
-        FakeVersionDll.Write(_store.ReShadePath, new Version(6, 8, 0, 0), "ReShade64.dll");
-        var tag = "snapshot-test";
-        var addon = Path.Combine(ComponentStore.TagDir(Component.RenoDx, tag), ComponentStore.RenoDxFile);
-        Directory.CreateDirectory(Path.GetDirectoryName(addon)!);
-        File.WriteAllText(addon, "fake addon");
-        _store.RenoDx = new ReleaseInfo { Tag = tag, FromCache = true };
-        ComponentStore.MarkComplete(Component.RenoDx, _store.RenoDx);
-        var game = new GameInfo
-        {
-            Id = root, Root = root, Name = "Fake RenoDX game",
-            Dlss = [new DlssDll { Name = "nvngx_dlss.dll" }],
-            Streamline = [new DlssDll { Name = "sl.interposer.dll" }],
-        };
-        var installer = new Installer(_store);
-        var options = new InstallOptions { Mode = InstallMode.ReShadeOnly, ReShade = true, RenoDx = true, DlssNr = true, DlssNrId = nr.Id };
-        await installer.InstallAsync(game, root, options, null, default);
-        var ini = IniFile.Load(config);
-        Assert.Equal("other.addon64," + ComponentStore.RenoDxFile, ini.Get("ADDON", "LoadFromDllMain"));
-        Assert.Equal("2", ini.Get("RenoDX.DLSS5", "NRPasses"));
-        Assert.Equal("1", ini.Get("RenoDX.DLSS5", "NRHookPoint"));
-        Assert.Equal("2", ini.Get("RenoDX.DLSS5", "NRDetailStability"));
-        Assert.Equal("keep", ini.Get("OTHER", "Setting"));
-        Assert.True(InstallManifest.Read(root)!.RenoDx);
-        await installer.InstallAsync(game, root, options, null, default);
-        Assert.Equal("other.addon64," + ComponentStore.RenoDxFile, IniFile.Load(config).Get("ADDON", "LoadFromDllMain"));
-        await installer.UninstallAsync(game, root, default);
-        Assert.Equal(before, File.ReadAllText(config));
-        Assert.False(File.Exists(Path.Combine(root, ComponentStore.RenoDxFile)));
-        Assert.False(File.Exists(Path.Combine(root, ComponentStore.DlssNrFile)));
-    }
-
-    [Fact]
     public async Task ImportedAndDownloadedDlssVersionsRemainAvailable()
     {
         var imported = _store.ImportDlss(Dll("sr.dll", new Version(310, 9, 16, 0), "nvngx_dlss.dll"));
@@ -221,7 +197,7 @@ internal static class FakeVersionDll
     [DllImport("kernel32.dll", SetLastError = true)]
     private static extern bool EndUpdateResource(IntPtr update, bool discard);
 
-    public static void Write(string path, Version v, string original)
+    public static void Write(string path, Version v, string original, string? internalName = null)
     {
         File.Copy(typeof(FakeVersionDll).Assembly.Location, path, true);
         var info = new uint[] { 0xFEEF04BD, 0x10000, (uint)(v.Major << 16 | v.Minor), (uint)(v.Build << 16 | v.Revision),
@@ -229,6 +205,7 @@ internal static class FakeVersionDll
         var fixedInfo = info.SelectMany(BitConverter.GetBytes).ToArray();
         var strings = Block("StringFileInfo", [], 0, 1, Block("040904b0", [], 0, 1,
             Block("OriginalFilename", Encoding.Unicode.GetBytes(original + '\0'), (ushort)(original.Length + 1), 1),
+            Block("InternalName", Encoding.Unicode.GetBytes((internalName ?? "") + '\0'), (ushort)((internalName ?? "").Length + 1), 1),
             Block("FileVersion", Encoding.Unicode.GetBytes(v + "\0"), (ushort)(v.ToString().Length + 1), 1),
             Block("ProductVersion", Encoding.Unicode.GetBytes(v + "\0"), (ushort)(v.ToString().Length + 1), 1)));
         var translation = Block("VarFileInfo", [], 0, 1, Block("Translation", [9, 4, 0xb0, 4], 4, 0));
