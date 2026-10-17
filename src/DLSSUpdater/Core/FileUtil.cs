@@ -18,9 +18,13 @@ public static class FileUtil
         catch (FileNotFoundException) { return null; }
     }
 
-    public static string? OriginalFilename(string path)
+    public static string? OriginalFilename(string path) => VersionInfo(path)?.OriginalFilename?.Trim();
+
+    public static string? InternalName(string path) => VersionInfo(path)?.InternalName?.Trim();
+
+    private static FileVersionInfo? VersionInfo(string path)
     {
-        try { return FileVersionInfo.GetVersionInfo(path).OriginalFilename?.Trim(); }
+        try { return FileVersionInfo.GetVersionInfo(path); }
         catch (FileNotFoundException) { return null; }
     }
 

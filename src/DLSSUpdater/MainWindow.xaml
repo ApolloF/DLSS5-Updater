@@ -792,6 +792,7 @@
                                             <TextBlock Text="Default NR version" Margin="0,0,0,6" />
                                             <ComboBox ItemsSource="{Binding NrChoices}" SelectedItem="{Binding SelectedNr}" MaxDropDownHeight="300"
                                                       AutomationProperties.Name="Default NR version" />
+                                            <TextBlock Text="{Binding SelectedNrHint}" Style="{StaticResource MutedText}" FontSize="11.5" TextWrapping="Wrap" Margin="0,6,0,0" />
                                             <Button Content="Switch default back" Command="{Binding UndoNrDefaultCommand}" HorizontalAlignment="Left" Margin="0,8,0,0" />
                                         </StackPanel>
                                         <Border Style="{StaticResource Divider}" />
@@ -808,6 +809,22 @@
                                                         Visibility="{Binding ReShadeImported, Converter={StaticResource BoolToVis}}"
                                                         ToolTip="Remove the imported ReShade64.dll and use the latest add-on build from reshade.me" />
                                                 <Button Content="Import…" Command="{Binding ImportReShadeCommand}" Margin="12,0,0,0" />
+                                            </StackPanel>
+                                        </Grid>
+                                        <Border Style="{StaticResource Divider}" />
+                                        <Grid Margin="0,10">
+                                            <Grid.ColumnDefinitions>
+                                                <ColumnDefinition Width="160" />
+                                                <ColumnDefinition Width="*" />
+                                                <ColumnDefinition Width="Auto" />
+                                            </Grid.ColumnDefinitions>
+                                            <TextBlock Text="renodx-dlss.addon64" Style="{StaticResource Mono}" VerticalAlignment="Center" />
+                                            <TextBlock Grid.Column="1" Text="{Binding RenoDxInfo}" Style="{StaticResource MutedText}" TextWrapping="Wrap" FontSize="12" VerticalAlignment="Center" />
+                                            <StackPanel Grid.Column="2" Orientation="Horizontal">
+                                                <Button Content="Remove" Style="{StaticResource BtnGhost}" Command="{Binding RemoveRenoDxCommand}" Margin="12,0,0,0"
+                                                        Visibility="{Binding RenoDxImported, Converter={StaticResource BoolToVis}}"
+                                                        ToolTip="Remove the imported RenoDX DLSS add-on from the local components" />
+                                                <Button Content="Import…" Command="{Binding ImportRenoDxCommand}" Margin="12,0,0,0" />
                                             </StackPanel>
                                         </Grid>
                                         <Border Style="{StaticResource Divider}" />
@@ -860,7 +877,7 @@
                                         </CheckBox>
                                         <CheckBox Content="Install ReShade" IsChecked="{Binding InstallReShade}" Margin="0,8" />
                                         <CheckBox Content="Install MFG Unlock add-on" IsChecked="{Binding InstallMfgUnlock}" Margin="0,8" />
-                                        <CheckBox Content="Install RenoDX DLSS add-on (needs ReShade 6+ and NR)" IsChecked="{Binding InstallRenoDx}" Margin="0,8" />
+                                        <CheckBox Content="Install RenoDX DLSS add-on (ReShade-only mode, replaces OptiScaler NR; needs ReShade 6+ and the NR runtime)" IsChecked="{Binding InstallRenoDx}" Margin="0,8" />
                                         <CheckBox Content="Install DLSSNR runtime" IsChecked="{Binding InstallDlssNr}" Margin="0,8" />
                                         <CheckBox IsChecked="{Binding InstallStreamline}" Margin="0,8">
                                             <StackPanel>
@@ -982,8 +999,12 @@
                                 <Border Style="{StaticResource Card}" Padding="16,4">
                                     <ItemsControl ItemsSource="{Binding MfgOptions}" ItemTemplate="{StaticResource OptionRow}" />
                                 </Border>
+                                <TextBlock Text="RENODX DLSS ADD-ON" Style="{StaticResource SectionTitle}" />
+                                <Border Style="{StaticResource Card}" Padding="16,4">
+                                    <ItemsControl ItemsSource="{Binding RenoDxOptions}" ItemTemplate="{StaticResource OptionRow}" />
+                                </Border>
                                 <TextBlock Style="{StaticResource MutedText}" FontSize="11.5" TextWrapping="Wrap" Margin="0,8,0,0"
-                                           Text="Written to ReShade.ini next to the game. For Dynamic MFG also set the NVIDIA App's DLSS Frame Generation override to 'Use the 3D application setting' and cold-restart the game." />
+                                           Text="Written to ReShade.ini next to the game. The RenoDX options only apply when the add-on is installed. For Dynamic MFG also set the NVIDIA App's DLSS Frame Generation override to 'Use the 3D application setting' and cold-restart the game." />
                             </StackPanel>
 
                             <!-- ===== DLSSNR & HDR ===== -->
@@ -1169,7 +1190,7 @@
                                     <x:Array Type="sys:String"><sys:String>ReShade</sys:String><sys:String>crosire · use the full add-on build</sys:String></x:Array>
                                 </Button>
                                 <Button Tag="https://github.com/clshortfuse/renodx">
-                                    <x:Array Type="sys:String"><sys:String>RenoDX</sys:String><sys:String>ShortFuse · DLSS ReShade add-on (snapshot / nightlies)</sys:String></x:Array>
+                                    <x:Array Type="sys:String"><sys:String>RenoDX</sys:String><sys:String>ShortFuse · ReShade add-on framework (renodx-dlss.addon64 is imported)</sys:String></x:Array>
                                 </Button>
                                 <Button Tag="https://github.com/clshortfuse/openNR">
                                     <x:Array Type="sys:String"><sys:String>ShortFuse NR compat</sys:String><sys:String>openNR · user-supplied RTX 20/30/40 runtime</sys:String></x:Array>

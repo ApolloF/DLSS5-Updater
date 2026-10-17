@@ -175,7 +175,7 @@ public sealed class AppSettings
 [JsonSerializable(typeof(AppSettings))]
 [JsonSerializable(typeof(InstallManifest))]
 [JsonSerializable(typeof(List<GameInfo>))]
-[JsonSerializable(typeof(Dictionary<string, ApiCacheEntry>))]
+[JsonSerializable(typeof(ApiCacheEntry))]
 [JsonSerializable(typeof(List<GhRelease>))]
 [JsonSerializable(typeof(GhRelease))]
 [JsonSerializable(typeof(CachedComponent))]

@@ -89,7 +89,7 @@ dotnet publish src/DLSSUpdater -c Release -o publish
 Produces a single self-contained `publish\DLSSUpdater.exe` (.NET 8, WPF), the portable build. The installer wraps it with [Inno Setup](https://jrsoftware.org/isinfo.php):
 
 ```
-iscc /DAppVersion=1.7.0 installer\DLSSUpdater.iss
+iscc /DAppVersion=1.8.0 installer\DLSSUpdater.iss
 ```
 
 Tagging `v*` (matching `<Version>` in the csproj) builds both on GitHub Actions and attaches them to a release.
@@ -108,6 +108,6 @@ Choose the global NR default in Settings, or choose a version on a game and pres
 
 OptiScaler-NR now comes from [ShyVortex's maintained continuation](https://github.com/ShyVortex/OptiScaler-DLSSNR-PreSR-Multipass). Existing installs, cached releases and settings remain usable. The [janblade F5 fork](https://github.com/janblade/OptiScaler-F5-DLSSNR-Multipass) is an advanced alternative described in the research report; it is not an automatic source in this release.
 
-The optional **RenoDX DLSS add-on** comes directly from [clshortfuse/renodx snapshot or nightly releases](https://github.com/clshortfuse/renodx/releases). Enable it with ReShade 6+ (full add-on support) and an imported NR runtime in a native DLSS/Streamline game. The installer preserves other early-loaded add-ons and configures `LoadFromDllMain`, pre-upscale rendering, one NR pass and detail stability. GitHub checks share the ETag cache and fall back to cached releases offline.
+The optional **RenoDX DLSS add-on** is ShortFuse's `renodx-dlss.addon64` (neural rendering for ReShade). It isn't published on any official GitHub, so it is import-only: import it under **Settings → Local components**; only a file that names itself `renodx-dlss.addon64` is accepted. It works in ReShade-only mode (it replaces OptiScaler's NR, so the two never run together), with ReShade 6+ (full add-on support), an imported NR runtime and a game with native DLSS. The installer keeps other early-loaded add-ons, adds the add-on to `LoadFromDllMain`, moves older `renodx-dlssfix` / `renodx-dlss5` add-ons out of the way (restored on uninstall), and writes the options you pick in Settings to `[RENODX-DLSS]` in `ReShade.ini`. With OptiScaler-NR v0.9+, don't combine its built-in MFG unlock (`AdaMfgUnlock` / `AmpereMfgUnlock`) with the MFG Unlock add-on; the installer refuses that.
 
 [ShortFuse's openNR](https://github.com/clshortfuse/openNR) describes the FP16 compatibility builds for RTX 20/30/40, including **compat-fp16-310.9.16-cuda13.4.3**. Download or build the file yourself, extract `nvngx_dlssnr.dll`, and import it. Known stock/compat hashes for 310.8.0 and 310.9.16 are labelled; other builds are marked unverified. A matching version alone does not establish hardware compatibility.

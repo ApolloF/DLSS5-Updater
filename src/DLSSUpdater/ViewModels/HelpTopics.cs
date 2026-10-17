@@ -17,7 +17,7 @@ public static class HelpTopics
         // ---------- General ----------
         new("install-mode", "General", "Install mode",
             "OptiScaler-NR (default) is the main use: OptiScaler is the proxy, loads ReShade and its add-ons, and runs DLSSNR. " +
-            "ReShade + add-ons installs ReShade itself as the proxy (dxgi.dll by default) with MFG Unlock, the DLSS and Streamline updates, and optional RenoDX DLSS with an imported NR runtime. " +
+            "ReShade + add-ons installs ReShade itself as the proxy (dxgi.dll by default) with MFG Unlock, the DLSS and Streamline updates, and the optional RenoDX DLSS add-on (replaces OptiScaler's NR) with an imported NR runtime. " +
             "Switching a game between the two removes the other mode's files and puts back what they replaced. Each game can use its own mode."),
         new("proxy", "General", "Proxy DLL name",
             "The file name OptiScaler is saved as so the game loads it. dxgi.dll works for most DX12 games. " +
@@ -46,15 +46,16 @@ public static class HelpTopics
             "(DLSS upscaler, preset override, Delete menu key, DLSSNR strengths and HDR tone mapping, ReShade tutorial skipped). Load it here or assign it to single games."),
         new("nr-library", "General", "NR versions and sources",
             "OptiScaler-NR updates come from ShyVortex/OptiScaler-DLSSNR-PreSR-Multipass. Existing cached releases still work. " +
-            "RenoDX DLSS comes from clshortfuse/renodx snapshot or nightly releases and needs ReShade 6+ with full add-on support, native DLSS and Streamline. " +
-            "It uses pre-upscale rendering with one pass. The runtime nvngx_dlssnr.dll is always imported by you. " +
+            "The RenoDX DLSS add-on (ShortFuse's renodx-dlss.addon64) is imported by you, not downloaded. It needs ReShade-only mode, ReShade 6+ with full add-on support, a game with native DLSS and an imported NR runtime. " +
+            "The runtime nvngx_dlssnr.dll is always imported by you too. " +
             "ShortFuse openNR describes compatible FP16 builds, including compat-fp16-310.9.16-cuda13.4.3 for RTX 20/30/40. " +
             "Versions come from DLL resources; hashes distinguish originals, compat builds and unverified files. " +
             "Choose a default in Settings or a per-game version, then Switch NR. Switch back restores the previous build without changing other components."),
         new("local-components", "General", "Local components",
             "nvngx_dlssnr.dll (DLSS 5 neural rendering model) is always user-supplied. ShortFuse compat-fp16-310.9.16-cuda13.4.3 targets RTX 20/30/40. Each imported version is retained locally " +
             "and copied into each game. ReShade64.dll (add-on build) is taken from the official setup on reshade.me whenever a new version is out; an imported " +
-            "ReShade64.dll replaces the download until you press Use download. Import a newer file here and Update all rolls it out."),
+            "ReShade64.dll replaces the download until you press Use download. Import a newer file here and Update all rolls it out. " +
+            "renodx-dlss.addon64 is imported the same way and only accepted when it names itself that."),
 
         // ---------- Keybinds ----------
         new("keybinds", "Keybinds", "Keybinds",
@@ -74,6 +75,25 @@ public static class HelpTopics
             "Adds the add-on to ReShade's LoadFromDllMain list so it loads while ReShade itself starts. Some games (e.g. Cyberpunk) start Streamline before " +
             "ReShade normally loads add-ons; without this, MFG Unlock can't apply its runtime settings there. Leave off unless a game needs it."),
 
+        // ---------- RenoDX DLSS ----------
+        new("rdx-stage", "RenoDX DLSS", "Where it runs",
+            "Render works on the game's native input before DLSS SR / DLAA / RR. Upscaled works on the DLSS output. Present works on the Streamline swapchain buffer " +
+            "just before presentation and can touch the HUD. Add-on default writes nothing and keeps the add-on's own choice."),
+        new("rdx-passes", "RenoDX DLSS", "Passes",
+            "Model passes per frame, 1 to 4. Each extra pass costs about as much as the first."),
+        new("rdx-strengths", "RenoDX DLSS", "Model strengths",
+            "Intensity scales everything. Local structure adds fine detail, local tone changes local contrast and lighting. 1.0 is the model's default."),
+        new("rdx-model", "RenoDX DLSS", "Model",
+            "Model A, B or C: the add-on's built-in neural model variants."),
+        new("rdx-mask", "RenoDX DLSS", "Character mask",
+            "Finds people in the picture. Character intensity sets the detail strength on them separately."),
+        new("rdx-scale", "RenoDX DLSS", "Resolution scale",
+            "Fraction of the frame the model works at. 50% costs about a quarter."),
+        new("rdx-ui", "RenoDX DLSS", "UI correction",
+            "Protects the HUD from the model. Auto and Off both turn DLSSNR.UICorrection off; On turns it on."),
+        new("rdx-encoding", "RenoDX DLSS", "Colour encoding",
+            "How the add-on interprets the game's colours. Auto detects it; set it by hand only when colours look wrong."),
+
         // ---------- DLSSNR ----------
         new("nr-enabled", "DLSSNR", "Neural rendering",
             "DLSS 5 neural rendering: NVIDIA's model synthesises detail and lighting on top of the upscaled image, before frame generation sees it. " +
@@ -85,6 +105,16 @@ public static class HelpTopics
         new("nr-finished", "DLSSNR", "Apply to finished picture",
             "Applies NR after the game's post-processing (bloom, grading) instead of at the upscaler. DX12 and the D3D11 bridge only. " +
             "Can also alter the HUD and menus. With Run before upscaling on, the edit is made early and carried to the final image."),
+        new("nr-denoise-first", "DLSSNR", "Denoise first",
+            "DX12 only. Runs Ray Reconstruction's denoiser first and the model after it, so the model sees a clean image. Takes priority over Run before upscaling."),
+        new("nr-deferred", "DLSSNR", "Generate before, apply after upscaling",
+            "The model's edit is generated from the low-resolution input and applied to the upscaled image. Cheaper than running the model at output resolution."),
+        new("nr-residual", "DLSSNR", "Residual across RR",
+            "Only matters with Ray Reconstruction and Run before upscaling: the model's change is carried through the denoiser instead of being cleaned away by it."),
+        new("nr-automask", "DLSSNR", "Character mask",
+            "Finds people in the picture and treats them separately. On upstream by default; turn it off if faces get odd edges."),
+        new("nr-private-upscaler", "DLSSNR", "Private upscaler",
+            "The upscaler the model uses for its own work: DLSS (default), the built-in FSR 2.2, the FSR FidelityFX runtime or XeSS. Leave on default unless a guide says otherwise."),
         new("nr-passes", "DLSSNR", "Passes",
             "Number of model layers per frame, each feeding the next. Costs roughly 1x / 2x / 3x the model time. The result is composed once, " +
             "so colours don't compound, but 2 and 3 are deliberately over-processed looks. Multipass is D3D12 only."),
@@ -179,6 +209,18 @@ public static class HelpTopics
             "NVIDIA can deliver DLSS FG over the air and use that instead of the game's files. Game default keeps the game's policy. " +
             "Prefer local files turns OTA off so the DLLs installed here are really used; recommended with pinned DLSS or the Streamline swap. " +
             "Force NVIDIA OTA does the opposite. Needs a game restart. If the add-on log shows a path under ProgramData\\NVIDIA\\NGX\\models, the OTA copy is active."),
+        new("mfg-reflex", "MFG Unlock", "Reflex mode",
+            "Game setting leaves NVIDIA Reflex alone. Off (FG-safe) turns it off, which some games need while frame generation is forced. On and On + Boost force Reflex on."),
+        new("mfg-fps-cap", "MFG Unlock", "Output FPS cap",
+            "Highest frame rate the generated output may reach (ReflexSourceFpsCap). Off adds no cap."),
+        new("mfg-vrr-headroom", "MFG Unlock", "Reflex VRR headroom",
+            "Keeps the output a little under the refresh rate on G-Sync / VRR displays so the limiter, not VSync, sets the pace."),
+        new("mfg-raise-ceiling", "MFG Unlock", "Raise frame ceiling",
+            "Old Streamline plugins stop at a lower multiplier. This raises their limit to 6x. Some games break with it; turn it off again if so."),
+        new("mfg-flip-metering", "MFG Unlock", "Force flip metering off",
+            "Disables the driver's flip metering. Use it only if 3x or 4x freezes the game, and restart the game afterwards."),
+        new("mfg-depth-edge", "MFG Unlock", "Depth edge guard",
+            "Game setting leaves the game's behaviour. 1 to 4 lower the thresholds that separate foreground from background, which can reduce smearing around edges."),
         new("hdr-compat", "MFG Unlock", "HDR compatibility",
             "Workarounds for HDR games where frame generation breaks the UI or colors. Native changes nothing. UI Composition handles the HUD separately. " +
             "Auto guard + UI adds automatic detection on top. Final color fallback is the most invasive, for games the others don't fix. Try in that order."),
@@ -211,6 +253,25 @@ public static class HelpTopics
         ["dynamic-target"] = "Refresh rate for G-Sync / VRR displays. A fixed value slightly below refresh (e.g. 138 for 144 Hz) if you cap FPS anyway.",
         ["runtime-selection"] = "Prefer local files when you use a pinned DLSS version or the Streamline swap, otherwise NVIDIA may silently replace them. Game default otherwise.",
         ["hdr-compat"] = "Native until you see HUD smearing or wrong colours with FG in HDR, then UI Composition, then Auto guard + UI, then Final color fallback.",
+        ["nr-denoise-first"] = "Off. Try it in DX12 games with Ray Reconstruction when the model amplifies noise.",
+        ["nr-deferred"] = "Off, unless the cost of running at output resolution is too high.",
+        ["nr-residual"] = "Off. Only try it with Ray Reconstruction and Run before upscaling both on.",
+        ["nr-automask"] = "Default. Turn off only if people get odd edges.",
+        ["nr-private-upscaler"] = "Default (DLSS).",
+        ["mfg-reflex"] = "Game setting. Off (FG-safe) only when a game misbehaves with Reflex while frame generation is forced.",
+        ["mfg-fps-cap"] = "Off, or a value a few frames under your refresh rate.",
+        ["mfg-vrr-headroom"] = "On with G-Sync / VRR displays when frame times look uneven near the refresh rate.",
+        ["mfg-raise-ceiling"] = "Off. Only for games with an old Streamline plugin that cap the multiplier too low.",
+        ["mfg-flip-metering"] = "Off. Turn on only when 3x / 4x freezes the game.",
+        ["mfg-depth-edge"] = "Game setting. Try 1 and work up if you see smearing around edges.",
+        ["rdx-stage"] = "Render with one pass is the cheapest and the recommended start. Try Upscaled or Present only if Render looks wrong.",
+        ["rdx-passes"] = "1. Heavier on RTX 20/30.",
+        ["rdx-strengths"] = "Leave on the add-on default first, then lower local tone if the image looks re-lit.",
+        ["rdx-model"] = "Add-on default; compare the three models per game.",
+        ["rdx-mask"] = "Add-on default.",
+        ["rdx-scale"] = "100% on fast cards; 75% or 50% to save FPS.",
+        ["rdx-ui"] = "Add-on default; On if the HUD looks processed.",
+        ["rdx-encoding"] = "Add-on default (Auto detects it).",
         ["nr-enabled"] = "Automatic; toggle it in-game with the DLSSNR key to compare.",
         ["install-mode"] = "OptiScaler-NR for everything it supports. ReShade + add-ons for games where OptiScaler causes trouble but you still want MFG Unlock or ReShade effects.",
         ["presets"] = "Start from the upstream defaults and load the Recommended preset if you want the tuned setup; save your own variations as presets.",
