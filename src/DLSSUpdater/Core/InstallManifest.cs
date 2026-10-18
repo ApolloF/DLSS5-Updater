@@ -48,6 +48,22 @@ public sealed class InstallManifest
     public string? PreviousDlssNrId { get; set; }
     public bool RenoDx { get; set; }
     public string? RenoDxTag { get; set; }
+    /// <summary>Library id of the ShortFuse build placed; null in records from before the library.</summary>
+    public string? RenoDxId { get; set; }
+    public bool Lecram { get; set; }
+    public string? LecramTag { get; set; }
+    /// <summary>Library id of the Lecram build placed; null in records from before the library.</summary>
+    public string? LecramId { get; set; }
+    /// <summary>The generation's file we placed: renodx-dlss5.addon64 (v10) or dlss5-nr.addon64 (v11).</summary>
+    public string? LecramFile { get; set; }
+    public bool Uplift { get; set; }
+    public string? UpliftTag { get; set; }
+    /// <summary>NR placement relative to the target; null in older records means beside the executable.</summary>
+    public string? DlssNrFile { get; set; }
+    public bool Dfc { get; set; }
+    public string? DfcTag { get; set; }
+    /// <summary>Values we wrote into deep-fried-chicken.cfg last time, keyed "DFC/key".</summary>
+    public Dictionary<string, string> DfcCfg { get; set; } = new(StringComparer.OrdinalIgnoreCase);
     public string? ReShadeSha { get; set; }
     public string? StreamlineTag { get; set; }
     public bool Streamline { get; set; }
@@ -164,6 +180,13 @@ public sealed class InstallManifest
             return full;
         }
 
+        if (DlssNrFile is not null && DlssNrFile != ComponentStore.DlssNrFile
+            && DlssNrFile != Path.Combine(ComponentStore.UpliftNrDir, ComponentStore.DlssNrFile))
+            throw new UnsafeManifestException(target, "unknown NR runtime placement");
+        if (DlssNr || Uplift)
+            foreach (var runtime in new[] { Path.Combine(target, DlssNrFile ?? ComponentStore.DlssNrFile), Uplift ? UpliftConfig.NrPath(target) : Path.Combine(target, ComponentStore.DlssNrFile) })
+                if (FileUtil.LinkBelow(Base(runtime), runtime) is { } runtimeLink)
+                    throw new UnsafeManifestException(target, $"{runtimeLink} is a link");
         var files = Files.Select(f => Check(f, inTargetOnly: false)).ToList();
         var dirs = Dirs.Select(d => Check(d, inTargetOnly: true)).ToList();
         if (dirs.Any(d => FileUtil.IsUnder(d, DirFor(target))))

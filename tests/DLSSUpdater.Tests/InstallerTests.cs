@@ -33,6 +33,8 @@ public class InstallerTests : IDisposable
         Write(Path.Combine(_target, "OptiScaler.ini"), "[Hotfix]\nManualInputPolling=true\n");
         Write(Path.Combine(_target, "nvngx.dll_dlssnr.dll"), "LEGACY");
         Write(Path.Combine(_target, "nvngx_dlssg.dll"), "OLD-FG");
+        // Frame generation through Streamline, which MFG Unlock needs.
+        Write(Path.Combine(_target, "sl.dlss_g.dll"), "SL-FG");
         Write(Path.Combine(_root, @"Engine\Plugins\Runtime\Nvidia\DLSS\Binaries\ThirdParty\Win64\nvngx_dlss.dll"), "OLD-SR");
     }
 
@@ -304,6 +306,43 @@ public class InstallerTests : IDisposable
 
         await installer.UninstallAsync(Game(), _target, default);
         Assert.False(File.Exists(Path.Combine(_target, "nvngx_dlss.dll")));
+    }
+
+    [Fact]
+    public async Task F5Build_PlacesForwarder_AndSwitchingBackRemovesIt_AndUninstallRestores()
+    {
+        var before = Snapshot();
+        var installer = new Installer(_store);
+        var o = new InstallOptions { Opti = true, Proxy = "dxgi.dll", Overrides = ConfigProfile.Recommended() };
+
+        SeedOpti("v0.1.32-f5", "OPTI-F5");
+        Write(Path.Combine(ComponentStore.TagDir(Component.OptiScaler, "v0.1.32-f5"), "pkg", "nvngx.dll_dlssnr.dll"), "FORWARDER");
+        await installer.InstallAsync(Game(), _target, o, null, default);
+        Assert.Equal("OPTI-F5", T("dxgi.dll"));
+        Assert.Equal("FORWARDER", T("nvngx.dll_dlssnr.dll"));
+        Assert.Equal("v0.1.32-f5", InstallManifest.Load(_target)!.OptiTag);
+        Assert.True(InstallManifest.Load(_target)!.Owns(Path.GetRelativePath(_root, Path.Combine(_target, "nvngx.dll_dlssnr.dll"))));
+
+        SeedOpti("v9.9.9", "OPTI-1");
+        await installer.InstallAsync(Game(), _target, o, null, default);
+        Assert.Equal("OPTI-1", T("dxgi.dll"));
+        Assert.False(File.Exists(Path.Combine(_target, "nvngx.dll_dlssnr.dll")));
+
+        await installer.UninstallAsync(Game(), _target, default);
+        Assert.Equal(before, Snapshot());
+    }
+
+    [Fact]
+    public async Task F5Build_ReShadeOnlySwitch_RemovesForwarder()
+    {
+        var installer = new Installer(_store);
+        SeedOpti("v0.1.32-f5", "OPTI-F5");
+        Write(Path.Combine(ComponentStore.TagDir(Component.OptiScaler, "v0.1.32-f5"), "pkg", "nvngx.dll_dlssnr.dll"), "FORWARDER");
+        await installer.InstallAsync(Game(), _target, new InstallOptions { Opti = true, Proxy = "dxgi.dll" }, null, default);
+        Assert.Equal("FORWARDER", T("nvngx.dll_dlssnr.dll"));
+
+        await installer.InstallAsync(Game(), _target, ReShadeOnly(), null, default);
+        Assert.False(File.Exists(Path.Combine(_target, "nvngx.dll_dlssnr.dll")) && T("nvngx.dll_dlssnr.dll") == "FORWARDER");
     }
 
     [Fact]

@@ -24,7 +24,9 @@ public sealed partial class IniOptionViewModel : ObservableObject
         Section = section;
         Key = key;
         _list = list;
-        Choices = choices;
+        Choices = _baseChoices = choices;
+        _baseHint = hint;
+        Hint = hint;
     }
 
     public static IniOptionViewModel Toggle(string label, string hint, string section, string key, string on, ObservableCollection<IniOverride> list) =>
@@ -41,10 +43,69 @@ public sealed partial class IniOptionViewModel : ObservableObject
     }
 
     public string Label { get; }
-    public string Hint { get; }
+
+    /// <summary>False when the chosen OptiScaler build has no such key; the row is hidden.</summary>
+    [ObservableProperty] private bool _isAvailable = true;
+    [ObservableProperty] private string _hint = "";
     public string Section { get; }
     public string Key { get; }
-    public OptionChoice[] Choices { get; }
+    public OptionChoice[] Choices { get; private set; }
+
+    private readonly string _baseHint;
+    private readonly OptionChoice[] _baseChoices;
+    private readonly Dictionary<OptiSource, (string? Hint, OptionChoice[]? Choices)> _variants = [];
+
+    /// <summary>The key means something else in <paramref name="source"/>: other values, defaults or advice.</summary>
+    public IniOptionViewModel In(OptiSource source, string? hint = null, params OptionChoice[] choices)
+    {
+        _variants[source] = (hint, choices.Length > 0 ? choices : null);
+        return this;
+    }
+
+    /// <summary>Switches hint and choices to the build's variant and hides the row when the build lacks the key.</summary>
+    public void ApplySource(OptiSource source)
+    {
+        IsAvailable = !source.IsUnsupported(Section, Key);
+        var v = _variants.GetValueOrDefault(source);
+        Show(v.Hint, v.Choices);
+    }
+
+    private readonly Dictionary<LecramGeneration, (string? Hint, OptionChoice[]? Choices)> _generationVariants = [];
+
+    /// <summary>The key means something else in Lecram's <paramref name="generation"/>: other values, defaults or advice.</summary>
+    public IniOptionViewModel In(LecramGeneration generation, string? hint = null, params OptionChoice[] choices)
+    {
+        _generationVariants[generation] = (hint, choices.Length > 0 ? choices : null);
+        return this;
+    }
+
+    /// <summary>
+    /// Switches to the values of the default Lecram build's generation and hides the row when that generation lacks the key.
+    /// No build (null) shows every option with the choices that fit both.
+    /// </summary>
+    public void ApplyGeneration(LecramGeneration? generation)
+    {
+        var view = ViewFor(generation);
+        IsAvailable = view.IsAvailable;
+        Show(view.Hint, view.Choices);
+    }
+
+    /// <summary>What this option offers for <paramref name="generation"/>, without touching the shared state: a game uses the generation of its own build.</summary>
+    public (bool IsAvailable, string Hint, OptionChoice[] Choices) ViewFor(LecramGeneration? generation)
+    {
+        var v = generation is { } g ? _generationVariants.GetValueOrDefault(g) : default;
+        return (LecramIni.IsAvailable(Key, generation), v.Hint ?? _baseHint, v.Choices ?? _baseChoices);
+    }
+
+    private void Show(string? hint, OptionChoice[]? variantChoices)
+    {
+        Hint = hint ?? _baseHint;
+        var choices = variantChoices ?? _baseChoices;
+        if (ReferenceEquals(choices, Choices)) return;
+        Choices = choices;
+        OnPropertyChanged(nameof(Choices));
+        Refresh();
+    }
     public bool IsToggle => Choices.Length == 2 && Choices[0].Value is null && Choices[1].Label == "On";
 
     /// <summary>Choices plus the current value when it isn't one of them (e.g. typed in Advanced).</summary>

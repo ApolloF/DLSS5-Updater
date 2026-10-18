@@ -6,6 +6,7 @@ public static class Log
     public static event Action<string>? Line;
 
     public static void Info(string message) => Write(message);
+    public static void Warn(string message) => Write($"WARNING {message}");
     public static void Error(string message, Exception? ex = null) =>
         Write(ex is null ? $"ERROR {message}" : $"ERROR {message}: {ex.Message}", ex);
 

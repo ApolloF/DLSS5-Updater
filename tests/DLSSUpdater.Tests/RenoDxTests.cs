@@ -50,11 +50,7 @@ public sealed class RenoDxTests : IDisposable
         return path;
     }
 
-    private string ImportGood()
-    {
-        _store.ImportRenoDx(Addon("renodx-dlss.addon64", ComponentStore.RenoDxFile));
-        return _store.RenoDxPath;
-    }
+    private AddonBuild ImportGood() => _store.ImportRenoDx(Addon("renodx-dlss.addon64", ComponentStore.RenoDxFile));
 
     private string G(string name) => Path.Combine(_root, name);
     private IniFile Ini() => IniFile.Load(G("ReShade.ini"));
@@ -64,7 +60,7 @@ public sealed class RenoDxTests : IDisposable
     private InstallOptions Reno(bool renoDx = true) => new()
     {
         Mode = InstallMode.ReShadeOnly, ReShade = true, RenoDx = renoDx, DlssNr = renoDx, DlssNrId = _nr.Id, Proxy = "dxgi.dll",
-        ReShadeOverrides = [new("RENODX-DLSS", "DirectNeuralRenderingHookStage", "1"), new("RENODX-DLSS", "DirectNeuralRenderingPassCount", "2")],
+        ReShadeOverrides = [new("RENODX-DLSS", "DirectNeuralRenderingHookStage", "1"), new(RenoDxIni.PresetSection, "DirectNeuralRenderingPassCount", "2")],
     };
 
     [Fact]
@@ -84,19 +80,21 @@ public sealed class RenoDxTests : IDisposable
         var good = Addon("renamed.bin", "RenoDX-DLSS.ADDON64");
         _store.Import(good, ComponentStore.RenoDxFile);
         Assert.True(_store.RenoDxImported);
-        Assert.Equal("0.2026.1016.1704", _store.RenoDxVersion);
-        Assert.Equal("0.2026.1016.1704-" + FileUtil.Sha256(good)[..12], _store.RenoDxTag);
-        Assert.Equal(ComponentStore.RenoDxFile, Path.GetFileName(_store.RenoDxPath));
+        var build = Assert.Single(_store.RenoDxBuilds);
+        Assert.Equal("0.2026.1016.1704", build.FileVersion);
+        Assert.Equal("0.2026.1016.1704", build.DetectedLabel);
+        Assert.Equal("0.2026.1016.1704-" + FileUtil.Sha256(good)[..12], build.Tag);
+        Assert.Equal(ComponentStore.RenoDxFile, Path.GetFileName(ComponentStore.AddonPathOf(AddonKind.RenoDx, build)));
 
-        _store.RemoveRenoDxImport();
+        _store.RemoveAddon(AddonKind.RenoDx, build.Id);
         Assert.False(_store.RenoDxImported);
-        Assert.Null(_store.RenoDxTag);
+        Assert.Null(_store.RenoDxBuildFor(null));
     }
 
     [Fact]
     public async Task ReShadeOnly_PlacesAddonEarlyLoadAndSettings_OnlyWhenEnabled_AndUninstallRestores()
     {
-        ImportGood();
+        var build = ImportGood();
         File.WriteAllText(G("ReShade.ini"), "[ADDON]\nLoadFromDllMain=other.addon64\n[OTHER]\nSetting=keep\n");
         var before = File.ReadAllText(G("ReShade.ini"));
         var installer = new Installer(_store);
@@ -112,11 +110,12 @@ public sealed class RenoDxTests : IDisposable
         Assert.True(File.Exists(G(ComponentStore.RenoDxFile)));
         Assert.Equal("other.addon64," + ComponentStore.RenoDxFile, ini.Get("ADDON", "LoadFromDllMain"));
         Assert.Equal("1", ini.Get("RENODX-DLSS", "DirectNeuralRenderingHookStage"));
-        Assert.Equal("2", ini.Get("RENODX-DLSS", "DirectNeuralRenderingPassCount"));
+        Assert.Equal("2", ini.Get(RenoDxIni.PresetSection, "DirectNeuralRenderingPassCount"));
         Assert.Null(ini.Get("RenoDX.DLSS5", "NRHookPoint"));
         var m = InstallManifest.Read(_root)!;
         Assert.True(m.RenoDx);
-        Assert.Equal(_store.RenoDxTag, m.RenoDxTag);
+        Assert.Equal(build.Tag, m.RenoDxTag);
+        Assert.Equal(build.Id, m.RenoDxId);
 
         await installer.InstallAsync(_game, _root, Reno(), null, default);
         Assert.Equal("other.addon64," + ComponentStore.RenoDxFile, Ini().Get("ADDON", "LoadFromDllMain"));
@@ -124,6 +123,113 @@ public sealed class RenoDxTests : IDisposable
         await installer.UninstallAsync(_game, _root, default);
         Assert.Equal(before, File.ReadAllText(G("ReShade.ini")));
         Assert.False(File.Exists(G(ComponentStore.RenoDxFile)));
+    }
+
+    [Fact]
+    public async Task PerPresetKeyWrittenToTheGlobalSection_MovesToPreset1_UnlessTheUserChangedIt()
+    {
+        ImportGood();
+        var installer = new Installer(_store);
+        var old = Reno() with
+        {
+            ReShadeOverrides =
+            [
+                new(RenoDxIni.Section, "DirectNeuralRenderingPassCount", "2"),
+                new(RenoDxIni.Section, "DirectNeuralRenderingIntensity", "1.5"),
+            ],
+        };
+        await installer.InstallAsync(_game, _root, old, null, default);
+        var tuned = Ini();
+        tuned.Set(RenoDxIni.Section, "DirectNeuralRenderingIntensity", "0.8");
+        tuned.Save(G("ReShade.ini"));
+
+        await installer.InstallAsync(_game, _root, Reno(), null, default);
+
+        var ini = Ini();
+        Assert.Null(ini.Get(RenoDxIni.Section, "DirectNeuralRenderingPassCount"));
+        Assert.Equal("2", ini.Get(RenoDxIni.PresetSection, "DirectNeuralRenderingPassCount"));
+        Assert.Equal("0.8", ini.Get(RenoDxIni.Section, "DirectNeuralRenderingIntensity"));
+        Assert.Equal("1", ini.Get(RenoDxIni.Section, "DirectNeuralRenderingHookStage"));
+        var m = InstallManifest.Read(_root)!;
+        Assert.DoesNotContain(m.ReShadeIni.Keys, k => k.StartsWith(RenoDxIni.Section + "/DirectNeuralRenderingIntensity", StringComparison.OrdinalIgnoreCase));
+    }
+
+    [Fact]
+    public async Task Uninstall_RemovesWhatWasWrittenToBothSections()
+    {
+        ImportGood();
+        File.WriteAllText(G("ReShade.ini"), "[OTHER]\nSetting=keep\n");
+        var before = File.ReadAllText(G("ReShade.ini"));
+        var installer = new Installer(_store);
+        await installer.InstallAsync(_game, _root, Reno(), null, default);
+        Assert.Equal("2", Ini().Get(RenoDxIni.PresetSection, "DirectNeuralRenderingPassCount"));
+
+        var opti = new InstallOptions { Mode = InstallMode.OptiScaler, Opti = true, ReShade = true, Proxy = "dxgi.dll" };
+        await installer.InstallAsync(_game, _root, opti, null, default);
+        Assert.Null(Ini().Get(RenoDxIni.PresetSection, "DirectNeuralRenderingPassCount"));
+        Assert.Null(Ini().Get(RenoDxIni.Section, "DirectNeuralRenderingHookStage"));
+
+        await installer.UninstallAsync(_game, _root, default);
+        Assert.Equal(before, File.ReadAllText(G("ReShade.ini")));
+    }
+
+    [Fact]
+    public void Options_UseTheSectionTheAddonReadsEachKeyFrom()
+    {
+        var options = ViewModels.SettingsOptions.RenoDx([]);
+        Assert.All(options, o => Assert.Equal(RenoDxIni.SectionOf(o.Key), o.Section));
+        Assert.Contains(options, o => o.Section == RenoDxIni.PresetSection);
+        Assert.Contains(options, o => o.Section == RenoDxIni.Section);
+        Assert.All(ConfigProfile.RecommendedReShade().Where(RenoDxIni.IsRenoDx), o => Assert.Equal(RenoDxIni.SectionOf(o.Key), o.Section));
+
+        // Ranges and label counts from the add-on's Setting constructors (0928 / 1016).
+        double[] Values(string key) => options.Single(o => o.Key == "DirectNeuralRendering" + key).Choices
+            .Where(c => c.Value is not null).Select(c => double.Parse(c.Value!, System.Globalization.CultureInfo.InvariantCulture)).ToArray();
+        foreach (var key in new[] { "Intensity", "LocalStructureStrength", "LocalToneStrength", "SkinStructureStrength" })
+            Assert.All(Values(key), v => Assert.InRange(v, 0, 1));
+        Assert.All(Values("PassCount"), v => Assert.InRange(v, 1, 10));
+        Assert.All(Values("ProcessingScale"), v => Assert.InRange(v, 0, 200));
+        Assert.Equal([0, 1, 2, 3, 4, 5], Values("Encoding"));
+        Assert.Equal([0, 1, 2, 3], Values("HookStage"));
+        Assert.Equal([0, 1, 2], Values("Preset"));
+        Assert.Equal([0, 1, 2], Values("ReuseDlssUpscalingResources"));
+    }
+
+    [Fact]
+    public void Migrate_MovesPerPresetKeys_KeepsGlobals_AndPrefersAnExistingPreset1Value()
+    {
+        List<IniOverride> list =
+        [
+            new(RenoDxIni.Section, "DirectNeuralRenderingHookStage", "1"),
+            new(RenoDxIni.Section, "DirectNeuralRenderingPassCount", "2"),
+            new(RenoDxIni.Section, "DirectNeuralRenderingStyle", "1"),
+            new(RenoDxIni.PresetSection, "DirectNeuralRenderingStyle", "2"),
+            new("OVERLAY", "TutorialProgress", "4"),
+        ];
+        Assert.True(RenoDxIni.Migrate(list));
+        Assert.Equal(
+            ["RENODX-DLSS/DirectNeuralRenderingHookStage", "RENODX-DLSS-preset1/DirectNeuralRenderingPassCount",
+             "RENODX-DLSS-preset1/DirectNeuralRenderingStyle", "OVERLAY/TutorialProgress"],
+            list.Select(o => o.Id));
+        Assert.Equal("2", list.Single(o => o.Key == "DirectNeuralRenderingStyle").Value);
+        Assert.False(RenoDxIni.Migrate(list));
+    }
+
+    [Fact]
+    public void Migrate_CoversPresetsAndGameLayers_AndLoadSavesTheResult()
+    {
+        IniOverride Old() => new(RenoDxIni.Section, "DirectNeuralRenderingIntensity", "1.25");
+        var s = new AppSettings { ReShadeOverrides = [Old()], Presets = [new ConfigPreset { Name = "Mine", ReShade = [Old()] }] };
+        s.For("g").ReShade = [Old()];
+        s.For("g").Presets = [new ConfigPreset { Name = "Game", ReShade = [Old()] }];
+        s.Save();
+
+        var loaded = AppSettings.Load();
+        var all = loaded.ReShadeOverrides.Concat(loaded.Presets[0].ReShade)
+            .Concat(loaded.Games["g"].ReShade!).Concat(loaded.Games["g"].Presets![0].ReShade).ToList();
+        Assert.Equal(4, all.Count);
+        Assert.All(all, o => Assert.Equal(RenoDxIni.PresetSection, o.Section));
+        Assert.Contains(RenoDxIni.PresetSection, File.ReadAllText(AppPaths.SettingsFile));
     }
 
     [Fact]

@@ -1,5 +1,6 @@
 ﻿using System.Runtime.InteropServices;
 using System.Windows;
+using System.Windows.Controls;
 using System.Windows.Interop;
 using System.Windows.Media;
 using System.Windows.Media.Imaging;
@@ -12,6 +13,10 @@ public partial class MainWindow : Window
 {
     private readonly MainViewModel _vm;
     private double _settingsOffset;
+    // Inside the deferred settings and about pages; set once each page is first shown.
+    private ScrollViewer? _settingsScroll;
+    private ScrollViewer? _aboutScroll;
+    private ItemsControl? _guideList;
 
     public MainWindow()
     {
@@ -25,10 +30,17 @@ public partial class MainWindow : Window
             if (Environment.GetEnvironmentVariable("DLSSU_SNAPSHOT") is { Length: > 0 } shot) await Snapshot(shot);
         };
         StateChanged += (_, _) => UpdateMaximized();
+        Closed += (_, _) => Core.HashCache.Save();
         PreviewKeyDown += OnPreviewKeyDown;
-        _vm.LeavingSettings += () => _settingsOffset = SettingsScroll.VerticalOffset;
+        SettingsHost.Realized += root => _settingsScroll = Deferred.Find<ScrollViewer>(root, "SettingsScroll");
+        AboutHost.Realized += root =>
+        {
+            _aboutScroll = Deferred.Find<ScrollViewer>(root, "AboutScroll");
+            _guideList = Deferred.Find<ItemsControl>(root, "GuideList");
+        };
+        _vm.LeavingSettings += () => _settingsOffset = _settingsScroll?.VerticalOffset ?? 0;
         _vm.ReturnedToSettings += () => Dispatcher.BeginInvoke(
-            () => SettingsScroll.ScrollToVerticalOffset(_settingsOffset), System.Windows.Threading.DispatcherPriority.Loaded);
+            () => _settingsScroll?.ScrollToVerticalOffset(_settingsOffset), System.Windows.Threading.DispatcherPriority.Loaded);
         _vm.PropertyChanged += (_, e) =>
         {
             if (e.PropertyName == nameof(MainViewModel.HelpTarget) && _vm.HelpTarget is { } id)
@@ -51,19 +63,26 @@ public partial class MainWindow : Window
             mods.HasFlag(System.Windows.Input.ModifierKeys.Alt));
     }
 
+    private void OnGameListClick(object sender, System.Windows.Input.MouseButtonEventArgs e)
+    {
+        if (e.OriginalSource is DependencyObject d && ItemsControl.ContainerFromElement((ItemsControl)sender, d) is ListBoxItem)
+            _vm.ShowGameView();
+    }
+
     /// <summary>Scrolls the About page to a guide entry and marks it with the accent bar.</summary>
     private void ScrollToGuide(string id)
     {
-        GuideList.UpdateLayout();
+        if (_guideList is null || _aboutScroll is null) return;
+        _guideList.UpdateLayout();
         foreach (var entry in _vm.Guide)
         {
             var topic = entry.Topic;
-            if (GuideList.ItemContainerGenerator.ContainerFromItem(entry) is not FrameworkElement c) continue;
+            if (_guideList.ItemContainerGenerator.ContainerFromItem(entry) is not FrameworkElement c) continue;
             var border = VisualTreeHelper.GetChildrenCount(c) > 0 ? VisualTreeHelper.GetChild(c, 0) as System.Windows.Controls.Border : null;
             if (border is not null)
                 border.BorderBrush = topic.Id == id ? (Brush)FindResource("Accent") : Brushes.Transparent;
-            if (topic.Id == id && AboutScroll.Content is UIElement content)
-                AboutScroll.ScrollToVerticalOffset(Math.Max(0, c.TranslatePoint(new Point(0, 0), content).Y - 24));
+            if (topic.Id == id && _aboutScroll.Content is UIElement content)
+                _aboutScroll.ScrollToVerticalOffset(Math.Max(0, c.TranslatePoint(new Point(0, 0), content).Y - 24));
         }
     }
 
@@ -81,7 +100,7 @@ public partial class MainWindow : Window
 
     private void OnClose(object sender, RoutedEventArgs e) => Close();
 
-    /// <summary>Dev aid: DLSSU_SNAPSHOT=file.png renders the window to disk (DLSSU_SNAPSHOT_STEPS=settings,log,game:N).</summary>
+    /// <summary>Dev aid: DLSSU_SNAPSHOT=file.png renders the window to disk (DLSSU_SNAPSHOT_STEPS=settings,tab:X,scroll:Y,log,game:N,name:Text,detail:Tab,mod:Label).</summary>
     private async Task Snapshot(string path)
     {
         var steps = (Environment.GetEnvironmentVariable("DLSSU_SNAPSHOT_STEPS") ?? "").Split(',', StringSplitOptions.RemoveEmptyEntries);
@@ -89,9 +108,23 @@ public partial class MainWindow : Window
         {
             if (step == "settings") _vm.SettingsOpen = true;
             else if (step.StartsWith("tab:")) _vm.SettingsVm.Tab = step[4..];
+            else if (step.StartsWith("scroll:") && double.TryParse(step[7..], out var y))
+            {
+                await Task.Delay(400);
+                _settingsScroll?.ScrollToVerticalOffset(y);
+            }
             else if (step == "about") _vm.AboutOpen = true;
             else if (step.StartsWith("help:")) _vm.ShowHelpCommand.Execute(step[5..]);
             else if (step == "nvgame" && _vm.SelectedGame is { } g) g.DetailTab = "Nvidia";
+            else if (step.StartsWith("name:"))
+                _vm.SelectedGame = _vm.GamesView.Cast<GameViewModel>().FirstOrDefault(g => g.Name.Contains(step[5..], StringComparison.OrdinalIgnoreCase));
+            else if (step.StartsWith("detail:") && _vm.SelectedGame is { } dg) dg.DetailTab = step[7..];
+            else if (step.StartsWith("mod:"))
+            {
+                var label = step[4..];
+                if (_vm.SettingsOpen) _vm.SettingsVm.ModSelection = _vm.SettingsVm.ModChoices.First(c => c.Label.Contains(label, StringComparison.OrdinalIgnoreCase));
+                else if (_vm.SelectedGame is { } mg) mg.ModSelection = mg.ModChoices.First(c => c.Label.Contains(label, StringComparison.OrdinalIgnoreCase));
+            }
             else if (step == "log") _vm.LogOpen = true;
             else if (step.StartsWith("game:") && int.TryParse(step[5..], out var i))
                 _vm.SelectedGame = _vm.GamesView.Cast<GameViewModel>().ElementAtOrDefault(i);
