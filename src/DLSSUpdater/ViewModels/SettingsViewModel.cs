@@ -74,6 +74,47 @@ public sealed partial class SettingsViewModel : ObservableObject
 
     [ObservableProperty] private string _tab = "General";
 
+    partial void OnTabChanged(string value)
+    {
+        if (value == "ReShade") NotifyModShown();
+    }
+
+    private ModChoice? _pickedMod;
+
+    public IReadOnlyList<ModChoice> ModChoices => ModPicker.AvailableInSettings;
+
+    /// <summary>The mod whose defaults the ReShade tab shows. Follows the default install route until the user picks one; not saved.</summary>
+    public ModChoice ModSelection
+    {
+        get => _pickedMod ?? ModPicker.Choice(ModChoices, DefaultMod);
+        set
+        {
+            if (value is null) return;
+            _pickedMod = value;
+            NotifyModShown();
+        }
+    }
+
+        private Mod DefaultMod => ModPicker.DefaultInSettings(Settings.DefaultMode == InstallMode.ReShadeOnly, Settings.InstallUplift, false, Settings.InstallLecram, Settings.InstallRenoDx);
+
+    public bool ShowReShade => ModPicker.Shows(ModSelection.Mod, Mod.ReShade);
+    public bool ShowMfg => ModPicker.Shows(ModSelection.Mod, Mod.Mfg);
+    public bool ShowRenoDx => ModPicker.Shows(ModSelection.Mod, Mod.RenoDx);
+    public bool ShowLecram => ModPicker.Shows(ModSelection.Mod, Mod.Lecram);
+    public bool ShowDfc => ModPicker.Shows(ModSelection.Mod, Mod.Dfc);
+    public bool ShowUplift => ModPicker.Shows(ModSelection.Mod, Mod.Uplift);
+
+    private void NotifyModShown()
+    {
+        OnPropertyChanged(nameof(ModSelection));
+        OnPropertyChanged(nameof(ShowReShade));
+        OnPropertyChanged(nameof(ShowMfg));
+        OnPropertyChanged(nameof(ShowRenoDx));
+        OnPropertyChanged(nameof(ShowLecram));
+        OnPropertyChanged(nameof(ShowDfc));
+        OnPropertyChanged(nameof(ShowUplift));
+    }
+
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(CanDeletePreset))]
     private string? _selectedPreset;

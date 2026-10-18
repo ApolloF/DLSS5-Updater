@@ -100,7 +100,7 @@ public partial class MainWindow : Window
 
     private void OnClose(object sender, RoutedEventArgs e) => Close();
 
-    /// <summary>Dev aid: DLSSU_SNAPSHOT=file.png renders the window to disk (DLSSU_SNAPSHOT_STEPS=settings,tab:X,scroll:Y,log,game:N,name:Text,detail:Tab).</summary>
+    /// <summary>Dev aid: DLSSU_SNAPSHOT=file.png renders the window to disk (DLSSU_SNAPSHOT_STEPS=settings,tab:X,scroll:Y,log,game:N,name:Text,detail:Tab,mod:Label).</summary>
     private async Task Snapshot(string path)
     {
         var steps = (Environment.GetEnvironmentVariable("DLSSU_SNAPSHOT_STEPS") ?? "").Split(',', StringSplitOptions.RemoveEmptyEntries);
@@ -119,6 +119,12 @@ public partial class MainWindow : Window
             else if (step.StartsWith("name:"))
                 _vm.SelectedGame = _vm.GamesView.Cast<GameViewModel>().FirstOrDefault(g => g.Name.Contains(step[5..], StringComparison.OrdinalIgnoreCase));
             else if (step.StartsWith("detail:") && _vm.SelectedGame is { } dg) dg.DetailTab = step[7..];
+            else if (step.StartsWith("mod:"))
+            {
+                var label = step[4..];
+                if (_vm.SettingsOpen) _vm.SettingsVm.ModSelection = _vm.SettingsVm.ModChoices.First(c => c.Label.Contains(label, StringComparison.OrdinalIgnoreCase));
+                else if (_vm.SelectedGame is { } mg) mg.ModSelection = mg.ModChoices.First(c => c.Label.Contains(label, StringComparison.OrdinalIgnoreCase));
+            }
             else if (step == "log") _vm.LogOpen = true;
             else if (step.StartsWith("game:") && int.TryParse(step[5..], out var i))
                 _vm.SelectedGame = _vm.GamesView.Cast<GameViewModel>().ElementAtOrDefault(i);
