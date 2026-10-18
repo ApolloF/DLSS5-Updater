@@ -99,6 +99,7 @@ public sealed partial class GameViewModel : ObservableObject
             OnPropertyChanged(nameof(LecramEnabled));
             OnPropertyChanged(nameof(BothAddonsEnabled));
             RefreshAddonPairStatus();
+            NotifyDfcHint();
             RefreshModPick();
         };
         Info = info;
@@ -217,6 +218,38 @@ public sealed partial class GameViewModel : ObservableObject
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
         { Log.Error("Could not mark the ShortFuse + Lecram pair", ex); Views.Dialog.Show("Could not mark pair", ex.Message); }
+    }
+
+    /// <summary>Deep Fried Chicken is ticked for a game that ships no DLSS of its own (copies an install of ours added don't count).</summary>
+    public bool DfcWithoutNativeDlss => IsReShadeOnly && On("dfc") && !Installer.HasNativeDlss(Info, Manifest, SelectedTarget?.Dir ?? Root);
+    /// <summary>The imported DFC is older than 4.x and the installer will refuse this game; null otherwise.</summary>
+    public string? DfcNoDlssWarning => DfcWithoutNativeDlss && _s.Store.DfcImported && !_s.Store.DfcSupportsNonDlssGames
+        ? Installer.DfcNeedsNativeDlss(_s.Store.DfcVersion) : null;
+    public bool HasDfcNoDlssWarning => DfcNoDlssWarning is not null;
+    public bool ShowDfcNoDlssHint => DfcWithoutNativeDlss && !HasDfcNoDlssWarning;
+    public const string DfcNoDlssHint =
+        "No DLSS in this game: Deep Fried Chicken 4.x runs NR on its own motion vectors (its motion model is in the deep-fried-chicken-neural folder) or an external ReShade motion provider's, on top of the game's anti-aliasing. " +
+        "There is no DLSS upscaling (4.x removed DFC's own SR). nvngx_dlss.dll from NVIDIA's DLSS release is added beside the exe. " +
+        "Frame generation (DFC overlay, Rendering card) needs borderless or windowed mode; DLSS-G needs an RTX 40/50 GPU.";
+
+    /// <summary>Per game: place NVIDIA's nvngx_dlssg.dll for DFC's DLSS-G frame generation when the game has no DLSS of its own.</summary>
+    public bool DfcFrameGen
+    {
+        get => _s.Settings.Games.GetValueOrDefault(Id)?.DfcFrameGen == true;
+        set
+        {
+            _s.Settings.For(Id).DfcFrameGen = value ? true : null;
+            _s.Settings.Save();
+            OnPropertyChanged();
+        }
+    }
+
+    private void NotifyDfcHint()
+    {
+        OnPropertyChanged(nameof(DfcWithoutNativeDlss));
+        OnPropertyChanged(nameof(DfcNoDlssWarning));
+        OnPropertyChanged(nameof(HasDfcNoDlssWarning));
+        OnPropertyChanged(nameof(ShowDfcNoDlssHint));
     }
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(IsLocalPresetSelected))]
@@ -655,6 +688,7 @@ public sealed partial class GameViewModel : ObservableObject
         OnPropertyChanged(nameof(CanSwitchNr));
         OnPropertyChanged(nameof(CanUndoNr));
         RefreshAddonPairStatus();
+        NotifyDfcHint();
 
         var latest = LatestDlss;
         DlssRows.Clear();
@@ -768,6 +802,7 @@ public sealed partial class GameViewModel : ObservableObject
         LecramId = EffectiveLecramId,
         Uplift = !dlssOnly && IsReShadeOnly && On("uplift"),
         Dfc = !dlssOnly && IsReShadeOnly && On("dfc"),
+        DfcFrameGen = DfcFrameGen,
         Dlss = dlssOnly || On("dlss"),
         AddMissingDlss = _s.Settings.AddMissingDlss && !dlssOnly && !IsReShadeOnly && On("opti"),
         DlssTag = EffectiveDlssTag,
@@ -795,6 +830,7 @@ public sealed partial class GameViewModel : ObservableObject
         LecramId = EffectiveLecramId,
         Uplift = m.Uplift,
         Dfc = m.Dfc,
+        DfcFrameGen = DfcFrameGen,
         Dlss = m.Dlss,
         AddMissingDlss = m.Opti && m.Files.Any(f => Path.GetFileName(f).Equals("nvngx_dlss.dll", StringComparison.OrdinalIgnoreCase)),
         DlssTag = EffectiveDlssTag,

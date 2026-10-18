@@ -16,6 +16,15 @@ public sealed partial class ComponentStore
     /// <summary>Version shown for the imported add-on, or null when none is imported.</summary>
     public string? DfcVersion => DfcImported ? FileUtil.Format(FileUtil.ReadVersion(DfcPath)) : null;
 
+    /// <summary>
+    /// From 4.x (INSTALL.txt 4.0.6 preview) DFC also runs in games without their own DLSS, on its own or an external motion
+    /// provider's vectors. 2.x needed the game's DLSS.
+    /// </summary>
+    public const int DfcNonDlssMajor = 4;
+
+    /// <summary>Whether the imported add-on runs in games without their own DLSS; false when none is imported.</summary>
+    public bool DfcSupportsNonDlssGames => DfcImported && FileUtil.ReadVersion(DfcPath) is { Major: >= DfcNonDlssMajor };
+
     /// <summary>"{version}-{sha[..12]}" of the imported add-on; this is what an install records.</summary>
     public string? DfcTag => DfcImported ? DfcTagOf(DfcPath) : null;
 

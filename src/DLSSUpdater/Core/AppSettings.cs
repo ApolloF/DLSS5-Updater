@@ -17,6 +17,8 @@ public sealed class GameOverride
     public string? RenoDxId { get; set; }
     /// <summary>Lecram add-on build (library id) pinned for this game; null follows the global choice.</summary>
     public string? LecramId { get; set; }
+    /// <summary>Deep Fried Chicken in a game without its own DLSS: also place nvngx_dlssg.dll for its DLSS-G frame generation.</summary>
+    public bool? DfcFrameGen { get; set; }
     /// <summary>Config preset used for this game; null uses the current settings.</summary>
     public string? Preset { get; set; }
     /// <summary>OptiScaler or ReShade-only for this game; null follows the default.</summary>
