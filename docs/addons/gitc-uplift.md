@@ -114,3 +114,14 @@ Per pass 2..10: `Pass<N>FollowPass1` 1, `Intensity`, `Style`, `LocalTone`, `Loca
 Hidden / no effect: `DLSSQualityMode`, `DLSSPreset*`, `DLSSAutoExposure`, `PedestalRemoval`, `DepthDirection`,
 `GlobalTone`, `Performance`, `AdjustVulkanDevices`, `AdjustVulkanDevicesForNgx`, `VulkanNativeNr`,
 `DiagnosticRemoveDevice`, `DlssPlacementBlocked` (bookkeeping latch), `ConfigVersion`. The app does not write these.
+
+## App
+
+DLSS Updater installs the x64 add-on, helper and both effects, writes `[Uplift] Enabled=1`, and places the user-supplied
+runtime in `GITC-Uplift\nvngx_dlssnr.dll`. It never downloads the runtime. ReShade + add-ons mode is required; other NR
+routes are displaced and restored on uninstall. Releases newer than tested v1.4.2 warn in the log.
+
+The app exposes the main stage, resolution, strength, face protection, exposure, compatibility and diagnostics options.
+The look/shape keys, advanced face-mask keys, per-pass keys, HDR detail keys and hidden keys remain in the in-game
+GITC Uplift tab. `SnippetPath` is not exposed: the app uses Uplift's default runtime lookup folder. Numeric dropdowns
+provide common values; other values within the documented ranges can be entered in Advanced.

@@ -5,12 +5,13 @@ Windows app that keeps an OptiScaler-NR + ReShade + DLSS setup current across al
 It pulls the latest releases of:
 
 - [OptiScaler-DLSSNR-PreSR-Multipass](https://github.com/ShyVortex/OptiScaler-DLSSNR-PreSR-Multipass/releases) (standard package, prereleases included)
+- [GITC Uplift](https://github.com/ghostinthecamera/GITC-Uplift/releases) (MIT ReShade DLSS-NR add-on, 64-bit; exclusive alternative to OptiScaler-NR, ShortFuse, Lecram and DFC)
 - [MFGAdaUnlock-RenoDx](https://github.com/mavismmg/MFGAdaUnlock-RenoDx/releases) (`renodx-mfgunlock.addon64`)
 - [NVIDIA DLSS](https://github.com/NVIDIA/DLSS) runtime DLLs: `nvngx_dlss.dll` (SR), `nvngx_dlssd.dll` (RR), `nvngx_dlssg.dll` (FG)
 - [NVIDIA Streamline](https://github.com/NVIDIA-RTX/Streamline) (optional, signed `sl.*.dll` set for Dynamic MFG)
 - [ReShade](https://reshade.me) with full add-on support (`ReShade64.dll` taken from the official setup)
 
-and installs them next to each game's executable, together with your own `nvngx_dlssnr.dll`.
+and installs them next to each game's executable, together with your own `nvngx_dlssnr.dll`. Uplift puts that runtime in `GITC-Uplift\nvngx_dlssnr.dll` so NVIDIA DLSS cannot load a game-folder copy first.
 
 > **Single-player games only.** Replacing or injecting DLLs can trigger anti-cheat in online games. DLSS Updater flags games with known anti-cheat (EAC, BattlEye, GameGuard, …) and asks before touching them, but no check is complete. For online games, use the DLSS override in the NVIDIA app instead.
 >

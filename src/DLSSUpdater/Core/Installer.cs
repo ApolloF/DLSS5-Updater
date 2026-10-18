@@ -26,6 +26,9 @@ public sealed record InstallOptions
     public bool Lecram { get; init; }
     /// <summary>Lecram add-on build from the library (it decides v10 or v11 placement); null = the default build.</summary>
     public string? LecramId { get; init; }
+    /// <summary>GITC Uplift, a downloaded ReShade add-on; excludes every other NR route.</summary>
+    public bool Uplift { get; init; }
+    public string? UpliftTag { get; init; }
     /// <summary>Deep Fried Chicken, an imported ReShade add-on; excludes <see cref="RenoDx"/> (two NR injectors).</summary>
     public bool Dfc { get; init; }
     public bool Dlss { get; init; }
@@ -58,6 +61,7 @@ public sealed record InstallOptions
         OptiTag = m.OptiTag,
         Mfg = Mfg && m.MfgTag is { } mt && ComponentStore.HasMfg(mt),
         MfgTag = m.MfgTag,
+        UpliftTag = m.UpliftTag,
         DlssNrId = m.DlssNrId,
         RenoDxId = m.RenoDxId ?? RenoDxId,
         LecramId = m.LecramId ?? LecramId,
@@ -111,6 +115,22 @@ public sealed class Installer(ComponentStore store)
 
     private async Task InstallCoreAsync(GameInfo game, string targetDir, InstallOptions o, IProgress<TransferProgress>? progress, CancellationToken ct)
     {
+        if (o.Uplift)
+        {
+            if (!o.ReShadeOnly || o.Opti || o.RenoDx || o.Lecram || o.Dfc)
+                throw new InvalidOperationException("GITC Uplift replaces OptiScaler-NR, ShortFuse, Lecram and Deep Fried Chicken; pick one route.");
+            if (!o.DlssNr) throw new InvalidOperationException("GITC Uplift needs an imported NR runtime.");
+            o = o with { ReShade = true };
+            var exe = game.Exes.FirstOrDefault(f => string.Equals(Path.GetDirectoryName(f), targetDir, StringComparison.OrdinalIgnoreCase))
+                ?? game.Exes.FirstOrDefault()
+                ?? throw new InvalidOperationException("GITC Uplift needs a game executable to verify that the game is 64-bit x64.");
+            {
+                using var stream = File.OpenRead(exe);
+                using var pe = new System.Reflection.PortableExecutable.PEReader(stream);
+                if (pe.PEHeaders.CoffHeader.Machine != System.Reflection.PortableExecutable.Machine.Amd64)
+                    throw new InvalidOperationException("GITC Uplift supports 64-bit x64 games only in this app.");
+            }
+        }
         if (o.ReShadeOnly && !o.ReShade) throw new InvalidOperationException("ReShade-only mode installs ReShade as the proxy; ReShade can't be left out.");
         if (!AppSettings.IsKnownProxy(o.Proxy)) throw new ArgumentException($"\"{o.Proxy}\" is not a proxy name DLSS Updater installs under.", nameof(o));
         EnsureNoDoubleMfgUnlock(targetDir, o);
@@ -143,6 +163,8 @@ public sealed class Installer(ComponentStore store)
         var renoDx = o.RenoDx ? store.RequireAddon(AddonKind.RenoDx, o.RenoDxId) : null;
         var lecram = o.Lecram ? store.RequireAddon(AddonKind.Lecram, o.LecramId) : null;
         var dfc = o.Dfc ? store.RequireDfc() : null;
+        var uplift = o.Uplift ? await store.EnsureUpliftAsync(o.UpliftTag, progress, ct) : null;
+        if (o.Uplift && UpliftConfig.Warning(o.UpliftTag ?? store.Uplift?.Tag) is { } upliftWarning) Log.Warn($"{game.Name}: {upliftWarning}");
         var addMissing = o.AddMissingDlss && o.Opti;
         var dlss = o.Dlss || addMissing ? await store.EnsureDlssAsync(o.DlssTag, progress, ct) : null;
         var mfgPlan = o.Mfg ? PlanMfg(game, o, dlss, FileUtil.ParseTag(store.Streamline?.Tag)) : null;
@@ -160,6 +182,10 @@ public sealed class Installer(ComponentStore store)
             throw new InvalidOperationException("Lecram's DLSS5 add-on needs ReShade 6 or newer with full add-on support.");
         if (o.Dfc && (reshade is null || FileUtil.ReadVersion(reshade) is not { Major: >= 6 }))
             throw new InvalidOperationException("Deep Fried Chicken needs ReShade 6 or newer with full add-on support.");
+        if (o.Uplift && (reshade is null || FileUtil.ReadVersion(reshade) is not { Major: >= 6 }))
+            throw new InvalidOperationException("GITC Uplift needs ReShade 6 or newer with full add-on support (6.8+ for Vulkan/OpenGL).");
+        if (o.Uplift && o.Proxy is "opengl32.dll" && FileUtil.ReadVersion(reshade!) < new Version(6, 8))
+            throw new InvalidOperationException("GITC Uplift on OpenGL needs ReShade 6.8 or newer.");
         if (store.SfLecramWarning(o.RenoDx, o.Lecram, renoDx?.Build.Id) is { } compat) Log.Warn($"{game.Name}: {compat}");
 
         progress?.Report(new TransferProgress($"Installing to {game.Name}", null));
@@ -167,6 +193,12 @@ public sealed class Installer(ComponentStore store)
         var m = InstallManifest.Read(targetDir) ?? new InstallManifest();
         m.Contain(targetDir, game.Root);
         var ctx = new Ctx(FileUtil.Normalize(game.Root), targetDir, m);
+        if (o.Uplift)
+            foreach (var full in ComponentStore.UpliftFiles.Select(f => Path.Combine(targetDir, f)).Append(UpliftConfig.NrPath(targetDir)))
+                if (FileUtil.LinkBelow(FileUtil.IsUnder(full, ctx.Root) ? ctx.Root : ctx.Target, full) is { } link)
+                    throw new UnsafeManifestException(targetDir, $"{link} is a link");
+        if (m.Uplift && !o.Uplift && (o.ReShade || pkg is not null) && nrPath is null && m.DlssNr)
+            nrPath = store.VerifiedDlssNrPath(m.DlssNrId);
 
         await Task.Run(() =>
         {
@@ -180,19 +212,19 @@ public sealed class Installer(ComponentStore store)
                 if (!o.RenoDx && m.RenoDx && (o.ReShade || pkg is not null)) RemoveRenoDx(ctx);
                 if (!o.Lecram && m.Lecram && (o.ReShade || pkg is not null)) RemoveLecram(ctx);
                 if (!o.Dfc && m.Dfc && (o.ReShade || pkg is not null)) RemoveDfc(ctx);
+                if (!o.Uplift && m.Uplift && (o.ReShade || pkg is not null)) RemoveUplift(ctx);
 
                 if (pkg is not null)
                 {
                     InstallOpti(ctx, pkg, o, OptiSources.OfTag(o.OptiTag ?? store.Opti?.Tag));
-                    if (dlssNr || m.DlssNr) DisplaceForeignNrAddons(ctx, [ComponentStore.RenoDxFile, .. ComponentStore.LecramFiles, .. ComponentStore.DfcPackageFiles, .. ComponentStore.DfcForeignFiles]);
+                    if (dlssNr || m.DlssNr) DisplaceForeignNrAddons(ctx, [ComponentStore.RenoDxFile, .. ComponentStore.LecramFiles, .. ComponentStore.DfcPackageFiles, .. ComponentStore.DfcForeignFiles, .. ComponentStore.UpliftFiles, .. ComponentStore.LegacyUpliftFiles]);
                     m.Opti = true;
                     m.OptiTag = o.OptiTag ?? store.Opti?.Tag;
                     m.Proxy = o.Proxy;
                 }
                 if (reshade is not null)
                 {
-                    WriteReShadeIni(ctx, o,
-                        dfcEffects: dfc is not null && store.DfcInstallFiles().Any(f => f.StartsWith(ComponentStore.DfcShaderDir + "\\", StringComparison.OrdinalIgnoreCase)),
+                    WriteReShadeIni(ctx, o, addonEffects: uplift is not null || (dfc is not null && store.DfcInstallFiles().Any(f => f.StartsWith(ComponentStore.DfcShaderDir + "\\", StringComparison.OrdinalIgnoreCase))),
                         lecramGen: lecram?.Build.Generation);
                     // ReShade-only: ReShade itself is the proxy the game loads; otherwise OptiScaler loads ReShade64.dll.
                     Place(ctx, reshade, Path.Combine(targetDir, o.ReShadeOnly ? o.Proxy : ComponentStore.ReShadeFile));
@@ -243,11 +275,18 @@ public sealed class Installer(ComponentStore store)
                 }
                 if (dfc is not null)
                 {
-                    DisplaceForeignNrAddons(ctx, [.. ComponentStore.RenoDxFamily, .. ComponentStore.DfcForeignFiles]);
+                    DisplaceForeignNrAddons(ctx, [.. ComponentStore.RenoDxFamily, .. ComponentStore.DfcForeignFiles, .. ComponentStore.UpliftFiles, .. ComponentStore.LegacyUpliftFiles]);
                     PlaceDfc(ctx);
                     WriteDfcConfig(ctx, o);
                     m.Dfc = true;
                     m.DfcTag = store.DfcTag;
+                }
+                if (uplift is not null)
+                {
+                    DisplaceForeignNrAddons(ctx, [ComponentStore.RenoDxFile, .. ComponentStore.ForeignNrAddons.Where(f => !ComponentStore.UpliftFiles.Contains(f))]);
+                    foreach (var rel in ComponentStore.UpliftFiles) Place(ctx, Path.Combine(uplift, rel), Path.Combine(targetDir, rel));
+                    m.Uplift = true;
+                    m.UpliftTag = o.UpliftTag ?? store.Uplift?.Tag;
                 }
                 if (nrPath is not null) PlaceDlssNr(ctx, nrPath);
 
@@ -343,9 +382,9 @@ public sealed class Installer(ComponentStore store)
     /// <summary>
     /// ReShade.ini sits next to ReShade64.dll. It is only patched: keys ReShade or the user wrote stay,
     /// our profile keys are added or updated (unless the user changed them since we last wrote them).
-    /// <paramref name="dfcEffects"/>: DFC's effects go to reshade-shaders\Shaders, which EffectSearchPaths must cover.
+    /// <paramref name="addonEffects"/>: Add-on effects go to reshade-shaders\Shaders, which EffectSearchPaths must cover.
     /// </summary>
-    private static void WriteReShadeIni(Ctx ctx, InstallOptions o, bool dfcEffects, LecramGeneration? lecramGen)
+    private static void WriteReShadeIni(Ctx ctx, InstallOptions o, bool addonEffects, LecramGeneration? lecramGen)
     {
         var path = Path.Combine(ctx.Target, "ReShade.ini");
         var rel = ctx.Rel(path);
@@ -354,7 +393,14 @@ public sealed class Installer(ComponentStore store)
         var profile = o.ReShadeOverrides
             .Where(x => o.RenoDx || !RenoDxIni.IsRenoDx(x))
             .Where(x => o.Lecram || !LecramIni.IsLecram(x))
+            .Where(x => o.Uplift || !UpliftConfig.IsUplift(x))
             .Where(x => !DfcConfig.IsDfc(x)).ToList();
+        // Uplift's default is off; written as a profile value so turning it off in the overlay later sticks.
+        if (o.Uplift)
+        {
+            profile.RemoveAll(x => UpliftConfig.IsUplift(x) && x.Key.Equals("Enabled", StringComparison.OrdinalIgnoreCase));
+            profile.Add(new(UpliftConfig.Section, "Enabled", "1"));
+        }
         // Next to ShortFuse's add-on Lecram stands down unless told to observe; the user's own ForeignNr wins.
         var explicitForeignNr = profile.Any(LecramIni.IsForeignNr);
         var observe = o.RenoDx && o.Lecram && !explicitForeignNr;
@@ -372,6 +418,10 @@ public sealed class Installer(ComponentStore store)
         var cleaned = IniFile.Parse(original ?? "");
         // The section also held keys of a different add-on that older versions of this app wrote; Lecram's own keys stay.
         var hadStale = !o.Lecram && DropWrittenKeys(cleaned, ctx.M.ReShadeIni, LecramIni.Section);
+        hadStale |= !o.Uplift && DropWrittenKeys(cleaned, ctx.M.ReShadeIni, UpliftConfig.Section);
+        // Uplift saves Enabled=0 itself; until we have written Enabled once, that is its default, not the user's choice.
+        if (o.Uplift && !ctx.M.ReShadeIni.ContainsKey($"{UpliftConfig.Section}/Enabled"))
+            hadStale |= cleaned.Remove(UpliftConfig.Section, "Enabled");
         // The add-on writes ForeignNr=yield itself on first run; that is its default, not a choice, so it makes way for observe.
         if (observe && string.Equals(cleaned.Get(LecramIni.Section, LecramIni.ForeignNrKey), "yield", StringComparison.OrdinalIgnoreCase))
             hadStale |= cleaned.Remove(LecramIni.Section, LecramIni.ForeignNrKey);
@@ -382,7 +432,7 @@ public sealed class Installer(ComponentStore store)
         if (o.Lecram && lecramGen == LecramGeneration.V11 &&
             profile.Any(x => LecramIni.IsLecram(x) && x.Key.Trim().Equals("NRHookPoint", StringComparison.OrdinalIgnoreCase)))
             hadStale |= LecramIni.MigrateToV11(cleaned);
-        var needsEffectPath = dfcEffects && DfcConfig.EffectSearchPathsFor(cleaned.Get("GENERAL", "EffectSearchPaths"), ctx.Target) is not null;
+        var needsEffectPath = addonEffects && DfcConfig.EffectSearchPathsFor(cleaned.Get("GENERAL", "EffectSearchPaths"), ctx.Target) is not null;
         if (profile.Count == 0 && ctx.M.ReShadeIni.Count == 0 && !hadStale && !needsEffectPath) return;
 
         var current = hadStale ? cleaned.ToString() : original;
@@ -397,7 +447,7 @@ public sealed class Installer(ComponentStore store)
             merged = merged with { Text = ini.ToString() };
         }
         // Not recorded as a profile value: the folder is ReShade's standard one and stays covered when DFC goes.
-        if (dfcEffects && IniFile.Parse(merged.Text) is var withPaths
+        if (addonEffects && IniFile.Parse(merged.Text) is var withPaths
             && DfcConfig.EffectSearchPathsFor(withPaths.Get("GENERAL", "EffectSearchPaths"), ctx.Target) is { } paths)
         {
             withPaths.Set("GENERAL", "EffectSearchPaths", paths);
@@ -484,6 +534,19 @@ public sealed class Installer(ComponentStore store)
         m.LecramId = null;
         m.LecramFile = null;
         Log.Info("  Lecram's DLSS5 add-on removed");
+    }
+
+    private static void RemoveUplift(Ctx ctx)
+    {
+        foreach (var rel in ComponentStore.UpliftFiles) RemoveOwned(ctx, Path.Combine(ctx.Target, rel));
+        var path = Path.Combine(ctx.Target, "ReShade.ini");
+        if (File.Exists(path))
+        {
+            var ini = IniFile.Load(path);
+            if (DropWrittenKeys(ini, ctx.M.ReShadeIni, UpliftConfig.Section)) ini.Save(path);
+        }
+        ctx.M.Uplift = false;
+        ctx.M.UpliftTag = null;
     }
 
     /// <summary>
@@ -804,10 +867,17 @@ public sealed class Installer(ComponentStore store)
 
     private void PlaceDlssNr(Ctx ctx, string source)
     {
-        var target = Path.Combine(ctx.Target, ComponentStore.DlssNrFile);
+        var target = ctx.M.Uplift ? UpliftConfig.NrPath(ctx.Target) : Path.Combine(ctx.Target, ComponentStore.DlssNrFile);
+        var old = Path.Combine(ctx.Target, ctx.M.DlssNrFile ?? ComponentStore.DlssNrFile);
+        var oldVersion = File.Exists(old) ? store.RetainDlssNr(old) : null;
+        if (!old.Equals(target, StringComparison.OrdinalIgnoreCase)) RemoveOwned(ctx, old);
+        // Uplift refuses a runtime mapped from beside the game exe, including a restored original.
+        if (ctx.M.Uplift && File.Exists(Path.Combine(ctx.Target, ComponentStore.DlssNrFile)))
+            Displace(ctx, Path.Combine(ctx.Target, ComponentStore.DlssNrFile));
         var selected = store.RetainDlssNr(source);
-        var previous = File.Exists(target) ? store.RetainDlssNr(target) : null;
+        var previous = File.Exists(target) ? store.RetainDlssNr(target) : oldVersion;
         Place(ctx, source, target);
+        ctx.M.DlssNrFile = Path.GetRelativePath(ctx.Target, target);
         if (previous is not null && previous.Id != selected.Id) ctx.M.PreviousDlssNrId = previous.Id;
         ctx.M.DlssNr = true;
         ctx.M.DlssNrId = selected.Id;
@@ -824,7 +894,7 @@ public sealed class Installer(ComponentStore store)
         if (!m.DlssNr) throw new InvalidOperationException("Install NR in this game first.");
         var ctx = new Ctx(FileUtil.Normalize(game.Root), targetDir, m);
         var source = store.VerifiedDlssNrPath(id ?? store.SelectedDlssNr());
-        var target = Path.Combine(targetDir, ComponentStore.DlssNrFile);
+        var target = m.Uplift ? UpliftConfig.NrPath(targetDir) : Path.Combine(targetDir, ComponentStore.DlssNrFile);
         var previous = File.Exists(target) ? store.RetainDlssNr(target) : null;
         try
         {

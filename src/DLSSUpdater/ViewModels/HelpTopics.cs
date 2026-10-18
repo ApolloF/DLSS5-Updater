@@ -14,6 +14,13 @@ public static class HelpTopics
 {
     public static readonly HelpTopic[] All =
     [
+        new("uplift", "GITC Uplift", "GITC Uplift",
+            "GITC Uplift is an open-source MIT ReShade add-on that runs DLSS-NR on the game image. Single-player only: injection can trigger anti-cheat. " +
+            "Use it instead of ShortFuse, Lecram, Deep Fried Chicken or OptiScaler-NR; these NR routes cannot coexist. " +
+            "This app installs the 64-bit add-on, its helper and Uplift effects. ReShade with full add-on support is required; Vulkan and OpenGL need ReShade 6.8+. " +
+            "Import your own nvngx_dlssnr.dll. It goes in GITC-Uplift beside the add-on because Uplift blocks a runtime mapped from the game folder (NVIDIA DLSS can load that copy first on RTX 50). " +
+            "The app writes Enabled=1. In the game press Home, then open the GITC Uplift tab. Tested with 1.4.2; newer tags warn in the log. " +
+            "Preset B needs NR 310.9.16. NGX hooks Off is safe mode, Present only. Use D3D9Ex changes exclusive fullscreen to borderless. Mask blend values are undocumented."),
         // ---------- General ----------
         new("install-mode", "General", "Install mode",
             "OptiScaler-NR (default) is the main use: OptiScaler is the proxy, loads ReShade and its add-ons, and runs DLSSNR. " +
@@ -350,6 +357,7 @@ public static class HelpTopics
     /// <summary>"Which should I pick" guidance shown in the guide under each topic.</summary>
     private static readonly Dictionary<string, string> Advice = new()
     {
+        ["uplift"] = "Use ReShade + add-ons mode and one NR route. Start with one pass and the default preset A; press Home to tune Uplift in-game.",
         ["proxy"] = "Start with dxgi.dll. If the game doesn't show the OptiScaler overlay or crashes at start, try winmm.dll, then version.dll. " +
                     "If the game already has a dxgi.dll from another mod (ReShade, Special K), OptiScaler takes over that name and loads ReShade itself, so that is fine.",
         ["dlss-version"] = "Keep Latest globally. Pin a game only when a new DLSS build looks worse there (ghosting, shimmer), or for Dynamic MFG pin exactly 310.9.1 " +

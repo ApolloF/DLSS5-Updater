@@ -69,6 +69,7 @@ public sealed class AppSettings
     public bool InstallMfgUnlock { get; set; } = true;
     public bool InstallDlssNr { get; set; } = true;
     public bool InstallRenoDx { get; set; }
+    public bool InstallUplift { get; set; }
     public bool InstallLecram { get; set; }
     public string OptiSource { get; set; } = ComponentStore.OptiRepo;
     public string? PreviousDlssNrId { get; set; }
