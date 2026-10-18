@@ -48,8 +48,9 @@ public static class HelpTopics
         new("add-missing", "General", "Add nvngx_dlss.dll when missing",
             "Games without DLSS (FSR/XeSS only) have no nvngx_dlss.dll. OptiScaler needs it to use DLSS as the upscaler, so it is placed next to the exe."),
         new("ini-mode", "General", "Existing game configs",
-            "What happens when a game already has an OptiScaler.ini or ReShade.ini. The app always remembers which values it wrote itself, " +
-            "and new keys from a new OptiScaler release are always added. Whatever is replaced is backed up first and Uninstall restores it."),
+            "The app remembers which config values it wrote itself. Fresh config rebuilds each installed mod's config from its defaults plus your settings: " +
+            "OptiScaler.ini from the release, the add-on's sections in ReShade.ini, and deep-fried-chicken.cfg from the import. " +
+            "ReShade's own settings stay. Old files are backed up first and Uninstall restores them."),
         new("presets", "General", "Presets and defaults",
             "Out of the box every setting is what the upstream projects ship: the release's OptiScaler.ini untouched, ReShade and MFG Unlock without an ini. " +
             "Only two keys are added because the components would otherwise do nothing: LoadReshade=true when ReShade is installed with OptiScaler and " +
@@ -70,14 +71,22 @@ public static class HelpTopics
             "deep-fried-chicken.addon64 is imported from its extracted release folder (the NGX bridge deep-fried-chicken-nvngx.dll must be beside it); for 4.x pick the one in the package's 64-bit folder, and the present-support dll, the neural folder and DFC's ReShade effect come along. " +
             "Lecram's DLSS5 add-on is imported as renodx-dlss5.addon64 (v10 and older) or dlss5-nr.addon64 (v11 and newer); all builds are kept side by side, and a combo saves a ShortFuse and a Lecram build as one choice for games."),
         new("dfc", "General", "Deep Fried Chicken",
-            "Deep Fried Chicken (DFC) is a closed-source ReShade add-on that runs NVIDIA DLSS neural rendering in games with native DLSS. " +
+            "Deep Fried Chicken (DFC) is a closed-source ReShade add-on that runs NVIDIA DLSS neural rendering. 2.x needs a game with native DLSS; 4.x also runs in games without their own DLSS (see Deep Fried Chicken without DLSS). " +
             "Its licence is personal use only, so this app never downloads or redistributes it: you import your own copy (add-on, NGX bridge and default config) in Local components, and the files are copied into games unchanged. " +
             "From 4.x the 64-bit set also has deep-fried-chicken-present-support.dll, the deep-fried-chicken-neural folder (kept whole, as INSTALL.txt asks) and reshade-shaders\\Shaders\\DFC_OutputState.addonfx; all of it is placed beside the game exe, and ReShade.ini's EffectSearchPaths gets .\\reshade-shaders\\Shaders\\** when it doesn't cover that folder yet. " +
             "DFC's 32-bit route (addon32 plus a 64-bit companion host) is not supported by this app. " +
-            "It needs ReShade-only mode, ReShade 6+ with add-on support, a game with native DLSS and an imported nvngx_dlssnr.dll, and it replaces the RenoDX DLSS add-on and OptiScaler-NR (a game gets only one of them). " +
+            "It needs ReShade-only mode, ReShade 6+ with add-on support and an imported nvngx_dlssnr.dll (placed beside the exe), and it replaces the RenoDX DLSS add-on and OptiScaler-NR (a game gets only one of them). " +
             "The default deep-fried-chicken.cfg is placed when the game has none. The few options in Settings are merged into it like into ReShade.ini: only keys you set are written, and values you tuned in the overlay survive updates. " +
-            "Everything else (hook mode, placement, Auto Balance, motion stability, glow suppression, per-pass model, preset and intensity, the 4.x Refine tab, pass controls, frame generation and so on) is tuned in the ReShade overlay (Home, Deep Fried Chicken tab); the cfg numbers for those are undocumented. " +
-            "4.x also runs on games without their own DLSS (with DFC's or an external motion provider's vectors); this app still installs it only into games with native DLSS."),
+            "Everything else (hook mode, placement, Auto Balance, motion stability, glow suppression, per-pass model, preset and intensity, the 4.x Refine tab, pass controls, frame generation and so on) is tuned in the ReShade overlay (Home, Deep Fried Chicken tab); the cfg numbers for those are undocumented."),
+        new("dfc-no-dlss", "Deep Fried Chicken", "Deep Fried Chicken without DLSS",
+            "From 4.x (INSTALL.txt of 4.0.6 preview) DFC also runs in games without their own DLSS. There it runs NR with its own motion vectors (the package's motion model, dfc-neural-motion.onnx, is in the deep-fried-chicken-neural folder, which goes beside the exe whole), " +
+            "or with the vectors of an external ReShade motion provider when one is running (Lumenite Kernel or QuantMotion, VORT, Launchpad, or a texMotionVectors effect such as DRME, qUINT or dh_uber_motion; DX10, DX11, DX12, Vulkan and OpenGL, not DX9). " +
+            "NR works on top of the game's own anti-aliasing; lower Resolution under Pass controls in the overlay for speed. There is no DLSS upscaling in these games: 4.x removed DFC's own upscaler (SR), scene jitter and the virtual display. " +
+            "INSTALL.txt asks for nvngx_dlss.dll and nvngx_dlssnr.dll beside the game exe; DFC ships neither. The app places your imported nvngx_dlssnr.dll and adds nvngx_dlss.dll from NVIDIA's DLSS release (the version picked for DLSS files), and takes both out again when DFC goes. " +
+            "In games with native DLSS nothing is added: DFC uses the game's own DLSS. A 2.x import is refused in games without DLSS. " +
+            "Frame generation for these games is switched on in the overlay (Rendering card); it needs borderless or windowed mode and pauses while the ReShade menu is open. DLSS-G needs an RTX 40/50 GPU and NVIDIA's nvngx_dlssg.dll beside the exe: tick Add nvngx_dlssg.dll on the game's Install tab and the app places it from the DLSS release. " +
+            "FSR 3.1 frame generation needs AMD's amd_fidelityfx_*_dx12.dll, which this app does not provide. " +
+            "The cfg has frame_generation_coexistence, experimental_fg2x_enabled and nr_interpolation_enabled, but no comment or note says what they do or which value picks DLSS-G or FSR 3.1, so the app does not set them."),
 
         new("lecram", "General", "Lecram DLSS5 add-on",
             "Lecram v11 builds are fetched from the author's public MediaFire channel during update checks. In Local components, turn automatic checks on or off, use Check now and see the last result. Older builds can still be imported. " +
@@ -375,7 +384,7 @@ public static class HelpTopics
                          "If FG disappears or the game crashes afterwards, use Restore DLSS on that game.",
         ["add-missing"] = "Leave on. It only adds a file to games that have none, and Uninstall removes it again.",
         ["ini-mode"] = "Keep game settings for everyday use: updates never undo tuning you did in-game. Apply app settings once after you changed something here and want " +
-                       "it everywhere, then switch back. Fresh config when a game's ini got messy or a new OptiScaler release changed a lot.",
+                       "it everywhere, then switch back. Fresh config when a mod's config got messy or a new release changed a lot.",
         ["local-components"] = "Import each nvngx_dlssnr.dll to keep it in the local library. Choose the default here or a version on a game, then use Switch NR. Switch back restores its previous file. No NR binary is downloaded by this app. The ShortFuse and Lecram add-ons keep a library too: import every build you want, pick the default, and name builds yourself.",
         ["keybinds"] = "Pick keys the game doesn't use: Delete, Insert, End, Page Up/Down and \\ are usually free. Avoid Home if you use ReShade's default overlay key.",
         ["skip-tutorial"] = "On, unless you are new to ReShade.",
@@ -427,6 +436,7 @@ public static class HelpTopics
         ["lc-foreign"] = "Add-on default alone; the app sets observe for you next to ShortFuse's add-on.",
         ["lc-hooks"] = "Add-on default. With a Streamline game and DLSS on set 1; if the game crashes at boot set 2.",
         ["lc-dx11"] = "Auto.",
+        ["dfc-no-dlss"] = "Use a 4.x import. Play in borderless or windowed mode when you want frame generation, and tick Add nvngx_dlssg.dll only on an RTX 40/50 card.",
         ["dfc-arm"] = "Default. Switch off only to take DFC out of a game without uninstalling, then restart the game.",
         ["dfc-enabled"] = "Default. Switch off to compare with the game's native image.",
         ["dfc-passes"] = "1.0 first. Add passes in whole steps only with headroom to spare.",

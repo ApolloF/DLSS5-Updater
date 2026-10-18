@@ -456,6 +456,10 @@ public static partial class SettingsOptions
     /// (INSTALL.txt says DFC's own SR was removed), motion_full_resolution_flow, fog_awareness_*, internal_motion_architecture,
     /// internal_guide_quality, the output_* strengths and output_hud_rect0-3, grade_*, reactive_protection_*,
     /// flow_slope_aware_depth and the output_compare_* view. texture_boost* is gone in 4.x.
+    /// Frame generation (games without their own DLSS, INSTALL.txt 4.0.6) is switched on and set to DLSS-G or FSR 3.1 in
+    /// the overlay's Rendering card; no cfg comment documents a key for it, so frame_generation_coexistence,
+    /// experimental_fg2x_enabled and nr_interpolation_enabled stay unset. The per-game "Add nvngx_dlssg.dll" toggle only
+    /// places NVIDIA's runtime that DLSS-G needs.
     /// The shipped cfg already has enabled=1 and arm=1, so "Default" writes nothing.
     /// </summary>
     public static IniOptionViewModel[] Dfc(ObservableCollection<IniOverride> rs) =>
@@ -513,6 +517,6 @@ public static partial class SettingsOptions
     [
         C("Keep game settings", "keep", "Values a game's OptiScaler.ini / ReShade.ini already has, or you changed in-game, stay. Values this app wrote follow your settings."),
         C("Apply app settings", "apply", "Your settings here overwrite the same keys in every game. Other keys in the game's config stay."),
-        C("Fresh config", "fresh", "OptiScaler.ini is rebuilt from the release plus your settings; everything else from the old one is dropped (backed up first). ReShade.ini is only overwritten on your keys."),
+        C("Fresh config", "fresh", "Each mod's config is rebuilt from its defaults plus your settings: OptiScaler.ini from the release, add-on sections in ReShade.ini, deep-fried-chicken.cfg from the import. ReShade's own settings stay. Old files are backed up first."),
     ];
 }

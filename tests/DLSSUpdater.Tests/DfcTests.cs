@@ -107,6 +107,65 @@ public sealed class DfcTests : IDisposable
         Mode = InstallMode.ReShadeOnly, ReShade = true, RenoDx = true, DlssNr = true, DlssNrId = _nr.Id, Proxy = "dxgi.dll",
     };
 
+    [Theory]
+    [InlineData(true, false, "4.0", "old")]
+    [InlineData(true, true, "2.0", "old")]
+    [InlineData(false, false, "2.0", null)]
+    public async Task IniModes_FreshRebuildsImportedDefaultsPlusOptions_AndKeepsOneBackup(bool carryOver, bool overwrite, string passes, string? junk)
+    {
+        _store.ImportDfc(Release());
+        const string original = "config_schema=12\npasses=4.0\ncolor_strength=0.2\njunk=old\n";
+        File.WriteAllText(G(ComponentStore.DfcConfigFile), original);
+        const string reshade = "[GENERAL]\nPresetPath=mine.ini\n[OTHER]\nSetting=keep\n";
+        File.WriteAllText(G("ReShade.ini"), reshade);
+        var options = DfcWith(O("passes", "2.0")) with { CarryOverIni = carryOver, OverwriteIni = overwrite };
+        var installer = new Installer(_store);
+        await installer.InstallAsync(_game, _root, options, null, default);
+        var cfg = Cfg(G(ComponentStore.DfcConfigFile));
+        Assert.Equal(passes, cfg["passes"]);
+        Assert.Equal(junk, cfg.GetValueOrDefault("junk"));
+        Assert.Equal(reshade, File.ReadAllText(G("ReShade.ini")));
+        var m = InstallManifest.Read(_root)!;
+        Assert.All(m.DfcCfg, entry => Assert.Equal(entry.Value, cfg[entry.Key.Split('/')[1]]));
+        if (carryOver && !overwrite)
+        {
+            Assert.Empty(m.DfcCfg);
+            Assert.DoesNotContain(m.Backups, b => b.Original == ComponentStore.DfcConfigFile);
+            return;
+        }
+        var backup = Assert.Single(m.Backups, b => b.Original == ComponentStore.DfcConfigFile);
+        Assert.Equal(original, File.ReadAllText(Path.Combine(InstallManifest.BackupDirFor(_root), backup.Backup)));
+        if (carryOver) return;
+        Assert.Equal(DefaultCfg.Replace("passes=1.0", "passes=2.0"), File.ReadAllText(G(ComponentStore.DfcConfigFile)));
+        var beforeReset = File.ReadAllText(G(ComponentStore.DfcConfigFile)) + "junk=new tuning\n";
+        File.WriteAllText(G(ComponentStore.DfcConfigFile), beforeReset);
+        m.DfcCfg["DFC/junk"] = "new tuning";
+        m.Save(_root);
+        await installer.InstallAsync(_game, _root, options with { ReShadeOverrides = [] }, null, default);
+        Assert.Equal(DefaultCfg, File.ReadAllText(G(ComponentStore.DfcConfigFile)));
+        m = InstallManifest.Read(_root)!;
+        Assert.Empty(m.DfcCfg);
+        backup = Assert.Single(m.Backups, b => b.Original == ComponentStore.DfcConfigFile);
+        Assert.Equal(original, File.ReadAllText(Path.Combine(InstallManifest.BackupDirFor(_root), backup.Backup)));
+        await installer.UninstallAsync(_game, _root, default);
+        Assert.Equal(original, File.ReadAllText(G(ComponentStore.DfcConfigFile)));
+    }
+
+    [Fact]
+    public async Task FreshConfig_WithoutProfileOrPreviousWrittenKeys_StillResetsOwnedCfg()
+    {
+        _store.ImportDfc(Release());
+        var installer = new Installer(_store);
+        await installer.InstallAsync(_game, _root, Dfc(), null, default);
+        const string original = "passes=8\njunk=old\n";
+        File.WriteAllText(G(ComponentStore.DfcConfigFile), original);
+        await installer.InstallAsync(_game, _root, Dfc() with { CarryOverIni = false }, null, default);
+        Assert.Equal(DefaultCfg, File.ReadAllText(G(ComponentStore.DfcConfigFile)));
+        var m = InstallManifest.Read(_root)!;
+        Assert.Empty(m.DfcCfg);
+        Assert.DoesNotContain(m.Backups, b => b.Original == ComponentStore.DfcConfigFile);
+    }
+
     [Fact]
     public void Import_ValidatesTheAddonAndBridge_FromFileOrFolder()
     {
@@ -618,5 +677,277 @@ public sealed class DfcTests : IDisposable
         var missing = _store.DfcCompat(ViewModels.SettingsOptions.Dfc([]).Select(o => o.Key))!.MissingKeys;
         Assert.Contains("output_hud_enabled", missing);
         Assert.DoesNotContain("passes", missing);
+    }
+
+    // ---------- games without their own DLSS (4.x) ----------
+
+    private const string Sr = "nvngx_dlss.dll";
+    private const string Fg = "nvngx_dlssg.dll";
+
+    /// <summary>NVIDIA's DLSS release in the component cache, as the installer fetches it (fake files, offline).</summary>
+    private void SeedDlss(string tag, string content)
+    {
+        foreach (var f in ComponentStore.DlssFiles)
+        {
+            var path = Path.Combine(ComponentStore.TagDir(Component.Dlss, tag), f);
+            Directory.CreateDirectory(Path.GetDirectoryName(path)!);
+            File.WriteAllText(path, $"{content}-{f}");
+        }
+        var r = new ReleaseInfo { Tag = tag };
+        ComponentStore.MarkComplete(Component.Dlss, r);
+        _store.Dlss = r;
+    }
+
+    private string PlainRoot => Path.Combine(_tmp, "plain");
+    private string P(string rel) => Path.Combine(PlainRoot, rel);
+
+    /// <summary>A game folder with an exe and no DLSS, scanned like the app does (so files we add show up in the next scan).</summary>
+    private GameInfo PlainGame()
+    {
+        Directory.CreateDirectory(PlainRoot);
+        if (!File.Exists(P("Game.exe"))) File.WriteAllText(P("Game.exe"), "EXE");
+        return GameScanner.Inspect(new GameEntry("Plain", PlainRoot, "Manual"));
+    }
+
+    private List<string> PlainFiles() => Directory.EnumerateFiles(PlainRoot, "*", SearchOption.AllDirectories).Order().ToList();
+
+    [Fact]
+    public async Task NonDlssGame_4x_PlacesTheSetNrAndNvidiasSr_OwnedAndRecorded_AndUninstallLeavesTheGameAsItWas()
+    {
+        SeedDlss("v310.9.1", "NEW");
+        _store.ImportDfc(Package());
+        var game = PlainGame();
+        Assert.False(Installer.HasNativeDlss(game, null, PlainRoot));
+        var installer = new Installer(_store);
+
+        await installer.InstallAsync(game, PlainRoot, Dfc(), null, default);
+
+        Assert.All(V4Set().Append(ComponentStore.DfcConfigFile), rel => Assert.True(File.Exists(P(rel)), rel));
+        Assert.All(NeuralFiles, n => Assert.True(File.Exists(P(Path.Combine(ComponentStore.DfcNeuralDir, n))), n));
+        Assert.Equal(_nr.Sha256, FileUtil.Sha256(P(ComponentStore.DlssNrFile)));
+        Assert.Equal("NEW-" + Sr, File.ReadAllText(P(Sr)));
+        Assert.False(File.Exists(P(Fg)));
+        var m = InstallManifest.Read(PlainRoot)!;
+        Assert.True(m.Dfc);
+        Assert.True(m.DlssNr);
+        Assert.Contains(Sr, m.Files, StringComparer.OrdinalIgnoreCase);
+        Assert.Contains(ComponentStore.DlssNrFile, m.Files, StringComparer.OrdinalIgnoreCase);
+        Assert.All(V4Set(), rel => Assert.Contains(rel, m.Files, StringComparer.OrdinalIgnoreCase));
+        Assert.Equal([Sr], m.DfcRuntimes);
+        Assert.False(m.Dlss);
+
+        // The next scan sees our nvngx_dlss.dll, but it doesn't make this a DLSS game: a reinstall keeps it current.
+        game = PlainGame();
+        Assert.Contains(game.Dlss, d => d.Name == Sr);
+        Assert.False(Installer.HasNativeDlss(game, m, PlainRoot));
+        // A DLSS update replaced the game's own file instead: ours, but the backed-up original keeps the game native.
+        var updated = InstallManifest.Read(PlainRoot)!;
+        updated.Backups.Add(new BackupEntry { Original = Sr });
+        Assert.True(Installer.HasNativeDlss(game, updated, PlainRoot));
+        SeedDlss("v310.10.0", "NEWER");
+        await installer.InstallAsync(game, PlainRoot, Dfc(), null, default);
+        Assert.Equal("NEWER-" + Sr, File.ReadAllText(P(Sr)));
+        Assert.Equal([Sr], InstallManifest.Read(PlainRoot)!.DfcRuntimes);
+
+        await installer.UninstallAsync(game, PlainRoot, default);
+        Assert.Equal(["Game.exe"], Directory.EnumerateFileSystemEntries(PlainRoot).Select(Path.GetFileName));
+    }
+
+    [Fact]
+    public async Task NonDlssGame_2xImport_IsRefusedWithThe4xHint_AndTouchesNothing()
+    {
+        SeedDlss("v310.9.1", "NEW");
+        _store.ImportDfc(Release());
+        var game = PlainGame();
+        var before = PlainFiles();
+
+        var error = await Assert.ThrowsAsync<InvalidOperationException>(() => new Installer(_store).InstallAsync(game, PlainRoot, Dfc(), null, default));
+        Assert.Equal(Installer.DfcNeedsNativeDlss("2.0.0"), error.Message);
+        Assert.Contains("4.x", error.Message);
+        Assert.DoesNotContain("Chicken Assist", error.Message);
+        Assert.Equal(before, PlainFiles());
+        Assert.False(_store.DfcSupportsNonDlssGames);
+
+        // A 2.x import still installs into a game with native DLSS.
+        await new Installer(_store).InstallAsync(_game, _root, Dfc(), null, default);
+        Assert.True(File.Exists(G(ComponentStore.DfcFile)));
+    }
+
+    [Fact]
+    public async Task NonDlssGame_FrameGenToggle_PlacesAndTakesOutNvidiasFgRuntime()
+    {
+        SeedDlss("v310.9.1", "NEW");
+        _store.ImportDfc(Package());
+        var installer = new Installer(_store);
+
+        await installer.InstallAsync(PlainGame(), PlainRoot, Dfc() with { DfcFrameGen = true }, null, default);
+        Assert.Equal("NEW-" + Fg, File.ReadAllText(P(Fg)));
+        Assert.Equal("NEW-" + Sr, File.ReadAllText(P(Sr)));
+        var m = InstallManifest.Read(PlainRoot)!;
+        Assert.Equal([Sr, Fg], m.DfcRuntimes);
+        Assert.Contains(Fg, m.Files, StringComparer.OrdinalIgnoreCase);
+
+        await installer.InstallAsync(PlainGame(), PlainRoot, Dfc(), null, default);
+        Assert.False(File.Exists(P(Fg)));
+        Assert.True(File.Exists(P(Sr)));
+        m = InstallManifest.Read(PlainRoot)!;
+        Assert.Equal([Sr], m.DfcRuntimes);
+        Assert.DoesNotContain(Fg, m.Files, StringComparer.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public async Task NonDlssGame_AnFgRuntimeThatIsNotOurs_IsLeftAlone_AndStaysAfterUninstall()
+    {
+        SeedDlss("v310.9.1", "NEW");
+        _store.ImportDfc(Package());
+        PlainGame();
+        File.WriteAllText(P(Fg), "USERS-FG");
+        var installer = new Installer(_store);
+
+        await installer.InstallAsync(PlainGame(), PlainRoot, Dfc() with { DfcFrameGen = true }, null, default);
+        Assert.Equal("USERS-FG", File.ReadAllText(P(Fg)));
+        Assert.Equal([Sr], InstallManifest.Read(PlainRoot)!.DfcRuntimes);
+
+        await installer.UninstallAsync(PlainGame(), PlainRoot, default);
+        Assert.Equal("USERS-FG", File.ReadAllText(P(Fg)));
+        Assert.False(File.Exists(P(Sr)));
+    }
+
+    [Fact]
+    public async Task NonDlssGame_SwitchingRoutes_TakesOutTheRuntimes_AndRenoDxStaysRefused()
+    {
+        SeedDlss("v310.9.1", "NEW");
+        _store.ImportDfc(Package());
+        _store.ImportRenoDx(RenoDxAddon());
+        var installer = new Installer(_store);
+        await installer.InstallAsync(PlainGame(), PlainRoot, Dfc() with { DfcFrameGen = true }, null, default);
+
+        // Our nvngx_dlss.dll doesn't count as the game's DLSS, so a route that needs native DLSS is still refused.
+        var before = PlainFiles().ToDictionary(f => f, FileUtil.Sha256);
+        var error = await Assert.ThrowsAsync<InvalidOperationException>(() => installer.InstallAsync(PlainGame(), PlainRoot, Reno(), null, default));
+        Assert.Contains("native DLSS", error.Message);
+        Assert.Equal(before, PlainFiles().ToDictionary(f => f, FileUtil.Sha256));
+
+        // ReShade-only with NR and no add-on: DFC and both runtimes go, NR and ReShade stay.
+        await installer.InstallAsync(PlainGame(), PlainRoot, Dfc() with { Dfc = false }, null, default);
+        Assert.False(File.Exists(P(Sr)));
+        Assert.False(File.Exists(P(Fg)));
+        Assert.False(File.Exists(P(ComponentStore.DfcFile)));
+        Assert.False(Directory.Exists(P(ComponentStore.DfcNeuralDir)));
+        Assert.True(File.Exists(P(ComponentStore.DlssNrFile)));
+        var m = InstallManifest.Read(PlainRoot)!;
+        Assert.False(m.Dfc);
+        Assert.Empty(m.DfcRuntimes);
+        Assert.DoesNotContain(m.Files, f => ComponentStore.DlssFiles.Contains(Path.GetFileName(f), StringComparer.OrdinalIgnoreCase));
+    }
+
+    [Fact]
+    public async Task NonDlssGame_SwitchingToOptiScalerNr_TakesOutDfcAndItsRuntimes()
+    {
+        SeedDlss("v310.9.1", "NEW");
+        var pkg = Path.Combine(ComponentStore.TagDir(Component.OptiScaler, "v9.9.9"), "pkg");
+        Directory.CreateDirectory(pkg);
+        File.WriteAllText(Path.Combine(pkg, "OptiScaler.dll"), "OPTI");
+        File.WriteAllText(Path.Combine(pkg, "OptiScaler.ini"), "[DlssNr]\nEnabled=auto\n");
+        var release = new ReleaseInfo { Tag = "v9.9.9" };
+        ComponentStore.MarkComplete(Component.OptiScaler, release);
+        _store.Opti = release;
+        _store.ImportDfc(Package());
+        var installer = new Installer(_store);
+        await installer.InstallAsync(PlainGame(), PlainRoot, Dfc() with { DfcFrameGen = true }, null, default);
+
+        var opti = new InstallOptions { Mode = InstallMode.OptiScaler, Opti = true, ReShade = true, DlssNr = true, DlssNrId = _nr.Id, Proxy = "dxgi.dll" };
+        await installer.InstallAsync(PlainGame(), PlainRoot, opti, null, default);
+        Assert.Equal("OPTI", File.ReadAllText(P("dxgi.dll")));
+        Assert.False(File.Exists(P(Sr)));
+        Assert.False(File.Exists(P(Fg)));
+        Assert.All(V4Set(), rel => Assert.False(File.Exists(P(rel)), rel));
+        Assert.Empty(InstallManifest.Read(PlainRoot)!.DfcRuntimes);
+
+        await installer.UninstallAsync(PlainGame(), PlainRoot, default);
+        Assert.Equal(["Game.exe"], Directory.EnumerateFileSystemEntries(PlainRoot).Select(Path.GetFileName));
+    }
+
+    [Fact]
+    public async Task NonDlssGame_RestoringDlss_KeepsTheRuntimesDfcNeeds()
+    {
+        SeedDlss("v310.9.1", "NEW");
+        _store.ImportDfc(Package());
+        var installer = new Installer(_store);
+        await installer.InstallAsync(PlainGame(), PlainRoot, Dfc(), null, default);
+
+        await installer.RestoreDlssAsync(PlainGame(), PlainRoot, default);
+        Assert.Equal("NEW-" + Sr, File.ReadAllText(P(Sr)));
+        Assert.Equal([Sr], InstallManifest.Read(PlainRoot)!.DfcRuntimes);
+    }
+
+    [Fact]
+    public async Task NativeDlssGame_GetsNoExtraRuntimes_EvenWithTheFrameGenToggle()
+    {
+        SeedDlss("v310.9.1", "NEW");
+        _store.ImportDfc(Package());
+        var sub = Path.Combine(_root, "Engine", "DLSS");
+        Directory.CreateDirectory(sub);
+        File.WriteAllText(Path.Combine(sub, Sr), "GAMES-SR");
+        File.WriteAllText(G("Game.exe"), "EXE");
+        var game = GameScanner.Inspect(new GameEntry("Native", _root, "Manual"));
+        Assert.True(Installer.HasNativeDlss(game, null, _root));
+
+        await new Installer(_store).InstallAsync(game, _root, Dfc() with { DfcFrameGen = true }, null, default);
+        Assert.False(File.Exists(G(Sr)));
+        Assert.False(File.Exists(G(Fg)));
+        Assert.Equal("GAMES-SR", File.ReadAllText(Path.Combine(sub, Sr)));
+        var m = InstallManifest.Read(_root)!;
+        Assert.True(m.Dfc);
+        Assert.Empty(m.DfcRuntimes);
+        Assert.DoesNotContain(m.Files, f => ComponentStore.DlssFiles.Contains(Path.GetFileName(f), StringComparer.OrdinalIgnoreCase));
+    }
+
+    [Fact]
+    public void NativeDlss_CountsStreamlineAndTheGamesOwnFiles_NotOurs()
+    {
+        var target = Path.Combine(_tmp, "g");
+        var game = new GameInfo { Root = target, Dlss = [new DlssDll { Path = Path.Combine(target, Sr), Name = Sr }] };
+        var m = new InstallManifest();
+        Assert.True(Installer.HasNativeDlss(game, m, target));
+        m.AddFile(Sr);
+        Assert.False(Installer.HasNativeDlss(game, m, target));
+        game.Dlss.Add(new DlssDll { Path = Path.Combine(target, Fg), Name = Fg });
+        Assert.False(Installer.HasNativeDlss(game, m, target)); // frame generation alone is not DLSS SR
+        game.Streamline.Add(new DlssDll { Path = Path.Combine(target, "sl.dlss.dll"), Name = "sl.dlss.dll" });
+        Assert.True(Installer.HasNativeDlss(game, m, target));
+    }
+
+    [Fact]
+    public void GamePage_ShowsTheNonDlssHintOrThe2xWarning_AndPassesTheFrameGenToggle()
+    {
+        var root = Path.Combine(_tmp, "vm-game"); Directory.CreateDirectory(root);
+        var settings = new AppSettings { DefaultMode = InstallMode.ReShadeOnly };
+        var services = new DLSSUpdater.ViewModels.Services { Settings = settings, Store = _store, Installer = new Installer(_store) };
+        var vm = new DLSSUpdater.ViewModels.GameViewModel(new GameInfo { Id = root, Root = root, Name = "No DLSS game" }, services);
+        Assert.False(vm.DfcWithoutNativeDlss);
+
+        vm.Components.First(c => c.Key == "dfc").Enabled = true;
+        Assert.True(vm.DfcWithoutNativeDlss);
+        Assert.True(vm.ShowDfcNoDlssHint); // nothing imported yet: the hint, no warning
+        Assert.False(vm.BuildOptions(false, false).DfcFrameGen);
+
+        _store.ImportDfc(Release());
+        vm.RefreshStatus();
+        Assert.Equal(Installer.DfcNeedsNativeDlss("2.0.0"), vm.DfcNoDlssWarning);
+        Assert.False(vm.ShowDfcNoDlssHint);
+
+        _store.ImportDfc(Package());
+        vm.RefreshStatus();
+        Assert.False(vm.HasDfcNoDlssWarning);
+        Assert.True(vm.ShowDfcNoDlssHint);
+        vm.DfcFrameGen = true;
+        Assert.True(settings.Games[vm.Id].DfcFrameGen);
+        Assert.True(vm.BuildOptions(false, false).DfcFrameGen);
+
+        var native = new DLSSUpdater.ViewModels.GameViewModel(new GameInfo { Id = root + "2", Root = root, Name = "DLSS game", Dlss = [new DlssDll { Name = Sr, Path = Path.Combine(root, "Engine", Sr) }] }, services);
+        native.Components.First(c => c.Key == "dfc").Enabled = true;
+        Assert.False(native.DfcWithoutNativeDlss);
+        Assert.False(native.ShowDfcNoDlssHint);
     }
 }

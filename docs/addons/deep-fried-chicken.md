@@ -36,9 +36,17 @@ folder included. INSTALL.txt does not say what each file does; the app makes no 
 
 Other 4.0.6 notes from INSTALL.txt that matter here:
 
-- 4.x also runs on games **without** their own DLSS (DFC's own or an external ReShade motion provider's vectors).
-  The app still installs DFC only into games with native DLSS; opening that up needs a decision about
-  `nvngx_dlss.dll` for those games (open item).
+- 4.x also runs on games **without** their own DLSS: "Games without their own DLSS get NR with DFC's (or an external)
+  motion; games with DLSS keep SR/Quality/Model tuning." External providers (Lumenite Kernel or QuantMotion, VORT,
+  Launchpad, texMotionVectors effects such as DRME / qUINT / dh_uber_motion) are used when running, on DX10/11/12,
+  Vulkan and OpenGL, not DX9. INSTALL.txt does not say which file makes DFC's own motion; the package's motion model
+  (`dfc-neural-motion.onnx`) is in `deep-fried-chicken-neural`, which the app always installs. See "Games without
+  their own DLSS" below.
+- "NR (DLSS 5 neural rendering) works on top of the game's own anti-aliasing. Lower Resolution under Pass controls for
+  speed."
+- "Frame Gen (Rendering card) for games without their own DLSS: needs borderless or windowed mode; DLSS-G needs an
+  RTX 40/50 GPU and NVIDIA's nvngx_dlssg.dll beside the game exe (DFC does not ship it); FSR 3.1 needs AMD's
+  amd_fidelityfx_*_dx12.dll. It pauses while the ReShade menu is open."
 - Removed in 4.x: DFC's own upscaler (SR), scene jitter and the virtual display. The cfg still has
   `universal_sr_enabled=0`; the app leaves it alone.
 - Profiles in the overlay now save every setting except per-install hooking options.
@@ -92,6 +100,43 @@ The 32-bit `deep-fried-chicken-bridge.cfg` (mode, work_resolution, cast_*, sr_*,
   folders (`deep-fried-chicken-neural`, `reshade-shaders\Shaders`) are deleted. Foreign copies of the add-on, bridge
   and present-support dll are moved to the backup; a foreign neural folder or effect file is left, since it does
   nothing without the add-on.
+
+## Games without their own DLSS
+
+- **Native DLSS** means the game ships DLSS Super Resolution itself (`nvngx_dlss.dll` or Streamline's `sl.dlss.dll`
+  anywhere in the game); copies an install of ours added beside the exe (for DFC, or OptiScaler's "add missing DLSS")
+  don't count (`Installer.HasNativeDlss`). The same rule now decides the native-DLSS requirement of ShortFuse and Lecram,
+  so a DFC install never makes a game look like a DLSS game to them.
+- **4.x import**: installs. Besides the whole 64-bit set and the user's `nvngx_dlssnr.dll` (as in every game), the app
+  places `nvngx_dlss.dll` from NVIDIA's DLSS release (the DLSS component, the version picked for the game's DLSS files)
+  beside the exe, because INSTALL.txt asks for it and DFC doesn't ship it. It is recorded in the manifest
+  (`DfcRuntimes`), kept current on reinstall and update, and taken out when DFC goes (uninstall or switching route).
+  Restore DLSS leaves it, since DFC needs it. A copy the app doesn't own is never replaced.
+- **Frame generation**: the per-game toggle "Add nvngx_dlssg.dll for DFC's DLSS-G frame generation" places NVIDIA's
+  `nvngx_dlssg.dll` from the same release the same way; off takes it out again. Frame generation itself is switched on,
+  and DLSS-G or FSR 3.1 chosen, in the overlay's Rendering card. FSR 3.1's AMD dll is not provided by the app.
+- **2.x import**: refused in such games ("Deep Fried Chicken 2.0.0 needs a game with native DLSS. Import Deep Fried
+  Chicken 4.x, which also supports games without their own DLSS."). The game page shows the same text before install.
+- In games with native DLSS nothing extra is placed: DFC uses the game's own DLSS.
+- The game page shows a short hint for these games (no DLSS upscaling, DFC's or an external motion, frame generation
+  needs borderless/windowed and RTX 40/50 for DLSS-G).
+
+### Frame generation keys in the cfg: undocumented
+
+The 4.0.6 `deep-fried-chicken.cfg` has three keys whose names touch frame generation or interpolation, all without a
+comment, in the uncommented block at the top:
+
+```
+nr_interpolation_enabled=0
+experimental_fg2x_enabled=0
+frame_generation_coexistence=0
+```
+
+The only comments in the file head the five blocks at its end ("Live neural residual controls; neutral preserves the
+normal result.", and the four quoted in the cfg diff above: output protection, output grading, the D3D11 DLSS bias and
+the output comparison); none of them covers these keys. INSTALL.txt names only the
+overlay's Rendering card. So no documented key turns DFC's frame generation on or picks DLSS-G vs FSR 3.1, and the app
+writes none of them.
 
 ## Options the app writes
 

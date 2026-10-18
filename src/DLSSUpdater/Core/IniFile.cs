@@ -88,6 +88,18 @@ public sealed partial class IniFile
         return true;
     }
 
+    /// <summary>Deletes every occurrence of the section, including its comments and keys.</summary>
+    public bool RemoveSection(string section)
+    {
+        var removed = false;
+        while (FindSection(section) is var (start, end) && start >= 0)
+        {
+            _lines.RemoveRange(start, end - start);
+            removed = true;
+        }
+        return removed;
+    }
+
     private int FindKey(string section, string key)
     {
         var (start, end) = FindSection(section);
