@@ -2,27 +2,20 @@ namespace DLSSUpdater.Core;
 
 /// <summary>
 /// ShortFuse's renodx-dlss add-on isn't published on any official GitHub, so it is import-only like a user-supplied
-/// ReShade64.dll: the file is checked by its version resource and kept in the components folder.
+/// ReShade64.dll: the file is checked by its version resource and kept in the add-on library
+/// (one folder per SHA-256, see AddonLibrary.cs).
 /// </summary>
 public sealed partial class ComponentStore
 {
-    public string RenoDxPath => Path.Combine(AppPaths.Components, RenoDxFile);
-    public bool RenoDxImported => File.Exists(RenoDxPath);
-
-    /// <summary>Version shown for the imported add-on, or null when none is imported.</summary>
-    public string? RenoDxVersion => RenoDxImported ? FileUtil.Format(FileUtil.ReadVersion(RenoDxPath)) : null;
-
-    /// <summary>"{version}-{sha[..12]}" of the imported add-on; this is what an install records.</summary>
-    public string? RenoDxTag => RenoDxImported ? RenoDxTagOf(RenoDxPath) : null;
-
-    internal static string RenoDxTagOf(string path) =>
-        $"{FileUtil.Format(FileUtil.ReadVersion(path))}-{FileUtil.Sha256(path)[..12]}";
-
     /// <summary>Only a file that names itself renodx-dlss.addon64 is accepted; sibling add-ons are named in the error.</summary>
-    public string ImportRenoDx(string source)
+    public AddonBuild ImportRenoDx(string source)
     {
         if (FileUtil.ReadVersion(source) is null)
+        {
+            if (File.Exists(source) && LooksLikeLecramV11(source))
+                throw new InvalidDataException($"This is Lecram's {Lecram11File}, a different neural-rendering add-on. Import it under Lecram's DLSS5 add-on instead.");
             throw new InvalidDataException("Choose renodx-dlss.addon64 with a readable version resource. Extract archives first.");
+        }
         var original = FileUtil.OriginalFilename(source);
         if (!string.Equals(original, RenoDxFile, StringComparison.OrdinalIgnoreCase))
         {
@@ -32,23 +25,17 @@ public sealed partial class ComponentStore
                 (LegacyRenoDxFiles.Contains(original ?? "", StringComparer.OrdinalIgnoreCase)
                     ? "That add-on has no neural rendering. "
                     : original is not null && original.StartsWith("renodx-dlss5", StringComparison.OrdinalIgnoreCase)
-                        ? "That is a different neural-rendering add-on. "
+                        ? "That is Lecram's DLSS5 add-on: import it under Lecram's add-on instead. "
                         : "") +
                 $"Choose ShortFuse's {RenoDxFile}.");
         }
-        Directory.CreateDirectory(AppPaths.Components);
-        FileUtil.AtomicCopy(source, RenoDxPath);
-        Log.Info($"Imported {RenoDxFile} {RenoDxVersion} from {source}");
-        return RenoDxTagOf(RenoDxPath);
+        var version = FileUtil.Format(FileUtil.ReadVersion(source));
+        var build = RetainAddon(AddonKind.RenoDx, source, RenoDxFile, version, null, version);
+        Log.Info($"Imported {RenoDxFile} {build.Label} from {source}");
+        return build;
     }
 
-    public void RemoveRenoDxImport()
-    {
-        if (File.Exists(RenoDxPath)) File.Delete(RenoDxPath);
-    }
-
-    /// <summary>The imported add-on, or a clear error when none was imported.</summary>
-    internal string RequireRenoDx() => RenoDxImported
-        ? RenoDxPath
-        : throw new FileNotFoundException($"Import {RenoDxFile} in Settings → Local components first.", RenoDxPath);
+    /// <summary>Warning for installing the chosen ShortFuse build next to Lecram's add-on, or null when there is none.</summary>
+    public string? SfLecramWarning(bool renoDx, bool lecram, string? renoDxId) =>
+        renoDx && lecram && RenoDxBuildFor(renoDxId) is { } sf ? LecramCompat.Warning(renoDx, lecram, sf.ParsedVersion) : null;
 }

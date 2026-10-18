@@ -18,3 +18,5 @@ TestResults/
 !.env.example
 *.token
 *.pem
+
+.handoffs/

@@ -15,6 +15,8 @@ public sealed partial class SettingsViewModel : ObservableObject
     public SettingsViewModel(MainViewModel main)
     {
         _main = main;
+        RenoDx = new AddonLibraryViewModel(main, AddonKind.RenoDx, AddonsChanged);
+        Lecram = new AddonLibraryViewModel(main, AddonKind.Lecram, AddonsChanged);
         Overrides = new ObservableCollection<IniOverride>(Settings.IniOverrides);
         ReShadeOverrides = new ObservableCollection<IniOverride>(Settings.ReShadeOverrides);
         Folders = new ObservableCollection<FolderEntry>();
@@ -25,13 +27,20 @@ public sealed partial class SettingsViewModel : ObservableObject
         ReShadeOptions = SettingsOptions.ReShade(ReShadeOverrides);
         MfgOptions = SettingsOptions.Mfg(ReShadeOverrides);
         RenoDxOptions = SettingsOptions.RenoDx(ReShadeOverrides);
+        LecramOptions = SettingsOptions.Lecram(ReShadeOverrides);
+        DfcOptions = SettingsOptions.Dfc(ReShadeOverrides);
         NrOptions = SettingsOptions.Nr(Overrides);
         TonemapOptions = SettingsOptions.Tonemap(Overrides);
         HdrOptions = SettingsOptions.HdrOutput(Overrides);
 
         Reload();
+        ApplyOptiSource();
+        ApplyDfcCompat();
+        ApplyLecramGeneration();
     }
 
+    public AddonLibraryViewModel RenoDx { get; }
+    public AddonLibraryViewModel Lecram { get; }
     public IReadOnlyList<string> ProxyNames => AppSettings.ProxyNames;
     public ObservableCollection<IniOverride> Overrides { get; }
     public ObservableCollection<IniOverride> ReShadeOverrides { get; }
@@ -41,10 +50,12 @@ public sealed partial class SettingsViewModel : ObservableObject
     public IReadOnlyList<IniOptionViewModel> ReShadeOptions { get; }
     public IReadOnlyList<IniOptionViewModel> MfgOptions { get; }
     public IReadOnlyList<IniOptionViewModel> RenoDxOptions { get; }
+    public IReadOnlyList<IniOptionViewModel> LecramOptions { get; }
+    public IReadOnlyList<IniOptionViewModel> DfcOptions { get; }
     public IReadOnlyList<IniOptionViewModel> NrOptions { get; }
     public IReadOnlyList<IniOptionViewModel> TonemapOptions { get; }
     public IReadOnlyList<IniOptionViewModel> HdrOptions { get; }
-    public IEnumerable<IniOptionViewModel> AllOptions => ReShadeOptions.Concat(MfgOptions).Concat(RenoDxOptions).Concat(NrOptions).Concat(TonemapOptions).Concat(HdrOptions);
+    public IEnumerable<IniOptionViewModel> AllOptions => ReShadeOptions.Concat(MfgOptions).Concat(RenoDxOptions).Concat(LecramOptions).Concat(DfcOptions).Concat(NrOptions).Concat(TonemapOptions).Concat(HdrOptions);
     public IReadOnlyList<OptionChoice> IniModes => SettingsOptions.IniModes;
 
     public OptionChoice IniMode
@@ -177,6 +188,30 @@ public sealed partial class SettingsViewModel : ObservableObject
         set { Settings.IncludePrereleases = value; Save(); }
     }
 
+    public IReadOnlyList<OptiSource> OptiBuilds => OptiSources.All;
+
+    public OptiSource OptiBuild
+    {
+        get => OptiSources.For(Settings.OptiSource);
+        set
+        {
+            if (value is null || value.Repo == Settings.OptiSource) return;
+            Settings.OptiSource = value.Repo;
+            Save();
+            OnPropertyChanged();
+            _main.OptiSourceChanged();
+        }
+    }
+
+    /// <summary>Hides the options the chosen OptiScaler build doesn't have and switches the rest to its values.</summary>
+    public void ApplyOptiSource()
+    {
+        var source = OptiBuild;
+        var shared = GameOptionViewModel.Definitions.Nr.Concat(GameOptionViewModel.Definitions.Tonemap).Concat(GameOptionViewModel.Definitions.HdrOutput);
+        foreach (var o in NrOptions.Concat(TonemapOptions).Concat(HdrOptions).Concat(shared))
+            o.ApplySource(source);
+    }
+
     public bool InstallReShade
     {
         get => Settings.InstallReShade;
@@ -256,6 +291,12 @@ public sealed partial class SettingsViewModel : ObservableObject
         set { Settings.InstallRenoDx = value; Save(); }
     }
 
+    public bool InstallLecram
+    {
+        get => Settings.InstallLecram;
+        set { Settings.InstallLecram = value; Save(); }
+    }
+
     public string DlssNrInfo => Describe(_main.S.Store.DlssNrPath, _main.S.DlssNrSha, true);
     public string ReShadeInfo
     {
@@ -271,31 +312,144 @@ public sealed partial class SettingsViewModel : ObservableObject
 
     public bool ReShadeImported => _main.S.Store.ReShadeImported;
 
-    public string RenoDxInfo
+    /// <summary>ShortFuse's default build is newer than the one tested with Lecram's add-on; shown, never blocking.</summary>
+    public string? LecramWarning => _main.S.Store.SfLecramWarning(_main.S.Store.RenoDxImported, _main.S.Store.LecramImported, Settings.RenoDxId);
+
+    public bool HasLecramWarning => LecramWarning is not null;
+
+    /// <summary>Hides the options the default Lecram build's generation doesn't have and switches the rest to its values.</summary>
+    public void ApplyLecramGeneration()
+    {
+        var generation = _main.S.Store.LecramBuildFor(null)?.Generation;
+        foreach (var o in LecramOptions)
+            o.ApplyGeneration(generation);
+    }
+
+    // ---------- add-on libraries and combos ----------
+
+    public ObservableCollection<AddonCombo> Combos { get; } = [];
+
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(CanRemoveCombo), nameof(SelectedComboInfo))]
+    private AddonCombo? _selectedCombo;
+
+    [ObservableProperty] private string _newComboName = "";
+
+    public bool CanRemoveCombo => SelectedCombo is not null;
+
+    public string SelectedComboInfo
+    {
+        get
+        {
+            if (SelectedCombo is not { } c) return Combos.Count == 0 ? "No combos yet. Pick the two default builds above and save the pair." : "";
+            var store = _main.S.Store;
+            var sf = store.RenoDxBuilds.FirstOrDefault(b => b.Id == c.RenoDxId)?.Label ?? "missing build";
+            var lecram = store.LecramBuilds.FirstOrDefault(b => b.Id == c.LecramId)?.Label ?? "missing build";
+            return $"ShortFuse: {sf}\nLecram: {lecram}";
+        }
+    }
+
+    /// <summary>Runs after an import, rename, removal or new default: games, options, warnings and the lists follow.</summary>
+    private async Task AddonsChanged()
+    {
+        await _main.RefreshLocalComponentsAsync();
+        ReloadAddons();
+    }
+
+    private void ReloadAddons()
+    {
+        RenoDx.Reload();
+        Lecram.Reload();
+        ApplyLecramGeneration();
+        var keep = SelectedCombo?.Name;
+        Combos.Clear();
+        foreach (var c in Settings.AddonCombos) Combos.Add(c);
+        SelectedCombo = Combos.FirstOrDefault(c => c.Name == keep);
+        OnPropertyChanged(nameof(SelectedComboInfo));
+        OnPropertyChanged(nameof(LecramWarning));
+        OnPropertyChanged(nameof(HasLecramWarning));
+    }
+
+    private void RefreshGameAddons()
+    {
+        foreach (var g in _main.Games) g.RebuildAddonChoices();
+    }
+
+    /// <summary>Saves the two default builds as one named choice; a combo with the same name is replaced.</summary>
+    [RelayCommand]
+    private void SaveCombo()
+    {
+        var name = NewComboName.Trim();
+        if (name.Length == 0)
+        {
+            Views.Dialog.Show("Save combo", "Type a name for the combo first.");
+            return;
+        }
+        var store = _main.S.Store;
+        var sf = store.RenoDxBuildFor(null);
+        var lecram = store.LecramBuildFor(null);
+        if (sf is null || lecram is null)
+        {
+            Views.Dialog.Show("Save combo", "Import both add-ons and pick their default versions first.");
+            return;
+        }
+        Settings.AddonCombos.RemoveAll(c => c.Name.Equals(name, StringComparison.OrdinalIgnoreCase));
+        Settings.AddonCombos.Add(new AddonCombo { Name = name, RenoDxId = sf.Id, LecramId = lecram.Id });
+        Settings.Save();
+        NewComboName = "";
+        ReloadAddons();
+        SelectedCombo = Combos.FirstOrDefault(c => c.Name == name);
+        RefreshGameAddons();
+        Log.Info($"Saved add-on combo '{name}'");
+    }
+
+    [RelayCommand]
+    private void RemoveCombo()
+    {
+        if (SelectedCombo is not { } combo) return;
+        Settings.AddonCombos.Remove(combo);
+        Settings.Save();
+        ReloadAddons();
+        RefreshGameAddons();
+    }
+
+    public string DfcInfo
     {
         get
         {
             var store = _main.S.Store;
-            return store.RenoDxImported
-                ? "Imported  ·  " + Describe(store.RenoDxPath, HashCache.Get(store.RenoDxPath), false)
-                : $"Not imported. ShortFuse's {ComponentStore.RenoDxFile} isn't published on GitHub; get it from ShortFuse's RenoDX Discord and import it here.";
+            return store.DfcImported
+                ? $"Imported  ·  {store.DfcVersion}  ·  {HashCache.Get(store.DfcPath)[..12]}" +
+                  (DfcWarning is null ? "" : $"  ·  differs from the tested {DfcConfig.TestedVersion} / config_schema {DfcConfig.TestedSchema} (see log)")
+                : "Not imported. Personal-use licence: import your own copy: deep-fried-chicken.addon64 from the extracted package's 64-bit folder (the files beside it come along). 32-bit games are not supported.";
         }
     }
 
-    public bool RenoDxImported => _main.S.Store.RenoDxImported;
-
-    [RelayCommand]
-    private Task ImportRenoDx() => Import(ComponentStore.RenoDxFile, "RenoDX DLSS add-on|renodx-dlss.addon64;*.addon64");
-
-    [RelayCommand]
-    private async Task RemoveRenoDx()
+    /// <summary>Hides the DFC options its imported default cfg doesn't have (a different config schema).</summary>
+    public void ApplyDfcCompat()
     {
-        try { _main.S.Store.RemoveRenoDxImport(); }
-        catch (IOException ex) { Log.Error("Could not remove the imported RenoDX add-on", ex); }
-        Log.Info($"Removed imported {ComponentStore.RenoDxFile}");
+        var missing = _main.S.Store.DfcCompat(DfcOptions.Select(o => o.Key))?.MissingKeys ?? [];
+        foreach (var o in DfcOptions.Concat(GameOptionViewModel.Definitions.Dfc))
+            o.IsAvailable = !missing.Contains(o.Key, StringComparer.OrdinalIgnoreCase);
+    }
+
+    public string? DfcWarning => _main.S.Store.DfcCompat(DfcOptions.Select(o => o.Key)) is { HasIssues: true } r ? r.Summary : null;
+
+    public bool DfcImported => _main.S.Store.DfcImported;
+
+    [RelayCommand]
+    private Task ImportDfc() => Import(ComponentStore.DfcFile, "Deep Fried Chicken|deep-fried-chicken.addon64;*.addon64");
+
+    [RelayCommand]
+    private async Task RemoveDfc()
+    {
+        try { _main.S.Store.RemoveDfcImport(); }
+        catch (IOException ex) { Log.Error("Could not remove the imported Deep Fried Chicken files", ex); }
+        Log.Info($"Removed imported {ComponentStore.DfcFile}");
         await _main.RefreshLocalComponentsAsync();
-        OnPropertyChanged(nameof(RenoDxInfo));
-        OnPropertyChanged(nameof(RenoDxImported));
+        ApplyDfcCompat();
+        OnPropertyChanged(nameof(DfcInfo));
+        OnPropertyChanged(nameof(DfcImported));
     }
 
     public bool AutoDownloadReShade
@@ -451,9 +605,9 @@ public sealed partial class SettingsViewModel : ObservableObject
     [RelayCommand]
     private Task ImportReShade() => Import(ComponentStore.ReShadeFile, "ReShade (add-on build)|ReShade64.dll;dxgi.dll;*.dll");
 
-    private async Task Import(string fileName, string filter)
+    private async Task Import(string fileName, string filter, string? what = null)
     {
-        var dlg = new OpenFileDialog { Filter = filter, Title = $"Select {fileName}" };
+        var dlg = new OpenFileDialog { Filter = filter, Title = $"Select {what ?? fileName}" };
         if (dlg.ShowDialog() != true) return;
         try
         {
@@ -466,11 +620,14 @@ public sealed partial class SettingsViewModel : ObservableObject
             }
             Reload();
             await _main.RefreshLocalComponentsAsync();
+            ApplyDfcCompat();
+            if (fileName == ComponentStore.DfcFile && DfcWarning is { } warning)
+                Views.Dialog.Show("Deep Fried Chicken config check", warning + Environment.NewLine + Environment.NewLine + "Settings that still exist are applied normally.");
             OnPropertyChanged(nameof(DlssNrInfo));
             OnPropertyChanged(nameof(ReShadeInfo));
             OnPropertyChanged(nameof(ReShadeImported));
-            OnPropertyChanged(nameof(RenoDxInfo));
-            OnPropertyChanged(nameof(RenoDxImported));
+            OnPropertyChanged(nameof(DfcInfo));
+            OnPropertyChanged(nameof(DfcImported));
             OnPropertyChanged(nameof(SelectedNrHint));
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or InvalidDataException)
@@ -514,6 +671,7 @@ public sealed partial class SettingsViewModel : ObservableObject
         foreach (var r in store.DlssReleases.Concat(ComponentStore.CachedReleases(Component.Dlss)).DistinctBy(r => r.Tag)) DlssChoices.Add(new DlssChoice(r.Tag, r.Tag));
         if (Settings.DlssTag is { } t && DlssChoices.All(c => c.Tag != t)) DlssChoices.Add(new DlssChoice(t, t));
 
+        ReloadAddons();
         RefreshEditors();
         OnPropertyChanged(string.Empty);
     }

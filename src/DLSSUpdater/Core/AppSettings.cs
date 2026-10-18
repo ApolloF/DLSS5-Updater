@@ -13,6 +13,10 @@ public sealed class GameOverride
     /// <summary>DLSS release tag pinned for this game; null follows the global choice.</summary>
     public string? DlssTag { get; set; }
     public string? DlssNrId { get; set; }
+    /// <summary>ShortFuse add-on build (library id) pinned for this game; null follows the global choice.</summary>
+    public string? RenoDxId { get; set; }
+    /// <summary>Lecram add-on build (library id) pinned for this game; null follows the global choice.</summary>
+    public string? LecramId { get; set; }
     /// <summary>Config preset used for this game; null uses the current settings.</summary>
     public string? Preset { get; set; }
     /// <summary>OptiScaler or ReShade-only for this game; null follows the default.</summary>
@@ -65,6 +69,7 @@ public sealed class AppSettings
     public bool InstallMfgUnlock { get; set; } = true;
     public bool InstallDlssNr { get; set; } = true;
     public bool InstallRenoDx { get; set; }
+    public bool InstallLecram { get; set; }
     public string OptiSource { get; set; } = ComponentStore.OptiRepo;
     public string? PreviousDlssNrId { get; set; }
     public bool AddMissingDlss { get; set; } = true;
@@ -116,6 +121,24 @@ public sealed class AppSettings
     /// <summary>DLSS release tag to install; null = latest.</summary>
     public string? DlssTag { get; set; }
     public string? DlssNrId { get; set; }
+    /// <summary>Newest NR library build already offered as the default (see <see cref="ComponentStore.AdoptNewerDlssNr"/>).</summary>
+    public string? NewestDlssNrSeen { get; set; }
+    /// <summary>Default ShortFuse add-on build (library id); games without their own choice install it.</summary>
+    public string? RenoDxId { get; set; }
+    /// <summary>Default Lecram add-on build (library id).</summary>
+    public string? LecramId { get; set; }
+    /// <summary>Named ShortFuse + Lecram pairs the user can pick as one choice.</summary>
+    public List<AddonCombo> AddonCombos { get; set; } = [];
+    /// <summary>The tested combo was offered once; removing it keeps it removed.</summary>
+    public bool TestedComboSeeded { get; set; }
+
+    public string? AddonId(AddonKind kind) => kind == AddonKind.RenoDx ? RenoDxId : LecramId;
+
+    public void SetAddonId(AddonKind kind, string? id)
+    {
+        if (kind == AddonKind.RenoDx) RenoDxId = id;
+        else LecramId = id;
+    }
 
     public void SelectDlssNr(string id)
     {
@@ -145,7 +168,8 @@ public sealed class AppSettings
                     var sourceMigrated = s.OptiSource == ComponentStore.LegacyOptiRepo;
                     if (sourceMigrated) s.OptiSource = ComponentStore.OptiRepo;
                     s.Presets.RemoveAll(p => p.Name.Equals(ConfigProfile.RecommendedName, StringComparison.OrdinalIgnoreCase));
-                    if (s._legacyTokenRead || sourceMigrated) s.Save();
+                    var renoDxMigrated = RenoDxIni.Migrate(s);
+                    if (s._legacyTokenRead || sourceMigrated || renoDxMigrated) s.Save();
                     return s;
                 }
             }
@@ -191,4 +215,5 @@ public sealed class AppSettings
 [JsonSerializable(typeof(GhRelease))]
 [JsonSerializable(typeof(CachedComponent))]
 [JsonSerializable(typeof(NrVersion))]
+[JsonSerializable(typeof(AddonBuild))]
 internal partial class JsonCtx : JsonSerializerContext;

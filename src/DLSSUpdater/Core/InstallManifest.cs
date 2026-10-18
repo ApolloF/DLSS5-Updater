@@ -48,6 +48,18 @@ public sealed class InstallManifest
     public string? PreviousDlssNrId { get; set; }
     public bool RenoDx { get; set; }
     public string? RenoDxTag { get; set; }
+    /// <summary>Library id of the ShortFuse build placed; null in records from before the library.</summary>
+    public string? RenoDxId { get; set; }
+    public bool Lecram { get; set; }
+    public string? LecramTag { get; set; }
+    /// <summary>Library id of the Lecram build placed; null in records from before the library.</summary>
+    public string? LecramId { get; set; }
+    /// <summary>The generation's file we placed: renodx-dlss5.addon64 (v10) or dlss5-nr.addon64 (v11).</summary>
+    public string? LecramFile { get; set; }
+    public bool Dfc { get; set; }
+    public string? DfcTag { get; set; }
+    /// <summary>Values we wrote into deep-fried-chicken.cfg last time, keyed "DFC/key".</summary>
+    public Dictionary<string, string> DfcCfg { get; set; } = new(StringComparer.OrdinalIgnoreCase);
     public string? ReShadeSha { get; set; }
     public string? StreamlineTag { get; set; }
     public bool Streamline { get; set; }
