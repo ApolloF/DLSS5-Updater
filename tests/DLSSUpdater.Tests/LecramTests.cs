@@ -96,6 +96,77 @@ public sealed class LecramTests : IDisposable
 
     // ---------- import ----------
 
+    [Theory]
+    [InlineData(false, false)]
+    [InlineData(false, true)]
+    [InlineData(true, false)]
+    [InlineData(true, true)]
+    public async Task FreshConfig_ClearsOldGenerationAndKeepsChosenHookPoint_WithoutMigrationMarkers(bool v11, bool setHookPoint)
+    {
+        var build = _store.ImportLecram(v11 ? FakeV11() : FakeV10());
+        const string original = "[GENERAL]\nPresetPath=mine.ini\n[OTHER]\nSetting=keep\n[RenoDX.DLSS5]\nConfigVersion=10\nNeuralUplift=1\nNRHookPoint=2\nNRModelStyleOffset=9\nJunk=old\n[RENODX-DLSS]\nJunk=foreign\n";
+        File.WriteAllText(G("ReShade.ini"), original);
+        await new Installer(_store).InstallAsync(_game, _root,
+            Lec(lecramId: build.Id, overrides: setHookPoint ? [Key("NRHookPoint", "1")] : []) with { CarryOverIni = false }, null, default);
+        var ini = Ini();
+        Assert.Equal(setHookPoint ? "1" : null, Value("NRHookPoint"));
+        Assert.Null(Value("ConfigVersion"));
+        Assert.Null(Value("NRModelCarryoverReset"));
+        Assert.Null(Value("NeuralUplift"));
+        Assert.Null(Value("NRModelStyleOffset"));
+        Assert.Null(Value("Junk"));
+        Assert.False(LecramIni.NeedsV11Migration(ini));
+        Assert.Equal("mine.ini", ini.Get("GENERAL", "PresetPath"));
+        Assert.Equal("keep", ini.Get("OTHER", "Setting"));
+        Assert.Equal("foreign", ini.Get(RenoDxIni.Section, "Junk"));
+        var m = InstallManifest.Read(_root)!;
+        if (setHookPoint)
+        {
+            var applied = Assert.Single(m.ReShadeIni);
+            Assert.Equal($"{LecramIni.Section}/NRHookPoint", applied.Key);
+            Assert.Equal("1", applied.Value);
+        }
+        else Assert.Empty(m.ReShadeIni);
+        var backup = Assert.Single(m.Backups, b => b.Original == "ReShade.ini");
+        Assert.Equal(original, File.ReadAllText(Path.Combine(InstallManifest.BackupDirFor(_root), backup.Backup)));
+    }
+
+    [Fact]
+    public async Task FreshConfig_V11WithNeuralUpliftAndHookPoint_MarksTheProfileV11ToPreventHookReset()
+    {
+        var build = _store.ImportLecram(FakeV11());
+        File.WriteAllText(G("ReShade.ini"), "[RenoDX.DLSS5]\nConfigVersion=10\nNRModelStyleOffset=9\nJunk=old\n");
+        await new Installer(_store).InstallAsync(_game, _root,
+            Lec(lecramId: build.Id, overrides: [Key("NeuralUplift", "0"), Key("NRHookPoint", "1")]) with { CarryOverIni = false }, null, default);
+        Assert.Equal("0", Value("NeuralUplift"));
+        Assert.Equal("1", Value("NRHookPoint"));
+        Assert.Equal("11", Value("ConfigVersion"));
+        Assert.Null(Value("NRModelCarryoverReset"));
+        Assert.Null(Value("NRModelStyleOffset"));
+        Assert.Null(Value("Junk"));
+        Assert.False(LecramIni.NeedsV11Migration(Ini()));
+        var applied = InstallManifest.Read(_root)!.ReShadeIni;
+        Assert.Equal(3, applied.Count);
+        Assert.Equal("0", applied[$"{LecramIni.Section}/NeuralUplift"]);
+        Assert.Equal("1", applied[$"{LecramIni.Section}/NRHookPoint"]);
+        Assert.Equal("11", applied[$"{LecramIni.Section}/ConfigVersion"]);
+    }
+
+    [Fact]
+    public async Task FreshConfig_WithBothAddons_ClearsBothAndWritesObserve()
+    {
+        _store.ImportLecram(FakeV11());
+        ImportSf(new Version(0, 2026, 928, 306));
+        File.WriteAllText(G("ReShade.ini"), "[RENODX-DLSS]\nJunk=old\n[RENODX-DLSS-preset1]\nJunk=old\n[RenoDX.DLSS5]\nJunk=old\nForeignNr=yield\n");
+        await new Installer(_store).InstallAsync(_game, _root, Lec(renoDx: true) with { CarryOverIni = false }, null, default);
+        var ini = Ini();
+        Assert.Equal("observe", Value("ForeignNr"));
+        Assert.Null(Value("Junk"));
+        Assert.Null(ini.Get(RenoDxIni.Section, "Junk"));
+        Assert.Null(ini.Get(RenoDxIni.PresetSection, "Junk"));
+        Assert.Single(InstallManifest.Read(_root)!.Backups, b => b.Original == "ReShade.ini");
+    }
+
     [Fact]
     public void Import_AcceptsV10ByItsVersionResourceAndV11ByItsStrings_AndRejectsOtherAddons()
     {
