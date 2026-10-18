@@ -191,7 +191,9 @@ public sealed class Installer(ComponentStore store)
                 }
                 if (reshade is not null)
                 {
-                    WriteReShadeIni(ctx, o, dfcEffects: dfc is not null && store.DfcInstallFiles().Any(f => f.StartsWith(ComponentStore.DfcShaderDir + "\\", StringComparison.OrdinalIgnoreCase)));
+                    WriteReShadeIni(ctx, o,
+                        dfcEffects: dfc is not null && store.DfcInstallFiles().Any(f => f.StartsWith(ComponentStore.DfcShaderDir + "\\", StringComparison.OrdinalIgnoreCase)),
+                        lecramGen: lecram?.Build.Generation);
                     // ReShade-only: ReShade itself is the proxy the game loads; otherwise OptiScaler loads ReShade64.dll.
                     Place(ctx, reshade, Path.Combine(targetDir, o.ReShadeOnly ? o.Proxy : ComponentStore.ReShadeFile));
                     if (o.ReShadeOnly)
@@ -343,7 +345,7 @@ public sealed class Installer(ComponentStore store)
     /// our profile keys are added or updated (unless the user changed them since we last wrote them).
     /// <paramref name="dfcEffects"/>: DFC's effects go to reshade-shaders\Shaders, which EffectSearchPaths must cover.
     /// </summary>
-    private static void WriteReShadeIni(Ctx ctx, InstallOptions o, bool dfcEffects)
+    private static void WriteReShadeIni(Ctx ctx, InstallOptions o, bool dfcEffects, LecramGeneration? lecramGen)
     {
         var path = Path.Combine(ctx.Target, "ReShade.ini");
         var rel = ctx.Rel(path);
@@ -377,6 +379,9 @@ public sealed class Installer(ComponentStore store)
         if (o.Lecram && !o.RenoDx && !explicitForeignNr)
             hadStale |= DropWrittenKeys(cleaned, ctx.M.ReShadeIni, LecramIni.Section, k => k.Equals(LecramIni.ForeignNrKey, StringComparison.OrdinalIgnoreCase));
         hadStale |= DropWrittenKeys(cleaned, ctx.M.ReShadeIni, RenoDxIni.Section, RenoDxIni.IsPresetKey);
+        if (o.Lecram && lecramGen == LecramGeneration.V11 &&
+            profile.Any(x => LecramIni.IsLecram(x) && x.Key.Trim().Equals("NRHookPoint", StringComparison.OrdinalIgnoreCase)))
+            hadStale |= LecramIni.MigrateToV11(cleaned);
         var needsEffectPath = dfcEffects && DfcConfig.EffectSearchPathsFor(cleaned.Get("GENERAL", "EffectSearchPaths"), ctx.Target) is not null;
         if (profile.Count == 0 && ctx.M.ReShadeIni.Count == 0 && !hadStale && !needsEffectPath) return;
 
