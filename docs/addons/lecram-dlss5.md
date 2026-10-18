@@ -164,9 +164,37 @@ App behaviour: when installing a Lecram v11 build with an `NRHookPoint` override
   C); its catalog text for the key is unchanged, so the SF + Lecram route through `observe` still applies. The behaviour next
   to a real foreign NR producer can't be probed without a game.
 
+## Update source
+
+DLSS Updater checks the same public MediaFire folder as the author's installer (DLSS5-NR-Setup). Method: static analysis of
+`DLSS5-NR-Setup-v11.0.0-beta.22.exe` (never run, no network used for the analysis); the live listing was then checked once.
+
+- **Listing** (public, no login): `GET https://www.mediafire.com/api/1.5/folder/get_content.php?folder_key=<key>&content_type=files&chunk=<n>&response_format=json`.
+  Default key `wrwi1qkpgy0qu`. `response.folder_content.files[]` carries `filename`, `hash` (SHA-256), `size`, `created_utc`,
+  `links.normal_download`, `quickkey`; `more_chunks` is `yes`/`no` (the installer stops after 10 chunks, so does the app).
+- **Channel move.** A `channel.json` in the root (fields `notice`, `moved_to`) moves the channel to a new folder key. The app
+  follows it once per check, remembers the new key in its settings and refuses a loop or a second move.
+- **Candidates.** `DLSS5-NR-Setup-v*.exe`, `DLSS5-NR-*.zip`, `dlss5-nr.addon64`, `dlss5-nr-v*.addon64`. The version comes from
+  the file name (`vN.N.N` with an optional `-alpha.N`/`-beta.N`/`-rc.N`); a major below 11, or a missing hash or `created_utc`, skips
+  the file. The newest upload wins, not the highest version. The installer prefers EXE over ZIP over raw add-on on a tie; the app only
+  needs the add-on, so it prefers raw over ZIP over EXE.
+- **Download.** `links.normal_download` is a landing page; the first `href="https://download...` in it (HTML entities decoded) is the
+  file. The downloaded file's SHA-256 must equal the listing's, else it is refused. Nothing is ever executed.
+- **Setup exe.** A Rust PE with a normal DEFLATE ZIP appended after the PE sections (central directory offsets count from the ZIP's
+  start; the app also accepts offsets counted from the file start). Entries include `dlss5-nr.addon64` and `package.json`
+  (schema 1, `version` `v11.0.0-beta.22`, `kind` `v11`). The app finds the end-of-central-directory record, reads the ZIP in
+  memory and extracts only the root `dlss5-nr.addon64`; the exe is deleted afterwards.
+- **Live state (2026-10-18):** the folder lists `DLSS5-NR-Setup-v11.0.0-beta.24.exe` (8,981,402 bytes) and `licenses.txt`.
+- **In the app.** The listing is cached under `%LocalAppData%\DLSSUpdater\cache` (ETag/Last-Modified sent when present). One
+  listing per check, requests in sequence. The add-on goes through the normal import (labels, generation, dedupe by SHA-256) and
+  becomes the library default only when newer than the current default. Games are never switched. Offline, a broken listing or an
+  exe without ZIP is logged once and the library stays as it is. Settings → Local components has "Check for new builds
+  automatically" (default on) and "Check now". A new build may have options beyond the last checked one; fetching it does not
+  mark its configuration as checked.
+
 ## App support
 
-DLSS Updater imports the add-on (never downloads it) and installs it per game in ReShade-only mode, with the same
+DLSS Updater imports the add-on (or fetches v11 builds from the author's public channel, see "Update source") and installs it per game in ReShade-only mode, with the same
 prerequisites as ShortFuse's add-on: ReShade 6+, a game with native DLSS and an imported `nvngx_dlssnr.dll`. It excludes
 OptiScaler-NR and Deep Fried Chicken. It is not added to `[ADDON] LoadFromDllMain`, since nothing here shows it needs early load.
 

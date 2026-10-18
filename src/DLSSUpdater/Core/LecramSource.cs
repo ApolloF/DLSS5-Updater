@@ -8,13 +8,65 @@ namespace DLSSUpdater.Core;
 public enum LecramGeneration { V10, V11 }
 
 /// <summary>
-/// Lecram's DLSS5 Neural Rendering add-on is distributed by its author to supporters, so it is import-only like
-/// ShortFuse's add-on. v10 and older (renodx-dlss5.addon64) name themselves in the version resource; v11+
+/// Lecram's DLSS5 Neural Rendering add-on supports local imports and the author's public v11 update channel.
+/// v10 and older (renodx-dlss5.addon64) name themselves in the version resource; v11+
 /// (dlss5-nr.addon64) has no version resource and is recognised by strings in the binary. Every imported build stays in the
 /// library; a game gets the one chosen for it, under its generation's file name.
 /// </summary>
 public sealed partial class ComponentStore
 {
+    private readonly SemaphoreSlim _lecramCheck = new(1, 1);
+
+    public Task CheckLecramAsync(AppSettings settings, CancellationToken ct) => CheckLecramAsync(settings, new MediaFireClient(), ct);
+
+    internal async Task CheckLecramAsync(AppSettings settings, MediaFireClient client, CancellationToken ct)
+    {
+        if (!settings.AutoDownloadLecram || !await _lecramCheck.WaitAsync(0, ct)) return;
+        var temp = Path.Combine(AppPaths.Cache, "lecram-download-" + Guid.NewGuid().ToString("N"));
+        try
+        {
+            var channel = await client.CheckAsync(settings.LecramFolderKey, ct);
+            if (!channel.Offline) settings.LecramFolderKey = channel.Key;
+            if (channel.Offline) settings.LecramLastResult = "Offline; keeping the Lecram library (cached listing).";
+            else if (channel.Latest is not { } latest) settings.LecramLastResult = "No v11 builds found; keeping the Lecram library.";
+            else if (latest.Hash.Equals(settings.LecramLastAssetHash, StringComparison.OrdinalIgnoreCase)
+                     && settings.LecramLastBuildId is { } id && LecramBuilds.Any(b => b.Id == id))
+                settings.LecramLastResult = $"Up to date: {settings.LecramLastVersion}.";
+            else
+            {
+                Directory.CreateDirectory(temp);
+                var package = Path.Combine(temp, "package");
+                await client.DownloadAsync(latest, package, ct);
+                var addon = Path.Combine(temp, Lecram11File);
+                if (latest.Rank == 2) File.Move(package, addon);
+                else MediaFireClient.ExtractAddon(package, addon);
+                if (!LooksLikeLecramV11(addon)) throw new InvalidDataException("Downloaded add-on is not a recognised Lecram v11 build.");
+                var before = LecramBuilds.Select(b => b.Id).ToHashSet(StringComparer.OrdinalIgnoreCase);
+                var build = ImportLecram(addon);
+                if (build.Generation != Generation.V11) throw new InvalidDataException("Downloaded add-on is not Lecram v11.");
+                if (!before.Contains(build.Id)) AdoptImportedAddon(settings, AddonKind.Lecram, build);
+                settings.LecramLastAssetHash = latest.Hash;
+                settings.LecramLastBuildId = build.Id;
+                settings.LecramLastVersion = build.DetectedLabel;
+                settings.LecramLastResult = $"Available in library: {build.DetectedLabel}.";
+            }
+            if (!string.IsNullOrWhiteSpace(channel.Notice)) settings.LecramLastResult += " " + channel.Notice;
+            Log.Info("Lecram: " + settings.LecramLastResult);
+        }
+        catch (Exception ex) when (ex is HttpRequestException or OperationCanceledException or IOException or InvalidDataException
+                                      or UnauthorizedAccessException or System.Text.Json.JsonException or KeyNotFoundException or InvalidOperationException or FormatException)
+        {
+            settings.LecramLastResult = "Check failed; keeping the Lecram library. " + ex.Message;
+            Log.Info("Lecram: " + settings.LecramLastResult);
+        }
+        finally
+        {
+            try { if (Directory.Exists(temp)) Directory.Delete(temp, true); }
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) { Log.Error("Could not remove Lecram temporary download", ex); }
+            _lecramCheck.Release();
+        }
+    }
+
     /// <summary>
     /// True for a PE file with the strings only Lecram's v11 binary has: the ini section it reads, and its NR-SETTINGS and
     /// NR-COMPAT log lines. v10 builds have the section but neither log line.

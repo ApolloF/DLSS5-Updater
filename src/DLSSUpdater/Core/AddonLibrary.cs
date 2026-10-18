@@ -45,14 +45,17 @@ public sealed record AddonBuild(
     /// before its release ("v11.0.0-beta.6" before "v11.0.0").
     /// </summary>
     [JsonIgnore]
-    public (Version Version, bool Release) Order
+    public (Version Version, bool Release, int Stage, int Number) Order
     {
         get
         {
             var label = DetectedLabel.TrimStart('v', 'V');
             var dash = label.IndexOf('-');
             var core = dash < 0 ? label : label[..dash];
-            return (Version.TryParse(core, out var v) ? v : ParsedVersion ?? new Version(0, 0), dash < 0);
+            var pre = dash < 0 ? [] : label[(dash + 1)..].Split('.');
+            var stage = pre.Length > 0 ? pre[0] switch { "alpha" => 1, "beta" => 2, "rc" => 3, _ => 0 } : 0;
+            var number = pre.Length == 2 && int.TryParse(pre[1], out var n) ? n : 0;
+            return (Version.TryParse(core, out var v) ? v : ParsedVersion ?? new Version(0, 0), dash < 0, stage, number);
         }
     }
 

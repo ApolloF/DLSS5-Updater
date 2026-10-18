@@ -47,7 +47,7 @@ public sealed partial class ComponentStore
     public const string RenoDxFile = "renodx-dlss.addon64";
     /// <summary>Other ShortFuse-family add-ons that also inject NR or replaced the add-on earlier; never installed by this app.</summary>
     public static readonly string[] LegacyRenoDxFiles = ["renodx-dlssfix.addon64"];
-    /// <summary>Lecram's DLSS5 add-on, import-only: v10 and older, and v11 and newer (never both in one game).</summary>
+    /// <summary>Lecram's DLSS5 add-on: v10 and older, and v11 and newer (never both in one game).</summary>
     public const string Lecram10File = "renodx-dlss5.addon64";
     public const string Lecram11File = "dlss5-nr.addon64";
     public static readonly string[] LecramFiles = [Lecram10File, Lecram11File];

@@ -66,6 +66,13 @@ public sealed class AppSettings
     public bool InstallReShade { get; set; } = true;
     /// <summary>Download the ReShade add-on build from reshade.me when no ReShade64.dll was imported.</summary>
     public bool AutoDownloadReShade { get; set; } = true;
+    /// <summary>Check Lecram's public MediaFire channel for new v11 builds and add them to the library.</summary>
+    public bool AutoDownloadLecram { get; set; } = true;
+    public string LecramFolderKey { get; set; } = MediaFireClient.DefaultFolder;
+    public string LecramLastResult { get; set; } = "Not checked yet.";
+    public string? LecramLastVersion { get; set; }
+    public string? LecramLastAssetHash { get; set; }
+    public string? LecramLastBuildId { get; set; }
     public bool InstallMfgUnlock { get; set; } = true;
     public bool InstallDlssNr { get; set; } = true;
     public bool InstallRenoDx { get; set; }
@@ -212,6 +219,7 @@ public sealed class AppSettings
 [JsonSerializable(typeof(InstallManifest))]
 [JsonSerializable(typeof(List<GameInfo>))]
 [JsonSerializable(typeof(ApiCacheEntry))]
+[JsonSerializable(typeof(MediaFireCacheEntry))]
 [JsonSerializable(typeof(List<GhRelease>))]
 [JsonSerializable(typeof(GhRelease))]
 [JsonSerializable(typeof(CachedComponent))]
