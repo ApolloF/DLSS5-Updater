@@ -220,6 +220,17 @@ public sealed partial class MainViewModel : ObservableObject
         ReShadeNews.Load(auto ? store.ReShade : null);
         foreach (var g in Games) { g.RebuildNrChoices(); g.RebuildAddonChoices(); g.RefreshStatus(); }
         CountUpdates();
+        OnPropertyChanged(nameof(LecramVersion));
+    }
+
+    public string LecramVersion => S.Settings.LecramLastVersion ?? S.Store.LecramBuildFor(null)?.DetectedLabel ?? "not in library";
+
+    internal async Task CheckLecramAsync()
+    {
+        await Task.Run(() => S.Store.CheckLecramAsync(S.Settings, _cts.Token));
+        S.Settings.Save();
+        await RefreshLocalComponentsAsync();
+        SettingsVm.Reload();
     }
 
     // ---------- commands: global ----------
@@ -233,6 +244,7 @@ public sealed partial class MainViewModel : ObservableObject
     {
         Gh.Token = S.Settings.GitHubToken;
         await S.Store.RefreshAsync(_cts.Token);
+        await CheckLecramAsync();
         var s = S.Store;
         Online = s.Opti is { FromCache: false } || s.Dlss is { FromCache: false } || s.Mfg is { FromCache: false } || s.Uplift is { FromCache: false };
         OptiVersion = s.Opti is null ? "—" : s.Opti.Tag + (s.Opti.Prerelease ? " pre" : "");

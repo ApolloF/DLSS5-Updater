@@ -29,6 +29,29 @@ public sealed partial class AddonLibraryViewModel : ObservableObject
     private AppSettings Settings => _main.S.Settings;
     private ComponentStore Store => _main.S.Store;
     private bool IsRenoDx => _kind == AddonKind.RenoDx;
+    public bool CanCheckUpdates => !IsRenoDx;
+    public bool AutoDownload
+    {
+        get => Settings.AutoDownloadLecram;
+        set
+        {
+            if (value == Settings.AutoDownloadLecram) return;
+            Settings.AutoDownloadLecram = value;
+            Settings.Save();
+            OnPropertyChanged();
+            CheckNowCommand.NotifyCanExecuteChanged();
+        }
+    }
+    public string LastResult => Settings.LecramLastResult;
+
+    private bool CanCheckNow() => CanCheckUpdates && AutoDownload;
+
+    [RelayCommand(CanExecute = nameof(CanCheckNow))]
+    private async Task CheckNow()
+    {
+        await _main.CheckLecramAsync();
+        await _changed();
+    }
 
     public string Title => IsRenoDx ? "ShortFuse RenoDX DLSS" : "Lecram DLSS5 Neural Rendering";
     public string FileNames => IsRenoDx ? ComponentStore.RenoDxFile : $"{ComponentStore.Lecram10File} (v10 and older) · {ComponentStore.Lecram11File} (v11 and newer)";
@@ -63,7 +86,7 @@ public sealed partial class AddonLibraryViewModel : ObservableObject
             if (SelectedBuild is not { } build)
                 return IsRenoDx
                     ? $"Not imported. ShortFuse's {ComponentStore.RenoDxFile} isn't published on GitHub; get it from ShortFuse's RenoDX Discord and import it here."
-                    : $"Not imported. Lecram's DLSS5 add-on is distributed by the author to supporters; import your copy here ({ComponentStore.Lecram10File} for v10 and older, {ComponentStore.Lecram11File} for v11 and newer).";
+                    : $"No builds yet. Check the author's public v11 channel or import your copy here ({ComponentStore.Lecram10File} for v10 and older, {ComponentStore.Lecram11File} for v11 and newer).";
             var path = ComponentStore.AddonPathOf(_kind, build);
             var generation = build.Generation switch { LecramGeneration.V11 => "v11 and newer  ·  ", LecramGeneration.V10 => "v10 and older  ·  ", _ => "" };
             var size = File.Exists(path) ? $"{new FileInfo(path).Length / 1048576.0:0.0} MB  ·  " : "";
@@ -83,6 +106,9 @@ public sealed partial class AddonLibraryViewModel : ObservableObject
         OnPropertyChanged(nameof(Selected));
         OnPropertyChanged(nameof(HasBuilds));
         OnPropertyChanged(nameof(Info));
+        OnPropertyChanged(nameof(LastResult));
+        OnPropertyChanged(nameof(AutoDownload));
+        CheckNowCommand.NotifyCanExecuteChanged();
     }
 
     [RelayCommand]
