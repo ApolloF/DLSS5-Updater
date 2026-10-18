@@ -1,5 +1,6 @@
 using System.Collections.ObjectModel;
 using CommunityToolkit.Mvvm.ComponentModel;
+using CommunityToolkit.Mvvm.Input;
 using DLSSUpdater.Core;
 using DLSSUpdater.Scan;
 
@@ -97,8 +98,7 @@ public sealed partial class GameViewModel : ObservableObject
             OnPropertyChanged(nameof(RenoDxEnabled));
             OnPropertyChanged(nameof(LecramEnabled));
             OnPropertyChanged(nameof(BothAddonsEnabled));
-            OnPropertyChanged(nameof(HasSfLecramWarning));
-            OnPropertyChanged(nameof(SfLecramWarning));
+            RefreshAddonPairStatus();
             RefreshModPick();
         };
         Info = info;
@@ -188,9 +188,39 @@ public sealed partial class GameViewModel : ObservableObject
     public bool LecramEnabled => On("lecram");
     public bool BothAddonsEnabled => RenoDxEnabled && LecramEnabled;
 
-    /// <summary>ShortFuse's build is newer than the one tested with Lecram's add-on; shown while both are enabled for this game.</summary>
-    public string? SfLecramWarning => _s.Store.SfLecramWarning(RenoDxEnabled, LecramEnabled, EffectiveRenoDxId);
-    public bool HasSfLecramWarning => SfLecramWarning is not null;
+    public string? SfLecramMessage => _s.Store.SfLecramMessage(RenoDxEnabled, LecramEnabled, EffectiveRenoDxId, EffectiveLecramId);
+    public bool HasSfLecramMessage => SfLecramMessage is not null;
+    public AddonPairStatus PairStatus => _s.Store.PairTestFor(EffectiveRenoDxId, EffectiveLecramId)?.Status ?? AddonPairStatus.Untested;
+    public bool IsPairCrashed => PairStatus == AddonPairStatus.Crashed;
+    public bool CanMarkAddonPair => BothAddonsEnabled && _s.Store.RenoDxBuildFor(EffectiveRenoDxId) is not null && _s.Store.LecramBuildFor(EffectiveLecramId) is not null;
+
+    public void RefreshAddonPairStatus()
+    {
+        OnPropertyChanged(nameof(SfLecramMessage));
+        OnPropertyChanged(nameof(HasSfLecramMessage));
+        OnPropertyChanged(nameof(PairStatus));
+        OnPropertyChanged(nameof(IsPairCrashed));
+        OnPropertyChanged(nameof(CanMarkAddonPair));
+        MarkPairWorkingCommand.NotifyCanExecuteChanged();
+        MarkPairCrashedCommand.NotifyCanExecuteChanged();
+    }
+
+    [RelayCommand(CanExecute = nameof(CanMarkAddonPair))]
+    private void MarkPairWorking() => MarkAddonPair(AddonPairStatus.Works);
+
+    [RelayCommand(CanExecute = nameof(CanMarkAddonPair))]
+    private void MarkPairCrashed() => MarkAddonPair(AddonPairStatus.Crashed);
+
+    private void MarkAddonPair(AddonPairStatus status)
+    {
+        try
+        {
+            _s.Store.MarkAddonPair(_s.Settings, EffectiveRenoDxId, EffectiveLecramId, status);
+            RefreshAddonPairStatus();
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        { Log.Error("Could not mark the ShortFuse + Lecram pair", ex); Views.Dialog.Show("Could not mark pair", ex.Message); }
+    }
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(IsLocalPresetSelected))]
     private PresetChoice? _presetChoice;
@@ -474,8 +504,7 @@ public sealed partial class GameViewModel : ObservableObject
         SyncComboChoice();
         _loading = loading;
         OnPropertyChanged(nameof(EffectiveLecramGeneration));
-        OnPropertyChanged(nameof(HasSfLecramWarning));
-        OnPropertyChanged(nameof(SfLecramWarning));
+        RefreshAddonPairStatus();
         if (_rowsBuilt) RefreshConfigRows();
     }
 
@@ -508,8 +537,7 @@ public sealed partial class GameViewModel : ObservableObject
         _s.Settings.Save();
         SyncComboChoice();
         OnPropertyChanged(nameof(EffectiveLecramGeneration));
-        OnPropertyChanged(nameof(HasSfLecramWarning));
-        OnPropertyChanged(nameof(SfLecramWarning));
+        RefreshAddonPairStatus();
         if (_rowsBuilt) RefreshConfigRows();
         RefreshStatus();
     }
@@ -664,8 +692,7 @@ public sealed partial class GameViewModel : ObservableObject
         Row("dfc", m?.Dfc == true ? RenoDxVersionOf(m.DfcTag) : null, store.DfcVersion, m?.DfcTag == store.DfcTag);
         OnPropertyChanged(nameof(CanSwitchNr));
         OnPropertyChanged(nameof(CanUndoNr));
-        OnPropertyChanged(nameof(HasSfLecramWarning));
-        OnPropertyChanged(nameof(SfLecramWarning));
+        RefreshAddonPairStatus();
 
         var latest = LatestDlss;
         DlssRows.Clear();

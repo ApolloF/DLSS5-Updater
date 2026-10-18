@@ -783,13 +783,28 @@
                                         <ColumnDefinition Width="*" />
                                         <ColumnDefinition Width="Auto" />
                                     </Grid.ColumnDefinitions>
-                                    <TextBlock Grid.Column="1" Text="ShortFuse + Lecram pair" VerticalAlignment="Center"
-                                               ToolTip="A saved pair sets both versions above for this game; changing either by hand clears it. Pairs are saved in Settings, Local components." />
+                                    <StackPanel Grid.Column="1" VerticalAlignment="Center" Margin="0,0,12,0">
+                                        <TextBlock Text="ShortFuse + Lecram pair" TextWrapping="Wrap"
+                                                   ToolTip="A saved pair sets both versions above for this game; changing either by hand clears it. Pairs are saved in Settings, Local components." />
+                                        <TextBlock Text="{Binding PairStatus}" Style="{StaticResource MutedText}" Margin="0,2,0,0" />
+                                    </StackPanel>
                                     <ComboBox Grid.Column="2" Width="356" Margin="0,0,54,0" ItemsSource="{Binding ComboChoices}" SelectedItem="{Binding ComboChoice}" MaxDropDownHeight="300"
                                               AutomationProperties.Name="ShortFuse and Lecram pair for this game" />
                                 </Grid>
-                                <TextBlock Text="{Binding SfLecramWarning}" Foreground="{StaticResource Warn}" TextWrapping="Wrap" FontSize="12" Margin="18,8,0,0"
-                                           Visibility="{Binding HasSfLecramWarning, Converter={StaticResource BoolToVis}}" />
+                                <WrapPanel Margin="18,6,0,0">
+                                    <Button Content="Mark as working" Style="{StaticResource BtnGhost}" Command="{Binding MarkPairWorkingCommand}" Margin="0,0,8,0" />
+                                    <Button Content="Mark as crashed" Style="{StaticResource BtnGhost}" Command="{Binding MarkPairCrashedCommand}" />
+                                </WrapPanel>
+                                <TextBlock Text="{Binding SfLecramMessage}" TextWrapping="Wrap" FontSize="12" Margin="18,8,0,0"
+                                           Visibility="{Binding HasSfLecramMessage, Converter={StaticResource BoolToVis}}">
+                                    <TextBlock.Style>
+                                        <Style TargetType="TextBlock" BasedOn="{StaticResource MutedText}">
+                                            <Style.Triggers>
+                                                <DataTrigger Binding="{Binding IsPairCrashed}" Value="True"><Setter Property="Foreground" Value="{StaticResource Warn}" /></DataTrigger>
+                                            </Style.Triggers>
+                                        </Style>
+                                    </TextBlock.Style>
+                                </TextBlock>
                             </StackPanel>
                         </StackPanel>
                     </Border>
@@ -1010,8 +1025,16 @@
                                                     <ContentControl Content="{Binding RenoDx}" ContentTemplate="{StaticResource AddonLibraryRow}" Margin="0,10" />
                                                     <Border Style="{StaticResource Divider}" />
                                                     <ContentControl Content="{Binding Lecram}" ContentTemplate="{StaticResource AddonLibraryRow}" Margin="0,10" />
-                                                    <TextBlock Text="{Binding LecramWarning}" Foreground="{StaticResource Warn}" TextWrapping="Wrap" FontSize="12" Margin="0,0,0,10"
-                                                               Visibility="{Binding HasLecramWarning, Converter={StaticResource BoolToVis}}" />
+                                                    <TextBlock Text="{Binding LecramMessage}" TextWrapping="Wrap" FontSize="12" Margin="0,0,0,10"
+                                                               Visibility="{Binding HasLecramMessage, Converter={StaticResource BoolToVis}}">
+                                                        <TextBlock.Style>
+                                                            <Style TargetType="TextBlock" BasedOn="{StaticResource MutedText}">
+                                                                <Style.Triggers>
+                                                                    <DataTrigger Binding="{Binding IsPairCrashed}" Value="True"><Setter Property="Foreground" Value="{StaticResource Warn}" /></DataTrigger>
+                                                                </Style.Triggers>
+                                                            </Style>
+                                                        </TextBlock.Style>
+                                                    </TextBlock>
                                                     <Border Style="{StaticResource Divider}" />
                                                     <StackPanel Margin="0,10">
                                                         <TextBlock Text="ShortFuse + Lecram combos" FontWeight="SemiBold" />

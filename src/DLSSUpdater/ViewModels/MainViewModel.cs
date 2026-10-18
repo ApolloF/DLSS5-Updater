@@ -25,10 +25,15 @@ public sealed partial class MainViewModel : ObservableObject
         Log.TrimFile();
         var settings = AppSettings.Load();
         var gh = new GitHubClient { Token = settings.GitHubToken };
-        var store = new ComponentStore(gh, () => settings.IncludePrereleases) { AutoReShade = () => settings.AutoDownloadReShade, SelectedDlssNr = () => settings.DlssNrId, SelectedRenoDx = () => settings.RenoDxId, SelectedLecram = () => settings.LecramId, OptiSourceRepo = () => settings.OptiSource };
+        var store = new ComponentStore(gh, () => settings.IncludePrereleases) { AutoReShade = () => settings.AutoDownloadReShade, SelectedDlssNr = () => settings.DlssNrId, SelectedRenoDx = () => settings.RenoDxId, SelectedLecram = () => settings.LecramId, PairTests = () => settings.AddonPairTests, OptiSourceRepo = () => settings.OptiSource };
         S = new Services { Settings = settings, Store = store, Installer = new Installer(store) };
         Gh = gh;
         SettingsVm = new SettingsViewModel(this);
+        store.PairStatusChanged += () =>
+        {
+            foreach (var game in Games) game.RefreshAddonPairStatus();
+            SettingsVm.RefreshAddonPairStatus();
+        };
         OptiNews = new ReleaseNewsViewModel(Component.OptiScaler, "OptiScaler-NR", settings);
         DlssNews = new ReleaseNewsViewModel(Component.Dlss, "DLSS", settings);
         UpliftNews = new ReleaseNewsViewModel(Component.Uplift, "GITC Uplift", settings);

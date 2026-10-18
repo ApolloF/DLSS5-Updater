@@ -130,6 +130,7 @@ public sealed class AppSettings
     public string? LecramId { get; set; }
     /// <summary>Named ShortFuse + Lecram pairs the user can pick as one choice.</summary>
     public List<AddonCombo> AddonCombos { get; set; } = [];
+    public List<AddonPairTest> AddonPairTests { get; set; } = [];
     /// <summary>The tested combo was offered once; removing it keeps it removed.</summary>
     public bool TestedComboSeeded { get; set; }
 
@@ -217,4 +218,5 @@ public sealed class AppSettings
 [JsonSerializable(typeof(CachedComponent))]
 [JsonSerializable(typeof(NrVersion))]
 [JsonSerializable(typeof(AddonBuild))]
+[JsonSerializable(typeof(AddonPairTest))]
 internal partial class JsonCtx : JsonSerializerContext;

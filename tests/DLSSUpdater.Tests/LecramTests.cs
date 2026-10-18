@@ -488,51 +488,53 @@ public sealed class LecramTests : IDisposable
     // ---------- compatibility with ShortFuse's add-on ----------
 
     [Theory]
-    [InlineData(0, 2026, 928, 2324, true, true, false)]
-    [InlineData(0, 2026, 927, 1, true, true, false)]
-    [InlineData(0, 2026, 1016, 1704, true, true, true)]
-    [InlineData(0, 2026, 1016, 1704, true, false, false)]
-    [InlineData(0, 2026, 1016, 1704, false, true, false)]
-    [InlineData(0, 2027, 101, 1, true, true, true)]
-    public void SfWarning_FiresOnlyForABuildNewerThan0928_WithBothAddonsOn(int a, int b, int c, int d, bool renoDx, bool lecram, bool warns)
+    [InlineData(AddonPairStatus.Works, true, true, null)]
+    [InlineData(AddonPairStatus.Untested, true, true, "This ShortFuse + Lecram pair hasn't been tested together yet. Known working: none recorded.")]
+    [InlineData(AddonPairStatus.Crashed, true, true, "crashed before (marked 2026-10-18)")]
+    [InlineData(AddonPairStatus.Crashed, true, false, null)]
+    [InlineData(AddonPairStatus.Crashed, false, true, null)]
+    public void PairMessage_UsesRecordedStatus_OnlyWhileBothAddonsAreSelected(AddonPairStatus status, bool renoDx, bool lecram, string? expected)
     {
-        var warning = LecramCompat.Warning(renoDx, lecram, new Version(a, b, c, d));
-        Assert.Equal(warns, warning is not null);
-        if (warning is not null)
-        {
-            Assert.Contains(FileUtil.Format(new Version(a, b, c, d)), warning);
-            Assert.Contains("0.2026.0928", warning);
-            Assert.Contains("Import the 0928 build or install only one of them.", warning);
-        }
-        Assert.Null(LecramCompat.Warning(true, true, null));
+        var pair = new AddonPairTest("sf", "lec", status, new DateTime(2026, 10, 18, 12, 0, 0, DateTimeKind.Local));
+        var message = LecramCompat.Message(renoDx, lecram, pair, "");
+        if (expected is null) Assert.Null(message);
+        else Assert.Contains(expected, message);
+        Assert.Contains("none recorded", LecramCompat.Message(true, true, null, ""));
+        Assert.Contains("Known working: SF A + Lecram B.", LecramCompat.Message(true, true, null, "SF A + Lecram B"));
     }
 
-    [Fact]
-    public async Task Install_LogsTheSfWarning_ButStillInstallsBoth()
+    [Theory]
+    [InlineData(AddonPairStatus.Untested)]
+    [InlineData(AddonPairStatus.Crashed)]
+    [InlineData(AddonPairStatus.Works)]
+    public async Task Install_LogsOnlyCrashedAsWarning_AndNeverBlocksEitherAddon(AddonPairStatus status)
     {
-        var newer = ImportSf(new Version(0, 2026, 1016, 1704));
-        _store.ImportLecram(FakeV10());
-        Assert.NotNull(_store.SfLecramWarning(true, true, newer.Id));
-        Assert.Null(_store.SfLecramWarning(true, false, newer.Id));
+        var sf = ImportSf(new Version(0, 2026, 1016, 1704));
+        var lecram = _store.ImportLecram(FakeV10());
+        var settings = new AppSettings();
+        var otherLecram = _store.ImportLecram(FakeV11());
+        _store.SelectedLecram = () => otherLecram.Id;
+        _store.PairTests = () => settings.AddonPairTests;
+        if (status != AddonPairStatus.Untested) _store.MarkAddonPair(settings, sf.Id, lecram.Id, status);
         var lines = new List<string>();
         void Capture(string l) => lines.Add(l);
         Log.Line += Capture;
         try
         {
-            await new Installer(_store).InstallAsync(_game, _root, Lec(renoDx: true, renoDxId: newer.Id), null, default);
+            await new Installer(_store).InstallAsync(_game, _root, Lec(renoDx: true, renoDxId: sf.Id, lecramId: lecram.Id), null, default);
         }
         finally { Log.Line -= Capture; }
 
-        Assert.Contains(lines, l => l.Contains("WARNING") && l.Contains("newer than the build tested"));
+        var messages = lines.Where(l => l.Contains("This ShortFuse + Lecram pair")).ToList();
+        if (status == AddonPairStatus.Works) Assert.Empty(messages);
+        else
+        {
+            var message = Assert.Single(messages);
+            Assert.Equal(status == AddonPairStatus.Crashed, message.Contains("WARNING"));
+            Assert.Contains(status == AddonPairStatus.Crashed ? "crashed before" : "hasn't been tested", message);
+        }
         Assert.True(File.Exists(G(ComponentStore.RenoDxFile)));
         Assert.True(File.Exists(G(V10File)));
-
-        var tested = ImportSf(new Version(0, 2026, 928, 2324));
-        lines.Clear();
-        Log.Line += Capture;
-        try { await new Installer(_store).InstallAsync(_game, _root, Lec(renoDx: true, renoDxId: tested.Id), null, default); }
-        finally { Log.Line -= Capture; }
-        Assert.DoesNotContain(lines, l => l.Contains("WARNING"));
     }
 
     // ---------- options ----------

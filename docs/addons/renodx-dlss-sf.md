@@ -4,9 +4,9 @@
 
 | Build (FileVersion) | Build stamp | Size | Checked | Notes |
 |---|---|---|---|---|
-| 0.2026.0928.0306 | 2026-09-28T02:05:38 | 2,915,840 | 2026-10-18 | Last build known to run next to Lecram 0928. No `Preset` key. |
+| 0.2026.0928.0306 | 2026-09-28T02:05:38 | 2,915,840 | 2026-10-18 | Tested working with Lecram 0928. No `Preset` key. |
 | (mirror 26.1003.2350) | 2026-10-03T23:50:12 | | 2026-10-18 (strings only) | Same settings as 0928. |
-| 0.2026.1016.1704 | 2026-10-16T13:04:22 | 3,333,632 | 2026-10-18 | New `Preset` key, new strength defaults, much more fence/Present hooking code. Crashed with Lecram 0928. |
+| 0.2026.1016.1704 | 2026-10-16T13:04:22 | 3,333,632 | 2026-10-18 | New `Preset` key, new strength defaults, much more fence/Present hooking code. A Werewulf crash occurred with this newer SF build; it was not attributed to the add-ons. |
 
 ## Where it comes from
 
@@ -86,7 +86,8 @@ Setting struct (1016, for the next diff): global flag at `+0x338`, type byte at 
 - SF has no awareness of other NR add-ons (no `renodx-dlss5` strings). It pins itself until process exit and hooks
   NGX `Parameter::Set` and Streamline with MinHook.
 - Running it next to Lecram depends on Lecram's `ForeignNr=observe`. The user ran SF 0928 + Lecram 0928 together;
-  SF 1016 + Lecram 0928 crashed. Pin SF 0928 when Lecram is installed until a newer pair is tested.
+  a Werewulf crash with SF 1016 was not attributed to the add-ons. Record test results per exact pair rather than inferring
+  compatibility from the SF version.
 
 ## App support
 
@@ -104,4 +105,6 @@ ReShade-only mode with ReShade 6+, a game with native DLSS and an imported `nvng
 - **Selection.** Settings picks the default build; a game can pick its own ("Use default (...)" follows Settings). The install
   records the build's id next to its tag, and automatic reinstalls keep the build that is installed.
 - **With Lecram.** The tested pair is `renodx-dlss` 0.2026.928.x with Lecram 0928 (see [lecram-dlss5.md](lecram-dlss5.md)). The
-  warning for a newer SF build looks at the build the game uses, and a saved combo can pick both builds as one choice.
+  Install tab shows the exact selected pair's recorded status (Works, Crashed or Untested), and offers buttons to mark it working
+  or crashed. Untested is neutral information; only Crashed warns, with its recorded date. Neither blocks installation.
+  Results persist by both build ids independently of combo names; a saved combo picks both builds as one choice.

@@ -68,7 +68,16 @@ public sealed record AddonBuild(
     public override string ToString() => Label;
 }
 
-/// <summary>A named pair of a ShortFuse build and a Lecram build that were tested together; either may be null for "no pin".</summary>
+public enum AddonPairStatus { Untested, Works, Crashed }
+
+/// <summary>A test result for two exact builds, independent of any saved combo's name.</summary>
+public sealed record AddonPairTest(string RenoDxId, string LecramId, AddonPairStatus Status = AddonPairStatus.Untested, DateTime? Marked = null)
+{
+    public bool Matches(string sf, string lecram) =>
+        string.Equals(RenoDxId, sf, StringComparison.OrdinalIgnoreCase) && string.Equals(LecramId, lecram, StringComparison.OrdinalIgnoreCase);
+}
+
+/// <summary>A named pair of a ShortFuse build and a Lecram build; either may be null for "no pin".</summary>
 public sealed class AddonCombo
 {
     public string Name { get; set; } = "";
@@ -89,6 +98,45 @@ public sealed partial class ComponentStore
     /// <summary>Build id the settings choose as the default; null follows the newest import.</summary>
     public Func<string?> SelectedRenoDx { get; set; } = () => null;
     public Func<string?> SelectedLecram { get; set; } = () => null;
+
+    public Func<IReadOnlyList<AddonPairTest>> PairTests { get; set; } = () => [];
+    public event Action? PairStatusChanged;
+
+    public AddonPairTest? PairTestFor(string? renoDxId, string? lecramId)
+    {
+        var sf = RenoDxBuildFor(renoDxId);
+        var lecram = LecramBuildFor(lecramId);
+        return sf is null || lecram is null ? null : FindPairTest(PairTests(), sf.Id, lecram.Id);
+    }
+
+    private static AddonPairTest? FindPairTest(IEnumerable<AddonPairTest> tests, string sf, string lecram) =>
+        tests.FirstOrDefault(t => t.Matches(sf, lecram));
+
+    /// <summary>Records the result against the resolved build ids, so default selections never become moving targets.</summary>
+    public void MarkAddonPair(AppSettings settings, string? renoDxId, string? lecramId, AddonPairStatus status)
+    {
+        if (!Enum.IsDefined(status)) throw new ArgumentOutOfRangeException(nameof(status));
+        var sf = RenoDxBuildFor(renoDxId) ?? throw new FileNotFoundException("The ShortFuse build is no longer in the library.");
+        var lecram = LecramBuildFor(lecramId) ?? throw new FileNotFoundException("The Lecram build is no longer in the library.");
+        var result = new AddonPairTest(sf.Id, lecram.Id, status, DateTime.UtcNow);
+        var tests = settings.AddonPairTests.Where(t => !t.Matches(sf.Id, lecram.Id)).ToList();
+        tests.Add(result);
+        // Persist before publishing the new result, so a failed write leaves the displayed status unchanged.
+        var previous = settings.AddonPairTests;
+        settings.AddonPairTests = tests;
+        try { FileUtil.AtomicWriteText(AppPaths.SettingsFile, JsonSerializer.Serialize(settings, JsonCtx.Default.AppSettings)); }
+        catch
+        {
+            settings.AddonPairTests = previous;
+            throw;
+        }
+        PairStatusChanged?.Invoke();
+    }
+
+    public string KnownWorkingPairs => string.Join("; ", PairTests().Where(t => t.Status == AddonPairStatus.Works)
+        .Select(t => (Sf: RenoDxBuildFor(t.RenoDxId), Lecram: LecramBuildFor(t.LecramId)))
+        .Where(p => p.Sf is not null && p.Lecram is not null)
+        .Select(p => $"ShortFuse {p.Sf!.Label} + Lecram {p.Lecram!.Label}"));
 
     private static string AddonRoot(AddonKind kind) => Path.Combine(AppPaths.Components, kind == AddonKind.RenoDx ? RenoDxDir : LecramDir);
 
@@ -269,10 +317,16 @@ public sealed partial class ComponentStore
     /// </summary>
     public bool SeedAddonCombos(AppSettings s)
     {
-        if (s.TestedComboSeeded) return false;
         var sf = RenoDxBuilds.FirstOrDefault(b => b.ParsedVersion is { Major: 0, Minor: 2026, Build: 928 });
         var lecram = LecramBuilds.FirstOrDefault(b => b.DetectedLabel.StartsWith("v8.5.0-rc10", StringComparison.OrdinalIgnoreCase));
         if (sf is null || lecram is null) return false;
+        var changed = false;
+        if (FindPairTest(s.AddonPairTests, sf.Id, lecram.Id) is null)
+        {
+            s.AddonPairTests.Add(new AddonPairTest(sf.Id, lecram.Id, AddonPairStatus.Works));
+            changed = true;
+        }
+        if (s.TestedComboSeeded) return changed;
         s.TestedComboSeeded = true;
         if (!s.AddonCombos.Any(c => c.Name == TestedComboName))
             s.AddonCombos.Add(new AddonCombo { Name = TestedComboName, RenoDxId = sf.Id, LecramId = lecram.Id });

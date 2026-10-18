@@ -361,10 +361,16 @@ public sealed partial class SettingsViewModel : ObservableObject
 
     public bool ReShadeImported => _main.S.Store.ReShadeImported;
 
-    /// <summary>ShortFuse's default build is newer than the one tested with Lecram's add-on; shown, never blocking.</summary>
-    public string? LecramWarning => _main.S.Store.SfLecramWarning(_main.S.Store.RenoDxImported, _main.S.Store.LecramImported, Settings.RenoDxId);
+    public string? LecramMessage => _main.S.Store.SfLecramMessage(_main.S.Store.RenoDxImported, _main.S.Store.LecramImported, Settings.RenoDxId, Settings.LecramId);
+    public bool HasLecramMessage => LecramMessage is not null;
+    public bool IsPairCrashed => _main.S.Store.PairTestFor(Settings.RenoDxId, Settings.LecramId)?.Status == AddonPairStatus.Crashed;
 
-    public bool HasLecramWarning => LecramWarning is not null;
+    public void RefreshAddonPairStatus()
+    {
+        OnPropertyChanged(nameof(LecramMessage));
+        OnPropertyChanged(nameof(HasLecramMessage));
+        OnPropertyChanged(nameof(IsPairCrashed));
+    }
 
     /// <summary>Hides the options the default Lecram build's generation doesn't have and switches the rest to its values.</summary>
     public void ApplyLecramGeneration()
@@ -415,8 +421,7 @@ public sealed partial class SettingsViewModel : ObservableObject
         foreach (var c in Settings.AddonCombos) Combos.Add(c);
         SelectedCombo = Combos.FirstOrDefault(c => c.Name == keep);
         OnPropertyChanged(nameof(SelectedComboInfo));
-        OnPropertyChanged(nameof(LecramWarning));
-        OnPropertyChanged(nameof(HasLecramWarning));
+        RefreshAddonPairStatus();
     }
 
     private void RefreshGameAddons()
