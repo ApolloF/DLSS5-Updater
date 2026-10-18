@@ -5,7 +5,20 @@ namespace DLSSUpdater.Core;
 public sealed record NrVersion(string Id, string Version, string Sha256)
 {
     public string Label => $"{Version} · {(ComponentStore.KnownDlssNr.GetValueOrDefault(Sha256) ?? "Unverified build")} · {Sha256[..8]}";
-    public string? Hint => ComponentStore.KnownDlssNrHints.GetValueOrDefault(Sha256);
+    public string? Hint
+    {
+        get
+        {
+            var known = ComponentStore.KnownDlssNrHints.GetValueOrDefault(Sha256);
+            if (!HasPresets) return known;
+            return known is null ? PresetHint : $"{known} {PresetHint}";
+        }
+    }
+
+    /// <summary>310.9 DLLs carry a main and a small model; Preset picks between them inside one file.</summary>
+    public bool HasPresets => FileUtil.ParseTag(Version) >= new Version(310, 9);
+
+    private const string PresetHint = "Holds Preset A (main) and B (small, about half the cost): choose with the NR Preset setting, no DLL switch needed.";
     public override string ToString() => Label;
 }
 
@@ -68,12 +81,31 @@ public sealed partial class ComponentStore
     /// <summary>Also retains older installs without a version resource so upgrading never destroys a way back.</summary>
     internal NrVersion RetainDlssNr(string source)
     {
-        var sha = FileUtil.Sha256(source);
+        var sha = HashCache.Get(source);
         var v = new NrVersion(sha, FileUtil.Format(FileUtil.ReadVersion(source)), sha);
         var dest = DlssNrFor(sha);
         if (!FileUtil.SameFile(source, dest)) FileUtil.AtomicCopy(source, dest);
         FileUtil.AtomicWriteText(Path.Combine(NrRoot, sha, "version.json"), JsonSerializer.Serialize(v, JsonCtx.Default.NrVersion));
         return v;
+    }
+
+    /// <summary>
+    /// A newer build that enters the library (imported, or kept from a game) becomes the default once. Switching back
+    /// to an older one afterwards sticks: <see cref="AppSettings.NewestDlssNrSeen"/> remembers what was offered.
+    /// Returns the version it selected, or null.
+    /// </summary>
+    public NrVersion? AdoptNewerDlssNr(AppSettings s)
+    {
+        var versions = DlssNrVersions;
+        if (versions.Count == 0 || versions[0].Id == s.NewestDlssNrSeen) return null;
+        var newest = versions[0];
+        var firstRun = s.NewestDlssNrSeen is null;
+        s.NewestDlssNrSeen = newest.Id;
+        var selected = versions.FirstOrDefault(v => v.Id == s.DlssNrId);
+        // Settings from before this feature: a choice already made is kept.
+        if (selected is not null && (firstRun || FileUtil.ParseTag(newest.Version) <= FileUtil.ParseTag(selected.Version))) return null;
+        s.SelectDlssNr(newest.Id);
+        return newest;
     }
 
     public NrVersion? MigrateDlssNr() => File.Exists(LegacyNr) ? RetainDlssNr(LegacyNr) : null;
@@ -93,7 +125,7 @@ public sealed partial class ComponentStore
         var file = DlssFiles.FirstOrDefault(f => f.Equals(original, StringComparison.OrdinalIgnoreCase));
         var version = FileUtil.ReadVersion(source);
         if (file is null || version is null) throw new InvalidDataException("Choose a DLSS SR, RR or FG DLL with a matching original filename and version resource.");
-        var sha = FileUtil.Sha256(source);
+        var sha = HashCache.Get(source);
         var release = new ReleaseInfo { Tag = $"v{version}-local-{sha[..12]}", FromCache = true };
         FileUtil.AtomicCopy(source, Path.Combine(TagDir(Component.Dlss, release.Tag), file));
         MarkComplete(Component.Dlss, release);

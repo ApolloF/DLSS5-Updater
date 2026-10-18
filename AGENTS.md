@@ -30,6 +30,9 @@ Windows desktop app that pulls the latest OptiScaler-NR, DLSS, MFG Unlock, Strea
 - `tests/DLSSUpdater.Tests`: one file per area. Tests that touch disk point `AppPaths.Root` at a temp folder.
 
 ## Conventions
+- The app is a watertight automation tool. Every mod or source added, and every new version of one, ships with its config settings in the app (new or updated options, per-build/per-version variants, help topics) and with tests for install, config writing and version/compat detection. Check each new release's config (keys, values, defaults) against the tested one and adjust the options before raising the tested version.
+- Closed-source add-ons (ShortFuse RenoDX DLSS, Lecram DLSS5): their config, defaults and checked builds are recorded in `docs/addons/`, with the analysis method and tools (`tools/addon-probe/`). Read it before touching their options, and update it when a new build is checked.
+- Research how a mod works before writing its options: its README, ini/cfg comments, release notes, docs folder, issues and the author's posts. Labels, hints, defaults and help topics must reflect what the option really does in that build and version; don't guess value meanings. Note in the help text when a value is undocumented.
 - Keep logic in `Core`/`Scan` as plain static or instance methods that can be tested without WPF. View models only orchestrate.
 - Async UI code keeps continuations on the UI thread (no `ConfigureAwait(false)` in view models). Background work goes through `Task.Run`, and `Log.Line` is marshalled with `Dispatcher.BeginInvoke`.
 - Never do work inside a `CollectionChanged` handler that makes a bound `ItemsControl` re-read its items (scrolling, for example). Defer it with `Dispatcher.BeginInvoke` (see `Views/ListAutoScroll.cs` and the startup crash fixed in b5f78ef).

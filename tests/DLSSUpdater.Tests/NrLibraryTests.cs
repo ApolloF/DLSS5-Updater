@@ -48,6 +48,62 @@ public sealed class NrLibraryTests : IDisposable
     }
 
     [Fact]
+    public void NewerBuild_BecomesDefaultOnce_SwitchingBackSticks_AndOldSettingsKeepTheirChoice()
+    {
+        var s = new AppSettings();
+        var old = _store.ImportDlssNr(Dll("old.dll", new Version(310, 8, 0, 0)));
+        Assert.Equal(old.Id, _store.AdoptNewerDlssNr(s)?.Id);
+        Assert.Equal(old.Id, s.DlssNrId);
+
+        var newer = _store.ImportDlssNr(Dll("new.dll", new Version(310, 9, 16, 0)));
+        Assert.Equal(newer.Id, _store.AdoptNewerDlssNr(s)?.Id);
+        Assert.Equal(newer.Id, s.DlssNrId);
+        Assert.Equal(old.Id, s.PreviousDlssNrId);
+
+        s.SelectDlssNr(old.Id);
+        Assert.Null(_store.AdoptNewerDlssNr(s));
+        Assert.Equal(old.Id, s.DlssNrId);
+
+        var sameVersion = Dll("variant.dll", new Version(310, 9, 16, 0));
+        using (var stream = File.Open(sameVersion, FileMode.Append)) stream.WriteByte(42);
+        s.SelectDlssNr(newer.Id);
+        _store.ImportDlssNr(sameVersion);
+        Assert.Null(_store.AdoptNewerDlssNr(s));
+        Assert.Equal(newer.Id, s.DlssNrId);
+
+        var legacy = new AppSettings { DlssNrId = old.Id };
+        Assert.Null(_store.AdoptNewerDlssNr(legacy));
+        Assert.Equal(old.Id, legacy.DlssNrId);
+        Assert.NotNull(legacy.NewestDlssNrSeen);
+    }
+
+    [Fact]
+    public void Hint_Points310_9BuildsAtPresetsInsteadOfDllSwitching()
+    {
+        const string compat310_8 = "e67dee209320cdafe0e93e45675d7aa34323a53acc57a72b2e40a181581c989a";
+        const string compat310_9 = "cdfa6c1ec784867182164c7836f324f087b5c9f374d0c9fe46f54999feabf3ed";
+        Assert.False(new NrVersion(compat310_8, "310.8.0", compat310_8).HasPresets);
+        Assert.DoesNotContain("Preset", new NrVersion(compat310_8, "310.8.0", compat310_8).Hint);
+        var known = new NrVersion(compat310_9, "310.9.16", compat310_9);
+        Assert.StartsWith(ComponentStore.KnownDlssNrHints[compat310_9], known.Hint);
+        Assert.Contains("Preset A", known.Hint);
+        var unknown = new string('c', 64);
+        Assert.Contains("Preset A", new NrVersion(unknown, "500.1.0", unknown).Hint);
+        Assert.Null(new NrVersion(unknown, "310.8.0", unknown).Hint);
+    }
+
+    [Fact]
+    public void PresetOptions_WriteTheDllPresetScaleForBothHosts()
+    {
+        var opti = ViewModels.SettingsOptions.Nr([]).Single(x => x.Key == "Preset");
+        var renodx = ViewModels.SettingsOptions.RenoDx([]).Single(x => x.Key == "DirectNeuralRenderingPreset");
+        Assert.Equal("DlssNr", opti.Section);
+        Assert.Equal([null, "1", "2"], opti.Choices.Select(c => c.Value));
+        Assert.Equal([null, "0", "1", "2"], renodx.Choices.Select(c => c.Value));
+        Assert.NotNull(ViewModels.HelpTopics.Get("nr-preset"));
+    }
+
+    [Fact]
     public void Import_AcceptsBuildThatNamesItselfByInternalName()
     {
         // 310.9.16 ships with OriginalFilename "CL 39025366" and InternalName "DLSSNR".

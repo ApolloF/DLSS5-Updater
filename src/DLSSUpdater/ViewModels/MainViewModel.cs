@@ -25,12 +25,13 @@ public sealed partial class MainViewModel : ObservableObject
         Log.TrimFile();
         var settings = AppSettings.Load();
         var gh = new GitHubClient { Token = settings.GitHubToken };
-        var store = new ComponentStore(gh, () => settings.IncludePrereleases) { AutoReShade = () => settings.AutoDownloadReShade, SelectedDlssNr = () => settings.DlssNrId };
+        var store = new ComponentStore(gh, () => settings.IncludePrereleases) { AutoReShade = () => settings.AutoDownloadReShade, SelectedDlssNr = () => settings.DlssNrId, SelectedRenoDx = () => settings.RenoDxId, SelectedLecram = () => settings.LecramId, OptiSourceRepo = () => settings.OptiSource };
         S = new Services { Settings = settings, Store = store, Installer = new Installer(store) };
         Gh = gh;
         SettingsVm = new SettingsViewModel(this);
         OptiNews = new ReleaseNewsViewModel(Component.OptiScaler, "OptiScaler-NR", settings);
         DlssNews = new ReleaseNewsViewModel(Component.Dlss, "DLSS", settings);
+        UpliftNews = new ReleaseNewsViewModel(Component.Uplift, "GITC Uplift", settings);
         MfgNews = new ReleaseNewsViewModel(Component.MfgUnlock, "MFG Unlock", settings);
         StreamlineNews = new ReleaseNewsViewModel(Component.Streamline, "Streamline", settings);
         ReShadeNews = new ReleaseNewsViewModel(Component.ReShade, "ReShade", settings);
@@ -55,6 +56,7 @@ public sealed partial class MainViewModel : ObservableObject
     public ObservableCollection<string> LogLines { get; } = [];
     public ReleaseNewsViewModel OptiNews { get; }
     public ReleaseNewsViewModel DlssNews { get; }
+    public ReleaseNewsViewModel UpliftNews { get; }
     public ReleaseNewsViewModel MfgNews { get; }
     public ReleaseNewsViewModel StreamlineNews { get; }
     public ReleaseNewsViewModel ReShadeNews { get; }
@@ -116,6 +118,7 @@ public sealed partial class MainViewModel : ObservableObject
     // component chips
     [ObservableProperty] private string _optiVersion = "—";
     [ObservableProperty] private string _dlssVersion = "—";
+    [ObservableProperty] private string _upliftVersion = "\u2014";
     [ObservableProperty] private string _mfgVersion = "—";
     [ObservableProperty] private string _dlssNrText = "missing";
     [ObservableProperty] private string _reShadeText = "missing";
@@ -170,9 +173,11 @@ public sealed partial class MainViewModel : ObservableObject
 
     public async Task InitializeAsync()
     {
-        S.Store.AutoImport();
-        if (S.Settings.DlssNrId is null && S.Store.DlssNrVersions.FirstOrDefault() is { } nr)
-        { S.Settings.DlssNrId = nr.Id; S.Settings.Save(); }
+        await Task.Run(() =>
+        {
+            HashCache.Load();
+            S.Store.AutoImport();
+        });
         await RefreshLocalComponentsAsync();
 
         var cached = GameScanner.LoadCache();
@@ -180,11 +185,16 @@ public sealed partial class MainViewModel : ObservableObject
 
         await Run("Starting", () => Task.WhenAll(CheckUpdatesCore(), ScanCore()));
         if (UpdateCount > 0) Log.Info($"{UpdateCount} game(s) have updates available");
+        await Task.Run(HashCache.Save);
     }
 
     public async Task RefreshLocalComponentsAsync()
     {
         var store = S.Store;
+        var seen = S.Settings.NewestDlssNrSeen;
+        if (store.AdoptNewerDlssNr(S.Settings) is { } newer) Log.Info($"DLSSNR default is now the newer {newer.Label}");
+        var defaultsChanged = store.EnsureAddonDefaults(S.Settings);
+        if (store.SeedAddonCombos(S.Settings) | defaultsChanged | (S.Settings.NewestDlssNrSeen != seen)) S.Settings.Save();
         var rsPath = store.CurrentReShadePath;
         var (nr, rs) = await Task.Run(() => (
             File.Exists(store.DlssNrPath) ? HashCache.Get(store.DlssNrPath) : null,
@@ -203,7 +213,7 @@ public sealed partial class MainViewModel : ObservableObject
             : auto ? "auto" : "missing";
         // An imported ReShade doesn't follow releases, so there is nothing new to point at.
         ReShadeNews.Load(auto ? store.ReShade : null);
-        foreach (var g in Games) { g.RebuildNrChoices(); g.RefreshStatus(); }
+        foreach (var g in Games) { g.RebuildNrChoices(); g.RebuildAddonChoices(); g.RefreshStatus(); }
         CountUpdates();
     }
 
@@ -219,14 +229,16 @@ public sealed partial class MainViewModel : ObservableObject
         Gh.Token = S.Settings.GitHubToken;
         await S.Store.RefreshAsync(_cts.Token);
         var s = S.Store;
-        Online = s.Opti is { FromCache: false } || s.Dlss is { FromCache: false } || s.Mfg is { FromCache: false };
+        Online = s.Opti is { FromCache: false } || s.Dlss is { FromCache: false } || s.Mfg is { FromCache: false } || s.Uplift is { FromCache: false };
         OptiVersion = s.Opti is null ? "—" : s.Opti.Tag + (s.Opti.Prerelease ? " pre" : "");
         DlssVersion = s.Dlss?.Tag.TrimStart('v') ?? "—";
+        UpliftVersion = s.Uplift?.Tag ?? "\u2014";
         MfgVersion = s.Mfg?.Tag ?? (File.Exists(Path.Combine(AppPaths.Components, ComponentStore.MfgFile)) ? "local" : "—");
         StreamlineVersion = s.Streamline?.Tag.TrimStart('v') ?? "—";
         OptiNews.Load(s.Opti);
         DlssNews.Load(s.Dlss);
         MfgNews.Load(s.Mfg);
+        UpliftNews.Load(s.Uplift);
         StreamlineNews.Load(s.Streamline);
         foreach (var g in Games)
         {
@@ -346,6 +358,13 @@ public sealed partial class MainViewModel : ObservableObject
     [RelayCommand]
     private void ToggleAbout() => AboutOpen = !AboutOpen;
 
+    /// <summary>A click on a game, even the one already selected, leaves Settings / About for that game.</summary>
+    public void ShowGameView()
+    {
+        SettingsOpen = false;
+        AboutOpen = false;
+    }
+
     /// <summary>Leaves the About / guide page: back to the settings tab it was opened from, otherwise to the game view.</summary>
     [RelayCommand]
     private void Back()
@@ -366,6 +385,13 @@ public sealed partial class MainViewModel : ObservableObject
         SettingsVm.RefreshPresetNames();
     }
 
+    /// <summary>The OptiScaler build changed: hide options it lacks, then re-resolve releases and the config check.</summary>
+    public void OptiSourceChanged()
+    {
+        SettingsVm.ApplyOptiSource();
+        if (CheckUpdatesCommand.CanExecute(null)) CheckUpdatesCommand.Execute(null);
+    }
+
     /// <summary>Every OptiScaler.ini key this app can write: profile, keybinds and friendly options.</summary>
     private IEnumerable<(string Section, string Key)> ManagedOptiKeys() =>
         S.Settings.IniOverrides.Select(o => (o.Section, o.Key))
@@ -374,7 +400,7 @@ public sealed partial class MainViewModel : ObservableObject
             .Concat(ConfigProfile.Recommended().Select(o => (o.Section, o.Key)))
             .Concat(ConfigProfile.Required(new InstallOptions { Opti = true, ReShade = true, DlssNr = true }).Select(o => (o.Section, o.Key)))
             .Concat(KeybindDef.Opti.Select(k => (k.Section, k.Key)))
-            .Concat(SettingsVm.NrOptions.Concat(SettingsVm.TonemapOptions).Concat(SettingsVm.HdrOptions).Select(o => (o.Section, o.Key)));
+            .Concat(SettingsVm.NrOptions.Concat(SettingsVm.TonemapOptions).Concat(SettingsVm.HdrOptions).Where(o => o.IsAvailable).Select(o => (o.Section, o.Key)));
 
     private async Task CheckCompatAsync()
     {
@@ -382,8 +408,8 @@ public sealed partial class MainViewModel : ObservableObject
         try
         {
             Compat = await OptiCompat.CheckAsync(Gh, opti.Tag, ManagedOptiKeys(), _cts.Token);
-            CompatWarning = Compat.HasIssues;
-            if (Compat.HasIssues) Log.Info("Config check: " + Compat.Summary.Replace("\n", " "));
+            CompatWarning = Compat.HasIssues || Compat.ChangedKeys.Count > 0;
+            if (CompatWarning) Log.Info("Config check: " + Compat.Summary.Replace("\n", " "));
         }
         catch (Exception ex) when (ex is HttpRequestException or TaskCanceledException or IOException)
         {

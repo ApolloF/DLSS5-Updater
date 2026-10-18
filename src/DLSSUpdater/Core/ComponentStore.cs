@@ -4,7 +4,7 @@ using System.Text.RegularExpressions;
 
 namespace DLSSUpdater.Core;
 
-public enum Component { OptiScaler, MfgUnlock, Dlss, Streamline, ReShade }
+public enum Component { OptiScaler, MfgUnlock, Dlss, Streamline, ReShade, Uplift }
 
 public sealed class ReleaseInfo
 {
@@ -33,6 +33,7 @@ public sealed partial class ComponentStore
 {
     public const string LegacyOptiRepo = "wilsjo2/OptiScaler-DLSSNR-PreSR-Multipass";
     public const string OptiRepo = "ShyVortex/OptiScaler-DLSSNR-PreSR-Multipass";
+    public const string UpliftRepo = "ghostinthecamera/GITC-Uplift";
     public const string MfgRepo = "mavismmg/MFGAdaUnlock-RenoDx";
     public const string DlssRepo = "NVIDIA/DLSS";
     public const string StreamlineRepo = "NVIDIA-RTX/Streamline";
@@ -46,7 +47,44 @@ public sealed partial class ComponentStore
     public const string RenoDxFile = "renodx-dlss.addon64";
     /// <summary>Other ShortFuse-family add-ons that also inject NR or replaced the add-on earlier; never installed by this app.</summary>
     public static readonly string[] LegacyRenoDxFiles = ["renodx-dlssfix.addon64"];
-    public static readonly string[] ForeignNrAddons = ["renodx-dlssfix.addon64", "renodx-dlss5.addon64"];
+    /// <summary>Lecram's DLSS5 add-on, import-only: v10 and older, and v11 and newer (never both in one game).</summary>
+    public const string Lecram10File = "renodx-dlss5.addon64";
+    public const string Lecram11File = "dlss5-nr.addon64";
+    public static readonly string[] LecramFiles = [Lecram10File, Lecram11File];
+    public const string UpliftFile = "gitc-uplift.addon64";
+    public const string UpliftHelper = "gitc-uplift-helper64.exe";
+    public const string UpliftNrDir = "GITC-Uplift";
+    public static readonly string[] UpliftFiles =
+        [UpliftFile, UpliftHelper, Path.Combine(DfcShaderDir, "Uplift.fx"), Path.Combine(DfcShaderDir, "UpliftMask.fx")];
+    internal static readonly string[] LegacyUpliftFiles = ["uplift.addon64", "uplift.addon32", "uplift-helper64.exe", "gitc-uplift.addon32"];
+
+    /// <summary>Deep Fried Chicken (closed source, personal-use licence; import-only): the ReShade add-on and its NGX bridge.</summary>
+    public const string DfcFile = "deep-fried-chicken.addon64";
+    public const string DfcBridgeFile = "deep-fried-chicken-nvngx.dll";
+    public const string DfcConfigFile = "deep-fried-chicken.cfg";
+    /// <summary>From 4.x (INSTALL.txt, 64-bit route): beside the game exe like the add-on.</summary>
+    public const string DfcPresentSupportFile = "deep-fried-chicken-present-support.dll";
+    /// <summary>From 4.x: kept whole beside the game exe (64-bit) per INSTALL.txt.</summary>
+    public const string DfcNeuralDir = "deep-fried-chicken-neural";
+    /// <summary>DFC's own ReShade effects (DFC_OutputState.addonfx in 4.x) ship in reshade-shaders\Shaders.</summary>
+    public const string DfcShaderDir = @"reshade-shaders\Shaders";
+    public const string DfcShaderPrefix = "DFC_";
+    /// <summary>The package's subfolder for 64-bit games; its 32-bit route keeps a companion set in host64 beside this exe.</summary>
+    public const string DfcPackage64Dir = "64-bit";
+    public const string DfcHost64Exe = "dfc-universal-host64.exe";
+    /// <summary>The single files of the 64-bit set that go beside the game exe.</summary>
+    public static readonly string[] DfcPackageFiles = [DfcFile, DfcBridgeFile, DfcPresentSupportFile];
+    /// <summary>Files of DFC's own installer for the feeder route (non-DLSS games); this app never installs them, but they are NR injectors.</summary>
+    public static readonly string[] DfcForeignFiles =
+    [
+        "dfc-native-d3d11.addon64", "dfc-native-d3d11.cfg",
+        "dfc-universal-feed.addon32", "dfc-universal-feed.addon64", "dfc-universal-feed.cfg",
+        "dlss5-feed.addon", "dlss5-feed.addon32", "dlss5-feed.addon64",
+    ];
+    /// <summary>Other NR injectors a RenoDX install moves out of the way (DFC refuses to coexist with the RenoDX add-ons).</summary>
+    public static readonly string[] ForeignNrAddons = ["renodx-dlssfix.addon64", .. LecramFiles, .. DfcPackageFiles, .. DfcForeignFiles, .. UpliftFiles, .. LegacyUpliftFiles];
+    /// <summary>The RenoDX family: what DFC moves out of the way.</summary>
+    public static readonly string[] RenoDxFamily = [RenoDxFile, .. LecramFiles, .. LegacyRenoDxFiles];
     public static readonly string[] DlssFiles = ["nvngx_dlss.dll", "nvngx_dlssd.dll", "nvngx_dlssg.dll"];
 
     /// <summary>SHA-256 values published in the fork's INSTALL-DLSSNR.md.</summary>
@@ -76,6 +114,7 @@ public sealed partial class ComponentStore
     {
         [Component.OptiScaler] = new(1, 1),
         [Component.MfgUnlock] = new(1, 1),
+        [Component.Uplift] = new(1, 1),
         [Component.Dlss] = new(1, 1),
         [Component.Streamline] = new(1, 1),
         [Component.ReShade] = new(1, 1),
@@ -88,6 +127,7 @@ public sealed partial class ComponentStore
     }
 
     public ReleaseInfo? Opti { get; internal set; }
+    public ReleaseInfo? Uplift { get; internal set; }
     public ReleaseInfo? Mfg { get; internal set; }
     public ReleaseInfo? Dlss { get; internal set; }
     public ReleaseInfo? Streamline { get; internal set; }
@@ -102,12 +142,16 @@ public sealed partial class ComponentStore
     {
         Component.OptiScaler => Opti,
         Component.MfgUnlock => Mfg,
+        Component.Uplift => Uplift,
         Component.Streamline => Streamline,
         Component.ReShade => ReShade,
         _ => Dlss,
     };
 
     public Func<string?> SelectedDlssNr { get; set; } = () => null;
+    /// <summary>Repo of the chosen OptiScaler build (null = default).</summary>
+    public Func<string?> OptiSourceRepo { get; set; } = () => null;
+    public OptiSource OptiSource => OptiSources.For(OptiSourceRepo());
     public string DlssNrPath => DlssNrFor(SelectedDlssNr());
     /// <summary>A ReShade64.dll the user imported; it wins over the automatic download.</summary>
     public string ReShadePath => Path.Combine(AppPaths.Components, ReShadeFile);
@@ -131,6 +175,7 @@ public sealed partial class ComponentStore
     {
         await Task.WhenAll(
             Resolve(Component.OptiScaler, ResolveOptiAsync, v => Opti = v, ct),
+            Resolve(Component.Uplift, ResolveUpliftAsync, v => Uplift = v, ct),
             Resolve(Component.MfgUnlock, ResolveMfgAsync, v => Mfg = v, ct),
             Resolve(Component.Dlss, ResolveDlssAsync, v => Dlss = v, ct),
             Resolve(Component.Streamline, ResolveStreamlineAsync, v => Streamline = v, ct),
@@ -155,17 +200,20 @@ public sealed partial class ComponentStore
     /// <summary>The newest downloaded release, with its notes from the API cache when GitHub had them.</summary>
     private ReleaseInfo? Offline(Component c)
     {
-        if (NewestCached(c) is not { } cached) return null;
+        var source = OptiSource;
+        Func<ReleaseInfo, bool>? sameSource = c == Component.OptiScaler ? r => OptiSources.OfTag(r.Tag) == source : null;
+        if (NewestCached(c, sameSource) is not { } cached) return null;
         var repo = c switch
         {
-            Component.OptiScaler => OptiRepo,
+            Component.OptiScaler => source.Repo,
             Component.MfgUnlock => MfgRepo,
+            Component.Uplift => UpliftRepo,
             Component.Dlss => DlssRepo,
             Component.Streamline => StreamlineRepo,
             _ => null,
         };
         var notes = repo is null ? null
-            : _gh.CachedReleases(repo).FirstOrDefault(r => string.Equals(r.TagName, cached.Tag, StringComparison.OrdinalIgnoreCase))?.Body;
+            : _gh.CachedReleases(repo).FirstOrDefault(r => string.Equals(r.TagName, c == Component.OptiScaler ? OptiSources.RawTag(cached.Tag) : cached.Tag, StringComparison.OrdinalIgnoreCase))?.Body;
         return notes is null ? cached : new ReleaseInfo
         {
             Tag = cached.Tag, Prerelease = cached.Prerelease, Published = cached.Published, FromCache = true, Notes = notes,
@@ -174,19 +222,17 @@ public sealed partial class ComponentStore
 
     private bool Accept(GhRelease r) => !r.Draft && (!r.Prerelease || _includePrereleases());
 
-    [GeneratedRegex(@"^OptiScaler-NR-v[\d.]+\.zip$", RegexOptions.IgnoreCase)]
-    private static partial Regex OptiAsset();
-
     private async Task<ReleaseInfo?> ResolveOptiAsync(CancellationToken ct)
     {
-        foreach (var r in await _gh.GetReleasesAsync(OptiRepo, 15, ct))
+        var source = OptiSource;
+        foreach (var r in await _gh.GetReleasesAsync(source.Repo, 15, ct))
         {
             if (!Accept(r)) continue;
-            var zip = r.Assets.FirstOrDefault(a => OptiAsset().IsMatch(a.Name));
+            var zip = r.Assets.FirstOrDefault(a => source.Asset.IsMatch(a.Name));
             if (zip is null) continue;
             return new ReleaseInfo
             {
-                Tag = r.TagName, Prerelease = r.Prerelease, Published = r.PublishedAt, Notes = r.Body,
+                Tag = r.TagName + source.TagSuffix, Prerelease = r.Prerelease, Published = r.PublishedAt, Notes = r.Body,
                 Files = [(zip.Name, zip.Url, zip.Sha256)],
             };
         }
@@ -287,7 +333,7 @@ public sealed partial class ComponentStore
 
     public static bool IsCached(Component c, string tag) => File.Exists(Path.Combine(TagDir(c, tag), CompleteMarker));
 
-    private static ReleaseInfo? NewestCached(Component c)
+    private static ReleaseInfo? NewestCached(Component c, Func<ReleaseInfo, bool>? filter = null)
     {
         var dir = ComponentDir(c);
         if (!Directory.Exists(dir)) return null;
@@ -306,7 +352,7 @@ public sealed partial class ComponentStore
                 }
                 catch (JsonException) { return null; }
             })
-            .FirstOrDefault(r => r is not null);
+            .FirstOrDefault(r => r is not null && (filter is null || filter(r)));
     }
 
     internal static void MarkComplete(Component c, ReleaseInfo r)
@@ -569,6 +615,8 @@ public sealed partial class ComponentStore
     {
         if (fileName == DlssNrFile) { ImportDlssNr(source); return; }
         if (fileName == RenoDxFile) { ImportRenoDx(source); return; }
+        if (LecramFiles.Contains(fileName)) { ImportLecram(source); return; }
+        if (fileName == DfcFile) { ImportDfc(source); return; }
         if (fileName != ReShadeFile && fileName != MfgFile) throw new ArgumentException("Unsupported component.", nameof(fileName));
         Directory.CreateDirectory(AppPaths.Components);
         FileUtil.AtomicCopy(source, Path.Combine(AppPaths.Components, fileName));
@@ -579,13 +627,15 @@ public sealed partial class ComponentStore
     public void AutoImport()
     {
         MigrateDlssNr();
+        MigrateAddons();
         var dirs = new[] { Path.GetDirectoryName(Environment.ProcessPath), AppContext.BaseDirectory, Environment.CurrentDirectory }
             .Where(d => !string.IsNullOrEmpty(d)).Distinct(StringComparer.OrdinalIgnoreCase);
-        foreach (var file in new[] { DlssNrFile, ReShadeFile, MfgFile, RenoDxFile })
+        foreach (var file in new[] { DlssNrFile, ReShadeFile, MfgFile, RenoDxFile, DfcFile })
         {
-            var dest = Path.Combine(AppPaths.Components, file);
-            if (File.Exists(dest) || (file == DlssNrFile && DlssNrVersions.Count > 0)) continue;
-            var src = dirs.Select(d => Path.Combine(d!, file)).FirstOrDefault(File.Exists);
+            var dest = file == DfcFile ? DfcPath : Path.Combine(AppPaths.Components, file);
+            if (File.Exists(dest) || (file == DlssNrFile && DlssNrVersions.Count > 0) || (file == RenoDxFile && RenoDxImported)) continue;
+            var src = dirs.Select(d => Path.Combine(d!, file))
+                .FirstOrDefault(f => File.Exists(f) && (file != DfcFile || File.Exists(Path.Combine(Path.GetDirectoryName(f)!, DfcBridgeFile))));
             if (src is null) continue;
             try { Import(src, file); }
             catch (Exception ex) when (ex is IOException or InvalidDataException) { Log.Error($"Auto-import of {file} failed", ex); }
