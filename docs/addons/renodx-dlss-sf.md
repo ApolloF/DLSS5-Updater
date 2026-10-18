@@ -107,4 +107,4 @@ ReShade-only mode with ReShade 6+, a game with native DLSS and an imported `nvng
 - **With Lecram.** The tested pair is `renodx-dlss` 0.2026.928.x with Lecram 0928 (see [lecram-dlss5.md](lecram-dlss5.md)). The
   Install tab shows the exact selected pair's recorded status (Works, Crashed or Untested), and offers buttons to mark it working
   or crashed. Untested is neutral information; only Crashed warns, with its recorded date. Neither blocks installation.
-  Results persist by both build ids independently of combo names; a saved combo picks both builds as one choice.
+  Results persist by both build ids by build ids.

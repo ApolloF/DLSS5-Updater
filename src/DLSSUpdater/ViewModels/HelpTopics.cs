@@ -68,7 +68,7 @@ public static class HelpTopics
             "ReShade64.dll replaces the download until you press Use download. Import a newer file here and Update all rolls it out. " +
             "ShortFuse's renodx-dlss.addon64 is imported the same way and only accepted when it names itself that; every import stays in a library of builds, with a default here, an optional pick per game and your own name per build. " +
             "deep-fried-chicken.addon64 is imported from its extracted release folder (the NGX bridge deep-fried-chicken-nvngx.dll must be beside it); for 4.x pick the one in the package's 64-bit folder, and the present-support dll, the neural folder and DFC's ReShade effect come along. " +
-            "Lecram's DLSS5 add-on is imported as renodx-dlss5.addon64 (v10 and older) or dlss5-nr.addon64 (v11 and newer); all builds are kept side by side, and a combo saves a ShortFuse and a Lecram build as one choice for games."),
+            "Lecram's DLSS5 add-on is imported as renodx-dlss5.addon64 (v10 and older) or dlss5-nr.addon64 (v11 and newer); all builds are kept side by side and each game picks its own."),
         new("dfc", "General", "Deep Fried Chicken",
             "Deep Fried Chicken (DFC) is a closed-source ReShade add-on that runs NVIDIA DLSS neural rendering in games with native DLSS. " +
             "Its licence is personal use only, so this app never downloads or redistributes it: you import your own copy (add-on, NGX bridge and default config) in Local components, and the files are copied into games unchanged. " +
@@ -84,7 +84,7 @@ public static class HelpTopics
             "There are two generations: v10 and older (renodx-dlss5.addon64, recognised by its version resource) and v11 and newer (dlss5-nr.addon64, recognised by strings in the file because it has no version resource). " +
             "Every import is kept as its own build, named by the highest vX.Y.Z string in the file or by you; a game only ever gets one file, because v11 goes inert when a renodx-dlss5.addon64 file sits next to it (from v11 beta.22 not when ReShade has that add-on disabled). Settings picks the default build and each game can pick its own, whose generation decides the options shown. " +
             "It needs ReShade-only mode, ReShade 6+ with add-on support, a game with native DLSS and an imported nvngx_dlssnr.dll, and it replaces OptiScaler-NR and Deep Fried Chicken. " +
-            "It can run next to ShortFuse's RenoDX add-on: the app then sets ForeignNr=observe. The 0928 pair (ShortFuse 0.2026.0928 and Lecram v8.5.0-rc10) was tested working. A Werewulf crash with a newer ShortFuse build was not attributed to the add-ons. Each exact pair has a recorded Works, Crashed or Untested status; only Crashed shows a warning. Mark results beside the Install tab's pair picker. A combo picks both builds at once. " +
+            "It can run next to ShortFuse's RenoDX add-on: the app then sets ForeignNr=observe. The 0928 pair (ShortFuse 0.2026.0928 and Lecram v8.5.0-rc10) was tested working. A Werewulf crash with a newer ShortFuse build was not attributed to the add-ons. Each exact pair has a recorded Works, Crashed or Untested status; only Crashed shows a warning. Mark the current build pair on the Install tab. " +
             "A copy of either Lecram file already in the game is moved to the backup folder and restored by Uninstall. Options that exist in only one generation are hidden for the other, following the build the game uses. " +
             "From v11 Patch 4 (beta.18) the author also ships its own installer (DLSS5 NR Setup). It finds the add-on in every game on every drive and its Update all replaces it there, games this app manages included, so manage a game with one of the two. " +
             "It keeps a shared nvngx_dlssnr.dll in %LOCALAPPDATA%\\DLSS5-NR\\runtime, which v11 also finds by itself."),
@@ -404,7 +404,7 @@ public static class HelpTopics
         ["rdx-exposure"] = "Add-on default; lower Exposure if the model blows out highlights.",
         ["rdx-model"] = "Add-on default; compare the three models per game.",
         ["rdx-mask"] = "Add-on default.",
-        ["lecram"] = "Import every build you want to keep and pick the one a game should use. Do not also copy the other Lecram file into the game. Check the chosen pair's tested status on the Install tab and record your results there; a combo picks both builds at once.",
+        ["lecram"] = "Import every build you want to keep and pick the one a game should use. Do not also copy the other Lecram file into the game. Check the chosen pair's tested status on the Install tab and record your results there.",
         ["lc-enable"] = "Add-on default. Off only to compare with the game's native image.",
         ["lc-hook"] = "Add-on default (After upscaling in v11 beta.18+, Auto in beta.6, Present in v10.7). Try Present if the HUD should be processed too, or Before upscaling if After upscaling looks wrong.",
         ["lc-present"] = "Add-on default. DLSS frames only if menus or loading screens look wrong under the model.",

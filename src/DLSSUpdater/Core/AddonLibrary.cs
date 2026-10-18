@@ -70,19 +70,11 @@ public sealed record AddonBuild(
 
 public enum AddonPairStatus { Untested, Works, Crashed }
 
-/// <summary>A test result for two exact builds, independent of any saved combo's name.</summary>
+/// <summary>A test result for two exact builds.</summary>
 public sealed record AddonPairTest(string RenoDxId, string LecramId, AddonPairStatus Status = AddonPairStatus.Untested, DateTime? Marked = null)
 {
     public bool Matches(string sf, string lecram) =>
         string.Equals(RenoDxId, sf, StringComparison.OrdinalIgnoreCase) && string.Equals(LecramId, lecram, StringComparison.OrdinalIgnoreCase);
-}
-
-/// <summary>A named pair of a ShortFuse build and a Lecram build; either may be null for "no pin".</summary>
-public sealed class AddonCombo
-{
-    public string Name { get; set; } = "";
-    public string? RenoDxId { get; set; }
-    public string? LecramId { get; set; }
 }
 
 /// <summary>A library build together with the file an install copies.</summary>
@@ -92,8 +84,6 @@ public sealed partial class ComponentStore
 {
     private const string RenoDxDir = "renodx-dlss";
     private const string LecramDir = "lecram-dlss5";
-
-    public const string TestedComboName = "SF 0928 + Lecram 0928 (tested)";
 
     /// <summary>Build id the settings choose as the default; null follows the newest import.</summary>
     public Func<string?> SelectedRenoDx { get; set; } = () => null;
@@ -311,25 +301,13 @@ public sealed partial class ComponentStore
         return true;
     }
 
-    /// <summary>
-    /// Adds the combo of the builds this app was tested with once both are in the library: ShortFuse 0.2026.928.x and Lecram
-    /// 0928 (v8.5.0-rc10). A combo the user removed afterwards stays removed.
-    /// </summary>
-    public bool SeedAddonCombos(AppSettings s)
+    /// <summary>Records the tested 0928 build pair as working when both builds are imported.</summary>
+    public bool SeedTestedAddonPair(AppSettings s)
     {
         var sf = RenoDxBuilds.FirstOrDefault(b => b.ParsedVersion is { Major: 0, Minor: 2026, Build: 928 });
         var lecram = LecramBuilds.FirstOrDefault(b => b.DetectedLabel.StartsWith("v8.5.0-rc10", StringComparison.OrdinalIgnoreCase));
-        if (sf is null || lecram is null) return false;
-        var changed = false;
-        if (FindPairTest(s.AddonPairTests, sf.Id, lecram.Id) is null)
-        {
-            s.AddonPairTests.Add(new AddonPairTest(sf.Id, lecram.Id, AddonPairStatus.Works));
-            changed = true;
-        }
-        if (s.TestedComboSeeded) return changed;
-        s.TestedComboSeeded = true;
-        if (!s.AddonCombos.Any(c => c.Name == TestedComboName))
-            s.AddonCombos.Add(new AddonCombo { Name = TestedComboName, RenoDxId = sf.Id, LecramId = lecram.Id });
+        if (sf is null || lecram is null || FindPairTest(s.AddonPairTests, sf.Id, lecram.Id) is not null) return false;
+        s.AddonPairTests.Add(new AddonPairTest(sf.Id, lecram.Id, AddonPairStatus.Works));
         return true;
     }
 

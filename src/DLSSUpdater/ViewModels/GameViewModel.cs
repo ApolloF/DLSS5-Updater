@@ -174,11 +174,8 @@ public sealed partial class GameViewModel : ObservableObject
 
     [ObservableProperty] private DlssChoice? _renoDxChoice;
     [ObservableProperty] private DlssChoice? _lecramChoice;
-    [ObservableProperty] private DlssChoice? _comboChoice;
     public ObservableCollection<DlssChoice> RenoDxChoices { get; } = [];
     public ObservableCollection<DlssChoice> LecramChoices { get; } = [];
-    /// <summary>"No combo" plus every saved combo whose two builds are in the library; Tag is the combo's name.</summary>
-    public ObservableCollection<DlssChoice> ComboChoices { get; } = [];
     /// <summary>The ShortFuse build this game installs: its own pick, else the default of the settings.</summary>
     public string? EffectiveRenoDxId => RenoDxChoice?.Tag ?? _s.Settings.RenoDxId;
     public string? EffectiveLecramId => LecramChoice?.Tag ?? _s.Settings.LecramId;
@@ -487,7 +484,7 @@ public sealed partial class GameViewModel : ObservableObject
         _loading = loading;
     }
 
-    /// <summary>The add-on dropdowns: "Use default" plus every library build, and the combos whose builds are both there.</summary>
+    /// <summary>The add-on dropdowns: "Use default" plus every library build.</summary>
     public void RebuildAddonChoices()
     {
         var loading = _loading;
@@ -495,13 +492,6 @@ public sealed partial class GameViewModel : ObservableObject
         var over = _s.Settings.Games.GetValueOrDefault(Id);
         RenoDxChoice = FillAddonChoices(RenoDxChoices, AddonKind.RenoDx, over?.RenoDxId);
         LecramChoice = FillAddonChoices(LecramChoices, AddonKind.Lecram, over?.LecramId);
-        ComboChoices.Clear();
-        ComboChoices.Add(new DlssChoice(null, "No combo"));
-        var renoDx = _s.Store.RenoDxBuilds;
-        var lecram = _s.Store.LecramBuilds;
-        foreach (var c in _s.Settings.AddonCombos.Where(c => renoDx.Any(b => b.Id == c.RenoDxId) && lecram.Any(b => b.Id == c.LecramId)))
-            ComboChoices.Add(new DlssChoice(c.Name, c.Name));
-        SyncComboChoice();
         _loading = loading;
         OnPropertyChanged(nameof(EffectiveLecramGeneration));
         RefreshAddonPairStatus();
@@ -520,22 +510,9 @@ public sealed partial class GameViewModel : ObservableObject
         return list.FirstOrDefault(c => c.Tag == pin) ?? list[0];
     }
 
-    /// <summary>The combo display follows the two picks: it names a combo only while both builds are pinned to exactly its pair.</summary>
-    private void SyncComboChoice()
-    {
-        var wasLoading = _loading;
-        _loading = true;
-        var combo = RenoDxChoice?.Tag is { } sf && LecramChoice?.Tag is { } lecram
-            ? _s.Settings.AddonCombos.FirstOrDefault(c => c.RenoDxId == sf && c.LecramId == lecram && ComboChoices.Any(x => x.Tag == c.Name))
-            : null;
-        ComboChoice = ComboChoices.FirstOrDefault(c => c.Tag is not null && c.Tag == combo?.Name) ?? ComboChoices[0];
-        _loading = wasLoading;
-    }
-
     private void AddonPicksChanged()
     {
         _s.Settings.Save();
-        SyncComboChoice();
         OnPropertyChanged(nameof(EffectiveLecramGeneration));
         RefreshAddonPairStatus();
         if (_rowsBuilt) RefreshConfigRows();
@@ -553,21 +530,6 @@ public sealed partial class GameViewModel : ObservableObject
     {
         if (_loading) return;
         _s.Settings.For(Id).LecramId = value?.Tag;
-        AddonPicksChanged();
-    }
-
-    /// <summary>A combo sets both versions for this game; "No combo" goes back to the defaults.</summary>
-    partial void OnComboChoiceChanged(DlssChoice? value)
-    {
-        if (_loading || value is null) return;
-        var combo = value.Tag is null ? null : _s.Settings.AddonCombos.FirstOrDefault(c => c.Name == value.Tag);
-        var g = _s.Settings.For(Id);
-        g.RenoDxId = combo?.RenoDxId;
-        g.LecramId = combo?.LecramId;
-        _loading = true;
-        RenoDxChoice = RenoDxChoices.FirstOrDefault(c => c.Tag == g.RenoDxId) ?? RenoDxChoices[0];
-        LecramChoice = LecramChoices.FirstOrDefault(c => c.Tag == g.LecramId) ?? LecramChoices[0];
-        _loading = false;
         AddonPicksChanged();
     }
 

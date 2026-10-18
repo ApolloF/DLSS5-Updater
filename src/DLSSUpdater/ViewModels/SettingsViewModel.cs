@@ -380,31 +380,9 @@ public sealed partial class SettingsViewModel : ObservableObject
             o.ApplyGeneration(generation);
     }
 
-    // ---------- add-on libraries and combos ----------
+    // ---------- add-on libraries ----------
 
-    public ObservableCollection<AddonCombo> Combos { get; } = [];
-
-    [ObservableProperty]
-    [NotifyPropertyChangedFor(nameof(CanRemoveCombo), nameof(SelectedComboInfo))]
-    private AddonCombo? _selectedCombo;
-
-    [ObservableProperty] private string _newComboName = "";
-
-    public bool CanRemoveCombo => SelectedCombo is not null;
-
-    public string SelectedComboInfo
-    {
-        get
-        {
-            if (SelectedCombo is not { } c) return Combos.Count == 0 ? "No combos yet. Pick the two default builds above and save the pair." : "";
-            var store = _main.S.Store;
-            var sf = store.RenoDxBuilds.FirstOrDefault(b => b.Id == c.RenoDxId)?.Label ?? "missing build";
-            var lecram = store.LecramBuilds.FirstOrDefault(b => b.Id == c.LecramId)?.Label ?? "missing build";
-            return $"ShortFuse: {sf}\nLecram: {lecram}";
-        }
-    }
-
-    /// <summary>Runs after an import, rename, removal or new default: games, options, warnings and the lists follow.</summary>
+    /// <summary>Runs after an import, rename, removal or new default: games, options and warnings follow.</summary>
     private async Task AddonsChanged()
     {
         await _main.RefreshLocalComponentsAsync();
@@ -416,55 +394,7 @@ public sealed partial class SettingsViewModel : ObservableObject
         RenoDx.Reload();
         Lecram.Reload();
         ApplyLecramGeneration();
-        var keep = SelectedCombo?.Name;
-        Combos.Clear();
-        foreach (var c in Settings.AddonCombos) Combos.Add(c);
-        SelectedCombo = Combos.FirstOrDefault(c => c.Name == keep);
-        OnPropertyChanged(nameof(SelectedComboInfo));
         RefreshAddonPairStatus();
-    }
-
-    private void RefreshGameAddons()
-    {
-        foreach (var g in _main.Games) g.RebuildAddonChoices();
-    }
-
-    /// <summary>Saves the two default builds as one named choice; a combo with the same name is replaced.</summary>
-    [RelayCommand]
-    private void SaveCombo()
-    {
-        var name = NewComboName.Trim();
-        if (name.Length == 0)
-        {
-            Views.Dialog.Show("Save combo", "Type a name for the combo first.");
-            return;
-        }
-        var store = _main.S.Store;
-        var sf = store.RenoDxBuildFor(null);
-        var lecram = store.LecramBuildFor(null);
-        if (sf is null || lecram is null)
-        {
-            Views.Dialog.Show("Save combo", "Import both add-ons and pick their default versions first.");
-            return;
-        }
-        Settings.AddonCombos.RemoveAll(c => c.Name.Equals(name, StringComparison.OrdinalIgnoreCase));
-        Settings.AddonCombos.Add(new AddonCombo { Name = name, RenoDxId = sf.Id, LecramId = lecram.Id });
-        Settings.Save();
-        NewComboName = "";
-        ReloadAddons();
-        SelectedCombo = Combos.FirstOrDefault(c => c.Name == name);
-        RefreshGameAddons();
-        Log.Info($"Saved add-on combo '{name}'");
-    }
-
-    [RelayCommand]
-    private void RemoveCombo()
-    {
-        if (SelectedCombo is not { } combo) return;
-        Settings.AddonCombos.Remove(combo);
-        Settings.Save();
-        ReloadAddons();
-        RefreshGameAddons();
     }
 
     public string DfcInfo

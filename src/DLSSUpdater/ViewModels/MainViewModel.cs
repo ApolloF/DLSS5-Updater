@@ -199,7 +199,7 @@ public sealed partial class MainViewModel : ObservableObject
         var seen = S.Settings.NewestDlssNrSeen;
         if (store.AdoptNewerDlssNr(S.Settings) is { } newer) Log.Info($"DLSSNR default is now the newer {newer.Label}");
         var defaultsChanged = store.EnsureAddonDefaults(S.Settings);
-        if (store.SeedAddonCombos(S.Settings) | defaultsChanged | (S.Settings.NewestDlssNrSeen != seen)) S.Settings.Save();
+        if (store.SeedTestedAddonPair(S.Settings) | defaultsChanged | (S.Settings.NewestDlssNrSeen != seen)) S.Settings.Save();
         var rsPath = store.CurrentReShadePath;
         var (nr, rs) = await Task.Run(() => (
             File.Exists(store.DlssNrPath) ? HashCache.Get(store.DlssNrPath) : null,

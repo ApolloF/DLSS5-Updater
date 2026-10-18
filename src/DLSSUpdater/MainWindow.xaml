@@ -784,12 +784,9 @@
                                         <ColumnDefinition Width="Auto" />
                                     </Grid.ColumnDefinitions>
                                     <StackPanel Grid.Column="1" VerticalAlignment="Center" Margin="0,0,12,0">
-                                        <TextBlock Text="ShortFuse + Lecram pair" TextWrapping="Wrap"
-                                                   ToolTip="A saved pair sets both versions above for this game; changing either by hand clears it. Pairs are saved in Settings, Local components." />
+                                        <TextBlock Text="ShortFuse + Lecram pair" TextWrapping="Wrap" />
                                         <TextBlock Text="{Binding PairStatus}" Style="{StaticResource MutedText}" Margin="0,2,0,0" />
                                     </StackPanel>
-                                    <ComboBox Grid.Column="2" Width="356" Margin="0,0,54,0" ItemsSource="{Binding ComboChoices}" SelectedItem="{Binding ComboChoice}" MaxDropDownHeight="300"
-                                              AutomationProperties.Name="ShortFuse and Lecram pair for this game" />
                                 </Grid>
                                 <WrapPanel Margin="18,6,0,0">
                                     <Button Content="Mark as working" Style="{StaticResource BtnGhost}" Command="{Binding MarkPairWorkingCommand}" Margin="0,0,8,0" />
@@ -1035,33 +1032,6 @@
                                                             </Style>
                                                         </TextBlock.Style>
                                                     </TextBlock>
-                                                    <Border Style="{StaticResource Divider}" />
-                                                    <StackPanel Margin="0,10">
-                                                        <TextBlock Text="ShortFuse + Lecram combos" FontWeight="SemiBold" />
-                                                        <TextBlock Text="A combo is a ShortFuse build and a Lecram build that belong together. Pick the two default versions above, name the pair and save it; each game can then pick the combo as one choice."
-                                                                   Style="{StaticResource MutedText}" FontSize="11.5" TextWrapping="Wrap" Margin="0,2,0,8" />
-                                                        <Grid>
-                                                            <Grid.ColumnDefinitions>
-                                                                <ColumnDefinition Width="*" />
-                                                                <ColumnDefinition Width="Auto" />
-                                                            </Grid.ColumnDefinitions>
-                                                            <TextBox Text="{Binding NewComboName, UpdateSourceTrigger=PropertyChanged}" Tag="Name for the current pair, e.g. SF 0928 + Lecram 0928"
-                                                                     AutomationProperties.Name="Combo name" />
-                                                            <Button Grid.Column="1" Content="Save current pair as combo" Command="{Binding SaveComboCommand}" Margin="12,0,0,0" />
-                                                        </Grid>
-                                                        <Grid Margin="0,8,0,0">
-                                                            <Grid.ColumnDefinitions>
-                                                                <ColumnDefinition Width="*" />
-                                                                <ColumnDefinition Width="Auto" />
-                                                            </Grid.ColumnDefinitions>
-                                                            <ComboBox ItemsSource="{Binding Combos}" SelectedItem="{Binding SelectedCombo}" DisplayMemberPath="Name" MaxDropDownHeight="300"
-                                                                      AutomationProperties.Name="Saved combos" />
-                                                            <Button Grid.Column="1" Content="Remove" Style="{StaticResource BtnGhost}" Command="{Binding RemoveComboCommand}" Margin="12,0,0,0"
-                                                                    IsEnabled="{Binding CanRemoveCombo}" ToolTip="Remove the selected combo (the builds stay in the library)" />
-                                                        </Grid>
-                                                        <TextBlock Text="{Binding SelectedComboInfo}" Style="{StaticResource MutedText}" FontSize="11.5" TextWrapping="Wrap" Margin="0,6,0,0" />
-                                                    </StackPanel>
-                                                    <Border Style="{StaticResource Divider}" />
                                                     <Grid Margin="0,10">
                                                         <Grid.ColumnDefinitions>
                                                             <ColumnDefinition Width="*" />
