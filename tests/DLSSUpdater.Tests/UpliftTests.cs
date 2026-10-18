@@ -86,7 +86,7 @@ public sealed class UpliftTests : IDisposable
     }
 
     [Fact]
-    public async Task FreshConfig_OnRouteSwitch_BacksUpBeforeRemovingOldAddonKeys()
+    public async Task FreshConfig_OnRouteSwitch_RemovesOldAddonKeysFromOwnedIni()
     {
         var src = Path.Combine(_tmp, ComponentStore.RenoDxFile);
         FakeVersionDll.Write(src, new Version(0, 2026, 928, 306), ComponentStore.RenoDxFile);
@@ -97,12 +97,10 @@ public sealed class UpliftTests : IDisposable
             Uplift = false, ReShade = true, RenoDx = true,
             ReShadeOverrides = [new(RenoDxIni.Section, "DirectNeuralRenderingHookStage", "1")],
         }, null, default);
-        var beforeReset = File.ReadAllText(G("ReShade.ini"));
         Assert.True(Manifest().Owns("ReShade.ini"));
         await installer.InstallAsync(_game, _root, Options with { CarryOverIni = false }, null, default);
         var m = Manifest();
-        var backup = Assert.Single(m.Backups, b => b.Original == "ReShade.ini");
-        Assert.Equal(beforeReset, File.ReadAllText(Path.Combine(InstallManifest.BackupDirFor(_root), backup.Backup)));
+        Assert.DoesNotContain(m.Backups, b => b.Original == "ReShade.ini");
         Assert.Null(Ini().Get(RenoDxIni.Section, "DirectNeuralRenderingHookStage"));
         Assert.Equal("1", Ini().Get(UpliftConfig.Section, "Enabled"));
         Assert.DoesNotContain($"{RenoDxIni.Section}/DirectNeuralRenderingHookStage", m.ReShadeIni.Keys);

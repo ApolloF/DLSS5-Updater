@@ -67,7 +67,7 @@ public sealed class RenoDxTests : IDisposable
     [InlineData(true, false, "3", "old")]
     [InlineData(true, true, "1", "old")]
     [InlineData(false, false, "1", null)]
-    public async Task IniModes_ResetOnlyInstalledAddonSections_AndBackUpEachFreshRun(bool carryOver, bool overwrite, string hook, string? junk)
+    public async Task IniModes_ResetOnlyInstalledAddonSections_AndKeepOneBackup(bool carryOver, bool overwrite, string hook, string? junk)
     {
         ImportGood();
         const string original = "[GENERAL]\nPresetPath=mine.ini\n[OTHER]\nSetting=keep\n[RENODX-DLSS]\nDirectNeuralRenderingHookStage=3\nJunk=old\n[RENODX-DLSS-preset1]\nDirectNeuralRenderingPassCount=4\nJunk=old\n[RenoDX.DLSS5]\nNRStyle=2\n[Uplift]\nStyle=2\n";
@@ -97,17 +97,16 @@ public sealed class RenoDxTests : IDisposable
         var edited = Ini();
         edited.Set(RenoDxIni.Section, "Junk", "new tuning");
         edited.Save(G("ReShade.ini"));
-        var beforeReset = File.ReadAllText(G("ReShade.ini"));
         m.ReShadeIni[$"{RenoDxIni.Section}/Junk"] = "new tuning";
         m.Save(_root);
         await installer.InstallAsync(_game, _root, options, null, default);
         m = InstallManifest.Read(_root)!;
         backup = Assert.Single(m.Backups, b => b.Original == "ReShade.ini");
-        Assert.Equal(beforeReset, File.ReadAllText(Path.Combine(InstallManifest.BackupDirFor(_root), backup.Backup)));
+        Assert.Equal(original, File.ReadAllText(Path.Combine(InstallManifest.BackupDirFor(_root), backup.Backup)));
         Assert.Null(Ini().Get(RenoDxIni.Section, "Junk"));
         Assert.DoesNotContain($"{RenoDxIni.Section}/Junk", m.ReShadeIni.Keys);
         await installer.UninstallAsync(_game, _root, default);
-        Assert.Equal(beforeReset, File.ReadAllText(G("ReShade.ini")));
+        Assert.Equal(original, File.ReadAllText(G("ReShade.ini")));
     }
 
     [Fact]

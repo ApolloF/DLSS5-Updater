@@ -257,7 +257,7 @@ public sealed class LecramTests : IDisposable
         {
             var build = _store.ImportLecram(v11);
             Assert.Equal(LecramGeneration.V11, build.Generation);
-            Assert.Equal("v11.0.0-beta.6", build.DetectedLabel);
+            Assert.StartsWith("v11.", build.DetectedLabel); // whichever v11 build is lying in Downloads
         }
         if (File.Exists(v10))
         {

@@ -111,7 +111,7 @@ public sealed class DfcTests : IDisposable
     [InlineData(true, false, "4.0", "old")]
     [InlineData(true, true, "2.0", "old")]
     [InlineData(false, false, "2.0", null)]
-    public async Task IniModes_FreshRebuildsImportedDefaultsPlusOptions_AndBacksUpEachReset(bool carryOver, bool overwrite, string passes, string? junk)
+    public async Task IniModes_FreshRebuildsImportedDefaultsPlusOptions_AndKeepsOneBackup(bool carryOver, bool overwrite, string passes, string? junk)
     {
         _store.ImportDfc(Release());
         const string original = "config_schema=12\npasses=4.0\ncolor_strength=0.2\njunk=old\n";
@@ -146,9 +146,9 @@ public sealed class DfcTests : IDisposable
         m = InstallManifest.Read(_root)!;
         Assert.Empty(m.DfcCfg);
         backup = Assert.Single(m.Backups, b => b.Original == ComponentStore.DfcConfigFile);
-        Assert.Equal(beforeReset, File.ReadAllText(Path.Combine(InstallManifest.BackupDirFor(_root), backup.Backup)));
+        Assert.Equal(original, File.ReadAllText(Path.Combine(InstallManifest.BackupDirFor(_root), backup.Backup)));
         await installer.UninstallAsync(_game, _root, default);
-        Assert.Equal(beforeReset, File.ReadAllText(G(ComponentStore.DfcConfigFile)));
+        Assert.Equal(original, File.ReadAllText(G(ComponentStore.DfcConfigFile)));
     }
 
     [Fact]
@@ -163,8 +163,7 @@ public sealed class DfcTests : IDisposable
         Assert.Equal(DefaultCfg, File.ReadAllText(G(ComponentStore.DfcConfigFile)));
         var m = InstallManifest.Read(_root)!;
         Assert.Empty(m.DfcCfg);
-        var backup = Assert.Single(m.Backups, b => b.Original == ComponentStore.DfcConfigFile);
-        Assert.Equal(original, File.ReadAllText(Path.Combine(InstallManifest.BackupDirFor(_root), backup.Backup)));
+        Assert.DoesNotContain(m.Backups, b => b.Original == ComponentStore.DfcConfigFile);
     }
 
     [Fact]
