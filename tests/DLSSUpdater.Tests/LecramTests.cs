@@ -663,4 +663,121 @@ public sealed class LecramTests : IDisposable
         Assert.False(LecramIni.IsAvailable("NeuralUplift", LecramGeneration.V10));
         Assert.False(LecramIni.IsAvailable("NRAutoMask", LecramGeneration.V11));
     }
+
+    [Fact]
+    public void MigrateToV11_V10Section_ResetsPresentAxesAndSetsConfigVersion11_LeavingHookPointAndOtherKeys()
+    {
+        var text = $"[{LecramIni.Section}]\nConfigVersion=10\nNRHookPoint=2\nNRModelStyleOffset=0.25\nNRModelSkip64Gain=1.2\nNRStyle=1\n";
+        var ini = IniFile.Parse(text);
+        Assert.True(LecramIni.NeedsV11Migration(ini));
+        Assert.True(LecramIni.MigrateToV11(ini));
+        Assert.Equal("11", ini.Get(LecramIni.Section, "ConfigVersion"));
+        Assert.Equal("1", ini.Get(LecramIni.Section, "NRModelCarryoverReset"));
+        Assert.Equal("0", ini.Get(LecramIni.Section, "NRModelStyleOffset"));
+        Assert.Equal("1", ini.Get(LecramIni.Section, "NRModelSkip64Gain"));
+        Assert.Equal("2", ini.Get(LecramIni.Section, "NRHookPoint"));
+        Assert.Equal("1", ini.Get(LecramIni.Section, "NRStyle"));
+    }
+
+    [Fact]
+    public void MigrateToV11_AbsentConfigVersionWithNeuralUplift_IsMigrated()
+    {
+        var text = $"[{LecramIni.Section}]\nNeuralUplift=1\nNRHookPoint=2\nNRModelToneOffset=0.3\n";
+        var ini = IniFile.Parse(text);
+        Assert.True(LecramIni.NeedsV11Migration(ini));
+        Assert.True(LecramIni.MigrateToV11(ini));
+        Assert.Equal("11", ini.Get(LecramIni.Section, "ConfigVersion"));
+        Assert.Equal("1", ini.Get(LecramIni.Section, "NRModelCarryoverReset"));
+        Assert.Equal("0", ini.Get(LecramIni.Section, "NRModelToneOffset"));
+        Assert.Equal("2", ini.Get(LecramIni.Section, "NRHookPoint"));
+    }
+
+    [Fact]
+    public void MigrateToV11_AbsentConfigVersionWithoutNeuralUplift_IsUnchanged()
+    {
+        var text = $"[{LecramIni.Section}]\nNRHookPoint=1\n";
+        var ini = IniFile.Parse(text);
+        Assert.False(LecramIni.NeedsV11Migration(ini));
+        Assert.False(LecramIni.MigrateToV11(ini));
+        Assert.Equal(text, ini.ToString());
+    }
+
+    [Fact]
+    public void MigrateToV11_ConfigVersion11_IsUnchanged()
+    {
+        var text = $"[{LecramIni.Section}]\nConfigVersion=11\nNRHookPoint=2\nNRModelStyleOffset=0.25\n";
+        var ini = IniFile.Parse(text);
+        Assert.False(LecramIni.NeedsV11Migration(ini));
+        Assert.False(LecramIni.MigrateToV11(ini));
+        Assert.Equal(text, ini.ToString());
+    }
+
+    [Fact]
+    public void MigrateToV11_AbsentModelKeys_AreNotAdded()
+    {
+        var text = $"[{LecramIni.Section}]\nConfigVersion=10\nNRHookPoint=2\n";
+        var ini = IniFile.Parse(text);
+        Assert.True(LecramIni.MigrateToV11(ini));
+        Assert.Equal("11", ini.Get(LecramIni.Section, "ConfigVersion"));
+        Assert.Equal("1", ini.Get(LecramIni.Section, "NRModelCarryoverReset"));
+        Assert.All(LecramIni.ModelAxisKeys, k => Assert.Null(ini.Get(LecramIni.Section, k)));
+    }
+
+    [Fact]
+    public void ModelAxisKeys_HasAll31Axes()
+    {
+        Assert.Equal(31, LecramIni.ModelAxisKeys.Length);
+        Assert.All(LecramIni.ModelAxisKeys, k => Assert.StartsWith("NRModel", k, StringComparison.Ordinal));
+        Assert.Equal(31, LecramIni.ModelAxisKeys.Distinct(StringComparer.OrdinalIgnoreCase).Count());
+    }
+
+    [Fact]
+    public async Task Install_V11WithHookPointOverride_PreMigratesV10ReShadeIni_WhileV10KeepsConfigVersion10()
+    {
+        var v11 = _store.ImportLecram(FakeV11());
+        var v10 = _store.ImportLecram(FakeV10());
+        var installer = new Installer(_store);
+
+        var v10Ini = $"[{LecramIni.Section}]\nConfigVersion=10\nNeuralUplift=1\nNRHookPoint=2\nNRModelToneOffset=0.3\n";
+        File.WriteAllText(G("ReShade.ini"), v10Ini);
+        var m = new InstallManifest();
+        m.ReShadeIni[$"{LecramIni.Section}/NRHookPoint"] = "2";
+        m.Save(_root);
+
+        await installer.InstallAsync(_game, _root, Lec(lecramId: v11.Id, overrides: [Key("NRHookPoint", "1")]), null, default);
+
+        Assert.Equal("1", Value("NRHookPoint"));
+        Assert.Equal("11", Value("ConfigVersion"));
+        Assert.Equal("1", Value("NRModelCarryoverReset"));
+        Assert.Equal("0", Value("NRModelToneOffset"));
+
+        File.WriteAllText(G("ReShade.ini"), v10Ini);
+        m = new InstallManifest();
+        m.ReShadeIni[$"{LecramIni.Section}/NRHookPoint"] = "2";
+        m.Save(_root);
+
+        await installer.InstallAsync(_game, _root, Lec(lecramId: v10.Id, overrides: [Key("NRHookPoint", "1")]), null, default);
+
+        Assert.Equal("1", Value("NRHookPoint"));
+        Assert.Equal("10", Value("ConfigVersion"));
+        Assert.Null(Value("NRModelCarryoverReset"));
+        Assert.Equal("0.3", Value("NRModelToneOffset"));
+    }
+
+    [Fact]
+    public async Task Install_V11WithoutHookPointOverride_LeavesFileForV11sOwnMigration()
+    {
+        var v11 = _store.ImportLecram(FakeV11());
+        var installer = new Installer(_store);
+
+        var v10Ini = $"[{LecramIni.Section}]\nConfigVersion=10\nNeuralUplift=1\nNRHookPoint=2\nNRModelToneOffset=0.3\n";
+        File.WriteAllText(G("ReShade.ini"), v10Ini);
+
+        await installer.InstallAsync(_game, _root, Lec(lecramId: v11.Id), null, default);
+
+        Assert.Equal("10", Value("ConfigVersion"));
+        Assert.Null(Value("NRModelCarryoverReset"));
+        Assert.Equal("0.3", Value("NRModelToneOffset"));
+        Assert.Equal("2", Value("NRHookPoint"));
+    }
 }

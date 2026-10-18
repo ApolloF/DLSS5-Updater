@@ -28,6 +28,71 @@ public static class LecramIni
         LecramGeneration.V11 => !V10Only.Contains(key),
         _ => true,
     };
+
+    /// <summary>The 31 model-tuning axes that v11's one-time migration resets to default.</summary>
+    public static readonly string[] ModelAxisKeys =
+    [
+        "NRModelStyleOffset",
+        "NRModelToneOffset",
+        "NRModelStructureOffset",
+        "NRModelChromaDirection",
+        "NRModelLumaDirection",
+        "NRModelNoiseDirection",
+        "NRModelMidAttentionGain",
+        "NRModelLateAttentionGain",
+        "NRModelDecoderSkipGain",
+        "NRModelRgbHeadGain",
+        "NRModelStyleSensitivity",
+        "NRModelToneSensitivity",
+        "NRModelStructureSensitivity",
+        "NRModelSkinSensitivity",
+        "NRModelMaskSensitivity",
+        "NRModelEncoderShallowQGain",
+        "NRModelEncoderDeepQGain",
+        "NRModelGlobalAttentionQGain",
+        "NRModelDecoderBroadQGain",
+        "NRModelDecoderMediumQGain",
+        "NRModelDecoderEntryQGain",
+        "NRModelDecoderFineQGain",
+        "NRModelSkip512Gain",
+        "NRModelSkip256Gain",
+        "NRModelSkip128Gain",
+        "NRModelSkip64Gain",
+        "NRModelFullLowGain",
+        "NRModelFullSourceGain",
+        "NRModelHistoryHeadGain",
+        "NRModelVitFfnResidualGain",
+        "NRModelVitAttentionResidualGain",
+    ];
+
+    /// <summary>True when a v11 build would treat this section as v10 and run its one-time migration on first load.</summary>
+    public static bool NeedsV11Migration(IniFile ini)
+    {
+        var cvStr = ini.Get(Section, "ConfigVersion");
+        if (cvStr is not null && int.TryParse(cvStr, System.Globalization.CultureInfo.InvariantCulture, out var cv))
+            return cv <= 10;
+        return ini.Get(Section, "NeuralUplift") is not null;
+    }
+
+    /// <summary>Applies v11's one-time config migration so the add-on sees an already-migrated section and keeps our chosen NRHookPoint.</summary>
+    public static bool MigrateToV11(IniFile ini)
+    {
+        if (!NeedsV11Migration(ini)) return false;
+
+        ini.Set(Section, "ConfigVersion", "11");
+        ini.Set(Section, "NRModelCarryoverReset", "1");
+        foreach (var key in ModelAxisKeys)
+        {
+            if (ini.Get(Section, key) is not null)
+            {
+                var def = key.EndsWith("Offset", StringComparison.OrdinalIgnoreCase) ||
+                          key.EndsWith("Direction", StringComparison.OrdinalIgnoreCase)
+                          ? "0" : "1";
+                ini.Set(Section, key, def);
+            }
+        }
+        return true;
+    }
 }
 
 /// <summary>
