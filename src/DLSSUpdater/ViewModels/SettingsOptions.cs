@@ -517,6 +517,6 @@ public static partial class SettingsOptions
     [
         C("Keep game settings", "keep", "Values a game's OptiScaler.ini / ReShade.ini already has, or you changed in-game, stay. Values this app wrote follow your settings."),
         C("Apply app settings", "apply", "Your settings here overwrite the same keys in every game. Other keys in the game's config stay."),
-        C("Fresh config", "fresh", "OptiScaler.ini is rebuilt from the release plus your settings; everything else from the old one is dropped (backed up first). ReShade.ini is only overwritten on your keys."),
+        C("Fresh config", "fresh", "Each mod's config is rebuilt from its defaults plus your settings: OptiScaler.ini from the release, add-on sections in ReShade.ini, deep-fried-chicken.cfg from the import. ReShade's own settings stay. Old files are backed up first."),
     ];
 }
