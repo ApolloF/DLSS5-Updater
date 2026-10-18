@@ -91,7 +91,7 @@ public sealed class UpliftTests : IDisposable
         Assert.False(Directory.Exists(G("GITC-Uplift")));
         Assert.Equal("0", Ini().Get("Uplift", "Enabled"));
         Assert.Null(Ini().Get("Uplift", "PassCount"));
-        Assert.Equal(["game.exe", "ReShade.ini"], Directory.GetFiles(_root).Select(Path.GetFileName).Order().ToArray());
+        Assert.Equal(["game.exe", "ReShade.ini"], Directory.GetFiles(_root).Select(f => Path.GetFileName(f)!).Order().ToArray());
     }
 
     [Theory]
@@ -166,7 +166,7 @@ public sealed class UpliftTests : IDisposable
         Assert.True(vm.UpdateOptions(Manifest()).Uplift);
         Assert.Equal("v1.4.2", vm.UpdateOptions(Manifest()).KeepingInstalledVersions(Manifest()).UpliftTag);
         await installer.UninstallAsync(_game, _root, default);
-        Assert.Equal(["game.exe"], Directory.GetFiles(_root).Select(Path.GetFileName).ToArray());
+        Assert.Equal(["game.exe"], Directory.GetFiles(_root).Select(f => Path.GetFileName(f)!).ToArray());
         Assert.Empty(Directory.GetDirectories(_root));
     }
 
@@ -202,7 +202,7 @@ public sealed class UpliftTests : IDisposable
         WriteExe(_game.Exes[0], Machine.I386);
         var ex = await Assert.ThrowsAsync<InvalidOperationException>(() => installer.InstallAsync(_game, _root, Options, null, default));
         Assert.Contains("64-bit", ex.Message);
-        Assert.Equal(["game.exe"], Directory.GetFiles(_root).Select(Path.GetFileName).ToArray());
+        Assert.Equal(["game.exe"], Directory.GetFiles(_root).Select(f => Path.GetFileName(f)!).ToArray());
         Assert.Empty(Directory.GetDirectories(_root));
     }
 
