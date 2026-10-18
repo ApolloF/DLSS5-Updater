@@ -31,6 +31,7 @@ public sealed partial class MainViewModel : ObservableObject
         SettingsVm = new SettingsViewModel(this);
         OptiNews = new ReleaseNewsViewModel(Component.OptiScaler, "OptiScaler-NR", settings);
         DlssNews = new ReleaseNewsViewModel(Component.Dlss, "DLSS", settings);
+        UpliftNews = new ReleaseNewsViewModel(Component.Uplift, "GITC Uplift", settings);
         MfgNews = new ReleaseNewsViewModel(Component.MfgUnlock, "MFG Unlock", settings);
         StreamlineNews = new ReleaseNewsViewModel(Component.Streamline, "Streamline", settings);
         ReShadeNews = new ReleaseNewsViewModel(Component.ReShade, "ReShade", settings);
@@ -55,6 +56,7 @@ public sealed partial class MainViewModel : ObservableObject
     public ObservableCollection<string> LogLines { get; } = [];
     public ReleaseNewsViewModel OptiNews { get; }
     public ReleaseNewsViewModel DlssNews { get; }
+    public ReleaseNewsViewModel UpliftNews { get; }
     public ReleaseNewsViewModel MfgNews { get; }
     public ReleaseNewsViewModel StreamlineNews { get; }
     public ReleaseNewsViewModel ReShadeNews { get; }
@@ -116,6 +118,7 @@ public sealed partial class MainViewModel : ObservableObject
     // component chips
     [ObservableProperty] private string _optiVersion = "—";
     [ObservableProperty] private string _dlssVersion = "—";
+    [ObservableProperty] private string _upliftVersion = "\u2014";
     [ObservableProperty] private string _mfgVersion = "—";
     [ObservableProperty] private string _dlssNrText = "missing";
     [ObservableProperty] private string _reShadeText = "missing";
@@ -226,14 +229,16 @@ public sealed partial class MainViewModel : ObservableObject
         Gh.Token = S.Settings.GitHubToken;
         await S.Store.RefreshAsync(_cts.Token);
         var s = S.Store;
-        Online = s.Opti is { FromCache: false } || s.Dlss is { FromCache: false } || s.Mfg is { FromCache: false };
+        Online = s.Opti is { FromCache: false } || s.Dlss is { FromCache: false } || s.Mfg is { FromCache: false } || s.Uplift is { FromCache: false };
         OptiVersion = s.Opti is null ? "—" : s.Opti.Tag + (s.Opti.Prerelease ? " pre" : "");
         DlssVersion = s.Dlss?.Tag.TrimStart('v') ?? "—";
+        UpliftVersion = s.Uplift?.Tag ?? "\u2014";
         MfgVersion = s.Mfg?.Tag ?? (File.Exists(Path.Combine(AppPaths.Components, ComponentStore.MfgFile)) ? "local" : "—");
         StreamlineVersion = s.Streamline?.Tag.TrimStart('v') ?? "—";
         OptiNews.Load(s.Opti);
         DlssNews.Load(s.Dlss);
         MfgNews.Load(s.Mfg);
+        UpliftNews.Load(s.Uplift);
         StreamlineNews.Load(s.Streamline);
         foreach (var g in Games)
         {

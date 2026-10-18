@@ -5,7 +5,7 @@ using DLSSUpdater.Core;
 namespace DLSSUpdater.ViewModels;
 
 /// <summary>Every friendly option in Settings: which ini key it edits, its choices and what each choice does.</summary>
-public static class SettingsOptions
+public static partial class SettingsOptions
 {
     /// <summary>OptiScaler writes floats with six decimals; matching that keeps "value we wrote" detection exact.</summary>
     private static string F(double v) => v.ToString("0.000000", CultureInfo.InvariantCulture);

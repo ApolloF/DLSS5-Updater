@@ -28,6 +28,7 @@ public sealed partial class SettingsViewModel : ObservableObject
         MfgOptions = SettingsOptions.Mfg(ReShadeOverrides);
         RenoDxOptions = SettingsOptions.RenoDx(ReShadeOverrides);
         LecramOptions = SettingsOptions.Lecram(ReShadeOverrides);
+        UpliftOptions = SettingsOptions.Uplift(ReShadeOverrides);
         DfcOptions = SettingsOptions.Dfc(ReShadeOverrides);
         NrOptions = SettingsOptions.Nr(Overrides);
         TonemapOptions = SettingsOptions.Tonemap(Overrides);
@@ -51,11 +52,12 @@ public sealed partial class SettingsViewModel : ObservableObject
     public IReadOnlyList<IniOptionViewModel> MfgOptions { get; }
     public IReadOnlyList<IniOptionViewModel> RenoDxOptions { get; }
     public IReadOnlyList<IniOptionViewModel> LecramOptions { get; }
+    public IReadOnlyList<IniOptionViewModel> UpliftOptions { get; }
     public IReadOnlyList<IniOptionViewModel> DfcOptions { get; }
     public IReadOnlyList<IniOptionViewModel> NrOptions { get; }
     public IReadOnlyList<IniOptionViewModel> TonemapOptions { get; }
     public IReadOnlyList<IniOptionViewModel> HdrOptions { get; }
-    public IEnumerable<IniOptionViewModel> AllOptions => ReShadeOptions.Concat(MfgOptions).Concat(RenoDxOptions).Concat(LecramOptions).Concat(DfcOptions).Concat(NrOptions).Concat(TonemapOptions).Concat(HdrOptions);
+    public IEnumerable<IniOptionViewModel> AllOptions => ReShadeOptions.Concat(MfgOptions).Concat(RenoDxOptions).Concat(LecramOptions).Concat(UpliftOptions).Concat(DfcOptions).Concat(NrOptions).Concat(TonemapOptions).Concat(HdrOptions);
     public IReadOnlyList<OptionChoice> IniModes => SettingsOptions.IniModes;
 
     public OptionChoice IniMode
@@ -71,6 +73,47 @@ public sealed partial class SettingsViewModel : ObservableObject
     public ObservableCollection<DlssChoice> DlssChoices { get; } = [];
 
     [ObservableProperty] private string _tab = "General";
+
+    partial void OnTabChanged(string value)
+    {
+        if (value == "ReShade") NotifyModShown();
+    }
+
+    private ModChoice? _pickedMod;
+
+    public IReadOnlyList<ModChoice> ModChoices => ModPicker.AvailableInSettings;
+
+    /// <summary>The mod whose defaults the ReShade tab shows. Follows the default install route until the user picks one; not saved.</summary>
+    public ModChoice ModSelection
+    {
+        get => _pickedMod ?? ModPicker.Choice(ModChoices, DefaultMod);
+        set
+        {
+            if (value is null) return;
+            _pickedMod = value;
+            NotifyModShown();
+        }
+    }
+
+        private Mod DefaultMod => ModPicker.DefaultInSettings(Settings.DefaultMode == InstallMode.ReShadeOnly, Settings.InstallUplift, false, Settings.InstallLecram, Settings.InstallRenoDx);
+
+    public bool ShowReShade => ModPicker.Shows(ModSelection.Mod, Mod.ReShade);
+    public bool ShowMfg => ModPicker.Shows(ModSelection.Mod, Mod.Mfg);
+    public bool ShowRenoDx => ModPicker.Shows(ModSelection.Mod, Mod.RenoDx);
+    public bool ShowLecram => ModPicker.Shows(ModSelection.Mod, Mod.Lecram);
+    public bool ShowDfc => ModPicker.Shows(ModSelection.Mod, Mod.Dfc);
+    public bool ShowUplift => ModPicker.Shows(ModSelection.Mod, Mod.Uplift);
+
+    private void NotifyModShown()
+    {
+        OnPropertyChanged(nameof(ModSelection));
+        OnPropertyChanged(nameof(ShowReShade));
+        OnPropertyChanged(nameof(ShowMfg));
+        OnPropertyChanged(nameof(ShowRenoDx));
+        OnPropertyChanged(nameof(ShowLecram));
+        OnPropertyChanged(nameof(ShowDfc));
+        OnPropertyChanged(nameof(ShowUplift));
+    }
 
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(CanDeletePreset))]
@@ -289,6 +332,12 @@ public sealed partial class SettingsViewModel : ObservableObject
     {
         get => Settings.InstallRenoDx;
         set { Settings.InstallRenoDx = value; Save(); }
+    }
+
+    public bool InstallUplift
+    {
+        get => Settings.InstallUplift;
+        set { Settings.InstallUplift = value; Save(); }
     }
 
     public bool InstallLecram

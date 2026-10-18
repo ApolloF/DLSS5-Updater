@@ -333,7 +333,7 @@
                     <ColumnDefinition Width="*" />
                     <ColumnDefinition Width="Auto" />
                 </Grid.ColumnDefinitions>
-                <StackPanel Orientation="Horizontal">
+                <WrapPanel Orientation="Horizontal">
                     <ToggleButton Style="{StaticResource ReleaseChip}" Tag="{Binding OptiNews}">
                         <StackPanel>
                             <TextBlock Text="OPTISCALER-NR" Style="{StaticResource Caps}" />
@@ -350,6 +350,13 @@
                         <StackPanel>
                             <TextBlock Text="DLSS" Style="{StaticResource Caps}" />
                             <TextBlock Text="{Binding DlssVersion}" Style="{StaticResource ChipValue}" />
+                        </StackPanel>
+                    </ToggleButton>
+                    <Border Width="1" Background="{StaticResource Line}" Margin="0,2,28,2" />
+                    <ToggleButton Style="{StaticResource ReleaseChip}" Tag="{Binding UpliftNews}">
+                        <StackPanel>
+                            <TextBlock Text="GITC UPLIFT" Style="{StaticResource Caps}" />
+                            <TextBlock Text="{Binding UpliftVersion}" Style="{StaticResource ChipValue}" />
                         </StackPanel>
                     </ToggleButton>
                     <Border Width="1" Background="{StaticResource Line}" Margin="0,2,28,2" />
@@ -398,7 +405,7 @@
                             </TextBlock>
                         </StackPanel>
                     </ToggleButton>
-                </StackPanel>
+                </WrapPanel>
 
                 <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center">
                     <TextBlock Text="OFFLINE" Style="{StaticResource Caps}" Foreground="{StaticResource Warn}" VerticalAlignment="Center"
@@ -626,48 +633,62 @@
                                     ToolTip="{Binding Source=ini-mode, Converter={StaticResource HelpTip}}" />
                         </StackPanel>
 
-                        <TextBlock Text="RESHADE" Style="{StaticResource SectionTitle}" />
-                        <Border Style="{StaticResource Card}" Padding="16,4">
-                            <ItemsControl ItemsSource="{Binding ReShadeRows}" ItemTemplate="{StaticResource GameOptionRow}" />
-                        </Border>
-                        <TextBlock Text="MFG UNLOCK" Style="{StaticResource SectionTitle}" />
-                        <Border Style="{StaticResource Card}" Padding="16,4">
-                            <ItemsControl ItemsSource="{Binding MfgRows}" ItemTemplate="{StaticResource GameOptionRow}" />
-                        </Border>
-                        <StackPanel Visibility="{Binding IsReShadeOnly, Converter={StaticResource BoolToVis}}">
+                        <StackPanel Orientation="Horizontal" Margin="0,14,0,0">
+                            <TextBlock Text="MOD" Style="{StaticResource Caps}" VerticalAlignment="Center" Margin="0,0,12,0" Width="96" />
+                            <ComboBox Width="240" ItemsSource="{Binding ModChoices}" SelectedItem="{Binding ModSelection}"
+                                      AutomationProperties.Name="Mod whose options are shown" ToolTip="Show the options of one mod at a time. Starts with the mod this game uses." />
+                        </StackPanel>
+
+                        <StackPanel Visibility="{Binding ShowReShade, Converter={StaticResource BoolToVis}}">
+                            <TextBlock Text="RESHADE" Style="{StaticResource SectionTitle}" />
+                            <Border Style="{StaticResource Card}" Padding="16,4">
+                                <ItemsControl ItemsSource="{Binding ReShadeRows}" ItemTemplate="{StaticResource GameOptionRow}" />
+                            </Border>
+                        </StackPanel>
+                        <StackPanel Visibility="{Binding ShowUplift, Converter={StaticResource BoolToVis}}">
+                            <TextBlock Text="GITC UPLIFT" Style="{StaticResource SectionTitle}" />
+                            <Border Style="{StaticResource Card}" Padding="16,4">
+                                <ItemsControl ItemsSource="{Binding UpliftRows}" ItemTemplate="{StaticResource GameOptionRow}" />
+                            </Border>
+                        </StackPanel>
+                        <StackPanel Visibility="{Binding ShowMfg, Converter={StaticResource BoolToVis}}">
+                            <TextBlock Text="MFG UNLOCK" Style="{StaticResource SectionTitle}" />
+                            <Border Style="{StaticResource Card}" Padding="16,4">
+                                <ItemsControl ItemsSource="{Binding MfgRows}" ItemTemplate="{StaticResource GameOptionRow}" />
+                            </Border>
+                        </StackPanel>
+                        <StackPanel Visibility="{Binding ShowRenoDx, Converter={StaticResource BoolToVis}}">
                             <TextBlock Text="SHORTFUSE RENODX DLSS ADD-ON" Style="{StaticResource SectionTitle}" />
                             <Border Style="{StaticResource Card}" Padding="16,4">
-                                <StackPanel>
-                                    <ItemsControl ItemsSource="{Binding RenoDxRows}" ItemTemplate="{StaticResource GameOptionRow}" />
-                                </StackPanel>
+                                <ItemsControl ItemsSource="{Binding RenoDxRows}" ItemTemplate="{StaticResource GameOptionRow}" />
                             </Border>
                         </StackPanel>
-                        <StackPanel Visibility="{Binding IsReShadeOnly, Converter={StaticResource BoolToVis}}">
+                        <StackPanel Visibility="{Binding ShowLecram, Converter={StaticResource BoolToVis}}">
                             <TextBlock Text="LECRAM DLSS5 ADD-ON" Style="{StaticResource SectionTitle}" />
                             <Border Style="{StaticResource Card}" Padding="16,4">
-                                <StackPanel>
-                                    <ItemsControl ItemsSource="{Binding LecramRows}" ItemTemplate="{StaticResource GameOptionRow}" />
-                                </StackPanel>
+                                <ItemsControl ItemsSource="{Binding LecramRows}" ItemTemplate="{StaticResource GameOptionRow}" />
                             </Border>
                         </StackPanel>
-                        <StackPanel Visibility="{Binding IsReShadeOnly, Converter={StaticResource BoolToVis}}">
+                        <StackPanel Visibility="{Binding ShowDfc, Converter={StaticResource BoolToVis}}">
                             <TextBlock Text="DEEP FRIED CHICKEN" Style="{StaticResource SectionTitle}" />
                             <Border Style="{StaticResource Card}" Padding="16,4">
                                 <ItemsControl ItemsSource="{Binding DfcRows}" ItemTemplate="{StaticResource GameOptionRow}" />
                             </Border>
                         </StackPanel>
-                        <TextBlock Text="NEURAL RENDERING" Style="{StaticResource SectionTitle}" />
-                        <Border Style="{StaticResource Card}" Padding="16,4">
-                            <ItemsControl ItemsSource="{Binding NrRows}" ItemTemplate="{StaticResource GameOptionRow}" />
-                        </Border>
-                        <TextBlock Text="HDR TONE MAPPING" Style="{StaticResource SectionTitle}" />
-                        <Border Style="{StaticResource Card}" Padding="16,4">
-                            <ItemsControl ItemsSource="{Binding TonemapRows}" ItemTemplate="{StaticResource GameOptionRow}" />
-                        </Border>
-                        <TextBlock Text="HDR OUTPUT" Style="{StaticResource SectionTitle}" />
-                        <Border Style="{StaticResource Card}" Padding="16,4">
-                            <ItemsControl ItemsSource="{Binding HdrRows}" ItemTemplate="{StaticResource GameOptionRow}" />
-                        </Border>
+                        <StackPanel Visibility="{Binding ShowOptiNr, Converter={StaticResource BoolToVis}}">
+                            <TextBlock Text="NEURAL RENDERING" Style="{StaticResource SectionTitle}" />
+                            <Border Style="{StaticResource Card}" Padding="16,4">
+                                <ItemsControl ItemsSource="{Binding NrRows}" ItemTemplate="{StaticResource GameOptionRow}" />
+                            </Border>
+                            <TextBlock Text="HDR TONE MAPPING" Style="{StaticResource SectionTitle}" />
+                            <Border Style="{StaticResource Card}" Padding="16,4">
+                                <ItemsControl ItemsSource="{Binding TonemapRows}" ItemTemplate="{StaticResource GameOptionRow}" />
+                            </Border>
+                            <TextBlock Text="HDR OUTPUT" Style="{StaticResource SectionTitle}" />
+                            <Border Style="{StaticResource Card}" Padding="16,4">
+                                <ItemsControl ItemsSource="{Binding HdrRows}" ItemTemplate="{StaticResource GameOptionRow}" />
+                            </Border>
+                        </StackPanel>
                     </StackPanel>
 
                     <StackPanel Visibility="{Binding DetailTab, Converter={StaticResource EqualsToVis}, ConverterParameter=Install}">
@@ -722,7 +743,12 @@
                                                 <ColumnDefinition Width="46" />
                                             </Grid.ColumnDefinitions>
                                             <Ellipse Width="7" Height="7" HorizontalAlignment="Left" Fill="{Binding State, Converter={StaticResource StateToBrush}}" />
-                                            <TextBlock Grid.Column="1" Text="{Binding Name}" VerticalAlignment="Center" TextTrimming="CharacterEllipsis" Margin="0,0,12,0" ToolTip="{Binding Name}" />
+                                            <DockPanel Grid.Column="1" Margin="0,0,12,0">
+                                                <Button DockPanel.Dock="Right" Style="{StaticResource InfoBtn}" CommandParameter="uplift"
+                                                        Visibility="{Binding Key, Converter={StaticResource EqualsToVis}, ConverterParameter=uplift}"
+                                                        ToolTip="{Binding Source=uplift, Converter={StaticResource HelpTip}}" AutomationProperties.Name="About GITC Uplift" />
+                                                <TextBlock Text="{Binding Name}" VerticalAlignment="Center" TextTrimming="CharacterEllipsis" ToolTip="{Binding Name}" />
+                                            </DockPanel>
                                             <TextBlock Grid.Column="2" Text="{Binding Installed}" Style="{StaticResource Mono}" Foreground="{StaticResource Muted}" VerticalAlignment="Center" />
                                             <TextBlock Grid.Column="3" Text="{Binding Latest}" VerticalAlignment="Center" TextTrimming="CharacterEllipsis">
                                                 <TextBlock.Style>
@@ -1094,6 +1120,7 @@
                                                     <CheckBox Content="Install ReShade" IsChecked="{Binding InstallReShade}" Margin="0,8" />
                                                     <CheckBox Content="Install MFG Unlock add-on (only games with Streamline DLSS frame generation; RTX 40)" IsChecked="{Binding InstallMfgUnlock}" Margin="0,8" />
                                                     <CheckBox Content="Install ShortFuse RenoDX DLSS add-on (ReShade-only mode; its own NR pass, replaces OptiScaler NR; needs ReShade 6+ and the NR runtime)" IsChecked="{Binding InstallRenoDx}" Margin="0,8" />
+                                                    <CheckBox Content="Install GITC Uplift (ReShade + add-ons mode; exclusive NR route, 64-bit only; uses your imported NR runtime)" IsChecked="{Binding InstallUplift}" Margin="0,8" />
                                                     <CheckBox Content="Install Lecram DLSS5 add-on (ReShade-only mode; its own NR pass, works without ShortFuse; with both, two NR passes run; needs ReShade 6+ and the NR runtime)" IsChecked="{Binding InstallLecram}" Margin="0,8" />
                                                     <CheckBox Content="Install DLSSNR runtime" IsChecked="{Binding InstallDlssNr}" Margin="0,8" />
                                                     <CheckBox IsChecked="{Binding InstallStreamline}" Margin="0,8">
@@ -1187,27 +1214,49 @@
 
                                         <!-- ===== ReShade add-ons ===== -->
                                         <StackPanel Visibility="{Binding Tab, Converter={StaticResource EqualsToVis}, ConverterParameter=ReShade}">
-                                            <TextBlock Text="RESHADE" Style="{StaticResource SectionTitle}" />
-                                            <Border Style="{StaticResource Card}" Padding="16,4">
-                                                <ItemsControl ItemsSource="{Binding ReShadeOptions}" ItemTemplate="{StaticResource OptionRow}" />
-                                            </Border>
-                                            <TextBlock Text="MFG UNLOCK" Style="{StaticResource SectionTitle}" />
-                                            <Border Style="{StaticResource Card}" Padding="16,4">
-                                                <ItemsControl ItemsSource="{Binding MfgOptions}" ItemTemplate="{StaticResource OptionRow}" />
-                                            </Border>
-                                            <TextBlock Text="SHORTFUSE RENODX DLSS ADD-ON" Style="{StaticResource SectionTitle}" />
-                                            <Border Style="{StaticResource Card}" Padding="16,4">
-                                                <ItemsControl ItemsSource="{Binding RenoDxOptions}" ItemTemplate="{StaticResource OptionRow}" />
-                                            </Border>
-                                            <TextBlock Text="LECRAM DLSS5 ADD-ON" Style="{StaticResource SectionTitle}" />
-                                            <Border Style="{StaticResource Card}" Padding="16,4">
-                                                <ItemsControl ItemsSource="{Binding LecramOptions}" ItemTemplate="{StaticResource OptionRow}" />
-                                            </Border>
-                                            <TextBlock Text="DEEP FRIED CHICKEN" Style="{StaticResource SectionTitle}" />
-                                            <Border Style="{StaticResource Card}" Padding="16,4">
-                                                <ItemsControl ItemsSource="{Binding DfcOptions}" ItemTemplate="{StaticResource OptionRow}" />
-                                            </Border>
+                                            <StackPanel Orientation="Horizontal" Margin="0,18,0,0">
+                                                <TextBlock Text="MOD" Style="{StaticResource Caps}" VerticalAlignment="Center" Margin="0,0,12,0" Width="96" />
+                                                <ComboBox Width="240" ItemsSource="{Binding ModChoices}" SelectedItem="{Binding ModSelection}"
+                                                          AutomationProperties.Name="Mod whose defaults are shown" ToolTip="Show the defaults of one mod at a time. Starts with the mod your default install uses." />
+                                            </StackPanel>
+                                            <StackPanel Visibility="{Binding ShowReShade, Converter={StaticResource BoolToVis}}">
+                                                <TextBlock Text="RESHADE" Style="{StaticResource SectionTitle}" />
+                                                <Border Style="{StaticResource Card}" Padding="16,4">
+                                                    <ItemsControl ItemsSource="{Binding ReShadeOptions}" ItemTemplate="{StaticResource OptionRow}" />
+                                                </Border>
+                                            </StackPanel>
+                                            <StackPanel Visibility="{Binding ShowMfg, Converter={StaticResource BoolToVis}}">
+                                                <TextBlock Text="MFG UNLOCK" Style="{StaticResource SectionTitle}" />
+                                                <Border Style="{StaticResource Card}" Padding="16,4">
+                                                    <ItemsControl ItemsSource="{Binding MfgOptions}" ItemTemplate="{StaticResource OptionRow}" />
+                                                </Border>
+                                            </StackPanel>
+                                            <StackPanel Visibility="{Binding ShowRenoDx, Converter={StaticResource BoolToVis}}">
+                                                <TextBlock Text="SHORTFUSE RENODX DLSS ADD-ON" Style="{StaticResource SectionTitle}" />
+                                                <Border Style="{StaticResource Card}" Padding="16,4">
+                                                    <ItemsControl ItemsSource="{Binding RenoDxOptions}" ItemTemplate="{StaticResource OptionRow}" />
+                                                </Border>
+                                            </StackPanel>
+                                            <StackPanel Visibility="{Binding ShowUplift, Converter={StaticResource BoolToVis}}">
+                                                <TextBlock Text="GITC UPLIFT" Style="{StaticResource SectionTitle}" />
+                                                <Border Style="{StaticResource Card}" Padding="16,4">
+                                                    <ItemsControl ItemsSource="{Binding UpliftOptions}" ItemTemplate="{StaticResource OptionRow}" />
+                                                </Border>
+                                            </StackPanel>
+                                            <StackPanel Visibility="{Binding ShowLecram, Converter={StaticResource BoolToVis}}">
+                                                <TextBlock Text="LECRAM DLSS5 ADD-ON" Style="{StaticResource SectionTitle}" />
+                                                <Border Style="{StaticResource Card}" Padding="16,4">
+                                                    <ItemsControl ItemsSource="{Binding LecramOptions}" ItemTemplate="{StaticResource OptionRow}" />
+                                                </Border>
+                                            </StackPanel>
+                                            <StackPanel Visibility="{Binding ShowDfc, Converter={StaticResource BoolToVis}}">
+                                                <TextBlock Text="DEEP FRIED CHICKEN" Style="{StaticResource SectionTitle}" />
+                                                <Border Style="{StaticResource Card}" Padding="16,4">
+                                                    <ItemsControl ItemsSource="{Binding DfcOptions}" ItemTemplate="{StaticResource OptionRow}" />
+                                                </Border>
+                                            </StackPanel>
                                             <TextBlock Style="{StaticResource MutedText}" FontSize="11.5" TextWrapping="Wrap" Margin="0,8,0,0"
+                                                       Visibility="{Binding ShowDfc, Converter={StaticResource BoolToVis}}"
                                                        Text="Deep Fried Chicken keys are written to deep-fried-chicken.cfg next to the game, only the ones you set; everything else in that file stays. Other settings are tuned in the ReShade overlay." />
                                             <TextBlock Style="{StaticResource MutedText}" FontSize="11.5" TextWrapping="Wrap" Margin="0,8,0,0"
                                                        Text="Written to ReShade.ini next to the game. The RenoDX and Lecram options only apply when that add-on is installed; Lecram options that the imported generation lacks are hidden. For Dynamic MFG also set the NVIDIA App's DLSS Frame Generation override to 'Use the 3D application setting' and cold-restart the game." />

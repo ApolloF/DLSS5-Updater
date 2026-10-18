@@ -4,7 +4,7 @@ using System.Text.RegularExpressions;
 
 namespace DLSSUpdater.Core;
 
-public enum Component { OptiScaler, MfgUnlock, Dlss, Streamline, ReShade }
+public enum Component { OptiScaler, MfgUnlock, Dlss, Streamline, ReShade, Uplift }
 
 public sealed class ReleaseInfo
 {
@@ -33,6 +33,7 @@ public sealed partial class ComponentStore
 {
     public const string LegacyOptiRepo = "wilsjo2/OptiScaler-DLSSNR-PreSR-Multipass";
     public const string OptiRepo = "ShyVortex/OptiScaler-DLSSNR-PreSR-Multipass";
+    public const string UpliftRepo = "ghostinthecamera/GITC-Uplift";
     public const string MfgRepo = "mavismmg/MFGAdaUnlock-RenoDx";
     public const string DlssRepo = "NVIDIA/DLSS";
     public const string StreamlineRepo = "NVIDIA-RTX/Streamline";
@@ -50,6 +51,13 @@ public sealed partial class ComponentStore
     public const string Lecram10File = "renodx-dlss5.addon64";
     public const string Lecram11File = "dlss5-nr.addon64";
     public static readonly string[] LecramFiles = [Lecram10File, Lecram11File];
+    public const string UpliftFile = "gitc-uplift.addon64";
+    public const string UpliftHelper = "gitc-uplift-helper64.exe";
+    public const string UpliftNrDir = "GITC-Uplift";
+    public static readonly string[] UpliftFiles =
+        [UpliftFile, UpliftHelper, Path.Combine(DfcShaderDir, "Uplift.fx"), Path.Combine(DfcShaderDir, "UpliftMask.fx")];
+    internal static readonly string[] LegacyUpliftFiles = ["uplift.addon64", "uplift.addon32", "uplift-helper64.exe", "gitc-uplift.addon32"];
+
     /// <summary>Deep Fried Chicken (closed source, personal-use licence; import-only): the ReShade add-on and its NGX bridge.</summary>
     public const string DfcFile = "deep-fried-chicken.addon64";
     public const string DfcBridgeFile = "deep-fried-chicken-nvngx.dll";
@@ -74,7 +82,7 @@ public sealed partial class ComponentStore
         "dlss5-feed.addon", "dlss5-feed.addon32", "dlss5-feed.addon64",
     ];
     /// <summary>Other NR injectors a RenoDX install moves out of the way (DFC refuses to coexist with the RenoDX add-ons).</summary>
-    public static readonly string[] ForeignNrAddons = ["renodx-dlssfix.addon64", .. LecramFiles, .. DfcPackageFiles, .. DfcForeignFiles];
+    public static readonly string[] ForeignNrAddons = ["renodx-dlssfix.addon64", .. LecramFiles, .. DfcPackageFiles, .. DfcForeignFiles, .. UpliftFiles, .. LegacyUpliftFiles];
     /// <summary>The RenoDX family: what DFC moves out of the way.</summary>
     public static readonly string[] RenoDxFamily = [RenoDxFile, .. LecramFiles, .. LegacyRenoDxFiles];
     public static readonly string[] DlssFiles = ["nvngx_dlss.dll", "nvngx_dlssd.dll", "nvngx_dlssg.dll"];
@@ -106,6 +114,7 @@ public sealed partial class ComponentStore
     {
         [Component.OptiScaler] = new(1, 1),
         [Component.MfgUnlock] = new(1, 1),
+        [Component.Uplift] = new(1, 1),
         [Component.Dlss] = new(1, 1),
         [Component.Streamline] = new(1, 1),
         [Component.ReShade] = new(1, 1),
@@ -118,6 +127,7 @@ public sealed partial class ComponentStore
     }
 
     public ReleaseInfo? Opti { get; internal set; }
+    public ReleaseInfo? Uplift { get; internal set; }
     public ReleaseInfo? Mfg { get; internal set; }
     public ReleaseInfo? Dlss { get; internal set; }
     public ReleaseInfo? Streamline { get; internal set; }
@@ -132,6 +142,7 @@ public sealed partial class ComponentStore
     {
         Component.OptiScaler => Opti,
         Component.MfgUnlock => Mfg,
+        Component.Uplift => Uplift,
         Component.Streamline => Streamline,
         Component.ReShade => ReShade,
         _ => Dlss,
@@ -164,6 +175,7 @@ public sealed partial class ComponentStore
     {
         await Task.WhenAll(
             Resolve(Component.OptiScaler, ResolveOptiAsync, v => Opti = v, ct),
+            Resolve(Component.Uplift, ResolveUpliftAsync, v => Uplift = v, ct),
             Resolve(Component.MfgUnlock, ResolveMfgAsync, v => Mfg = v, ct),
             Resolve(Component.Dlss, ResolveDlssAsync, v => Dlss = v, ct),
             Resolve(Component.Streamline, ResolveStreamlineAsync, v => Streamline = v, ct),
@@ -195,6 +207,7 @@ public sealed partial class ComponentStore
         {
             Component.OptiScaler => source.Repo,
             Component.MfgUnlock => MfgRepo,
+            Component.Uplift => UpliftRepo,
             Component.Dlss => DlssRepo,
             Component.Streamline => StreamlineRepo,
             _ => null,

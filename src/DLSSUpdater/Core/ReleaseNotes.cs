@@ -124,6 +124,7 @@ public static partial class ReleaseNotes
     public static string Url(Component c, string tag) => c switch
     {
         Component.OptiScaler => GitHubTag(OptiSources.OfTag(tag).Repo, OptiSources.RawTag(tag)),
+        Component.Uplift => GitHubTag(ComponentStore.UpliftRepo, tag),
         Component.MfgUnlock => GitHubTag(ComponentStore.MfgRepo, tag),
         Component.Streamline => GitHubTag(ComponentStore.StreamlineRepo, tag),
         Component.ReShade => ComponentStore.ReShadeSite + "/releases",

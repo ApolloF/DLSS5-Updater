@@ -21,6 +21,7 @@ public sealed partial class GameOptionViewModel : ObservableObject
         public static readonly IReadOnlyList<IniOptionViewModel> Mfg = SettingsOptions.Mfg([]);
         public static readonly IReadOnlyList<IniOptionViewModel> RenoDx = SettingsOptions.RenoDx([]);
         public static readonly IReadOnlyList<IniOptionViewModel> Lecram = SettingsOptions.Lecram([]);
+        public static readonly IReadOnlyList<IniOptionViewModel> Uplift = SettingsOptions.Uplift([]);
         public static readonly IReadOnlyList<IniOptionViewModel> Dfc = SettingsOptions.Dfc([]);
         public static readonly IReadOnlyList<IniOptionViewModel> Nr = SettingsOptions.Nr([]);
         public static readonly IReadOnlyList<IniOptionViewModel> Tonemap = SettingsOptions.Tonemap([]);

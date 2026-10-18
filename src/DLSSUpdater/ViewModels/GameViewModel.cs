@@ -77,6 +77,7 @@ public sealed partial class GameViewModel : ObservableObject
             new ComponentRow("dlssnr", "DLSSNR runtime"),
             new ComponentRow("renodx", "ShortFuse RenoDX DLSS add-on (own NR pass; replaces OptiScaler NR)"),
             new ComponentRow("lecram", "Lecram DLSS5 add-on (own NR pass; with ShortFuse both passes run)"),
+            new ComponentRow("uplift", "GITC Uplift (exclusive DLSS-NR route)"),
             new ComponentRow("dfc", "Deep Fried Chicken (replaces OptiScaler NR, RenoDX and Lecram)"),
             new ComponentRow("dlss", "DLSS SR · RR · FG"),
             new ComponentRow("streamline", "Streamline (Dynamic MFG)"),
@@ -84,12 +85,12 @@ public sealed partial class GameViewModel : ObservableObject
         foreach (var c in Components) c.PropertyChanged += (_, e) =>
         {
             if (e.PropertyName != nameof(ComponentRow.Enabled)) return;
-            if (c.Key is "renodx" or "lecram" or "dfc" && c.Enabled)
+            if (c.Key is "renodx" or "lecram" or "dfc" or "uplift" && c.Enabled)
             {
                 Components.First(r => r.Key == "dlssnr").Enabled = true;
                 Components.First(r => r.Key == "reshade").Enabled = true;
                 // One NR provider per game; ShortFuse's and Lecram's add-ons are the pair that can run together.
-                foreach (var other in Components.Where(r => r.Key is "renodx" or "lecram" or "dfc" && r.Key != c.Key && (c.Key == "dfc" || r.Key == "dfc")))
+                foreach (var other in Components.Where(r => r.Key is "renodx" or "lecram" or "dfc" or "uplift" && r.Key != c.Key && (c.Key is "dfc" or "uplift" || r.Key is "dfc" or "uplift")))
                     other.Enabled = false;
             }
             OnPropertyChanged(nameof(AnyEnabled));
@@ -98,6 +99,7 @@ public sealed partial class GameViewModel : ObservableObject
             OnPropertyChanged(nameof(BothAddonsEnabled));
             OnPropertyChanged(nameof(HasSfLecramWarning));
             OnPropertyChanged(nameof(SfLecramWarning));
+            RefreshModPick();
         };
         Info = info;
         Load(info);
@@ -138,8 +140,9 @@ public sealed partial class GameViewModel : ObservableObject
     partial void OnModeChanged(InstallMode value)
     {
         ApplyModeToRows();
-        if (IsReShadeOnly && !On("renodx") && !On("lecram") && !On("dfc")) Components.First(c => c.Key == "dlssnr").Enabled = false;
+        if (IsReShadeOnly && !On("renodx") && !On("lecram") && !On("dfc") && !On("uplift")) Components.First(c => c.Key == "dlssnr").Enabled = false;
         if (!ProxyNames.Contains(Proxy, StringComparer.OrdinalIgnoreCase)) Proxy = "dxgi.dll";
+        RefreshModPick();
         if (_loading) return;
         _s.Settings.For(Id).Mode = value == _s.Settings.DefaultMode ? null : value;
         _s.Settings.Save();
@@ -154,7 +157,7 @@ public sealed partial class GameViewModel : ObservableObject
             c.Editable = !(IsReShadeOnly && c.Key == "reshade");
             if (!c.Editable) c.Enabled = true;
             // The add-on replaces OptiScaler's NR, so it exists in ReShade-only mode alone.
-            if (c.Key is "renodx" or "lecram" or "dfc" && !IsReShadeOnly) { c.Visible = false; c.Enabled = false; }
+            if (c.Key is "renodx" or "lecram" or "dfc" or "uplift" && !IsReShadeOnly) { c.Visible = false; c.Enabled = false; }
         }
         OnPropertyChanged(nameof(AnyEnabled));
     }
@@ -254,15 +257,67 @@ public sealed partial class GameViewModel : ObservableObject
         OnPropertyChanged(nameof(IniModeChoice));
     }
 
+    private ModChoice? _pickedMod;
+
+    private IReadOnlyList<ModChoice> _modChoices = ModPicker.Available(false);
+    public IReadOnlyList<ModChoice> ModChoices => _modChoices;
+
+    /// <summary>The mod whose options the Game config tab shows. Follows the NR route in use until the user picks one; not saved.</summary>
+    public ModChoice ModSelection
+    {
+        get => _pickedMod ?? ModPicker.Choice(ModChoices, DefaultMod);
+        set
+        {
+            if (value is null) return;
+            _pickedMod = value;
+            NotifyModShown();
+        }
+    }
+
+    private Mod DefaultMod => ModPicker.DefaultFor(IsReShadeOnly, On("uplift"), On("dfc"), On("lecram"), On("renodx"));
+
+    public bool ShowOptiNr => ModPicker.Shows(ModSelection.Mod, Mod.OptiScalerNr);
+    public bool ShowReShade => ModPicker.Shows(ModSelection.Mod, Mod.ReShade);
+    public bool ShowMfg => ModPicker.Shows(ModSelection.Mod, Mod.Mfg);
+    public bool ShowRenoDx => IsReShadeOnly && ModPicker.Shows(ModSelection.Mod, Mod.RenoDx);
+    public bool ShowLecram => IsReShadeOnly && ModPicker.Shows(ModSelection.Mod, Mod.Lecram);
+    public bool ShowDfc => IsReShadeOnly && ModPicker.Shows(ModSelection.Mod, Mod.Dfc);
+    public bool ShowUplift => IsReShadeOnly && ModPicker.Shows(ModSelection.Mod, Mod.Uplift);
+
+    /// <summary>Mode or ticks changed: keep the user's pick while that mod is still listed; otherwise follow the route.</summary>
+    private void RefreshModPick()
+    {
+        if (_modChoices.Count != ModPicker.Available(IsReShadeOnly).Count)
+        {
+            _modChoices = ModPicker.Available(IsReShadeOnly);
+            OnPropertyChanged(nameof(ModChoices));
+        }
+        if (_pickedMod is not null && !ModChoices.Contains(_pickedMod)) _pickedMod = null;
+        NotifyModShown();
+    }
+
+    private void NotifyModShown()
+    {
+        OnPropertyChanged(nameof(ModSelection));
+        OnPropertyChanged(nameof(ShowOptiNr));
+        OnPropertyChanged(nameof(ShowReShade));
+        OnPropertyChanged(nameof(ShowMfg));
+        OnPropertyChanged(nameof(ShowRenoDx));
+        OnPropertyChanged(nameof(ShowLecram));
+        OnPropertyChanged(nameof(ShowDfc));
+        OnPropertyChanged(nameof(ShowUplift));
+    }
+
     public ObservableCollection<GameOptionViewModel> ReShadeRows { get; } = [];
     public ObservableCollection<GameOptionViewModel> MfgRows { get; } = [];
     public ObservableCollection<GameOptionViewModel> RenoDxRows { get; } = [];
     public ObservableCollection<GameOptionViewModel> LecramRows { get; } = [];
+    public ObservableCollection<GameOptionViewModel> UpliftRows { get; } = [];
     public ObservableCollection<GameOptionViewModel> DfcRows { get; } = [];
     public ObservableCollection<GameOptionViewModel> NrRows { get; } = [];
     public ObservableCollection<GameOptionViewModel> TonemapRows { get; } = [];
     public ObservableCollection<GameOptionViewModel> HdrRows { get; } = [];
-    private IEnumerable<GameOptionViewModel> ConfigRows => ReShadeRows.Concat(MfgRows).Concat(RenoDxRows).Concat(LecramRows).Concat(DfcRows).Concat(NrRows).Concat(TonemapRows).Concat(HdrRows);
+    private IEnumerable<GameOptionViewModel> ConfigRows => ReShadeRows.Concat(MfgRows).Concat(RenoDxRows).Concat(LecramRows).Concat(UpliftRows).Concat(DfcRows).Concat(NrRows).Concat(TonemapRows).Concat(HdrRows);
     private bool _rowsBuilt;
 
     /// <summary>Built when the Game config tab first opens: most games never need them.</summary>
@@ -274,6 +329,7 @@ public sealed partial class GameViewModel : ObservableObject
         Fill(MfgRows, GameOptionViewModel.Definitions.Mfg, true);
         Fill(RenoDxRows, GameOptionViewModel.Definitions.RenoDx, true);
         Fill(LecramRows, GameOptionViewModel.Definitions.Lecram, true, () => EffectiveLecramGeneration);
+        Fill(UpliftRows, GameOptionViewModel.Definitions.Uplift, true);
         Fill(DfcRows, GameOptionViewModel.Definitions.Dfc, true);
         Fill(NrRows, GameOptionViewModel.Definitions.Nr, false);
         Fill(TonemapRows, GameOptionViewModel.Definitions.Tonemap, false);
@@ -350,6 +406,7 @@ public sealed partial class GameViewModel : ObservableObject
     {
         if (Driver is not null && Driver.Features != Features) Driver = null; // rebuilt with the new scan when the tab opens
         Info = info;
+        _pickedMod = null;
         _loading = true;
         var over = _s.Settings.Games.GetValueOrDefault(Id);
 
@@ -558,10 +615,11 @@ public sealed partial class GameViewModel : ObservableObject
         Set("opti", m?.Opti ?? true);
         Set("reshade", m?.ReShade ?? _s.Settings.InstallReShade);
         Set("mfg", m?.Mfg ?? _s.Settings.InstallMfgUnlock);
-        Set("dlssnr", m?.DlssNr ?? (_s.Settings.InstallDlssNr && (!IsReShadeOnly || _s.Settings.InstallRenoDx || _s.Settings.InstallLecram)));
+        Set("dlssnr", m?.DlssNr ?? (_s.Settings.InstallDlssNr && (!IsReShadeOnly || _s.Settings.InstallRenoDx || _s.Settings.InstallLecram || _s.Settings.InstallUplift)));
         Set("renodx", m?.RenoDx ?? _s.Settings.InstallRenoDx);
         Set("lecram", m?.Lecram ?? _s.Settings.InstallLecram);
         Set("dfc", m?.Dfc ?? false);
+        Set("uplift", m?.Uplift ?? _s.Settings.InstallUplift);
         Set("dlss", m?.Dlss ?? HasDlss); // nothing to replace in games that don't ship DLSS
         Set("streamline", m?.Streamline ?? (_s.Settings.InstallStreamline && HasStreamline));
         ApplyModeToRows();
@@ -593,14 +651,16 @@ public sealed partial class GameViewModel : ObservableObject
             mfgRow.State = RowState.Missing;
         }
         var nrPath = store.DlssNrFor(EffectiveNrId);
-        var gameNr = SelectedTarget is null ? null : Path.Combine(SelectedTarget.Dir, ComponentStore.DlssNrFile);
-        Row("dlssnr", gameNr is not null && File.Exists(gameNr) ? InstalledVersion(ComponentStore.DlssNrFile) : null,
+        var nrFile = m?.Uplift == true ? Path.Combine(ComponentStore.UpliftNrDir, ComponentStore.DlssNrFile) : ComponentStore.DlssNrFile;
+        var gameNr = SelectedTarget is null ? null : Path.Combine(SelectedTarget.Dir, nrFile);
+        Row("dlssnr", gameNr is not null && File.Exists(gameNr) ? InstalledVersion(nrFile) : null,
             File.Exists(nrPath) ? FileUtil.Format(FileUtil.ReadVersion(nrPath)) : null,
             gameNr is null || !File.Exists(gameNr) || (File.Exists(nrPath) && FileUtil.SameFile(gameNr, nrPath)));
         var sf = store.RenoDxBuildFor(EffectiveRenoDxId);
         var lecram = store.LecramBuildFor(EffectiveLecramId);
         Row("renodx", m?.RenoDx == true ? InstalledAddon(AddonKind.RenoDx, m.RenoDxId, m.RenoDxTag) : null, sf?.Name, sf is not null && sf.Matches(m?.RenoDxId, m?.RenoDxTag));
         Row("lecram", m?.Lecram == true ? InstalledAddon(AddonKind.Lecram, m.LecramId, m.LecramTag) : null, lecram?.Name, lecram is not null && lecram.Matches(m?.LecramId, m?.LecramTag));
+        Row("uplift", m?.Uplift == true ? m.UpliftTag : null, store.Uplift?.Tag, true);
         Row("dfc", m?.Dfc == true ? RenoDxVersionOf(m.DfcTag) : null, store.DfcVersion, m?.DfcTag == store.DfcTag);
         OnPropertyChanged(nameof(CanSwitchNr));
         OnPropertyChanged(nameof(CanUndoNr));
@@ -655,6 +715,7 @@ public sealed partial class GameViewModel : ObservableObject
         "dlssnr" => m.DlssNr,
         "renodx" => m.RenoDx,
         "lecram" => m.Lecram,
+        "uplift" => m.Uplift,
         "dfc" => m.Dfc,
         "streamline" => m.Streamline,
         _ => m.Dlss,
@@ -716,6 +777,7 @@ public sealed partial class GameViewModel : ObservableObject
         RenoDxId = EffectiveRenoDxId,
         Lecram = !dlssOnly && IsReShadeOnly && On("lecram") && !On("dfc"),
         LecramId = EffectiveLecramId,
+        Uplift = !dlssOnly && IsReShadeOnly && On("uplift"),
         Dfc = !dlssOnly && IsReShadeOnly && On("dfc"),
         Dlss = dlssOnly || On("dlss"),
         AddMissingDlss = _s.Settings.AddMissingDlss && !dlssOnly && !IsReShadeOnly && On("opti"),
@@ -742,6 +804,7 @@ public sealed partial class GameViewModel : ObservableObject
         RenoDxId = EffectiveRenoDxId,
         Lecram = m.Lecram,
         LecramId = EffectiveLecramId,
+        Uplift = m.Uplift,
         Dfc = m.Dfc,
         Dlss = m.Dlss,
         AddMissingDlss = m.Opti && m.Files.Any(f => Path.GetFileName(f).Equals("nvngx_dlss.dll", StringComparison.OrdinalIgnoreCase)),
@@ -759,5 +822,5 @@ public sealed partial class GameViewModel : ObservableObject
 
     private bool On(string key) => Components.First(c => c.Key == key).Enabled;
 
-    public bool NeedsInjection(InstallOptions o) => o.Opti || o.ReShade || o.Mfg || o.DlssNr || o.RenoDx || o.Lecram || o.Dfc;
+    public bool NeedsInjection(InstallOptions o) => o.Opti || o.ReShade || o.Mfg || o.DlssNr || o.RenoDx || o.Lecram || o.Dfc || o.Uplift;
 }
