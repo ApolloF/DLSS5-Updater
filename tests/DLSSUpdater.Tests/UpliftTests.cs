@@ -55,6 +55,57 @@ public sealed class UpliftTests : IDisposable
         writer.Write((ushort)machine);
     }
 
+    [Theory]
+    [InlineData(true, false, "4", "old")]
+    [InlineData(true, true, "2", "old")]
+    [InlineData(false, false, "2", null)]
+    public async Task IniModes_ResetOnlyUplift_AndKeepReShadeSettings(bool carryOver, bool overwrite, string passes, string? junk)
+    {
+        const string original = "[Uplift]\nPassCount=4\nJunk=old\n[GENERAL]\nPresetPath=mine.ini\n[OTHER]\nSetting=keep\n[RenoDX.DLSS5]\nJunk=foreign\n";
+        FileUtil.AtomicWriteText(G("ReShade.ini"), original);
+        await new Installer(_store).InstallAsync(_game, _root, Options with
+        {
+            CarryOverIni = carryOver, OverwriteIni = overwrite, ReShadeOverrides = [new(UpliftConfig.Section, "PassCount", "2")],
+        }, null, default);
+        var ini = Ini();
+        Assert.Equal(passes, ini.Get(UpliftConfig.Section, "PassCount"));
+        Assert.Equal("1", ini.Get(UpliftConfig.Section, "Enabled"));
+        Assert.Equal(junk, ini.Get(UpliftConfig.Section, "Junk"));
+        Assert.Equal("mine.ini", ini.Get("GENERAL", "PresetPath"));
+        Assert.Equal("keep", ini.Get("OTHER", "Setting"));
+        Assert.Equal("foreign", ini.Get(LecramIni.Section, "Junk"));
+        Assert.Null(DfcConfig.EffectSearchPathsFor(ini.Get("GENERAL", "EffectSearchPaths"), _root));
+        var m = Manifest();
+        var backup = Assert.Single(m.Backups, b => b.Original == "ReShade.ini");
+        Assert.Equal(original, File.ReadAllText(Path.Combine(InstallManifest.BackupDirFor(_root), backup.Backup)));
+        Assert.All(m.ReShadeIni, entry =>
+        {
+            var parts = entry.Key.Split('/');
+            Assert.Equal(entry.Value, ini.Get(parts[0], parts[1]));
+        });
+    }
+
+    [Fact]
+    public async Task FreshConfig_OnRouteSwitch_RemovesOldAddonKeysFromOwnedIni()
+    {
+        var src = Path.Combine(_tmp, ComponentStore.RenoDxFile);
+        FakeVersionDll.Write(src, new Version(0, 2026, 928, 306), ComponentStore.RenoDxFile);
+        _store.ImportRenoDx(src);
+        var installer = new Installer(_store);
+        await installer.InstallAsync(_game, _root, Options with
+        {
+            Uplift = false, ReShade = true, RenoDx = true,
+            ReShadeOverrides = [new(RenoDxIni.Section, "DirectNeuralRenderingHookStage", "1")],
+        }, null, default);
+        Assert.True(Manifest().Owns("ReShade.ini"));
+        await installer.InstallAsync(_game, _root, Options with { CarryOverIni = false }, null, default);
+        var m = Manifest();
+        Assert.DoesNotContain(m.Backups, b => b.Original == "ReShade.ini");
+        Assert.Null(Ini().Get(RenoDxIni.Section, "DirectNeuralRenderingHookStage"));
+        Assert.Equal("1", Ini().Get(UpliftConfig.Section, "Enabled"));
+        Assert.DoesNotContain($"{RenoDxIni.Section}/DirectNeuralRenderingHookStage", m.ReShadeIni.Keys);
+    }
+
     [Fact]
     public async Task Install_PlacesOnlyThe64BitSet_EnablesUplift_WritesOptionsAndTracksRuntime()
     {

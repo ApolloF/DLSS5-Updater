@@ -42,7 +42,7 @@ public sealed record InstallOptions
     /// <summary>DLSS release to install; null = latest (never downgrades a newer game DLL).</summary>
     public string? DlssTag { get; init; }
     public bool Streamline { get; init; }
-    /// <summary>False = fresh OptiScaler.ini from the release (old one backed up).</summary>
+    /// <summary>False = each installed mod starts from its defaults plus app settings (old configs backed up).</summary>
     public bool CarryOverIni { get; init; } = true;
     /// <summary>App settings replace values the game's config already has.</summary>
     public bool OverwriteIni { get; init; }
@@ -217,6 +217,12 @@ public sealed class Installer(ComponentStore store)
         {
             try
             {
+                // Save fresh mode's original before route changes can clean up any add-on keys.
+                var reShadeIni = Path.Combine(targetDir, "ReShade.ini");
+                if (!o.CarryOverIni && reshade is not null && File.Exists(reShadeIni)
+                    && !m.Owns(ctx.Rel(reShadeIni)) && m.BackupOf(ctx.Rel(reShadeIni)) is null)
+                    Backup(ctx, reShadeIni, "file", copy: true);
+
                 if (o.ReShadeOnly) RemoveOpti(ctx, o.Proxy, keepNr: dlssNr);
                 else if (m.Mode == InstallMode.ReShadeOnly && (pkg is not null || reshade is not null)) RemoveReShadeProxy(ctx, o.Proxy);
                 if (o.ReShadeOnly || pkg is not null) m.Mode = o.Mode;
@@ -394,8 +400,8 @@ public sealed class Installer(ComponentStore store)
     }
 
     /// <summary>
-    /// ReShade.ini sits next to ReShade64.dll. It is only patched: keys ReShade or the user wrote stay,
-    /// our profile keys are added or updated (unless the user changed them since we last wrote them).
+    /// ReShade.ini sits next to ReShade64.dll. ReShade's own settings stay; fresh mode clears the installed
+    /// add-ons' sections before applying our profile. Otherwise user edits are kept unless overwrite is selected.
     /// <paramref name="addonEffects"/>: Add-on effects go to reshade-shaders\Shaders, which EffectSearchPaths must cover.
     /// </summary>
     private static void WriteReShadeIni(Ctx ctx, InstallOptions o, bool addonEffects, LecramGeneration? lecramGen)
@@ -409,6 +415,14 @@ public sealed class Installer(ComponentStore store)
             .Where(x => o.Lecram || !LecramIni.IsLecram(x))
             .Where(x => o.Uplift || !UpliftConfig.IsUplift(x))
             .Where(x => !DfcConfig.IsDfc(x)).ToList();
+        // Without a version marker, NeuralUplift makes v11 treat even a fresh profile as v10 and reset its hook point.
+        if (!o.CarryOverIni && o.Lecram && lecramGen == LecramGeneration.V11 &&
+            profile.Any(x => LecramIni.IsLecram(x) && x.Key.Trim().Equals("NRHookPoint", StringComparison.OrdinalIgnoreCase)) &&
+            profile.Any(x => LecramIni.IsLecram(x) && x.Key.Trim().Equals("NeuralUplift", StringComparison.OrdinalIgnoreCase)))
+        {
+            profile.RemoveAll(x => LecramIni.IsLecram(x) && x.Key.Trim().Equals("ConfigVersion", StringComparison.OrdinalIgnoreCase));
+            profile.Add(new(LecramIni.Section, "ConfigVersion", "11"));
+        }
         // Uplift's default is off; written as a profile value so turning it off in the overlay later sticks.
         if (o.Uplift)
         {
@@ -430,8 +444,19 @@ public sealed class Installer(ComponentStore store)
 
         // Keys an earlier version wrote for the wrong add-on go, unless the user changed them since.
         var cleaned = IniFile.Parse(original ?? "");
+        var hadStale = false;
+        if (!o.CarryOverIni)
+        {
+            if (o.RenoDx)
+            {
+                hadStale |= cleaned.RemoveSection(RenoDxIni.Section);
+                hadStale |= cleaned.RemoveSection(RenoDxIni.PresetSection);
+            }
+            if (o.Lecram) hadStale |= cleaned.RemoveSection(LecramIni.Section);
+            if (o.Uplift) hadStale |= cleaned.RemoveSection(UpliftConfig.Section);
+        }
         // The section also held keys of a different add-on that older versions of this app wrote; Lecram's own keys stay.
-        var hadStale = !o.Lecram && DropWrittenKeys(cleaned, ctx.M.ReShadeIni, LecramIni.Section);
+        hadStale |= !o.Lecram && DropWrittenKeys(cleaned, ctx.M.ReShadeIni, LecramIni.Section);
         hadStale |= !o.Uplift && DropWrittenKeys(cleaned, ctx.M.ReShadeIni, UpliftConfig.Section);
         // Uplift saves Enabled=0 itself; until we have written Enabled once, that is its default, not the user's choice.
         if (o.Uplift && !ctx.M.ReShadeIni.ContainsKey($"{UpliftConfig.Section}/Enabled"))
@@ -443,7 +468,7 @@ public sealed class Installer(ComponentStore store)
         if (o.Lecram && !o.RenoDx && !explicitForeignNr)
             hadStale |= DropWrittenKeys(cleaned, ctx.M.ReShadeIni, LecramIni.Section, k => k.Equals(LecramIni.ForeignNrKey, StringComparison.OrdinalIgnoreCase));
         hadStale |= DropWrittenKeys(cleaned, ctx.M.ReShadeIni, RenoDxIni.Section, RenoDxIni.IsPresetKey);
-        if (o.Lecram && lecramGen == LecramGeneration.V11 &&
+        if (o.CarryOverIni && o.Lecram && lecramGen == LecramGeneration.V11 &&
             profile.Any(x => LecramIni.IsLecram(x) && x.Key.Trim().Equals("NRHookPoint", StringComparison.OrdinalIgnoreCase)))
             hadStale |= LecramIni.MigrateToV11(cleaned);
         var needsEffectPath = addonEffects && DfcConfig.EffectSearchPathsFor(cleaned.Get("GENERAL", "EffectSearchPaths"), ctx.Target) is not null;
@@ -564,9 +589,9 @@ public sealed class Installer(ComponentStore store)
     }
 
     /// <summary>
-    /// deep-fried-chicken.cfg: the imported default is copied when the game has none. The app's DFC options are merged
-    /// into it like into ReShade.ini, so keys the user tuned in the overlay stay unless this app set them last time.
-    /// A cfg that was already there is backed up before the first change.
+    /// deep-fried-chicken.cfg: fresh mode starts from the imported default, otherwise the game's cfg is kept.
+    /// The app's DFC options are merged in, preserving overlay edits unless overwrite is selected.
+    /// A cfg that was already there is backed up once, before the first change.
     /// </summary>
     private void WriteDfcConfig(Ctx ctx, InstallOptions o)
     {
@@ -581,10 +606,11 @@ public sealed class Installer(ComponentStore store)
             if (defaults is not null) Place(ctx, store.DfcConfigPath, path);
             return;
         }
-        if (exists && profile.Count == 0 && m.DfcCfg.Count == 0) return;
+        if (o.CarryOverIni && exists && profile.Count == 0 && m.DfcCfg.Count == 0) return;
 
         var original = exists ? File.ReadAllText(path) : null;
-        var merged = DfcConfig.Merge(original ?? defaults ?? "", original, defaults, profile, m.DfcCfg, o.OverwriteIni || !o.CarryOverIni);
+        var current = o.CarryOverIni ? original : null;
+        var merged = DfcConfig.Merge(current ?? defaults ?? "", current, defaults, profile, m.DfcCfg, o.OverwriteIni || !o.CarryOverIni);
         m.DfcCfg = merged.Applied;
         if (original == merged.Text) return;
         if (exists && !m.Owns(rel) && m.BackupOf(rel) is null) Backup(ctx, path, "file", copy: true);
