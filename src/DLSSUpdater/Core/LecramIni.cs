@@ -95,21 +95,18 @@ public static class LecramIni
     }
 }
 
-/// <summary>
-/// ShortFuse's renodx-dlss and Lecram's add-on were tested together on the 0928 build of ShortFuse's; newer builds
-/// crashed alongside it.
-/// </summary>
+/// <summary>Information about a pair's recorded test result; build versions do not imply compatibility.</summary>
 public static class LecramCompat
 {
-    /// <summary>Compared on major.minor.build: file version 0.2026.0928.x.</summary>
-    public static readonly Version TestedSfVersion = new(0, 2026, 928);
-
-    /// <summary>The warning for installing both add-ons with a ShortFuse build newer than the tested one; null otherwise.</summary>
-    public static string? Warning(bool renoDx, bool lecram, Version? shortFuse)
+    public static string? Message(bool renoDx, bool lecram, AddonPairTest? pair, string knownWorking)
     {
-        if (!renoDx || !lecram || shortFuse is null) return null;
-        if (new Version(shortFuse.Major, shortFuse.Minor, Math.Max(shortFuse.Build, 0)) <= TestedSfVersion) return null;
-        return $"ShortFuse renodx-dlss {FileUtil.Format(shortFuse)} is newer than the build tested with Lecram's add-on (0.2026.0928); " +
-               "newer builds crashed together with it. Import the 0928 build or install only one of them.";
+        if (!renoDx || !lecram) return null;
+        return pair?.Status switch
+        {
+            AddonPairStatus.Works => null,
+            AddonPairStatus.Crashed => $"This ShortFuse + Lecram pair crashed before (marked {(pair.Marked is { } date ? date.ToLocalTime().ToString("yyyy-MM-dd", System.Globalization.CultureInfo.InvariantCulture) : "date unknown")}). Pick another pair or install only one of them.",
+            _ => "This ShortFuse + Lecram pair hasn't been tested together yet. Known working: " +
+                 (string.IsNullOrWhiteSpace(knownWorking) ? "none recorded" : knownWorking) + ".",
+        };
     }
 }
