@@ -747,6 +747,9 @@
                                                 <Button DockPanel.Dock="Right" Style="{StaticResource InfoBtn}" CommandParameter="uplift"
                                                         Visibility="{Binding Key, Converter={StaticResource EqualsToVis}, ConverterParameter=uplift}"
                                                         ToolTip="{Binding Source=uplift, Converter={StaticResource HelpTip}}" AutomationProperties.Name="About GITC Uplift" />
+                                                <Button DockPanel.Dock="Right" Style="{StaticResource InfoBtn}" CommandParameter="dfc"
+                                                        Visibility="{Binding Key, Converter={StaticResource EqualsToVis}, ConverterParameter=dfc}"
+                                                        ToolTip="{Binding Source=dfc, Converter={StaticResource HelpTip}}" AutomationProperties.Name="About Deep Fried Chicken" />
                                                 <TextBlock Text="{Binding Name}" VerticalAlignment="Center" TextTrimming="CharacterEllipsis" ToolTip="{Binding Name}" />
                                             </DockPanel>
                                             <TextBlock Grid.Column="2" Text="{Binding Installed}" Style="{StaticResource Mono}" Foreground="{StaticResource Muted}" VerticalAlignment="Center" />
@@ -790,6 +793,18 @@
                                 </Grid>
                                 <TextBlock Text="{Binding SfLecramWarning}" Foreground="{StaticResource Warn}" TextWrapping="Wrap" FontSize="12" Margin="18,8,0,0"
                                            Visibility="{Binding HasSfLecramWarning, Converter={StaticResource BoolToVis}}" />
+                            </StackPanel>
+                            <!-- Deep Fried Chicken in a game without its own DLSS: what changes, and the DLSS-G runtime for its frame generation. -->
+                            <TextBlock Text="{Binding DfcNoDlssWarning}" Foreground="{StaticResource Warn}" TextWrapping="Wrap" FontSize="12" Margin="34,4,16,12"
+                                       Visibility="{Binding HasDfcNoDlssWarning, Converter={StaticResource BoolToVis}}" />
+                            <StackPanel Margin="34,4,16,12" Visibility="{Binding ShowDfcNoDlssHint, Converter={StaticResource BoolToVis}}">
+                                <DockPanel>
+                                    <Button DockPanel.Dock="Right" Style="{StaticResource InfoBtn}" CommandParameter="dfc-no-dlss" VerticalAlignment="Top"
+                                            ToolTip="{Binding Source=dfc-no-dlss, Converter={StaticResource HelpTip}}" AutomationProperties.Name="About Deep Fried Chicken in games without DLSS" />
+                                    <TextBlock Text="{x:Static vm:GameViewModel.DfcNoDlssHint}" Style="{StaticResource MutedText}" TextWrapping="Wrap" FontSize="12" />
+                                </DockPanel>
+                                <CheckBox Content="Add nvngx_dlssg.dll for DFC's DLSS-G frame generation (RTX 40/50)" IsChecked="{Binding DfcFrameGen}" Margin="0,8,0,0"
+                                          ToolTip="NVIDIA's frame generation runtime from the DLSS release, placed beside the exe and removed with DFC. FSR 3.1 frame generation needs AMD's amd_fidelityfx_*_dx12.dll, which this app does not provide." />
                             </StackPanel>
                         </StackPanel>
                     </Border>
