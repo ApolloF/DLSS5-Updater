@@ -25,7 +25,7 @@ public sealed partial class MainViewModel : ObservableObject
         Log.TrimFile();
         var settings = AppSettings.Load();
         var gh = new GitHubClient { Token = settings.GitHubToken };
-        var store = new ComponentStore(gh, () => settings.IncludePrereleases) { AutoReShade = () => settings.AutoDownloadReShade };
+        var store = new ComponentStore(gh, () => settings.IncludePrereleases) { AutoReShade = () => settings.AutoDownloadReShade, SelectedDlssNr = () => settings.DlssNrId };
         S = new Services { Settings = settings, Store = store, Installer = new Installer(store) };
         Gh = gh;
         SettingsVm = new SettingsViewModel(this);
@@ -110,7 +110,7 @@ public sealed partial class MainViewModel : ObservableObject
 
     [ObservableProperty]
     [NotifyCanExecuteChangedFor(nameof(InstallCommand), nameof(DlssOnlyCommand), nameof(UninstallCommand),
-        nameof(RestoreDlssCommand), nameof(UpdateAllCommand), nameof(CheckUpdatesCommand), nameof(RescanCommand))]
+        nameof(RestoreDlssCommand), nameof(SwitchNrCommand), nameof(UndoNrCommand), nameof(UpdateAllCommand), nameof(CheckUpdatesCommand), nameof(RescanCommand))]
     private bool _isBusy;
 
     // component chips
@@ -137,6 +137,7 @@ public sealed partial class MainViewModel : ObservableObject
         foreach (var g in Games)
         {
             g.RebuildDlssChoices();
+            g.RefreshConfig();
             g.RefreshStatus();
         }
         CountUpdates();
@@ -170,6 +171,8 @@ public sealed partial class MainViewModel : ObservableObject
     public async Task InitializeAsync()
     {
         S.Store.AutoImport();
+        if (S.Settings.DlssNrId is null && S.Store.DlssNrVersions.FirstOrDefault() is { } nr)
+        { S.Settings.DlssNrId = nr.Id; S.Settings.Save(); }
         await RefreshLocalComponentsAsync();
 
         var cached = GameScanner.LoadCache();
@@ -200,7 +203,7 @@ public sealed partial class MainViewModel : ObservableObject
             : auto ? "auto" : "missing";
         // An imported ReShade doesn't follow releases, so there is nothing new to point at.
         ReShadeNews.Load(auto ? store.ReShade : null);
-        foreach (var g in Games) g.RefreshStatus();
+        foreach (var g in Games) { g.RebuildNrChoices(); g.RefreshStatus(); }
         CountUpdates();
     }
 
@@ -356,15 +359,18 @@ public sealed partial class MainViewModel : ObservableObject
         ReturnedToSettings?.Invoke();
     }
 
+    /// <summary>A preset was added, replaced or removed: every game's base list and the Settings preset list follow.</summary>
     public void RefreshPresets()
     {
-        foreach (var g in Games) g.RebuildPresetChoices();
+        foreach (var g in Games) g.RefreshConfig();
+        SettingsVm.RefreshPresetNames();
     }
 
     /// <summary>Every OptiScaler.ini key this app can write: profile, keybinds and friendly options.</summary>
     private IEnumerable<(string Section, string Key)> ManagedOptiKeys() =>
         S.Settings.IniOverrides.Select(o => (o.Section, o.Key))
             .Concat(S.Settings.Presets.SelectMany(p => p.Opti).Select(o => (o.Section, o.Key)))
+            .Concat(S.Settings.Games.Values.SelectMany(g => (g.Opti ?? []).Concat(g.Presets?.SelectMany(p => p.Opti) ?? [])).Select(o => (o.Section, o.Key)))
             .Concat(ConfigProfile.Recommended().Select(o => (o.Section, o.Key)))
             .Concat(ConfigProfile.Required(new InstallOptions { Opti = true, ReShade = true, DlssNr = true }).Select(o => (o.Section, o.Key)))
             .Concat(KeybindDef.Opti.Select(k => (k.Section, k.Key)))
@@ -429,6 +435,8 @@ public sealed partial class MainViewModel : ObservableObject
         DlssOnlyCommand.NotifyCanExecuteChanged();
         UninstallCommand.NotifyCanExecuteChanged();
         RestoreDlssCommand.NotifyCanExecuteChanged();
+        SwitchNrCommand.NotifyCanExecuteChanged();
+        UndoNrCommand.NotifyCanExecuteChanged();
     }
 
     [RelayCommand(CanExecute = nameof(CanRunOnGame))]
@@ -466,6 +474,30 @@ public sealed partial class MainViewModel : ObservableObject
     }
 
     [RelayCommand(CanExecute = nameof(CanRunOnInstalled))]
+    private Task SwitchNr() => ChangeNr(undo: false);
+
+    [RelayCommand(CanExecute = nameof(CanRunOnInstalled))]
+    private Task UndoNr() => ChangeNr(undo: true);
+
+    private Task ChangeNr(bool undo)
+    {
+        var g = SelectedGame;
+        if (g?.SelectedTarget is null || !g.CanSwitchNr) return Task.CompletedTask;
+        var id = undo ? g.Manifest?.PreviousDlssNrId : g.EffectiveNrId;
+        if (undo && id is null) return Task.CompletedTask;
+        return Run($"Switching NR for {g.Name}", async () =>
+        {
+            await S.Installer.SwitchDlssNrAsync(g.Info, g.SelectedTarget.Dir, id, _cts.Token);
+            if (undo)
+            {
+                S.Settings.For(g.Id).DlssNrId = id;
+                S.Settings.Save();
+            }
+            await RescanOne(g);
+        });
+    }
+
+    [RelayCommand(CanExecute = nameof(CanRunOnInstalled))]
     private async Task Uninstall()
     {
         var g = SelectedGame;
@@ -489,6 +521,61 @@ public sealed partial class MainViewModel : ObservableObject
             await S.Installer.RestoreDlssAsync(g.Info, g.SelectedTarget.Dir, _cts.Token);
             await RescanOne(g);
         });
+    }
+
+    // ---------- commands: game config ----------
+
+    /// <summary>Saves the selected game's effective config as a preset, for this game only or for all games.</summary>
+    [RelayCommand]
+    private void SaveGamePreset()
+    {
+        if (SelectedGame is not { } g) return;
+        if (Dialog.Prompt("Save as preset",
+                $"Saves {g.Name}'s settings, with the changes made for this game, under a name. The preset becomes the game's base and its own changes are cleared.",
+                g.PresetChoice?.Name ?? "My preset", "Only for this game (unticked: all games can use it)", true) is not { } answer) return;
+        var (name, gameOnly) = answer;
+        if (GameConfig.SavePreset(S.Settings, g.Id, name, gameOnly) is { } error)
+        {
+            Dialog.Show("Save as preset", error);
+            return;
+        }
+        S.Settings.Save();
+        RefreshPresets();
+        Log.Info($"Saved preset '{name}' ({(gameOnly ? "for " + g.Name : "all games")})");
+    }
+
+    [RelayCommand]
+    private void DeleteGamePreset()
+    {
+        if (SelectedGame is not { PresetChoice: { GameOnly: true, Name: { } name } } g) return;
+        if (!Dialog.Confirm("Delete preset", $"Delete '{name}'? {g.Name} falls back to the current settings.", "Delete", danger: true)) return;
+        GameConfig.DeleteLocalPreset(S.Settings, g.Id, name);
+        S.Settings.Save();
+        RefreshPresets();
+    }
+
+    [RelayCommand]
+    private void MakeGamePresetGlobal()
+    {
+        if (SelectedGame is not { PresetChoice: { GameOnly: true, Name: { } name } } g) return;
+        if (GameConfig.MakeGlobal(S.Settings, g.Id, name) is { } error)
+        {
+            Dialog.Show("Make global", error);
+            return;
+        }
+        S.Settings.Save();
+        RefreshPresets();
+        Log.Info($"Preset '{name}' is now available for all games");
+    }
+
+    [RelayCommand]
+    private void ResetGameConfig()
+    {
+        if (SelectedGame is not { } g) return;
+        if (!Dialog.Confirm("Reset game config", $"Remove every change made for {g.Name}? It follows its base again.", "Reset", danger: true)) return;
+        GameConfig.ResetLayer(S.Settings.For(g.Id));
+        S.Settings.Save();
+        g.RefreshConfig();
     }
 
     [RelayCommand]

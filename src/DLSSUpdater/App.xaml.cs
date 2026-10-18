@@ -10,33 +10,12 @@ public partial class App : Application
 {
     protected override void OnStartup(StartupEventArgs e)
     {
-        if (e.Args.Contains("--addon"))
-        {
-            // Seaglass add-on: no window, JSON-RPC on stdin/stdout until Seaglass lets go.
-            ShutdownMode = ShutdownMode.OnExplicitShutdown;
-            Task.Run(async () =>
-            {
-                try { await Addon.AddonServer.RunStdioAsync(); }
-                catch (Exception ex) { Log.Error("Add-on", ex); }
-                Dispatcher.Invoke(Shutdown);
-            });
-            base.OnStartup(e);
-            return;
-        }
         if (e.Args.Contains("--unregister-addon"))
         {
-            // Run by the uninstaller: only removes the Seaglass link when it points at this exe.
+            // Run by the uninstaller so stale Seaglass links from older versions get cleaned up; only removes the link when it points at this exe.
             ShutdownMode = ShutdownMode.OnExplicitShutdown;
             try { Addon.AddonRegistration.UnregisterIfThisExe(); }
             catch (Exception ex) { Log.Error("Disconnect from Seaglass", ex); }
-            Shutdown();
-            return;
-        }
-        if (e.Args.Contains("--register-addon"))
-        {
-            ShutdownMode = ShutdownMode.OnExplicitShutdown;
-            try { Addon.AddonRegistration.Register(); }
-            catch (Exception ex) { Log.Error("Connect to Seaglass", ex); }
             Shutdown();
             return;
         }

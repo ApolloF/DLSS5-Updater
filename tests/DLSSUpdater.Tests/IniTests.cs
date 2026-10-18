@@ -124,6 +124,19 @@ public class IniTests
         Assert.Equal("Delete", Hotkey.KeyName(0x2E));
     }
 
+    [Fact]
+    public void Remove_DeletesOnlyThatKeyLine()
+    {
+        var ini = IniFile.Parse("[A]\nx=1\ny=2\n[B]\nx=3\n");
+        Assert.True(ini.Remove("A", "x"));
+        Assert.False(ini.Remove("A", "x"));
+        Assert.False(ini.Remove("C", "x"));
+        Assert.Null(ini.Get("A", "x"));
+        Assert.Equal("2", ini.Get("A", "y"));
+        Assert.Equal("3", ini.Get("B", "x"));
+        Assert.Equal("[A]\ny=2\n[B]\nx=3\n", ini.ToString());
+    }
+
     [Theory]
     [InlineData("v310.9.1", "310.9.1")]
     [InlineData("1.1.5", "1.1.5")]

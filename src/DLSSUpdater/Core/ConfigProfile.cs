@@ -7,6 +7,9 @@ public sealed class IniOverride
     public string Section { get; set; } = "";
     public string Key { get; set; } = "";
     public string Value { get; set; } = "";
+    /// <summary>Only in a game layer: remove this key from the base profile instead of setting it.</summary>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
+    public bool Unset { get; set; }
 
     public IniOverride() { }
     public IniOverride(string section, string key, string value) => (Section, Key, Value) = (section, key, value);
@@ -55,6 +58,8 @@ public static class ConfigProfile
     public static List<IniOverride> RecommendedReShade() =>
     [
         new("OVERLAY", "TutorialProgress", "4"),
+        new("RENODX-DLSS", "DirectNeuralRenderingHookStage", "1"),
+        new("RENODX-DLSS", "DirectNeuralRenderingPassCount", "1"),
     ];
 
     public static ConfigPreset RecommendedPreset() =>
@@ -81,6 +86,18 @@ public static class ConfigProfile
         var ids = list.Select(x => x.Id).ToHashSet(StringComparer.OrdinalIgnoreCase);
         list.AddRange(Required(o).Where(r => !ids.Contains(r.Id)));
         return list;
+    }
+
+    /// <summary>
+    /// The base profile with a game's layer on top: layer entries replace base entries of the same key, and
+    /// <see cref="IniOverride.Unset"/> entries drop the key. Unset entries never reach <see cref="Merge"/>; a key
+    /// that disappears from the profile is handed back to the release's value there, if nobody touched it.
+    /// </summary>
+    public static List<IniOverride> Layer(IEnumerable<IniOverride> baseList, IEnumerable<IniOverride>? layer)
+    {
+        var over = layer?.ToList() ?? [];
+        var ids = over.Select(x => x.Id).ToHashSet(StringComparer.OrdinalIgnoreCase);
+        return [.. baseList.Where(b => !ids.Contains(b.Id)), .. over.Where(x => !x.Unset)];
     }
 
     private static bool IsAuto(string? v) => v is null || v.Equals("auto", StringComparison.OrdinalIgnoreCase);

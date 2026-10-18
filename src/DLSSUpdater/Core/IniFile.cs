@@ -79,6 +79,15 @@ public sealed partial class IniFile
         _lines.Insert(insertAt, $"{key}={value}");
     }
 
+    /// <summary>Deletes the key's line; false when it isn't there.</summary>
+    public bool Remove(string section, string key)
+    {
+        var idx = FindKey(section, key);
+        if (idx < 0) return false;
+        _lines.RemoveAt(idx);
+        return true;
+    }
+
     private int FindKey(string section, string key)
     {
         var (start, end) = FindSection(section);

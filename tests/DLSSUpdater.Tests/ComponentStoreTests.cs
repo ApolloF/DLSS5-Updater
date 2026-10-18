@@ -79,4 +79,31 @@ public class ComponentStoreTests
         Assert.DoesNotContain(gh.Requests, r => r.Contains("/main/"));
         Assert.False(ComponentStore.IsCached(Component.Dlss, "v310.2.0"));
     }
+
+    [Fact]
+    public async Task MaintainedSource_UsesApiCache_AndFallsBackToCacheOffline()
+    {
+        var offline = false;
+        var handler = new FakeGitHub(r =>
+        {
+            var url = r.RequestUri!.ToString();
+            if (offline) return new HttpResponseMessage(HttpStatusCode.ServiceUnavailable);
+            if (url.Contains(ComponentStore.OptiRepo + "/releases"))
+            {
+                var result = Json("""[{"tag_name":"v0.9.51","assets":[{"name":"OptiScaler-NR-v0.9.51.zip","browser_download_url":"https://example.invalid/package.zip"}]}]""");
+                result.Headers.ETag = new System.Net.Http.Headers.EntityTagHeaderValue("\"opti\"");
+                return result;
+            }
+            if (url.StartsWith("https://api.github.com/")) return Json("[]");
+            return new HttpResponseMessage(HttpStatusCode.NotFound);
+        });
+        var store = new ComponentStore(new GitHubClient(handler), () => true);
+        await store.RefreshAsync(default);
+        Assert.Equal("v0.9.51", store.Opti?.Tag);
+        offline = true;
+        await store.RefreshAsync(default);
+        Assert.Equal("v0.9.51", store.Opti?.Tag);
+        Assert.DoesNotContain(handler.Requests, r => r.Contains(ComponentStore.LegacyOptiRepo));
+        Assert.DoesNotContain(handler.Requests, r => r.Contains("nvngx_dlssnr.dll"));
+    }
 }

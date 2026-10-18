@@ -12,10 +12,19 @@ public sealed class GameOverride
     public string? Proxy { get; set; }
     /// <summary>DLSS release tag pinned for this game; null follows the global choice.</summary>
     public string? DlssTag { get; set; }
+    public string? DlssNrId { get; set; }
     /// <summary>Config preset used for this game; null uses the current settings.</summary>
     public string? Preset { get; set; }
     /// <summary>OptiScaler or ReShade-only for this game; null follows the default.</summary>
     public InstallMode? Mode { get; set; }
+    /// <summary>OptiScaler.ini changes for this game on top of its base (preset or current settings); null/empty inherits everything.</summary>
+    public List<IniOverride>? Opti { get; set; }
+    /// <summary>Same for ReShade.ini.</summary>
+    public List<IniOverride>? ReShade { get; set; }
+    /// <summary>keep | apply | fresh for this game; null follows the global choice.</summary>
+    public string? IniMode { get; set; }
+    /// <summary>Presets that only this game can use.</summary>
+    public List<ConfigPreset>? Presets { get; set; }
 }
 
 /// <summary>A named snapshot of the OptiScaler.ini and ReShade.ini settings (incl. keybinds and options).</summary>
@@ -55,6 +64,9 @@ public sealed class AppSettings
     public bool AutoDownloadReShade { get; set; } = true;
     public bool InstallMfgUnlock { get; set; } = true;
     public bool InstallDlssNr { get; set; } = true;
+    public bool InstallRenoDx { get; set; }
+    public string OptiSource { get; set; } = ComponentStore.OptiRepo;
+    public string? PreviousDlssNrId { get; set; }
     public bool AddMissingDlss { get; set; } = true;
     /// <summary>Legacy (1.0/1.1); false maps to IniMode "fresh".</summary>
     public bool CarryOverGameIni { get; set; } = true;
@@ -96,10 +108,21 @@ public sealed class AppSettings
     [JsonIgnore]
     public IEnumerable<ConfigPreset> AllPresets => [ConfigProfile.RecommendedPreset(), .. Presets];
 
+    /// <summary>The game's chosen preset; its own game-only presets are looked at before the global and built-in ones.</summary>
     public ConfigPreset? PresetFor(string gameId) =>
-        Games.GetValueOrDefault(gameId)?.Preset is { } name ? AllPresets.FirstOrDefault(p => p.Name == name) : null;
+        Games.GetValueOrDefault(gameId) is { Preset: { } name } g
+            ? g.Presets?.FirstOrDefault(p => p.Name == name) ?? AllPresets.FirstOrDefault(p => p.Name == name)
+            : null;
     /// <summary>DLSS release tag to install; null = latest.</summary>
     public string? DlssTag { get; set; }
+    public string? DlssNrId { get; set; }
+
+    public void SelectDlssNr(string id)
+    {
+        if (DlssNrId == id) return;
+        PreviousDlssNrId = DlssNrId;
+        DlssNrId = id;
+    }
 
     public GameOverride For(string gameId)
     {
@@ -119,8 +142,10 @@ public sealed class AppSettings
                     s.Games = new Dictionary<string, GameOverride>(s.Games, StringComparer.OrdinalIgnoreCase);
                     if (!s.CarryOverGameIni && s.IniMode == "keep") s.IniMode = "fresh";
                     s.CarryOverGameIni = true;
+                    var sourceMigrated = s.OptiSource == ComponentStore.LegacyOptiRepo;
+                    if (sourceMigrated) s.OptiSource = ComponentStore.OptiRepo;
                     s.Presets.RemoveAll(p => p.Name.Equals(ConfigProfile.RecommendedName, StringComparison.OrdinalIgnoreCase));
-                    if (s._legacyTokenRead) s.Save();
+                    if (s._legacyTokenRead || sourceMigrated) s.Save();
                     return s;
                 }
             }
@@ -161,8 +186,9 @@ public sealed class AppSettings
 [JsonSerializable(typeof(AppSettings))]
 [JsonSerializable(typeof(InstallManifest))]
 [JsonSerializable(typeof(List<GameInfo>))]
-[JsonSerializable(typeof(Dictionary<string, ApiCacheEntry>))]
+[JsonSerializable(typeof(ApiCacheEntry))]
 [JsonSerializable(typeof(List<GhRelease>))]
 [JsonSerializable(typeof(GhRelease))]
 [JsonSerializable(typeof(CachedComponent))]
+[JsonSerializable(typeof(NrVersion))]
 internal partial class JsonCtx : JsonSerializerContext;

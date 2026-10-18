@@ -24,6 +24,7 @@ public sealed partial class SettingsViewModel : ObservableObject
 
         ReShadeOptions = SettingsOptions.ReShade(ReShadeOverrides);
         MfgOptions = SettingsOptions.Mfg(ReShadeOverrides);
+        RenoDxOptions = SettingsOptions.RenoDx(ReShadeOverrides);
         NrOptions = SettingsOptions.Nr(Overrides);
         TonemapOptions = SettingsOptions.Tonemap(Overrides);
         HdrOptions = SettingsOptions.HdrOutput(Overrides);
@@ -39,10 +40,11 @@ public sealed partial class SettingsViewModel : ObservableObject
     public ObservableCollection<KeybindViewModel> ReShadeKeybinds { get; }
     public IReadOnlyList<IniOptionViewModel> ReShadeOptions { get; }
     public IReadOnlyList<IniOptionViewModel> MfgOptions { get; }
+    public IReadOnlyList<IniOptionViewModel> RenoDxOptions { get; }
     public IReadOnlyList<IniOptionViewModel> NrOptions { get; }
     public IReadOnlyList<IniOptionViewModel> TonemapOptions { get; }
     public IReadOnlyList<IniOptionViewModel> HdrOptions { get; }
-    public IEnumerable<IniOptionViewModel> AllOptions => ReShadeOptions.Concat(MfgOptions).Concat(NrOptions).Concat(TonemapOptions).Concat(HdrOptions);
+    public IEnumerable<IniOptionViewModel> AllOptions => ReShadeOptions.Concat(MfgOptions).Concat(RenoDxOptions).Concat(NrOptions).Concat(TonemapOptions).Concat(HdrOptions);
     public IReadOnlyList<OptionChoice> IniModes => SettingsOptions.IniModes;
 
     public OptionChoice IniMode
@@ -104,6 +106,11 @@ public sealed partial class SettingsViewModel : ObservableObject
             Views.Dialog.Show("Save preset", $"'{name}' is built in and can't be replaced. Pick another name.");
             return;
         }
+        if (GameConfig.GlobalNameError(Settings, name) is { } clash)
+        {
+            Views.Dialog.Show("Save preset", clash);
+            return;
+        }
         Settings.Presets.RemoveAll(p => p.Name.Equals(name, StringComparison.OrdinalIgnoreCase));
         Settings.Presets.Add(new ConfigPreset { Name = name, Opti = Copy(Overrides), ReShade = Copy(ReShadeOverrides) });
         Save();
@@ -128,6 +135,10 @@ public sealed partial class SettingsViewModel : ObservableObject
         ReloadPresets(null);
         _main.RefreshPresets();
     }
+
+    /// <summary>Re-reads the preset list after a game changed presets; keeps the selection if it still exists.</summary>
+    public void RefreshPresetNames() =>
+        ReloadPresets(SelectedPreset is { } sp && Settings.AllPresets.Any(p => p.Name == sp) ? sp : null);
 
     private void ReloadPresets(string? select)
     {
@@ -213,6 +224,38 @@ public sealed partial class SettingsViewModel : ObservableObject
         }
     }
 
+    public ObservableCollection<DlssChoice> NrChoices { get; } = [];
+    public DlssChoice? SelectedNr
+    {
+        get => NrChoices.FirstOrDefault(c => c.Tag == Settings.DlssNrId);
+        set
+        {
+            if (value?.Tag is null || value.Tag == Settings.DlssNrId) return;
+            Settings.SelectDlssNr(value.Tag);
+            Save();
+            _ = _main.RefreshLocalComponentsAsync();
+            OnPropertyChanged(nameof(SelectedNr));
+            OnPropertyChanged(nameof(SelectedNrHint));
+            OnPropertyChanged(nameof(DlssNrInfo));
+        }
+    }
+
+    /// <summary>Plain advice for the chosen NR build (known hashes only).</summary>
+    public string? SelectedNrHint => _main.S.Store.DlssNrVersions.FirstOrDefault(v => v.Id == Settings.DlssNrId)?.Hint;
+
+    [RelayCommand]
+    private void UndoNrDefault()
+    {
+        if (Settings.PreviousDlssNrId is not { } id) return;
+        SelectedNr = NrChoices.FirstOrDefault(c => c.Tag == id);
+    }
+
+    public bool InstallRenoDx
+    {
+        get => Settings.InstallRenoDx;
+        set { Settings.InstallRenoDx = value; Save(); }
+    }
+
     public string DlssNrInfo => Describe(_main.S.Store.DlssNrPath, _main.S.DlssNrSha, true);
     public string ReShadeInfo
     {
@@ -227,6 +270,33 @@ public sealed partial class SettingsViewModel : ObservableObject
     }
 
     public bool ReShadeImported => _main.S.Store.ReShadeImported;
+
+    public string RenoDxInfo
+    {
+        get
+        {
+            var store = _main.S.Store;
+            return store.RenoDxImported
+                ? "Imported  ·  " + Describe(store.RenoDxPath, HashCache.Get(store.RenoDxPath), false)
+                : $"Not imported. ShortFuse's {ComponentStore.RenoDxFile} isn't published on GitHub; get it from ShortFuse's RenoDX Discord and import it here.";
+        }
+    }
+
+    public bool RenoDxImported => _main.S.Store.RenoDxImported;
+
+    [RelayCommand]
+    private Task ImportRenoDx() => Import(ComponentStore.RenoDxFile, "RenoDX DLSS add-on|renodx-dlss.addon64;*.addon64");
+
+    [RelayCommand]
+    private async Task RemoveRenoDx()
+    {
+        try { _main.S.Store.RemoveRenoDxImport(); }
+        catch (IOException ex) { Log.Error("Could not remove the imported RenoDX add-on", ex); }
+        Log.Info($"Removed imported {ComponentStore.RenoDxFile}");
+        await _main.RefreshLocalComponentsAsync();
+        OnPropertyChanged(nameof(RenoDxInfo));
+        OnPropertyChanged(nameof(RenoDxImported));
+    }
 
     public bool AutoDownloadReShade
     {
@@ -262,7 +332,7 @@ public sealed partial class SettingsViewModel : ObservableObject
         if (!File.Exists(path) || sha is null) return "Not imported";
         var v = FileUtil.Format(FileUtil.ReadVersion(path));
         var size = new FileInfo(path).Length / 1048576.0;
-        var variant = known ? (ComponentStore.KnownDlssNr.TryGetValue(sha, out var n) ? n : "unknown build, hash not in INSTALL-DLSSNR.md") : null;
+        var variant = known ? (ComponentStore.KnownDlssNr.TryGetValue(sha, out var n) ? n : "Unverified build") : null;
         return $"{v}  ·  {size:0.0} MB  ·  SHA-256 {sha[..12]}…" + (variant is null ? "" : $"\n{variant}");
     }
 
@@ -363,6 +433,22 @@ public sealed partial class SettingsViewModel : ObservableObject
     private Task ImportDlssNr() => Import(ComponentStore.DlssNrFile, "nvngx_dlssnr.dll|nvngx_dlssnr.dll|DLL|*.dll");
 
     [RelayCommand]
+    private async Task ImportDlss()
+    {
+        var dlg = new OpenFileDialog { Title = "Import DLSS SR / RR / FG", Filter = "DLSS runtimes|nvngx_dlss.dll;nvngx_dlssd.dll;nvngx_dlssg.dll" };
+        if (dlg.ShowDialog() != true) return;
+        try
+        {
+            var release = await Task.Run(() => _main.S.Store.ImportDlss(dlg.FileName));
+            Settings.DlssTag = release.Tag;
+            Save();
+            Reload();
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or InvalidDataException)
+        { Log.Error("DLSS import failed", ex); Views.Dialog.Show("Import failed", ex.Message); }
+    }
+
+    [RelayCommand]
     private Task ImportReShade() => Import(ComponentStore.ReShadeFile, "ReShade (add-on build)|ReShade64.dll;dxgi.dll;*.dll");
 
     private async Task Import(string fileName, string filter)
@@ -372,12 +458,23 @@ public sealed partial class SettingsViewModel : ObservableObject
         try
         {
             await Task.Run(() => _main.S.Store.Import(dlg.FileName, fileName));
+            if (fileName == ComponentStore.DlssNrFile)
+            {
+                var id = FileUtil.Sha256(dlg.FileName);
+                Settings.SelectDlssNr(id);
+                Save();
+            }
+            Reload();
             await _main.RefreshLocalComponentsAsync();
             OnPropertyChanged(nameof(DlssNrInfo));
             OnPropertyChanged(nameof(ReShadeInfo));
             OnPropertyChanged(nameof(ReShadeImported));
+            OnPropertyChanged(nameof(RenoDxInfo));
+            OnPropertyChanged(nameof(RenoDxImported));
+            OnPropertyChanged(nameof(SelectedNrHint));
         }
-        catch (IOException ex) { Log.Error($"Import of {fileName} failed", ex); }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or InvalidDataException)
+        { Log.Error($"Import of {fileName} failed", ex); Views.Dialog.Show("Import failed", ex.Message); }
     }
 
     [RelayCommand]
@@ -397,32 +494,6 @@ public sealed partial class SettingsViewModel : ObservableObject
         _main.RescanCommand.Execute(null);
     }
 
-    // ---------- Seaglass ----------
-
-    [ObservableProperty] private bool _seaglassConnected = Addon.AddonRegistration.Registered;
-
-    public string SeaglassHint => SeaglassConnected
-        ? "Connected. With DLSS Updater turned on under Settings, Add-ons, Seaglass shows each game's DLSS version and puts DLSS back before a game starts when an update replaced it."
-        : Addon.AddonRegistration.SeaglassFound
-            ? "Show DLSS versions in Seaglass and put DLSS back automatically before a game starts (Seaglass builds with add-on support)."
-            : "Seaglass isn't on this PC. It's a game launcher that can use DLSS Updater as an add-on.";
-
-    [RelayCommand]
-    private void ToggleSeaglass()
-    {
-        try
-        {
-            if (SeaglassConnected) Addon.AddonRegistration.Unregister();
-            else Addon.AddonRegistration.Register();
-        }
-        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or InvalidOperationException)
-        {
-            Views.Dialog.Show("Seaglass", ex.Message);
-        }
-        SeaglassConnected = Addon.AddonRegistration.Registered;
-        OnPropertyChanged(nameof(SeaglassHint));
-    }
-
     [RelayCommand]
     private void OpenDataFolder() =>
         Process.Start(new ProcessStartInfo("explorer.exe", $"\"{AppPaths.Root}\"") { UseShellExecute = true });
@@ -435,10 +506,12 @@ public sealed partial class SettingsViewModel : ObservableObject
 
         ReloadPresets(SelectedPreset is { } sp && Settings.AllPresets.Any(p => p.Name == sp) ? sp : null);
 
+        NrChoices.Clear();
+        foreach (var nr in _main.S.Store.DlssNrVersions) NrChoices.Add(new DlssChoice(nr.Id, nr.Label));
         DlssChoices.Clear();
         var store = _main.S.Store;
         DlssChoices.Add(new DlssChoice(null, $"Latest{(store.Dlss is { } l ? " · " + l.Tag : "")}"));
-        foreach (var r in store.DlssReleases) DlssChoices.Add(new DlssChoice(r.Tag, r.Tag));
+        foreach (var r in store.DlssReleases.Concat(ComponentStore.CachedReleases(Component.Dlss)).DistinctBy(r => r.Tag)) DlssChoices.Add(new DlssChoice(r.Tag, r.Tag));
         if (Settings.DlssTag is { } t && DlssChoices.All(c => c.Tag != t)) DlssChoices.Add(new DlssChoice(t, t));
 
         RefreshEditors();

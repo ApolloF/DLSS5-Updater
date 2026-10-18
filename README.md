@@ -4,7 +4,7 @@ Windows app that keeps an OptiScaler-NR + ReShade + DLSS setup current across al
 
 It pulls the latest releases of:
 
-- [OptiScaler-DLSSNR-PreSR-Multipass](https://github.com/wilsjo2/OptiScaler-DLSSNR-PreSR-Multipass/releases) (standard package, prereleases included)
+- [OptiScaler-DLSSNR-PreSR-Multipass](https://github.com/ShyVortex/OptiScaler-DLSSNR-PreSR-Multipass/releases) (standard package, prereleases included)
 - [MFGAdaUnlock-RenoDx](https://github.com/mavismmg/MFGAdaUnlock-RenoDx/releases) (`renodx-mfgunlock.addon64`)
 - [NVIDIA DLSS](https://github.com/NVIDIA/DLSS) runtime DLLs: `nvngx_dlss.dll` (SR), `nvngx_dlssd.dll` (RR), `nvngx_dlssg.dll` (FG)
 - [NVIDIA Streamline](https://github.com/NVIDIA-RTX/Streamline) (optional, signed `sl.*.dll` set for Dynamic MFG)
@@ -23,7 +23,7 @@ Each [release](https://github.com/ApolloF/dlssupdater/releases/latest) has two b
 - **`DLSSUpdater-Setup-<version>.exe`**: installer. Installs for your user without admin rights (or for all users), adds a Start menu entry and an optional desktop icon, and has an uninstaller. Run a newer setup to update.
 - **`DLSSUpdater.exe`**: portable. A single self-contained exe; put it anywhere and run it.
 
-Both keep settings and downloads in `%LocalAppData%\DLSSUpdater`, so you can switch between them. Uninstalling keeps that folder and removes the Seaglass add-on link if it pointed at the installed copy.
+Both keep settings and downloads in `%LocalAppData%\DLSSUpdater`, so you can switch between them. Uninstalling keeps that folder and also removes a stale Seaglass add-on link left by older versions if it pointed at the installed copy.
 
 ## What an install does
 
@@ -65,15 +65,7 @@ ReShade is downloaded from reshade.me on the first install that needs it (add-on
 
 ## Seaglass add-on
 
-DLSS Updater also works as an add-on for [Seaglass](https://github.com/ApolloF/Seaglass) (formerly WaterLauncher). Add-on support is being reworked in Seaglass and lives on its [`feature/dlss-addon`](https://github.com/ApolloF/Seaglass/tree/feature/dlss-addon) branch for now; Seaglass 1.5 releases don't load add-ons.
-
-- Seaglass shows each game's DLSS and OptiScaler versions.
-- Before a game starts, DLSS Updater puts DLSS back when a game update replaced it.
-- A game's page in Seaglass can update DLSS, install OptiScaler (with your DLSS Updater settings), restore the original DLSS files or open DLSS Updater.
-
-To connect them, use *Settings → General → Connect to Seaglass*, or run `DLSSUpdater.exe --register-addon`. This writes `%LOCALAPPDATA%\Seaglass\addons\dlssupdater\addon.json` (or WaterLauncher's folder while an older WaterLauncher hasn't updated to Seaglass yet). Then turn it on in Seaglass under *Settings → Add-ons*. Seaglass pins this exe's hash, so it asks again after an update.
-
-Seaglass runs `DLSSUpdater.exe --addon`, which has no window and speaks JSON-RPC on stdin/stdout ([protocol](https://github.com/ApolloF/Seaglass/blob/feature/dlss-addon/docs/addon-protocol.md)). It never runs elevated. Games with anti-cheat that you haven't confirmed in DLSS Updater are left alone.
+Seaglass add-on support lives on the [`feature/seaglass-addon`](https://github.com/ApolloF/dlssupdater/tree/feature/seaglass-addon) branch until Seaglass ships add-on support. Releases of DLSS Updater no longer include it.
 
 ## Support
 
@@ -89,7 +81,7 @@ dotnet publish src/DLSSUpdater -c Release -o publish
 Produces a single self-contained `publish\DLSSUpdater.exe` (.NET 8, WPF), the portable build. The installer wraps it with [Inno Setup](https://jrsoftware.org/isinfo.php):
 
 ```
-iscc /DAppVersion=1.5.1 installer\DLSSUpdater.iss
+iscc /DAppVersion=1.9.0 installer\DLSSUpdater.iss
 ```
 
 Tagging `v*` (matching `<Version>` in the csproj) builds both on GitHub Actions and attaches them to a release.
@@ -99,3 +91,15 @@ Tagging `v*` (matching `<Version>` in the csproj) builds both on GitHub Actions 
 ## License
 
 DLSS Updater is released under the [MIT License](LICENSE). The third-party files it downloads and installs (OptiScaler, MFG Unlock, NVIDIA DLSS and Streamline, ReShade) and your own `nvngx_dlssnr.dll` keep their own licences.
+
+## DLSS 5 / NR library and maintained sources
+
+Import each `nvngx_dlssnr.dll` under **Settings → Local components**. Every build is kept side by side in `%LocalAppData%\DLSSUpdater\components\dlssnr`, including builds with the same version but different contents. Version numbers come from the DLL version resource; SHA-256 identifies the build. Existing single-file imports are retained automatically. NR is never downloaded or distributed by this app.
+
+Choose the global NR default in Settings, or choose a version on a game and press **Switch NR**. **Switch back** restores the previous game file; **Switch default back** restores the previous default. Changes to the default apply on the next install or update for games following it. Full uninstall still restores the game's original files. Downloaded DLSS SDK versions are also retained and available in the DLSS version picker, including offline.
+
+OptiScaler-NR now comes from [ShyVortex's maintained continuation](https://github.com/ShyVortex/OptiScaler-DLSSNR-PreSR-Multipass). Existing installs, cached releases and settings remain usable. The [janblade F5 fork](https://github.com/janblade/OptiScaler-F5-DLSSNR-Multipass) is an advanced alternative described in the research report; it is not an automatic source in this release.
+
+The optional **RenoDX DLSS add-on** is ShortFuse's `renodx-dlss.addon64` (neural rendering for ReShade). It isn't published on any official GitHub, so it is import-only: import it under **Settings → Local components**; only a file that names itself `renodx-dlss.addon64` is accepted. It works in ReShade-only mode (it replaces OptiScaler's NR, so the two never run together), with ReShade 6+ (full add-on support), an imported NR runtime and a game with native DLSS. The installer keeps other early-loaded add-ons, adds the add-on to `LoadFromDllMain`, moves older `renodx-dlssfix` / `renodx-dlss5` add-ons out of the way (restored on uninstall), and writes the options you pick in Settings to `[RENODX-DLSS]` in `ReShade.ini`. With OptiScaler-NR v0.9+, don't combine its built-in MFG unlock (`AdaMfgUnlock` / `AmpereMfgUnlock`) with the MFG Unlock add-on; the installer refuses that.
+
+[ShortFuse's openNR](https://github.com/clshortfuse/openNR) describes the FP16 compatibility builds for RTX 20/30/40, including **compat-fp16-310.9.16-cuda13.4.3**. Download or build the file yourself, extract `nvngx_dlssnr.dll`, and import it. Known stock/compat hashes for 310.8.0 and 310.9.16 are labelled; other builds are marked unverified. A matching version alone does not establish hardware compatibility.

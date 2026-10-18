@@ -1,6 +1,6 @@
 # DLSS Updater
 
-Windows desktop app that pulls the latest OptiScaler-NR, DLSS, MFG Unlock, Streamline and ReShade releases and installs them into the user's games. It also runs as a Seaglass add-on (`Addon/`).
+Windows desktop app that pulls the latest OptiScaler-NR, DLSS, MFG Unlock, Streamline and ReShade releases and installs them into the user's games. The Seaglass add-on lives on branch `feature/seaglass-addon`.
 
 ## Stack
 - Language/runtime: C# 12, .NET 8 (`net8.0-windows`, `win-x64`)
@@ -26,7 +26,7 @@ Windows desktop app that pulls the latest OptiScaler-NR, DLSS, MFG Unlock, Strea
 - `src/DLSSUpdater/Scan`: game discovery (launchers, Steam VDF) and inspection (DLSS dlls, exe ranking, anti-cheat)
 - `src/DLSSUpdater/ViewModels`: MVVM view models. `MainViewModel` owns the `Services` (settings, store, installer).
 - `src/DLSSUpdater/Views`: dialogs, converters, small WPF helpers
-- `src/DLSSUpdater/Addon`: the Seaglass add-on protocol (stdin/stdout JSON)
+- `src/DLSSUpdater/Addon`: only the `--unregister-addon` cleanup of stale Seaglass links (called by the uninstaller)
 - `tests/DLSSUpdater.Tests`: one file per area. Tests that touch disk point `AppPaths.Root` at a temp folder.
 
 ## Conventions

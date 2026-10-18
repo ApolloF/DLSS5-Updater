@@ -31,7 +31,8 @@ public sealed class CachedComponent
 /// <summary>Resolves the latest releases, downloads them once per tag and holds the user-supplied files.</summary>
 public sealed partial class ComponentStore
 {
-    public const string OptiRepo = "wilsjo2/OptiScaler-DLSSNR-PreSR-Multipass";
+    public const string LegacyOptiRepo = "wilsjo2/OptiScaler-DLSSNR-PreSR-Multipass";
+    public const string OptiRepo = "ShyVortex/OptiScaler-DLSSNR-PreSR-Multipass";
     public const string MfgRepo = "mavismmg/MFGAdaUnlock-RenoDx";
     public const string DlssRepo = "NVIDIA/DLSS";
     public const string StreamlineRepo = "NVIDIA-RTX/Streamline";
@@ -41,6 +42,11 @@ public sealed partial class ComponentStore
     public const string DlssNrFile = "nvngx_dlssnr.dll";
     public const string ReShadeFile = "ReShade64.dll";
     public const string MfgFile = "renodx-mfgunlock.addon64";
+    /// <summary>ShortFuse's DLSS add-on with neural rendering; import-only.</summary>
+    public const string RenoDxFile = "renodx-dlss.addon64";
+    /// <summary>Other ShortFuse-family add-ons that also inject NR or replaced the add-on earlier; never installed by this app.</summary>
+    public static readonly string[] LegacyRenoDxFiles = ["renodx-dlssfix.addon64"];
+    public static readonly string[] ForeignNrAddons = ["renodx-dlssfix.addon64", "renodx-dlss5.addon64"];
     public static readonly string[] DlssFiles = ["nvngx_dlss.dll", "nvngx_dlssd.dll", "nvngx_dlssg.dll"];
 
     /// <summary>SHA-256 values published in the fork's INSTALL-DLSSNR.md.</summary>
@@ -48,6 +54,20 @@ public sealed partial class ComponentStore
     {
         ["e16bcf15e16e13f527491cdf7845b2fe6521a738d8f7c9c721866a8496e1fc8e"] = "NVIDIA original · RTX 50",
         ["e67dee209320cdafe0e93e45675d7aa34323a53acc57a72b2e40a181581c989a"] = "ShortFuse compat · RTX 20–50",
+        ["2bc19bc09a7b89dd44f73e2ac0108fcc586e2154bdd0830f242f4f040e28789f"] = "NVIDIA original · RTX 50",
+        ["cdfa6c1ec784867182164c7836f324f087b5c9f374d0c9fe46f54999feabf3ed"] = "ShortFuse compat · RTX 20–50 · CUDA 13.4.3",
+    };
+
+    private const string CompatHint = "Heavier on RTX 20/30: start with 1 pass and NR before upscaling.";
+    private const string OriginalHint = "RTX 50 only.";
+
+    /// <summary>Plain advice per known build, shown under the NR version picker.</summary>
+    public static readonly Dictionary<string, string> KnownDlssNrHints = new(StringComparer.OrdinalIgnoreCase)
+    {
+        ["e16bcf15e16e13f527491cdf7845b2fe6521a738d8f7c9c721866a8496e1fc8e"] = OriginalHint,
+        ["e67dee209320cdafe0e93e45675d7aa34323a53acc57a72b2e40a181581c989a"] = CompatHint,
+        ["2bc19bc09a7b89dd44f73e2ac0108fcc586e2154bdd0830f242f4f040e28789f"] = OriginalHint,
+        ["cdfa6c1ec784867182164c7836f324f087b5c9f374d0c9fe46f54999feabf3ed"] = CompatHint,
     };
 
     private readonly GitHubClient _gh;
@@ -87,7 +107,8 @@ public sealed partial class ComponentStore
         _ => Dlss,
     };
 
-    public string DlssNrPath => Path.Combine(AppPaths.Components, DlssNrFile);
+    public Func<string?> SelectedDlssNr { get; set; } = () => null;
+    public string DlssNrPath => DlssNrFor(SelectedDlssNr());
     /// <summary>A ReShade64.dll the user imported; it wins over the automatic download.</summary>
     public string ReShadePath => Path.Combine(AppPaths.Components, ReShadeFile);
     public bool ReShadeImported => File.Exists(ReShadePath);
@@ -291,24 +312,7 @@ public sealed partial class ComponentStore
     internal static void MarkComplete(Component c, ReleaseInfo r)
     {
         var meta = new CachedComponent { Tag = r.Tag, Prerelease = r.Prerelease, Published = r.Published, Fetched = DateTime.UtcNow };
-        File.WriteAllText(Path.Combine(TagDir(c, r.Tag), CompleteMarker), JsonSerializer.Serialize(meta, JsonCtx.Default.CachedComponent));
-        Prune(c, keep: c == Component.Dlss ? 4 : 2);
-    }
-
-    private static void Prune(Component c, int keep)
-    {
-        try
-        {
-            var dirs = Directory.EnumerateDirectories(ComponentDir(c))
-                .Select(d => new DirectoryInfo(d))
-                .OrderByDescending(d => File.Exists(Path.Combine(d.FullName, CompleteMarker))
-                    ? File.GetLastWriteTimeUtc(Path.Combine(d.FullName, CompleteMarker))
-                    : d.LastWriteTimeUtc)
-                .Skip(keep);
-            foreach (var d in dirs) d.Delete(true);
-        }
-        catch (IOException) { }
-        catch (UnauthorizedAccessException) { }
+        FileUtil.AtomicWriteText(Path.Combine(TagDir(c, r.Tag), CompleteMarker), JsonSerializer.Serialize(meta, JsonCtx.Default.CachedComponent));
     }
 
     // ---------- ensure (download + verify) ----------
@@ -563,6 +567,9 @@ public sealed partial class ComponentStore
 
     public void Import(string source, string fileName)
     {
+        if (fileName == DlssNrFile) { ImportDlssNr(source); return; }
+        if (fileName == RenoDxFile) { ImportRenoDx(source); return; }
+        if (fileName != ReShadeFile && fileName != MfgFile) throw new ArgumentException("Unsupported component.", nameof(fileName));
         Directory.CreateDirectory(AppPaths.Components);
         FileUtil.AtomicCopy(source, Path.Combine(AppPaths.Components, fileName));
         Log.Info($"Imported {fileName} from {source}");
@@ -571,16 +578,17 @@ public sealed partial class ComponentStore
     /// <summary>First run: pick up nvngx_dlssnr.dll / ReShade64.dll lying next to the exe.</summary>
     public void AutoImport()
     {
+        MigrateDlssNr();
         var dirs = new[] { Path.GetDirectoryName(Environment.ProcessPath), AppContext.BaseDirectory, Environment.CurrentDirectory }
             .Where(d => !string.IsNullOrEmpty(d)).Distinct(StringComparer.OrdinalIgnoreCase);
-        foreach (var file in new[] { DlssNrFile, ReShadeFile, MfgFile })
+        foreach (var file in new[] { DlssNrFile, ReShadeFile, MfgFile, RenoDxFile })
         {
             var dest = Path.Combine(AppPaths.Components, file);
-            if (File.Exists(dest)) continue;
+            if (File.Exists(dest) || (file == DlssNrFile && DlssNrVersions.Count > 0)) continue;
             var src = dirs.Select(d => Path.Combine(d!, file)).FirstOrDefault(File.Exists);
             if (src is null) continue;
             try { Import(src, file); }
-            catch (IOException ex) { Log.Error($"Auto-import of {file} failed", ex); }
+            catch (Exception ex) when (ex is IOException or InvalidDataException) { Log.Error($"Auto-import of {file} failed", ex); }
         }
     }
 }
