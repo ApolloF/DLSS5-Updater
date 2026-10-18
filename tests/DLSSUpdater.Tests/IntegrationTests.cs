@@ -77,6 +77,6 @@ public class IntegrationTests
         File.Delete(Path.Combine(target, "sl.interposer.dll"));
 
         await installer.UninstallAsync(GameScanner.Inspect(new GameEntry("G", game, "Manual")), target, default);
-        Assert.Equal(["G-Win64-Shipping.exe"], Directory.EnumerateFileSystemEntries(target).Select(Path.GetFileName).ToArray());
+        Assert.Equal(["G-Win64-Shipping.exe"], Directory.EnumerateFileSystemEntries(target).Select(f => Path.GetFileName(f)!).ToArray());
     }
 }
