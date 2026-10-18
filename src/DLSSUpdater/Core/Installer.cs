@@ -34,6 +34,11 @@ public sealed record InstallOptions
     public bool Dlss { get; init; }
     /// <summary>Put nvngx_dlss.dll next to OptiScaler when the game has none (independent of <see cref="Dlss"/>).</summary>
     public bool AddMissingDlss { get; init; }
+    /// <summary>
+    /// With <see cref="Dfc"/> in a game without its own DLSS: also put NVIDIA's nvngx_dlssg.dll beside the exe for DFC's
+    /// DLSS-G frame generation (INSTALL.txt 4.0.6). Ignored in games with native DLSS.
+    /// </summary>
+    public bool DfcFrameGen { get; init; }
     /// <summary>DLSS release to install; null = latest (never downgrades a newer game DLL).</summary>
     public string? DlssTag { get; init; }
     public bool Streamline { get; init; }
@@ -142,13 +147,15 @@ public sealed class Installer(ComponentStore store)
             throw new InvalidOperationException("The RenoDX DLSS add-on only works in ReShade-only mode: with OptiScaler-NR there would be two NR injectors.");
         if (o.RenoDx && (!o.ReShade || !dlssNr))
             throw new InvalidOperationException("RenoDX needs ReShade with add-on support and an imported NR runtime.");
-        if (o.RenoDx && !game.Features.HasFlag(GameFeatures.SR))
+        // DLSS files an earlier install of ours added (for DFC or OptiScaler) don't make the game a DLSS game.
+        var nativeDlss = (o.RenoDx || o.Lecram || o.Dfc) && HasNativeDlss(game, InstallManifest.Read(targetDir), targetDir);
+        if (o.RenoDx && !nativeDlss)
             throw new InvalidOperationException("RenoDX needs a game with native DLSS.");
         if (o.Lecram && !o.ReShadeOnly)
             throw new InvalidOperationException("Lecram's DLSS5 add-on only works in ReShade-only mode: with OptiScaler-NR there would be two NR injectors.");
         if (o.Lecram && (!o.ReShade || !dlssNr))
             throw new InvalidOperationException("Lecram's DLSS5 add-on needs ReShade with add-on support and an imported NR runtime.");
-        if (o.Lecram && !game.Features.HasFlag(GameFeatures.SR))
+        if (o.Lecram && !nativeDlss)
             throw new InvalidOperationException("Lecram's DLSS5 add-on needs a game with native DLSS.");
         if (o.Dfc && o.RenoDx)
             throw new InvalidOperationException("Deep Fried Chicken and the RenoDX DLSS add-on can't run together: pick one.");
@@ -158,15 +165,17 @@ public sealed class Installer(ComponentStore store)
             throw new InvalidOperationException("Deep Fried Chicken only works in ReShade-only mode: with OptiScaler-NR there would be two NR injectors.");
         if (o.Dfc && (!o.ReShade || !dlssNr))
             throw new InvalidOperationException("Deep Fried Chicken needs ReShade with add-on support and an imported NR runtime.");
-        if (o.Dfc && !game.Features.HasFlag(GameFeatures.SR))
-            throw new InvalidOperationException("Deep Fried Chicken needs a game with native DLSS. For other games use its own Chicken Assist feeder route.");
         var renoDx = o.RenoDx ? store.RequireAddon(AddonKind.RenoDx, o.RenoDxId) : null;
         var lecram = o.Lecram ? store.RequireAddon(AddonKind.Lecram, o.LecramId) : null;
         var dfc = o.Dfc ? store.RequireDfc() : null;
+        if (dfc is not null && !nativeDlss && !store.DfcSupportsNonDlssGames)
+            throw new InvalidOperationException(DfcNeedsNativeDlss(store.DfcVersion));
+        // INSTALL.txt: add your own nvngx_dlss.dll beside the game exe; DFC does not ship it. The game has none of its own here.
+        var dfcRuntimes = dfc is not null && !nativeDlss;
         var uplift = o.Uplift ? await store.EnsureUpliftAsync(o.UpliftTag, progress, ct) : null;
         if (o.Uplift && UpliftConfig.Warning(o.UpliftTag ?? store.Uplift?.Tag) is { } upliftWarning) Log.Warn($"{game.Name}: {upliftWarning}");
         var addMissing = o.AddMissingDlss && o.Opti;
-        var dlss = o.Dlss || addMissing ? await store.EnsureDlssAsync(o.DlssTag, progress, ct) : null;
+        var dlss = o.Dlss || addMissing || dfcRuntimes ? await store.EnsureDlssAsync(o.DlssTag, progress, ct) : null;
         var mfgPlan = o.Mfg ? PlanMfg(game, o, dlss, FileUtil.ParseTag(store.Streamline?.Tag)) : null;
         if (mfgPlan?.Skip is { } skip) Log.Info($"{game.Name}: MFG Unlock skipped. {skip}");
         foreach (var w in mfgPlan?.Warnings ?? []) Log.Warn($"{game.Name}: {w}");
@@ -283,6 +292,7 @@ public sealed class Installer(ComponentStore store)
                 {
                     DisplaceForeignNrAddons(ctx, [.. ComponentStore.RenoDxFamily, .. ComponentStore.DfcForeignFiles, .. ComponentStore.UpliftFiles, .. ComponentStore.LegacyUpliftFiles]);
                     PlaceDfc(ctx);
+                    PlaceDfcRuntimes(ctx, dfcRuntimes ? dlss : null, o.DfcFrameGen);
                     WriteDfcConfig(ctx, o);
                     m.Dfc = true;
                     m.DfcTag = store.DfcTag;
@@ -631,6 +641,7 @@ public sealed class Installer(ComponentStore store)
     {
         foreach (var full in OwnedDfcFiles(ctx).Append(Path.Combine(ctx.Target, ComponentStore.DfcConfigFile)))
             RemoveOwned(ctx, full);
+        RemoveDfcRuntimes(ctx, keep: []);
         // A cfg that was already there and changed by us is not owned, but its original is saved.
         if (ctx.M.BackupOf(ctx.Rel(Path.Combine(ctx.Target, ComponentStore.DfcConfigFile))) is { } b)
         {
@@ -641,6 +652,82 @@ public sealed class Installer(ComponentStore store)
         ctx.M.Dfc = false;
         ctx.M.DfcTag = null;
         Log.Info($"  {ComponentStore.DfcFile} removed");
+    }
+
+    /// <summary>
+    /// DFC in a game without its own DLSS: INSTALL.txt (4.0.6) asks for nvngx_dlss.dll beside the game exe, and for
+    /// nvngx_dlssg.dll there too when its DLSS-G frame generation is used; DFC ships neither. Both come from NVIDIA's DLSS
+    /// release (<paramref name="dlss"/>) and are kept current with it. Null <paramref name="dlss"/> (a game with native
+    /// DLSS) wants none. Runtimes placed earlier that are no longer wanted go; a copy we don't own is never touched.
+    /// </summary>
+    private static void PlaceDfcRuntimes(Ctx ctx, IReadOnlyDictionary<string, string>? dlss, bool frameGen)
+    {
+        string[] wanted = dlss is null ? [] : frameGen ? DfcRuntimeFiles : DfcRuntimeFiles[..1];
+        var placed = new List<string>();
+        foreach (var name in wanted)
+        {
+            var dest = Path.Combine(ctx.Target, name);
+            var rel = ctx.Rel(dest);
+            if (!dlss!.TryGetValue(name, out var src))
+            {
+                Log.Warn($"  {name}: not in the DLSS release, so Deep Fried Chicken can't get it here");
+                continue;
+            }
+            if (File.Exists(dest) && !ctx.M.Owns(rel))
+            {
+                Log.Info($"  {rel}: already there and not ours, left as is for Deep Fried Chicken");
+                continue;
+            }
+            if (!File.Exists(dest) || !FileUtil.SameFile(src, dest))
+            {
+                var had = File.Exists(dest);
+                Place(ctx, src, dest);
+                Log.Info($"  {(had ? "updated" : "added")} {rel} for Deep Fried Chicken ({FileUtil.Format(FileUtil.ReadVersion(src))})");
+            }
+            placed.Add(rel);
+        }
+        RemoveDfcRuntimes(ctx, keep: placed);
+        foreach (var rel in placed)
+            if (!ctx.M.DfcRuntimes.Contains(rel, StringComparer.OrdinalIgnoreCase)) ctx.M.DfcRuntimes.Add(rel);
+    }
+
+    /// <summary>nvngx_dlss.dll first: it is always wanted; nvngx_dlssg.dll only for frame generation.</summary>
+    private static readonly string[] DfcRuntimeFiles = ["nvngx_dlss.dll", "nvngx_dlssg.dll"];
+
+    /// <summary>Takes out the runtimes placed for DFC except <paramref name="keep"/>, restoring what they replaced.</summary>
+    private static void RemoveDfcRuntimes(Ctx ctx, IReadOnlyCollection<string> keep)
+    {
+        foreach (var rel in ctx.M.DfcRuntimes.Where(r => !keep.Contains(r, StringComparer.OrdinalIgnoreCase)).ToList())
+        {
+            if (ctx.M.Owns(rel)) Log.Info($"  removed {rel} (placed for Deep Fried Chicken)");
+            RemoveOwned(ctx, ctx.Full(rel));
+            ctx.M.DfcRuntimes.Remove(rel);
+        }
+    }
+
+    /// <summary>The refusal for an imported DFC older than 4.x in a game without its own DLSS.</summary>
+    internal static string DfcNeedsNativeDlss(string? version) =>
+        $"Deep Fried Chicken {version} needs a game with native DLSS. Import Deep Fried Chicken {ComponentStore.DfcNonDlssMajor}.x, which also supports games without their own DLSS.";
+
+    /// <summary>
+    /// Whether the game ships DLSS Super Resolution itself (nvngx_dlss.dll or Streamline's sl.dlss.dll), not counting the
+    /// copies an install of ours added beside the exe (for DFC, or OptiScaler's "add missing DLSS").
+    /// </summary>
+    public static bool HasNativeDlss(GameInfo game, InstallManifest? m, string targetDir) =>
+        game.Dlss.Concat(game.Streamline)
+            .Where(d => GameInfo.FeaturesOf([d], []).HasFlag(GameFeatures.SR))
+            .Any(d => m is null || !OwnedBy(m, d.Path, targetDir, game.Root));
+
+    private static bool OwnedBy(InstallManifest m, string path, string targetDir, string root)
+    {
+        if (string.IsNullOrEmpty(path)) return false;
+        // A DLSS update replaces the game's own file: ours now, but the backed-up original makes the game native.
+        try
+        {
+            var rel = InstallManifest.Entry(FileUtil.Normalize(path), FileUtil.Normalize(targetDir), FileUtil.Normalize(root));
+            return m.Owns(rel) && m.BackupOf(rel) is null;
+        }
+        catch (UnsafeManifestException) { return false; }
     }
 
     /// <summary>Another NR injector next to OptiScaler's DLSSNR would run the model twice: move the ones we don't own away.</summary>
@@ -992,7 +1079,9 @@ public sealed class Installer(ComponentStore store)
                 Restore(ctx, b);
                 m.Backups.Remove(b);
             }
-            foreach (var rel in m.Files.Where(f => ComponentStore.DlssFiles.Contains(Path.GetFileName(f), StringComparer.OrdinalIgnoreCase)).ToList())
+            // The runtimes placed for DFC are part of that install, not a DLSS update: they leave with DFC.
+            foreach (var rel in m.Files.Where(f => ComponentStore.DlssFiles.Contains(Path.GetFileName(f), StringComparer.OrdinalIgnoreCase)
+                                                   && !m.DfcRuntimes.Contains(f, StringComparer.OrdinalIgnoreCase)).ToList())
             {
                 TryDelete(ctx.Full(rel));
                 m.Files.Remove(rel);

@@ -64,6 +64,11 @@ public sealed class InstallManifest
     public string? DfcTag { get; set; }
     /// <summary>Values we wrote into deep-fried-chicken.cfg last time, keyed "DFC/key".</summary>
     public Dictionary<string, string> DfcCfg { get; set; } = new(StringComparer.OrdinalIgnoreCase);
+    /// <summary>
+    /// NVIDIA runtimes placed for DFC in a game without its own DLSS (nvngx_dlss.dll, and nvngx_dlssg.dll for its frame
+    /// generation), entries as in <see cref="Files"/>. They leave with DFC.
+    /// </summary>
+    public List<string> DfcRuntimes { get; set; } = [];
     public string? ReShadeSha { get; set; }
     public string? StreamlineTag { get; set; }
     public bool Streamline { get; set; }
