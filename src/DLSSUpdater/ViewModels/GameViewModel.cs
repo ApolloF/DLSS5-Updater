@@ -1,5 +1,6 @@
 using System.Collections.ObjectModel;
 using CommunityToolkit.Mvvm.ComponentModel;
+using CommunityToolkit.Mvvm.Input;
 using DLSSUpdater.Core;
 using DLSSUpdater.Scan;
 
@@ -97,8 +98,7 @@ public sealed partial class GameViewModel : ObservableObject
             OnPropertyChanged(nameof(RenoDxEnabled));
             OnPropertyChanged(nameof(LecramEnabled));
             OnPropertyChanged(nameof(BothAddonsEnabled));
-            OnPropertyChanged(nameof(HasSfLecramWarning));
-            OnPropertyChanged(nameof(SfLecramWarning));
+            RefreshAddonPairStatus();
             NotifyDfcHint();
             RefreshModPick();
         };
@@ -175,11 +175,8 @@ public sealed partial class GameViewModel : ObservableObject
 
     [ObservableProperty] private DlssChoice? _renoDxChoice;
     [ObservableProperty] private DlssChoice? _lecramChoice;
-    [ObservableProperty] private DlssChoice? _comboChoice;
     public ObservableCollection<DlssChoice> RenoDxChoices { get; } = [];
     public ObservableCollection<DlssChoice> LecramChoices { get; } = [];
-    /// <summary>"No combo" plus every saved combo whose two builds are in the library; Tag is the combo's name.</summary>
-    public ObservableCollection<DlssChoice> ComboChoices { get; } = [];
     /// <summary>The ShortFuse build this game installs: its own pick, else the default of the settings.</summary>
     public string? EffectiveRenoDxId => RenoDxChoice?.Tag ?? _s.Settings.RenoDxId;
     public string? EffectiveLecramId => LecramChoice?.Tag ?? _s.Settings.LecramId;
@@ -189,9 +186,39 @@ public sealed partial class GameViewModel : ObservableObject
     public bool LecramEnabled => On("lecram");
     public bool BothAddonsEnabled => RenoDxEnabled && LecramEnabled;
 
-    /// <summary>ShortFuse's build is newer than the one tested with Lecram's add-on; shown while both are enabled for this game.</summary>
-    public string? SfLecramWarning => _s.Store.SfLecramWarning(RenoDxEnabled, LecramEnabled, EffectiveRenoDxId);
-    public bool HasSfLecramWarning => SfLecramWarning is not null;
+    public string? SfLecramMessage => _s.Store.SfLecramMessage(RenoDxEnabled, LecramEnabled, EffectiveRenoDxId, EffectiveLecramId);
+    public bool HasSfLecramMessage => SfLecramMessage is not null;
+    public AddonPairStatus PairStatus => _s.Store.PairTestFor(EffectiveRenoDxId, EffectiveLecramId)?.Status ?? AddonPairStatus.Untested;
+    public bool IsPairCrashed => PairStatus == AddonPairStatus.Crashed;
+    public bool CanMarkAddonPair => BothAddonsEnabled && _s.Store.RenoDxBuildFor(EffectiveRenoDxId) is not null && _s.Store.LecramBuildFor(EffectiveLecramId) is not null;
+
+    public void RefreshAddonPairStatus()
+    {
+        OnPropertyChanged(nameof(SfLecramMessage));
+        OnPropertyChanged(nameof(HasSfLecramMessage));
+        OnPropertyChanged(nameof(PairStatus));
+        OnPropertyChanged(nameof(IsPairCrashed));
+        OnPropertyChanged(nameof(CanMarkAddonPair));
+        MarkPairWorkingCommand.NotifyCanExecuteChanged();
+        MarkPairCrashedCommand.NotifyCanExecuteChanged();
+    }
+
+    [RelayCommand(CanExecute = nameof(CanMarkAddonPair))]
+    private void MarkPairWorking() => MarkAddonPair(AddonPairStatus.Works);
+
+    [RelayCommand(CanExecute = nameof(CanMarkAddonPair))]
+    private void MarkPairCrashed() => MarkAddonPair(AddonPairStatus.Crashed);
+
+    private void MarkAddonPair(AddonPairStatus status)
+    {
+        try
+        {
+            _s.Store.MarkAddonPair(_s.Settings, EffectiveRenoDxId, EffectiveLecramId, status);
+            RefreshAddonPairStatus();
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        { Log.Error("Could not mark the ShortFuse + Lecram pair", ex); Views.Dialog.Show("Could not mark pair", ex.Message); }
+    }
 
     /// <summary>Deep Fried Chicken is ticked for a game that ships no DLSS of its own (copies an install of ours added don't count).</summary>
     public bool DfcWithoutNativeDlss => IsReShadeOnly && On("dfc") && !Installer.HasNativeDlss(Info, Manifest, SelectedTarget?.Dir ?? Root);
@@ -490,7 +517,7 @@ public sealed partial class GameViewModel : ObservableObject
         _loading = loading;
     }
 
-    /// <summary>The add-on dropdowns: "Use default" plus every library build, and the combos whose builds are both there.</summary>
+    /// <summary>The add-on dropdowns: "Use default" plus every library build.</summary>
     public void RebuildAddonChoices()
     {
         var loading = _loading;
@@ -498,17 +525,9 @@ public sealed partial class GameViewModel : ObservableObject
         var over = _s.Settings.Games.GetValueOrDefault(Id);
         RenoDxChoice = FillAddonChoices(RenoDxChoices, AddonKind.RenoDx, over?.RenoDxId);
         LecramChoice = FillAddonChoices(LecramChoices, AddonKind.Lecram, over?.LecramId);
-        ComboChoices.Clear();
-        ComboChoices.Add(new DlssChoice(null, "No combo"));
-        var renoDx = _s.Store.RenoDxBuilds;
-        var lecram = _s.Store.LecramBuilds;
-        foreach (var c in _s.Settings.AddonCombos.Where(c => renoDx.Any(b => b.Id == c.RenoDxId) && lecram.Any(b => b.Id == c.LecramId)))
-            ComboChoices.Add(new DlssChoice(c.Name, c.Name));
-        SyncComboChoice();
         _loading = loading;
         OnPropertyChanged(nameof(EffectiveLecramGeneration));
-        OnPropertyChanged(nameof(HasSfLecramWarning));
-        OnPropertyChanged(nameof(SfLecramWarning));
+        RefreshAddonPairStatus();
         if (_rowsBuilt) RefreshConfigRows();
     }
 
@@ -524,25 +543,11 @@ public sealed partial class GameViewModel : ObservableObject
         return list.FirstOrDefault(c => c.Tag == pin) ?? list[0];
     }
 
-    /// <summary>The combo display follows the two picks: it names a combo only while both builds are pinned to exactly its pair.</summary>
-    private void SyncComboChoice()
-    {
-        var wasLoading = _loading;
-        _loading = true;
-        var combo = RenoDxChoice?.Tag is { } sf && LecramChoice?.Tag is { } lecram
-            ? _s.Settings.AddonCombos.FirstOrDefault(c => c.RenoDxId == sf && c.LecramId == lecram && ComboChoices.Any(x => x.Tag == c.Name))
-            : null;
-        ComboChoice = ComboChoices.FirstOrDefault(c => c.Tag is not null && c.Tag == combo?.Name) ?? ComboChoices[0];
-        _loading = wasLoading;
-    }
-
     private void AddonPicksChanged()
     {
         _s.Settings.Save();
-        SyncComboChoice();
         OnPropertyChanged(nameof(EffectiveLecramGeneration));
-        OnPropertyChanged(nameof(HasSfLecramWarning));
-        OnPropertyChanged(nameof(SfLecramWarning));
+        RefreshAddonPairStatus();
         if (_rowsBuilt) RefreshConfigRows();
         RefreshStatus();
     }
@@ -558,21 +563,6 @@ public sealed partial class GameViewModel : ObservableObject
     {
         if (_loading) return;
         _s.Settings.For(Id).LecramId = value?.Tag;
-        AddonPicksChanged();
-    }
-
-    /// <summary>A combo sets both versions for this game; "No combo" goes back to the defaults.</summary>
-    partial void OnComboChoiceChanged(DlssChoice? value)
-    {
-        if (_loading || value is null) return;
-        var combo = value.Tag is null ? null : _s.Settings.AddonCombos.FirstOrDefault(c => c.Name == value.Tag);
-        var g = _s.Settings.For(Id);
-        g.RenoDxId = combo?.RenoDxId;
-        g.LecramId = combo?.LecramId;
-        _loading = true;
-        RenoDxChoice = RenoDxChoices.FirstOrDefault(c => c.Tag == g.RenoDxId) ?? RenoDxChoices[0];
-        LecramChoice = LecramChoices.FirstOrDefault(c => c.Tag == g.LecramId) ?? LecramChoices[0];
-        _loading = false;
         AddonPicksChanged();
     }
 
@@ -697,8 +687,7 @@ public sealed partial class GameViewModel : ObservableObject
         Row("dfc", m?.Dfc == true ? RenoDxVersionOf(m.DfcTag) : null, store.DfcVersion, m?.DfcTag == store.DfcTag);
         OnPropertyChanged(nameof(CanSwitchNr));
         OnPropertyChanged(nameof(CanUndoNr));
-        OnPropertyChanged(nameof(HasSfLecramWarning));
-        OnPropertyChanged(nameof(SfLecramWarning));
+        RefreshAddonPairStatus();
         NotifyDfcHint();
 
         var latest = LatestDlss;
