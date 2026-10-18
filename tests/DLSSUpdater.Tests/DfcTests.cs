@@ -107,6 +107,66 @@ public sealed class DfcTests : IDisposable
         Mode = InstallMode.ReShadeOnly, ReShade = true, RenoDx = true, DlssNr = true, DlssNrId = _nr.Id, Proxy = "dxgi.dll",
     };
 
+    [Theory]
+    [InlineData(true, false, "4.0", "old")]
+    [InlineData(true, true, "2.0", "old")]
+    [InlineData(false, false, "2.0", null)]
+    public async Task IniModes_FreshRebuildsImportedDefaultsPlusOptions_AndBacksUpEachReset(bool carryOver, bool overwrite, string passes, string? junk)
+    {
+        _store.ImportDfc(Release());
+        const string original = "config_schema=12\npasses=4.0\ncolor_strength=0.2\njunk=old\n";
+        File.WriteAllText(G(ComponentStore.DfcConfigFile), original);
+        const string reshade = "[GENERAL]\nPresetPath=mine.ini\n[OTHER]\nSetting=keep\n";
+        File.WriteAllText(G("ReShade.ini"), reshade);
+        var options = DfcWith(O("passes", "2.0")) with { CarryOverIni = carryOver, OverwriteIni = overwrite };
+        var installer = new Installer(_store);
+        await installer.InstallAsync(_game, _root, options, null, default);
+        var cfg = Cfg(G(ComponentStore.DfcConfigFile));
+        Assert.Equal(passes, cfg["passes"]);
+        Assert.Equal(junk, cfg.GetValueOrDefault("junk"));
+        Assert.Equal(reshade, File.ReadAllText(G("ReShade.ini")));
+        var m = InstallManifest.Read(_root)!;
+        Assert.All(m.DfcCfg, entry => Assert.Equal(entry.Value, cfg[entry.Key.Split('/')[1]]));
+        if (carryOver && !overwrite)
+        {
+            Assert.Empty(m.DfcCfg);
+            Assert.DoesNotContain(m.Backups, b => b.Original == ComponentStore.DfcConfigFile);
+            return;
+        }
+        var backup = Assert.Single(m.Backups, b => b.Original == ComponentStore.DfcConfigFile);
+        Assert.Equal(original, File.ReadAllText(Path.Combine(InstallManifest.BackupDirFor(_root), backup.Backup)));
+        if (carryOver) return;
+        Assert.Equal(DefaultCfg.Replace("passes=1.0", "passes=2.0"), File.ReadAllText(G(ComponentStore.DfcConfigFile)));
+        var beforeReset = File.ReadAllText(G(ComponentStore.DfcConfigFile)) + "junk=new tuning\n";
+        File.WriteAllText(G(ComponentStore.DfcConfigFile), beforeReset);
+        m.DfcCfg["DFC/junk"] = "new tuning";
+        m.Save(_root);
+        await installer.InstallAsync(_game, _root, options with { ReShadeOverrides = [] }, null, default);
+        Assert.Equal(DefaultCfg, File.ReadAllText(G(ComponentStore.DfcConfigFile)));
+        m = InstallManifest.Read(_root)!;
+        Assert.Empty(m.DfcCfg);
+        backup = Assert.Single(m.Backups, b => b.Original == ComponentStore.DfcConfigFile);
+        Assert.Equal(beforeReset, File.ReadAllText(Path.Combine(InstallManifest.BackupDirFor(_root), backup.Backup)));
+        await installer.UninstallAsync(_game, _root, default);
+        Assert.Equal(beforeReset, File.ReadAllText(G(ComponentStore.DfcConfigFile)));
+    }
+
+    [Fact]
+    public async Task FreshConfig_WithoutProfileOrPreviousWrittenKeys_StillResetsOwnedCfg()
+    {
+        _store.ImportDfc(Release());
+        var installer = new Installer(_store);
+        await installer.InstallAsync(_game, _root, Dfc(), null, default);
+        const string original = "passes=8\njunk=old\n";
+        File.WriteAllText(G(ComponentStore.DfcConfigFile), original);
+        await installer.InstallAsync(_game, _root, Dfc() with { CarryOverIni = false }, null, default);
+        Assert.Equal(DefaultCfg, File.ReadAllText(G(ComponentStore.DfcConfigFile)));
+        var m = InstallManifest.Read(_root)!;
+        Assert.Empty(m.DfcCfg);
+        var backup = Assert.Single(m.Backups, b => b.Original == ComponentStore.DfcConfigFile);
+        Assert.Equal(original, File.ReadAllText(Path.Combine(InstallManifest.BackupDirFor(_root), backup.Backup)));
+    }
+
     [Fact]
     public void Import_ValidatesTheAddonAndBridge_FromFileOrFolder()
     {

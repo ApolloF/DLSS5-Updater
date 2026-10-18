@@ -48,8 +48,9 @@ public static class HelpTopics
         new("add-missing", "General", "Add nvngx_dlss.dll when missing",
             "Games without DLSS (FSR/XeSS only) have no nvngx_dlss.dll. OptiScaler needs it to use DLSS as the upscaler, so it is placed next to the exe."),
         new("ini-mode", "General", "Existing game configs",
-            "What happens when a game already has an OptiScaler.ini or ReShade.ini. The app always remembers which values it wrote itself, " +
-            "and new keys from a new OptiScaler release are always added. Whatever is replaced is backed up first and Uninstall restores it."),
+            "The app remembers which config values it wrote itself. Fresh config rebuilds each installed mod's config from its defaults plus your settings: " +
+            "OptiScaler.ini from the release, the add-on's sections in ReShade.ini, and deep-fried-chicken.cfg from the import. " +
+            "ReShade's own settings stay. Old files are backed up first and Uninstall restores them."),
         new("presets", "General", "Presets and defaults",
             "Out of the box every setting is what the upstream projects ship: the release's OptiScaler.ini untouched, ReShade and MFG Unlock without an ini. " +
             "Only two keys are added because the components would otherwise do nothing: LoadReshade=true when ReShade is installed with OptiScaler and " +
@@ -368,7 +369,7 @@ public static class HelpTopics
                          "If FG disappears or the game crashes afterwards, use Restore DLSS on that game.",
         ["add-missing"] = "Leave on. It only adds a file to games that have none, and Uninstall removes it again.",
         ["ini-mode"] = "Keep game settings for everyday use: updates never undo tuning you did in-game. Apply app settings once after you changed something here and want " +
-                       "it everywhere, then switch back. Fresh config when a game's ini got messy or a new OptiScaler release changed a lot.",
+                       "it everywhere, then switch back. Fresh config when a mod's config got messy or a new release changed a lot.",
         ["local-components"] = "Import each nvngx_dlssnr.dll to keep it in the local library. Choose the default here or a version on a game, then use Switch NR. Switch back restores its previous file. No NR binary is downloaded by this app. The ShortFuse and Lecram add-ons keep a library too: import every build you want, pick the default, and name builds yourself.",
         ["keybinds"] = "Pick keys the game doesn't use: Delete, Insert, End, Page Up/Down and \\ are usually free. Avoid Home if you use ReShade's default overlay key.",
         ["skip-tutorial"] = "On, unless you are new to ReShade.",

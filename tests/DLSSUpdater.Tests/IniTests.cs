@@ -22,6 +22,17 @@ public class IniTests
         LoadReshade=auto
         """.ReplaceLineEndings("\n");
 
+    [Theory]
+    [InlineData("\n")]
+    [InlineData("\r\n")]
+    public void RemoveSection_RemovesAllOccurrencesCaseInsensitively_AndPreservesOtherSections(string newline)
+    {
+        var ini = IniFile.Parse("; header\n[GENERAL]\nKey = keep\n[Mod]\n; old\nJunk=1\n[Foreign]\nValue=stay\n[ mod ]\nJunk=2\n".Replace("\n", newline));
+        Assert.True(ini.RemoveSection("MOD"));
+        Assert.Equal("; header\n[GENERAL]\nKey = keep\n[Foreign]\nValue=stay\n".Replace("\n", newline), ini.ToString());
+        Assert.False(ini.RemoveSection("Mod"));
+    }
+
     [Fact]
     public void Set_ReplacesValue_KeepsCommentsAndSpacing()
     {
