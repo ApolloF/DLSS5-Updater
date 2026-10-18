@@ -196,10 +196,10 @@ OptiScaler-NR and Deep Fried Chicken. It is not added to `[ADDON] LoadFromDllMai
 - **ShortFuse next to Lecram.** With both installed the app writes `ForeignNr=observe` (otherwise Lecram yields), also over the
   `ForeignNr=yield` the add-on writes itself on first run, unless the profile sets `ForeignNr` explicitly. Lecram alone never gets
   the key, and an `observe` the app wrote is removed when ShortFuse's add-on goes.
-- **SF pin.** The tested pair is ShortFuse's `renodx-dlss` 0.2026.0928.x with Lecram. Installing both with a newer ShortFuse build
-  (compared on major.minor.build) logs a warning and shows one under Local components and on the game; the install is not blocked.
-  The warning looks at the ShortFuse build that game uses (its own pick, else the Settings default).
-- **Combos.** A combo is a named pair of one ShortFuse build and one Lecram build (Settings, Local components: "Save current pair as
-  combo"). A game can pick a combo, which sets both of its versions; changing either by hand clears the combo display. Once both
-  tested builds are in the library (ShortFuse 0.2026.928.x and a Lecram build labelled `v8.5.0-rc10...`), the combo
-  "SF 0928 + Lecram 0928 (tested)" is added once; deleting it keeps it deleted.
+- **Pair status.** ShortFuse's `renodx-dlss` 0.2026.0928.x with Lecram 0928 (v8.5.0-rc10) was tested working. A crash in
+  Werewulf with a newer SF build was not attributed to the add-ons. Results are recorded by both build ids in settings.json,
+  by build ids: Works shows no message, Untested shows neutral information with known working pairs, and
+  Crashed shows a dated warning. The installer logs Untested as information and Crashed as a warning; neither blocks installs.
+  Use "Mark as working" / "Mark as crashed" on the Install tab to persist a result for the exact selected
+  builds (including resolved defaults). Old saved data defaults to Untested; the seeded 0928 pair is Works. New SF versions
+  do not imply a crash. Changing the selected builds does not affect results recorded for other build pairs.

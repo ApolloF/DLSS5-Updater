@@ -25,10 +25,15 @@ public sealed partial class MainViewModel : ObservableObject
         Log.TrimFile();
         var settings = AppSettings.Load();
         var gh = new GitHubClient { Token = settings.GitHubToken };
-        var store = new ComponentStore(gh, () => settings.IncludePrereleases) { AutoReShade = () => settings.AutoDownloadReShade, SelectedDlssNr = () => settings.DlssNrId, SelectedRenoDx = () => settings.RenoDxId, SelectedLecram = () => settings.LecramId, OptiSourceRepo = () => settings.OptiSource };
+        var store = new ComponentStore(gh, () => settings.IncludePrereleases) { AutoReShade = () => settings.AutoDownloadReShade, SelectedDlssNr = () => settings.DlssNrId, SelectedRenoDx = () => settings.RenoDxId, SelectedLecram = () => settings.LecramId, PairTests = () => settings.AddonPairTests, OptiSourceRepo = () => settings.OptiSource };
         S = new Services { Settings = settings, Store = store, Installer = new Installer(store) };
         Gh = gh;
         SettingsVm = new SettingsViewModel(this);
+        store.PairStatusChanged += () =>
+        {
+            foreach (var game in Games) game.RefreshAddonPairStatus();
+            SettingsVm.RefreshAddonPairStatus();
+        };
         OptiNews = new ReleaseNewsViewModel(Component.OptiScaler, "OptiScaler-NR", settings);
         DlssNews = new ReleaseNewsViewModel(Component.Dlss, "DLSS", settings);
         UpliftNews = new ReleaseNewsViewModel(Component.Uplift, "GITC Uplift", settings);
@@ -194,7 +199,7 @@ public sealed partial class MainViewModel : ObservableObject
         var seen = S.Settings.NewestDlssNrSeen;
         if (store.AdoptNewerDlssNr(S.Settings) is { } newer) Log.Info($"DLSSNR default is now the newer {newer.Label}");
         var defaultsChanged = store.EnsureAddonDefaults(S.Settings);
-        if (store.SeedAddonCombos(S.Settings) | defaultsChanged | (S.Settings.NewestDlssNrSeen != seen)) S.Settings.Save();
+        if (store.SeedTestedAddonPair(S.Settings) | defaultsChanged | (S.Settings.NewestDlssNrSeen != seen)) S.Settings.Save();
         var rsPath = store.CurrentReShadePath;
         var (nr, rs) = await Task.Run(() => (
             File.Exists(store.DlssNrPath) ? HashCache.Get(store.DlssNrPath) : null,

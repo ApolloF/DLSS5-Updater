@@ -8,7 +8,7 @@ namespace DLSSUpdater.Tests;
 
 /// <summary>
 /// The libraries of ShortFuse's and Lecram's add-ons: storage, migration, labels, default and per-game choice, installs of the
-/// chosen build, combos and the options that follow a build's generation. Fixtures only: a copy of the test assembly with a
+/// chosen build and the options that follow a build's generation. Fixtures only: a copy of the test assembly with a
 /// version resource, or synthetic bytes; never real add-on or NVIDIA binaries.
 /// </summary>
 public sealed class AddonLibraryTests : IDisposable
@@ -31,6 +31,7 @@ public sealed class AddonLibraryTests : IDisposable
         Directory.CreateDirectory(_root);
         _store.SelectedRenoDx = () => _settings.RenoDxId;
         _store.SelectedLecram = () => _settings.LecramId;
+        _store.PairTests = () => _settings.AddonPairTests;
         FakeVersionDll.Write(_store.ReShadePath, new Version(6, 8, 0, 0), ComponentStore.ReShadeFile);
         var nr = Path.Combine(_tmp, "nr.dll");
         FakeVersionDll.Write(nr, new Version(310, 9, 16, 0), ComponentStore.DlssNrFile);
@@ -431,96 +432,6 @@ public sealed class AddonLibraryTests : IDisposable
         Assert.Equal("lecram-choice", fromOlderRecord.LecramId);
     }
 
-    // ---------- combos ----------
-
-    [Fact]
-    public void Combo_IsSeededOnceWhenTheTestedSfAndLecramBuildsAreBothInTheLibrary()
-    {
-        Assert.False(_store.SeedAddonCombos(_settings));
-        var sf = Sf(new Version(0, 2026, 928, 306));
-        Sf(new Version(0, 2026, 1016, 1704));
-        Assert.False(_store.SeedAddonCombos(_settings));
-        LecramV11("v7.5.0-rc2");
-        Assert.False(_store.SeedAddonCombos(_settings));
-        Assert.Empty(_settings.AddonCombos);
-
-        var lecram = LecramV11("v8.5.0-rc10-model-sdr1");
-        Assert.True(_store.SeedAddonCombos(_settings));
-        var combo = Assert.Single(_settings.AddonCombos);
-        Assert.Equal("SF 0928 + Lecram 0928 (tested)", combo.Name);
-        Assert.Equal(sf.Id, combo.RenoDxId);
-        Assert.Equal(lecram.Id, combo.LecramId);
-
-        Assert.False(_store.SeedAddonCombos(_settings));
-        _settings.AddonCombos.Clear();
-        Assert.False(_store.SeedAddonCombos(_settings));
-        Assert.Empty(_settings.AddonCombos);
-    }
-
-    [Fact]
-    public void Settings_KeepTheDefaultsPerGameChoicesAndCombosThroughJson()
-    {
-        var s = new AppSettings { RenoDxId = "sf", LecramId = "lec", TestedComboSeeded = true };
-        s.AddonCombos.Add(new AddonCombo { Name = "Pair", RenoDxId = "sf", LecramId = "lec" });
-        s.For("game").RenoDxId = "sf2";
-        s.For("game").LecramId = "lec2";
-        var back = JsonSerializer.Deserialize(JsonSerializer.Serialize(s, JsonCtx.Default.AppSettings), JsonCtx.Default.AppSettings)!;
-        Assert.Equal("sf", back.RenoDxId);
-        Assert.Equal("lec", back.LecramId);
-        Assert.True(back.TestedComboSeeded);
-        var combo = Assert.Single(back.AddonCombos);
-        Assert.Equal(("Pair", "sf", "lec"), (combo.Name, combo.RenoDxId, combo.LecramId));
-        Assert.Equal("sf2", back.Games["game"].RenoDxId);
-        Assert.Equal("lec2", back.Games["game"].LecramId);
-    }
-
-    [Fact]
-    public void GameCombo_SetsBothVersions_AndChangingEitherByHandClearsTheDisplay()
-    {
-        var sfA = Sf(new Version(0, 2026, 928, 306));
-        var sfB = Sf(new Version(0, 2026, 1016, 1704));
-        var lecA = LecramV11("v8.5.0-rc10-model-sdr1");
-        var lecB = LecramV10();
-        _settings.RenoDxId = sfB.Id;
-        _settings.LecramId = lecB.Id;
-        _settings.AddonCombos.Add(new AddonCombo { Name = "Pair", RenoDxId = sfA.Id, LecramId = lecA.Id });
-        _settings.AddonCombos.Add(new AddonCombo { Name = "Dangling", RenoDxId = sfA.Id, LecramId = new string('d', 64) });
-        var vm = NewGame();
-
-        Assert.Equal(["No combo", "Pair"], vm.ComboChoices.Select(c => c.Label));
-        Assert.Null(vm.ComboChoice!.Tag);
-        Assert.Equal(sfB.Id, vm.EffectiveRenoDxId);
-        Assert.Equal(lecB.Id, vm.EffectiveLecramId);
-
-        vm.ComboChoice = vm.ComboChoices.Single(c => c.Tag == "Pair");
-        Assert.Equal(sfA.Id, _settings.Games[vm.Id].RenoDxId);
-        Assert.Equal(lecA.Id, _settings.Games[vm.Id].LecramId);
-        Assert.Equal(sfA.Id, vm.EffectiveRenoDxId);
-        Assert.Equal(lecA.Id, vm.EffectiveLecramId);
-        Assert.Equal(sfA.Id, vm.RenoDxChoice!.Tag);
-        Assert.Equal("Pair", vm.ComboChoice!.Tag);
-        Assert.Equal("Pair", NewGameFor(vm.Id).ComboChoice!.Tag);
-
-        vm.RenoDxChoice = vm.RenoDxChoices.Single(c => c.Tag == sfB.Id);
-        Assert.Null(vm.ComboChoice!.Tag);
-        Assert.Equal(lecA.Id, _settings.Games[vm.Id].LecramId);
-        Assert.Equal(sfB.Id, _settings.Games[vm.Id].RenoDxId);
-
-        vm.ComboChoice = vm.ComboChoices.Single(c => c.Tag == "Pair");
-        vm.LecramChoice = vm.LecramChoices.Single(c => c.Tag == lecB.Id);
-        Assert.Null(vm.ComboChoice!.Tag);
-
-        var options = vm.BuildOptions(false, false);
-        Assert.Equal(vm.EffectiveRenoDxId, options.RenoDxId);
-        Assert.Equal(lecB.Id, options.LecramId);
-
-        vm.ComboChoice = vm.ComboChoices.Single(c => c.Tag == "Pair");
-        vm.ComboChoice = vm.ComboChoices[0];
-        Assert.Null(_settings.Games[vm.Id].RenoDxId);
-        Assert.Null(_settings.Games[vm.Id].LecramId);
-        Assert.Equal(sfB.Id, vm.EffectiveRenoDxId);
-    }
-
     private GameViewModel NewGameFor(string root) =>
         new(new GameInfo { Id = root, Root = root, Name = "VM game" }, new Services { Settings = _settings, Store = _store, Installer = new Installer(_store) });
 
@@ -542,36 +453,103 @@ public sealed class AddonLibraryTests : IDisposable
     // ---------- compat warning and options per game ----------
 
     [Fact]
-    public void SfWarning_UsesTheBuildSelectedForTheGame_NotJustTheDefault()
+    public void PairStatus_FollowsBothGameBuilds_AndMarkCommandsPersistTheResolvedDefaults()
     {
-        var tested = Sf(new Version(0, 2026, 928, 306));
+        var sf = Sf(new Version(0, 2026, 928, 306));
         var newer = Sf(new Version(0, 2026, 1016, 1704));
-        LecramV10();
-        _settings.RenoDxId = tested.Id;
+        var lecram = LecramV10();
+        var otherLecram = LecramV11();
+        _settings.RenoDxId = sf.Id;
+        _settings.LecramId = lecram.Id;
         var vm = NewGame();
         vm.Components.First(c => c.Key == "renodx").Enabled = true;
         vm.Components.First(c => c.Key == "lecram").Enabled = true;
-        Assert.True(vm.IsReShadeOnly);
-        Assert.Null(vm.SfLecramWarning);
-        Assert.Null(_store.SfLecramWarning(true, true, tested.Id));
+        Assert.Equal(AddonPairStatus.Untested, vm.PairStatus);
+        Assert.Contains("none recorded", vm.SfLecramMessage);
+        Assert.False(vm.IsPairCrashed);
+        Assert.True(vm.MarkPairWorkingCommand.CanExecute(null));
+        var changed = new List<string?>();
+        vm.PropertyChanged += (_, e) => changed.Add(e.PropertyName);
+
+        vm.MarkPairWorkingCommand.Execute(null);
+        Assert.Null(vm.SfLecramMessage);
+        Assert.Equal(AddonPairStatus.Works, vm.PairStatus);
+        Assert.Contains(nameof(vm.PairStatus), changed);
+        var saved = Assert.Single(AppSettings.Load().AddonPairTests);
+        Assert.Equal((sf.Id, lecram.Id, AddonPairStatus.Works), (saved.RenoDxId, saved.LecramId, saved.Status));
+        Assert.NotNull(saved.Marked);
 
         vm.RenoDxChoice = vm.RenoDxChoices.Single(c => c.Tag == newer.Id);
-        Assert.NotNull(vm.SfLecramWarning);
-        Assert.True(vm.HasSfLecramWarning);
-        Assert.Contains("0.2026.1016.1704", vm.SfLecramWarning);
-        Assert.NotNull(_store.SfLecramWarning(true, true, newer.Id));
+        Assert.Contains("hasn't been tested", vm.SfLecramMessage);
+        Assert.Contains(sf.Label, vm.SfLecramMessage);
+        vm.MarkPairCrashedCommand.Execute(null);
+        Assert.True(vm.IsPairCrashed);
+        Assert.Contains("crashed before (marked ", vm.SfLecramMessage);
+        Assert.Contains(_store.PairTestFor(newer.Id, lecram.Id)!.Marked!.Value.ToLocalTime().ToString("yyyy-MM-dd"), vm.SfLecramMessage);
+        Assert.Equal(2, AppSettings.Load().AddonPairTests.Count);
 
+        vm.LecramChoice = vm.LecramChoices.Single(c => c.Tag == otherLecram.Id);
+        Assert.False(vm.IsPairCrashed);
+        Assert.Equal(AddonPairStatus.Untested, vm.PairStatus);
+        vm.MarkPairWorkingCommand.Execute(null);
+        Assert.Null(vm.SfLecramMessage); // A newer SF build can be known working too.
+        Assert.Equal(AddonPairStatus.Crashed, _store.PairTestFor(newer.Id, lecram.Id)!.Status);
         vm.Components.First(c => c.Key == "lecram").Enabled = false;
-        Assert.Null(vm.SfLecramWarning);
-        Assert.Null(_store.SfLecramWarning(true, false, newer.Id));
+        Assert.Null(vm.SfLecramMessage);
+        Assert.False(vm.MarkPairCrashedCommand.CanExecute(null));
+    }
 
-        _settings.RenoDxId = newer.Id;
-        var other = NewGame("other-game");
-        other.Components.First(c => c.Key == "renodx").Enabled = true;
-        other.Components.First(c => c.Key == "lecram").Enabled = true;
-        Assert.NotNull(other.SfLecramWarning);
-        other.RenoDxChoice = other.RenoDxChoices.Single(c => c.Tag == tested.Id);
-        Assert.Null(other.SfLecramWarning);
+    [Fact]
+    public void Settings_LoadLegacyCombosAndKeepSeparateGameBuildChoices()
+    {
+        var old = JsonSerializer.Deserialize("""{"AddonCombos":[{"Name":"Pair","RenoDxId":"sf","LecramId":"lec"}],"TestedComboSeeded":true,"Games":{"game":{"RenoDxId":"sf-game","LecramId":"lec-game"}}}""", JsonCtx.Default.AppSettings)!;
+        Assert.Empty(old.AddonPairTests);
+        Assert.Equal("sf-game", old.Games["game"].RenoDxId);
+        Assert.Equal("lec-game", old.Games["game"].LecramId);
+        Assert.DoesNotContain("AddonCombos", JsonSerializer.Serialize(old, JsonCtx.Default.AppSettings));
+
+        Assert.Equal(AddonPairStatus.Untested, new AddonPairTest("sf", "lec").Status);
+        var sf = Sf(new Version(0, 2026, 928, 306));
+        var lecram = LecramV11("v8.5.0-rc10-model-sdr1");
+        Assert.True(_store.SeedTestedAddonPair(old));
+        Assert.Equal(AddonPairStatus.Works, Assert.Single(old.AddonPairTests).Status);
+        Assert.False(_store.SeedTestedAddonPair(old));
+        _store.MarkAddonPair(old, sf.Id, lecram.Id, AddonPairStatus.Crashed);
+        Assert.False(_store.SeedTestedAddonPair(old));
+        Assert.Equal(AddonPairStatus.Crashed, Assert.Single(old.AddonPairTests).Status);
+    }
+
+    [Fact]
+    public void PairStatus_ReplacesOnlyTheExactPair_AndSurvivesBuildRename()
+    {
+        var sf = Sf(new Version(0, 2026, 1016, 1704));
+        var lecram = LecramV10();
+        _store.MarkAddonPair(_settings, sf.Id, lecram.Id, AddonPairStatus.Crashed);
+        _store.MarkAddonPair(_settings, sf.Id.ToUpperInvariant(), lecram.Id.ToUpperInvariant(), AddonPairStatus.Works);
+        Assert.Single(_settings.AddonPairTests);
+        _settings.Save();
+        _store.RenameAddon(AddonKind.RenoDx, sf.Id, "My SF");
+        _store.RenameAddon(AddonKind.Lecram, lecram.Id, "My Lecram");
+        Assert.Contains("ShortFuse My SF + Lecram My Lecram", _store.KnownWorkingPairs);
+        Assert.Equal(AddonPairStatus.Works, Assert.Single(AppSettings.Load().AddonPairTests).Status);
+        Assert.Throws<FileNotFoundException>(() => _store.MarkAddonPair(_settings, new string('f', 64), lecram.Id, AddonPairStatus.Works));
+        Assert.Throws<ArgumentOutOfRangeException>(() => _store.MarkAddonPair(_settings, sf.Id, lecram.Id, (AddonPairStatus)100));
+    }
+
+    [Fact]
+    public void PairStatus_FailedSaveKeepsTheOldResult_AndDoesNotPublishAChange()
+    {
+        var sf = Sf(new Version(0, 2026, 1016, 1704));
+        var lecram = LecramV10();
+        _store.MarkAddonPair(_settings, sf.Id, lecram.Id, AddonPairStatus.Works);
+        var previous = Assert.Single(_settings.AddonPairTests);
+        var notified = false;
+        _store.PairStatusChanged += () => notified = true;
+        File.Delete(AppPaths.SettingsFile);
+        Directory.CreateDirectory(AppPaths.SettingsFile);
+        Assert.Throws<UnauthorizedAccessException>(() => _store.MarkAddonPair(_settings, sf.Id, lecram.Id, AddonPairStatus.Crashed));
+        Assert.Equal(previous, Assert.Single(_settings.AddonPairTests));
+        Assert.False(notified);
     }
 
     [Fact]

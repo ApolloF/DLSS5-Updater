@@ -35,7 +35,7 @@ public sealed partial class ComponentStore
         return build;
     }
 
-    /// <summary>Warning for installing the chosen ShortFuse build next to Lecram's add-on, or null when there is none.</summary>
-    public string? SfLecramWarning(bool renoDx, bool lecram, string? renoDxId) =>
-        renoDx && lecram && RenoDxBuildFor(renoDxId) is { } sf ? LecramCompat.Warning(renoDx, lecram, sf.ParsedVersion) : null;
+    /// <summary>Information for the exact chosen pair, or null when both add-ons are not selected.</summary>
+    public string? SfLecramMessage(bool renoDx, bool lecram, string? renoDxId, string? lecramId) =>
+        LecramCompat.Message(renoDx, lecram, PairTestFor(renoDxId, lecramId), KnownWorkingPairs);
 }
