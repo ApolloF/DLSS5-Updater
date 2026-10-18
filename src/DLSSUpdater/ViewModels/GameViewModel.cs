@@ -99,6 +99,7 @@ public sealed partial class GameViewModel : ObservableObject
             OnPropertyChanged(nameof(BothAddonsEnabled));
             OnPropertyChanged(nameof(HasSfLecramWarning));
             OnPropertyChanged(nameof(SfLecramWarning));
+            RefreshModPick();
         };
         Info = info;
         Load(info);
@@ -141,6 +142,7 @@ public sealed partial class GameViewModel : ObservableObject
         ApplyModeToRows();
         if (IsReShadeOnly && !On("renodx") && !On("lecram") && !On("dfc") && !On("uplift")) Components.First(c => c.Key == "dlssnr").Enabled = false;
         if (!ProxyNames.Contains(Proxy, StringComparer.OrdinalIgnoreCase)) Proxy = "dxgi.dll";
+        RefreshModPick();
         if (_loading) return;
         _s.Settings.For(Id).Mode = value == _s.Settings.DefaultMode ? null : value;
         _s.Settings.Save();
@@ -255,6 +257,57 @@ public sealed partial class GameViewModel : ObservableObject
         OnPropertyChanged(nameof(IniModeChoice));
     }
 
+    private ModChoice? _pickedMod;
+
+    private IReadOnlyList<ModChoice> _modChoices = ModPicker.Available(false);
+    public IReadOnlyList<ModChoice> ModChoices => _modChoices;
+
+    /// <summary>The mod whose options the Game config tab shows. Follows the NR route in use until the user picks one; not saved.</summary>
+    public ModChoice ModSelection
+    {
+        get => _pickedMod ?? ModPicker.Choice(ModChoices, DefaultMod);
+        set
+        {
+            if (value is null) return;
+            _pickedMod = value;
+            NotifyModShown();
+        }
+    }
+
+    private Mod DefaultMod => ModPicker.DefaultFor(IsReShadeOnly, On("uplift"), On("dfc"), On("lecram"), On("renodx"));
+
+    public bool ShowOptiNr => ModPicker.Shows(ModSelection.Mod, Mod.OptiScalerNr);
+    public bool ShowReShade => ModPicker.Shows(ModSelection.Mod, Mod.ReShade);
+    public bool ShowMfg => ModPicker.Shows(ModSelection.Mod, Mod.Mfg);
+    public bool ShowRenoDx => IsReShadeOnly && ModPicker.Shows(ModSelection.Mod, Mod.RenoDx);
+    public bool ShowLecram => IsReShadeOnly && ModPicker.Shows(ModSelection.Mod, Mod.Lecram);
+    public bool ShowDfc => IsReShadeOnly && ModPicker.Shows(ModSelection.Mod, Mod.Dfc);
+    public bool ShowUplift => IsReShadeOnly && ModPicker.Shows(ModSelection.Mod, Mod.Uplift);
+
+    /// <summary>Mode or ticks changed: keep the user's pick while that mod is still listed; otherwise follow the route.</summary>
+    private void RefreshModPick()
+    {
+        if (_modChoices.Count != ModPicker.Available(IsReShadeOnly).Count)
+        {
+            _modChoices = ModPicker.Available(IsReShadeOnly);
+            OnPropertyChanged(nameof(ModChoices));
+        }
+        if (_pickedMod is not null && !ModChoices.Contains(_pickedMod)) _pickedMod = null;
+        NotifyModShown();
+    }
+
+    private void NotifyModShown()
+    {
+        OnPropertyChanged(nameof(ModSelection));
+        OnPropertyChanged(nameof(ShowOptiNr));
+        OnPropertyChanged(nameof(ShowReShade));
+        OnPropertyChanged(nameof(ShowMfg));
+        OnPropertyChanged(nameof(ShowRenoDx));
+        OnPropertyChanged(nameof(ShowLecram));
+        OnPropertyChanged(nameof(ShowDfc));
+        OnPropertyChanged(nameof(ShowUplift));
+    }
+
     public ObservableCollection<GameOptionViewModel> ReShadeRows { get; } = [];
     public ObservableCollection<GameOptionViewModel> MfgRows { get; } = [];
     public ObservableCollection<GameOptionViewModel> RenoDxRows { get; } = [];
@@ -353,6 +406,7 @@ public sealed partial class GameViewModel : ObservableObject
     {
         if (Driver is not null && Driver.Features != Features) Driver = null; // rebuilt with the new scan when the tab opens
         Info = info;
+        _pickedMod = null;
         _loading = true;
         var over = _s.Settings.Games.GetValueOrDefault(Id);
 
