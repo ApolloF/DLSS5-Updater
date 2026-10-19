@@ -1103,6 +1103,30 @@ public class InstallerTests : IDisposable
         Assert.Equal(original, File.ReadAllText(path));
     }
 
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public async Task TwoInstallFolders_DlssOriginalsSurviveEitherUninstallOrder(bool firstInstallGoesFirst)
+    {
+        var other = Path.Combine(_root, "Other");
+        Write(Path.Combine(other, "Other.exe"), "EXE2");
+        var installer = new Installer(_store);
+        await installer.InstallAsync(Game(), _target, new InstallOptions { Dlss = true }, null, default);
+        SeedDlss("v310.10.0", "NEWER");
+
+        // The second install folder leaves the files the first one swapped to that install.
+        await installer.InstallAsync(Game(), other, new InstallOptions { Dlss = true }, null, default);
+        Assert.Equal("NEW-nvngx_dlss.dll", File.ReadAllText(Engine("nvngx_dlss.dll")));
+        Assert.Null(InstallManifest.Read(other)?.BackupOf(Rel(Engine("nvngx_dlss.dll"))));
+        await installer.InstallAsync(Game(), _target, new InstallOptions { Dlss = true }, null, default);
+        Assert.Equal("NEWER-nvngx_dlss.dll", File.ReadAllText(Engine("nvngx_dlss.dll")));
+
+        foreach (var dir in firstInstallGoesFirst ? new[] { _target, other } : [other, _target])
+            if (InstallManifest.Read(dir) is not null) await installer.UninstallAsync(Game(), dir, default);
+        Assert.Equal("OLD-SR", File.ReadAllText(Engine("nvngx_dlss.dll")));
+        Assert.Equal("OLD-FG", T("nvngx_dlssg.dll"));
+    }
+
     [Fact]
     public async Task ReadOnlyFiles_AreReplacedAndRestored()
     {

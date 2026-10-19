@@ -810,6 +810,7 @@ public sealed class Installer(ComponentStore store)
         var m = ctx.M;
         var scan = new GameInfo { Root = ctx.Root };
         GameInspector.Inspect(scan);
+        var claimed = ClaimedByOtherInstalls(ctx, scan);
         foreach (var dll in scan.Streamline)
         {
             var rel = ctx.Rel(dll.Path);
@@ -820,6 +821,7 @@ public sealed class Installer(ComponentStore store)
                 continue;
             }
             if (FileUtil.SameFile(src, dll.Path)) continue;
+            if (LeftToOtherInstall(ctx, claimed, dll.Path)) continue;
             var entry = m.BackupOf(rel);
             var ours = entry?.InstalledSha is { } s && s == HashCache.Get(dll.Path);
             Replace(ctx, src, dll.Path, ours ? null : "streamline");
@@ -837,6 +839,7 @@ public sealed class Installer(ComponentStore store)
         var m = ctx.M;
         var scan = new GameInfo { Root = ctx.Root };
         GameInspector.Inspect(scan);
+        var claimed = ClaimedByOtherInstalls(ctx, scan);
 
         foreach (var dll in replace ? scan.Dlss : [])
         {
@@ -846,6 +849,7 @@ public sealed class Installer(ComponentStore store)
             var rel = ctx.Rel(dll.Path);
             // Latest: only ever upgrade. Pinned: move to exactly that version, up or down.
             if (dll.Version is not null && newVer is not null && (exact ? dll.Version == newVer : dll.Version >= newVer)) continue;
+            if (LeftToOtherInstall(ctx, claimed, dll.Path)) continue;
 
             var srcSha = HashCache.Get(src);
             var entry = m.BackupOf(rel);
@@ -864,6 +868,39 @@ public sealed class Installer(ComponentStore store)
             Place(ctx, srSrc, dest);
             Log.Info($"  {(had ? "updated" : "added")} {ctx.Rel(dest)}");
         }
+    }
+
+    /// <summary>
+    /// Game files (by full path) another install folder of this game has placed or backed up, with that folder. Swapping
+    /// one from here would save that install's copy as the original, and uninstalling both would then lose the real one.
+    /// The swap scans the whole game (DLSS often sits in an engine folder, not beside the exe), so such files are left to
+    /// the install that holds them. A record that can't be read claims nothing; its own install refuses to run anyway.
+    /// </summary>
+    private static Dictionary<string, string> ClaimedByOtherInstalls(Ctx ctx, GameInfo scan)
+    {
+        var claimed = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+        foreach (var dir in scan.Installs.Select(FileUtil.Normalize).Where(d => !d.Equals(ctx.Target, StringComparison.OrdinalIgnoreCase)))
+        {
+            var other = InstallManifest.Load(dir);
+            if (other is null) continue;
+            try
+            {
+                other.Contain(dir, ctx.Root);
+                foreach (var entry in other.Files.Concat(other.Backups.Select(b => b.Original)))
+                    claimed.TryAdd(InstallManifest.Resolve(entry, dir, ctx.Root), dir);
+            }
+            catch (UnsafeManifestException ex) { Log.Warn(ex.Message); }
+        }
+        return claimed;
+    }
+
+    /// <summary>True when another install holds <paramref name="full"/> and this one has no claim on it.</summary>
+    private static bool LeftToOtherInstall(Ctx ctx, Dictionary<string, string> claimed, string full)
+    {
+        var rel = ctx.Rel(full);
+        if (ctx.M.Owns(rel) || ctx.M.BackupOf(rel) is not null || !claimed.TryGetValue(FileUtil.Normalize(full), out var dir)) return false;
+        Log.Info($"  {rel}: managed by the install in {dir}, left to it");
+        return true;
     }
 
     /// <summary>Puts <paramref name="src"/> at <paramref name="dest"/>, backing up anything we don't own.</summary>
