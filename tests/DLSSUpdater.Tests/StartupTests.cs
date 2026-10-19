@@ -96,28 +96,48 @@ public sealed class StartupTests : IDisposable
     }
 
     [Fact]
-    public async Task SecondInstance_IsRefused_UntilTheFirstEnds()
+    public void SecondInstance_IsRefused_UntilTheFirstEnds()
     {
         var name = @"Local\DLSSUpdater.Test." + Guid.NewGuid().ToString("N");
-        var first = SingleInstance.TryAcquire(name, TimeSpan.Zero);
+        // A mutex is re-entrant on its owning thread, so each "process" gets its own dedicated thread (pool threads
+        // can be reused by the next step and would re-enter the lock).
+        SingleInstance? first = null;
+        using var acquired = new ManualResetEventSlim();
+        using var end = new ManualResetEventSlim();
+        var firstThread = new Thread(() =>
+        {
+            first = SingleInstance.TryAcquire(name, TimeSpan.Zero);
+            acquired.Set();
+            end.Wait();
+        });
+        firstThread.Start();
+        acquired.Wait();
         Assert.NotNull(first);
 
-        // A mutex is re-entrant on its own thread; another process is modelled by another thread.
-        var second = await Task.Run(() =>
+        SingleInstance? second = null;
+        OnOwnThread(() =>
         {
-            var other = SingleInstance.TryAcquire(name, TimeSpan.Zero);
-            other?.Dispose();
-            return other;
+            second = SingleInstance.TryAcquire(name, TimeSpan.Zero);
+            second?.Dispose();
         });
         Assert.Null(second);
 
-        first.Dispose();
-        var third = await Task.Run(() =>
+        // The first instance ends: its thread exits without releasing, as a closing process does.
+        end.Set();
+        firstThread.Join();
+        SingleInstance? third = null;
+        OnOwnThread(() =>
         {
-            var other = SingleInstance.TryAcquire(name, TimeSpan.FromSeconds(5));
-            other?.Dispose();
-            return other;
+            third = SingleInstance.TryAcquire(name, TimeSpan.FromSeconds(5));
+            third?.Dispose();
         });
         Assert.NotNull(third);
+    }
+
+    private static void OnOwnThread(Action action)
+    {
+        var thread = new Thread(() => action());
+        thread.Start();
+        thread.Join();
     }
 }
