@@ -16,6 +16,7 @@ public static class HashCache
 
     public static string Get(string path)
     {
+        if (Demo.Active && Demo.HashOf(path) is { } demo) return demo;
         var fi = new FileInfo(path);
         var key = (fi.FullName.ToLowerInvariant(), fi.Length, fi.LastWriteTimeUtc);
         lock (Cache)
