@@ -70,6 +70,31 @@ public class BusyTests
     }
 
     [Fact]
+    public async Task LeaseTakenAtConstruction_KeepsCommandsOut_UntilStartupHasRun()
+    {
+        // MainViewModel takes the lease in its constructor and hands it to the startup run, so a command clicked while
+        // startup still loads caches is refused instead of the startup scan and update check.
+        var gate = new BusyGate();
+        var startup = gate.TryEnter()!;
+        var preload = new TaskCompletionSource();
+        var startupWork = Task.Run(async () =>
+        {
+            using (startup)
+            {
+                await preload.Task;
+                return !startup.Token.IsCancellationRequested;
+            }
+        });
+
+        Assert.Null(gate.TryEnter());
+        preload.SetResult();
+        Assert.True(await startupWork);
+        Assert.False(gate.IsBusy);
+        using var command = gate.TryEnter();
+        Assert.NotNull(command);
+    }
+
+    [Fact]
     public void Cancel_StopsOnlyTheCurrentRun()
     {
         var gate = new BusyGate();

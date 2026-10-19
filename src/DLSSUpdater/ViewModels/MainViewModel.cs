@@ -20,6 +20,8 @@ public sealed partial class MainViewModel : ObservableObject
     private readonly BusyGate _busy = new();
     /// <summary>Work asked for while another run was going; it starts when that run ends.</summary>
     private bool _refreshPending, _rescanPending;
+    /// <summary>Held from construction until <see cref="InitializeAsync"/> hands it to the startup run.</summary>
+    private BusyGate.Lease? _startup;
 
     public MainViewModel()
     {
@@ -31,6 +33,8 @@ public sealed partial class MainViewModel : ObservableObject
         S = new Services { Settings = settings, Store = store, Installer = new Installer(store) };
         Gh = gh;
         _busy.Changed += () => IsBusy = _busy.IsBusy;
+        // Busy from the start: no command may take the gate before the startup scan and update check have run.
+        _startup = _busy.TryEnter();
         SettingsVm = new SettingsViewModel(this);
         store.PairStatusChanged += () =>
         {
@@ -182,19 +186,24 @@ public sealed partial class MainViewModel : ObservableObject
 
     public async Task InitializeAsync()
     {
-        if (Demo.Active) Demo.Seed(S.Store, S.Settings);
-        else
-            await Task.Run(() =>
-            {
-                HashCache.Load();
-                S.Store.AutoImport();
-            });
-        await RefreshLocalComponentsAsync();
+        var lease = _startup;
+        _startup = null;
+        await Run("Starting", async ct =>
+        {
+            if (Demo.Active) Demo.Seed(S.Store, S.Settings);
+            else
+                await Task.Run(() =>
+                {
+                    HashCache.Load();
+                    S.Store.AutoImport();
+                });
+            await RefreshLocalComponentsAsync();
 
-        var cached = GameScanner.LoadCache();
-        if (cached.Count > 0) ApplyScan(cached);
+            var cached = GameScanner.LoadCache();
+            if (cached.Count > 0) ApplyScan(cached);
 
-        await Run("Starting", ct => Task.WhenAll(CheckUpdatesCore(ct), ScanCore(ct)));
+            await Task.WhenAll(CheckUpdatesCore(ct), ScanCore(ct));
+        }, lease);
         if (UpdateCount > 0) Log.Info($"{UpdateCount} game(s) have updates available");
         if (!Demo.Active) await Task.Run(HashCache.Save);
     }
@@ -728,9 +737,10 @@ public sealed partial class MainViewModel : ObservableObject
     });
 
     /// <summary>Runs one operation with the busy state, progress and error handling. Skipped when another run is going.</summary>
-    private async Task Run(string label, Func<CancellationToken, Task> work)
+    /// <param name="held">A lease the caller already holds (startup); otherwise one is taken here.</param>
+    private async Task Run(string label, Func<CancellationToken, Task> work, BusyGate.Lease? held = null)
     {
-        var lease = _busy.TryEnter();
+        var lease = held ?? _busy.TryEnter();
         if (lease is null)
         {
             Log.Info($"{label}: skipped, another task is still running");
