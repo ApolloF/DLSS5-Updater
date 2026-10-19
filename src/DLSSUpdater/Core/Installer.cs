@@ -822,8 +822,7 @@ public sealed class Installer(ComponentStore store)
             if (FileUtil.SameFile(src, dll.Path)) continue;
             var entry = m.BackupOf(rel);
             var ours = entry?.InstalledSha is { } s && s == HashCache.Get(dll.Path);
-            if (!ours) Backup(ctx, dll.Path, "streamline");
-            FileUtil.AtomicCopy(src, dll.Path);
+            Replace(ctx, src, dll.Path, ours ? null : "streamline");
             if (m.BackupOf(rel) is { } b) b.InstalledSha = HashCache.Get(src);
             Log.Info($"  {rel}: {FileUtil.Format(dll.Version)} → {FileUtil.Format(FileUtil.ReadVersion(src))}");
         }
@@ -851,8 +850,7 @@ public sealed class Installer(ComponentStore store)
             var srcSha = HashCache.Get(src);
             var entry = m.BackupOf(rel);
             var ours = m.Owns(rel) || (entry?.InstalledSha is { } s && s == HashCache.Get(dll.Path));
-            if (!ours) Backup(ctx, dll.Path, "dlss");
-            FileUtil.AtomicCopy(src, dll.Path);
+            Replace(ctx, src, dll.Path, ours ? null : "dlss");
             if (m.BackupOf(rel) is { } b) b.InstalledSha = srcSha;
             Log.Info($"  {rel}: {FileUtil.Format(dll.Version)} → {FileUtil.Format(newVer)}");
         }
@@ -872,13 +870,37 @@ public sealed class Installer(ComponentStore store)
     private static void Place(Ctx ctx, string src, string dest)
     {
         var rel = ctx.Rel(dest);
-        if (File.Exists(dest))
-        {
-            if (ctx.M.Owns(rel) && FileUtil.SameFile(src, dest)) return;
-            if (!ctx.M.Owns(rel)) Backup(ctx, dest, "file");
-        }
-        FileUtil.AtomicCopy(src, dest);
+        if (File.Exists(dest) && ctx.M.Owns(rel) && FileUtil.SameFile(src, dest)) return;
+        Replace(ctx, src, dest, ctx.M.Owns(rel) ? null : "file");
         ctx.M.AddFile(rel);
+    }
+
+    /// <summary>
+    /// Puts <paramref name="src"/> at <paramref name="dest"/> so the game never goes without the file: the copy is staged
+    /// beside it first, the original is saved to the backup (<paramref name="backupKind"/>; null = ours, not saved) and the
+    /// copy then takes its place in one rename. A failure leaves <paramref name="dest"/> and the record as they were.
+    /// </summary>
+    private static void Replace(Ctx ctx, string src, string dest, string? backupKind)
+    {
+        var tmp = FileUtil.StageCopy(src, dest);
+        var rel = ctx.Rel(dest);
+        var newBackup = backupKind is not null && File.Exists(dest) && ctx.M.BackupOf(rel) is null;
+        try
+        {
+            if (backupKind is not null && File.Exists(dest)) Backup(ctx, dest, backupKind, copy: true);
+            FileUtil.CommitStaged(tmp, dest);
+        }
+        catch
+        {
+            FileUtil.TryDeleteFile(tmp);
+            // The original never left. A backup entry made for this swap goes again; a reused one now holds that same original.
+            if (newBackup && ctx.M.BackupOf(rel) is { } b)
+            {
+                FileUtil.TryDeleteFile(Path.Combine(ctx.BackupDir, b.Backup));
+                ctx.M.Backups.Remove(b);
+            }
+            throw;
+        }
     }
 
     /// <summary>
@@ -970,6 +992,7 @@ public sealed class Installer(ComponentStore store)
         var backupRel = entry?.Backup ?? FreeBackupName(ctx, BackupName(rel));
         var dest = Path.Combine(ctx.BackupDir, backupRel);
         Directory.CreateDirectory(Path.GetDirectoryName(dest)!);
+        FileUtil.ClearReadOnly(dest);
         if (copy) File.Copy(full, dest, true);
         else File.Move(full, dest, true);
         if (entry is null) ctx.M.Backups.Add(new BackupEntry { Original = rel, Backup = backupRel, Kind = kind });
@@ -1120,18 +1143,16 @@ public sealed class Installer(ComponentStore store)
         // A game patch replaced the file we put in: the game's newer file stays and the stale original goes.
         if (b.InstalledSha is { } ours && File.Exists(dest) && !string.Equals(HashCache.Get(dest), ours, StringComparison.OrdinalIgnoreCase))
         {
-            File.Delete(src);
+            FileUtil.DeleteFile(src);
             Log.Info($"  {b.Original}: changed by the game since, kept");
             return;
         }
         Directory.CreateDirectory(Path.GetDirectoryName(dest)!);
+        FileUtil.ClearReadOnly(dest);
         File.Move(src, dest, true);
     }
 
-    private static void TryDelete(string path)
-    {
-        if (File.Exists(path)) File.Delete(path);
-    }
+    private static void TryDelete(string path) => FileUtil.DeleteFile(path);
 
     // ---------- checks ----------
 

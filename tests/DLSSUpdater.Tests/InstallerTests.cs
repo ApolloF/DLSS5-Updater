@@ -40,7 +40,13 @@ public class InstallerTests : IDisposable
 
     public void Dispose()
     {
-        try { Directory.Delete(_tmp, true); } catch (IOException) { }
+        try
+        {
+            // Tests lock files read-only the way users do; Directory.Delete refuses those.
+            foreach (var f in Directory.EnumerateFiles(_tmp, "*", SearchOption.AllDirectories)) File.SetAttributes(f, FileAttributes.Normal);
+            Directory.Delete(_tmp, true);
+        }
+        catch (IOException) { }
     }
 
     private static void Write(string path, string content)
@@ -1047,5 +1053,77 @@ public class InstallerTests : IDisposable
             new InstallManifest { Mode = InstallMode.ReShadeOnly, ReShade = true, RenoDx = true, Lecram = true }.ModLabel());
         Assert.Equal("ReShade + Uplift", new InstallManifest { Mode = InstallMode.ReShadeOnly, ReShade = true, Uplift = true }.ModLabel());
         Assert.Equal("OptiScaler + DFC + Streamline", new InstallManifest { Opti = true, Dfc = true, Streamline = true }.ModLabel());
+    }
+
+    // ---------- proxy changes, MFG removal, swap safety, read-only files ----------
+
+    private string Rel(string full) => Path.GetRelativePath(_root, full);
+
+    [Fact]
+    public async Task DlssSwap_CopyFails_GameKeepsItsDll_AndRetryWorks()
+    {
+        var dll = Engine("nvngx_dlss.dll");
+        // A folder where the staged copy goes makes the copy fail, as a full disk would.
+        Directory.CreateDirectory(dll + ".dlssu-tmp");
+        var installer = new Installer(_store);
+
+        await Assert.ThrowsAnyAsync<Exception>(() => installer.InstallAsync(Game(), _target, new InstallOptions { Dlss = true }, null, default));
+        Assert.Equal("OLD-SR", File.ReadAllText(dll));
+        Assert.Null(InstallManifest.Read(_target)?.BackupOf(Rel(dll)));
+
+        Directory.Delete(dll + ".dlssu-tmp");
+        await installer.InstallAsync(Game(), _target, new InstallOptions { Dlss = true }, null, default);
+        Assert.Equal("NEW-nvngx_dlss.dll", File.ReadAllText(dll));
+        await installer.UninstallAsync(Game(), _target, default);
+        Assert.Equal("OLD-SR", File.ReadAllText(dll));
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task Swap_FileInUse_LeavesOriginalAndRecordAsTheyWere(bool proxy)
+    {
+        var path = proxy ? Path.Combine(_target, "dxgi.dll") : Engine("nvngx_dlss.dll");
+        var original = File.ReadAllText(path);
+        var o = proxy ? new InstallOptions { Opti = true, Proxy = "dxgi.dll", Overrides = ConfigProfile.Recommended() } : new InstallOptions { Dlss = true };
+        var installer = new Installer(_store);
+
+        // Readable but not replaceable, like a file an antivirus scanner holds open.
+        using (new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.Read))
+            await Assert.ThrowsAnyAsync<Exception>(() => installer.InstallAsync(Game(), _target, o, null, default));
+        Assert.Equal(original, File.ReadAllText(path));
+        Assert.False(File.Exists(path + ".dlssu-tmp"));
+        var m = InstallManifest.Read(_target);
+        Assert.False(m?.Owns(Rel(path)) ?? false);
+        Assert.Null(m?.BackupOf(Rel(path)));
+
+        await installer.InstallAsync(Game(), _target, o, null, default);
+        Assert.NotEqual(original, File.ReadAllText(path));
+        await installer.UninstallAsync(Game(), _target, default);
+        Assert.Equal(original, File.ReadAllText(path));
+    }
+
+    [Fact]
+    public async Task ReadOnlyFiles_AreReplacedAndRestored()
+    {
+        var ini = Path.Combine(_target, "ReShade.ini");
+        Write(ini, "[GENERAL]\nX=1\n");
+        var dll = Engine("nvngx_dlss.dll");
+        File.SetAttributes(ini, FileAttributes.ReadOnly);
+        File.SetAttributes(dll, FileAttributes.ReadOnly);
+        var before = Snapshot();
+        var installer = new Installer(_store);
+
+        await installer.InstallAsync(Game(), _target, ReShadeOnly() with { Mfg = false, Dlss = true }, null, default);
+        Assert.Equal("4", IniFile.Load(ini).Get("OVERLAY", "TutorialProgress"));
+        Assert.Equal("NEW-nvngx_dlss.dll", File.ReadAllText(dll));
+        Assert.True(new FileInfo(ini).IsReadOnly);
+        Assert.False(File.Exists(ini + ".dlssu-tmp"));
+        // A file we placed and the user locked afterwards still goes on uninstall.
+        File.SetAttributes(Path.Combine(_target, "dxgi.dll"), FileAttributes.ReadOnly);
+
+        await installer.UninstallAsync(Game(), _target, default);
+        Assert.Equal(before, Snapshot());
+        Assert.True(new FileInfo(dll).IsReadOnly);
     }
 }
