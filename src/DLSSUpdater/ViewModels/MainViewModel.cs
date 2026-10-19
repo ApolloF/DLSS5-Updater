@@ -288,6 +288,9 @@ public sealed partial class MainViewModel : ObservableObject
 
     private bool CanRun() => !IsBusy;
 
+    /// <summary>The demo only knows its made-up games; a real folder would have no demo record to install into.</summary>
+    private bool CanAddGames() => !IsBusy && !Demo.Active;
+
     [RelayCommand(CanExecute = nameof(CanRun))]
     private Task CheckUpdates() => Run("Checking for updates", CheckUpdatesCore);
 
@@ -404,7 +407,7 @@ public sealed partial class MainViewModel : ObservableObject
         Log.Info(failed == 0 ? $"Updated {targets.Count} game(s)" : $"{failed} game(s) couldn't be updated. Details are in the log.");
     });
 
-    [RelayCommand(CanExecute = nameof(CanRun))]
+    [RelayCommand(CanExecute = nameof(CanAddGames))]
     private async Task AddGameFolder()
     {
         var dlg = new OpenFolderDialog { Title = "Select a game folder" };
@@ -433,7 +436,7 @@ public sealed partial class MainViewModel : ObservableObject
         });
     }
 
-    [RelayCommand(CanExecute = nameof(CanRun))]
+    [RelayCommand(CanExecute = nameof(CanAddGames))]
     private async Task AddLibraryRoot()
     {
         var dlg = new OpenFolderDialog { Title = "Select a folder that contains game folders" };

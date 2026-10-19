@@ -102,7 +102,7 @@ ReShade-only mode with ReShade 6+, a game with native DLSS and an imported `nvng
   and makes it the default.
 - **Label.** SF builds publish a file version, which is the detected label (for example `0.2026.928.306`). The user can give any
   build their own name in Settings (for example `SF 0928`); lists show that name, else `<file version> (<import date>)`.
-- **Selection.** Settings picks the default build; a game can pick its own ("Use default (...)" follows Settings). The install
+- **Selection.** Settings picks the default build; a game can pick its own ("Default (...)" follows Settings). The install
   records the build's id next to its tag, and automatic reinstalls keep the build that is installed.
 - **Options.** Each option's first choice, "Add-on default", writes nothing, so the add-on's own default (table above) applies.
   A switch (Off/On) in the app writes nothing for Off, which only fits keys whose default is off. `AutoMask` defaults to 1, so

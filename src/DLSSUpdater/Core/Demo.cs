@@ -46,7 +46,11 @@ public static class Demo
     {
         root ??= Path.Combine(Path.GetTempPath(), "DLSSUpdater-demo");
         if (!FileUtil.IsUnder(root, Path.GetTempPath())) throw new ArgumentException("The demo data folder must be under the temp folder.", nameof(root));
-        if (Directory.Exists(root)) Directory.Delete(root, true);
+        try { FileUtil.DeleteDirectory(root); }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            throw new IOException($"The demo data folder {root} is still in use, probably by another demo or a program that has a file in it open. Close it and start the demo again.", ex);
+        }
         AppPaths.Root = root;
         AppPaths.Ensure();
         Active = true;
