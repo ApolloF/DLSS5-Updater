@@ -488,6 +488,31 @@ public class InstallerTests : IDisposable
         Assert.Equal(before.OrderBy(k => k.Key), Snapshot().OrderBy(k => k.Key));
     }
 
+    [Theory]
+    [InlineData("dxgi.dll")]
+    [InlineData("winmm.dll")]
+    public async Task ReShadeOnly_ToOptiScalerModeWithoutOpti_DropsReShadeProxyAndMode(string proxy)
+    {
+        var before = Snapshot();
+        var installer = new Installer(_store);
+        await installer.InstallAsync(Game(), _target, ReShadeOnly(), null, default);
+        Assert.Equal("RESHADE", T("dxgi.dll"));
+
+        // OptiScaler mode with OptiScaler unticked: nothing may keep loading ReShade as the proxy.
+        await installer.InstallAsync(Game(), _target, new InstallOptions { ReShade = true, Proxy = proxy }, null, default);
+        Assert.Equal("OTHER-MOD", T("dxgi.dll"));
+        Assert.False(File.Exists(Path.Combine(_target, "winmm.dll")));
+        Assert.Equal("RESHADE", T("ReShade64.dll"));
+        var m = InstallManifest.Load(_target)!;
+        Assert.Equal(InstallMode.OptiScaler, m.Mode);
+        Assert.False(m.Opti);
+        Assert.True(m.ReShade);
+        Assert.Null(m.Proxy);
+
+        await installer.UninstallAsync(Game(), _target, default);
+        Assert.Equal(before.OrderBy(k => k.Key), Snapshot().OrderBy(k => k.Key));
+    }
+
     [Fact]
     public async Task SwitchingModes_LeavesNoStrayFiles()
     {

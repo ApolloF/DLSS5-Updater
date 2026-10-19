@@ -224,8 +224,13 @@ public sealed class Installer(ComponentStore store)
                     Backup(ctx, reShadeIni, "file", copy: true);
 
                 if (o.ReShadeOnly) RemoveOpti(ctx, o.Proxy, keepNr: dlssNr);
-                else if (m.Mode == InstallMode.ReShadeOnly && (pkg is not null || reshade is not null)) RemoveReShadeProxy(ctx, o.Proxy);
-                if (o.ReShadeOnly || pkg is not null) m.Mode = o.Mode;
+                else if (m.Mode == InstallMode.ReShadeOnly && (pkg is not null || reshade is not null))
+                {
+                    // Without OptiScaler taking over the proxy name, ReShade's proxy goes whatever its name: ReShade64.dll waits for a loader.
+                    RemoveReShadeProxy(ctx, pkg is not null ? o.Proxy : null);
+                    if (pkg is null) m.Proxy = null;
+                }
+                if (o.ReShadeOnly || pkg is not null || reshade is not null) m.Mode = o.Mode;
 
                 // Only a run that sets up the injectors drops the add-on; a DLSS-only update keeps it.
                 if (!o.RenoDx && m.RenoDx && (o.ReShade || pkg is not null)) RemoveRenoDx(ctx);
@@ -903,7 +908,7 @@ public sealed class Installer(ComponentStore store)
     }
 
     /// <summary>Switching back from ReShade-only: the ReShade proxy goes unless OptiScaler takes over the same name.</summary>
-    private static void RemoveReShadeProxy(Ctx ctx, string newProxy)
+    private static void RemoveReShadeProxy(Ctx ctx, string? newProxy)
     {
         if (ctx.M.Proxy is { } p && !p.Equals(newProxy, StringComparison.OrdinalIgnoreCase))
             RemoveOwned(ctx, Path.Combine(ctx.Target, p));
