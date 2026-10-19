@@ -44,16 +44,16 @@ public sealed partial class AddonLibraryViewModel : ObservableObject
     }
     public string LastResult => Settings.LecramLastResult;
 
-    private bool CanCheckNow() => CanCheckUpdates && AutoDownload;
+    private bool CanCheckNow() => CanCheckUpdates;
 
     [RelayCommand(CanExecute = nameof(CanCheckNow))]
     private async Task CheckNow()
     {
-        await _main.CheckLecramAsync();
+        await _main.CheckLecramAsync(force: true);
         await _changed();
     }
 
-    public string Title => IsRenoDx ? "ShortFuse RenoDX DLSS" : "Lecram DLSS5 Neural Rendering";
+    public string Title => IsRenoDx ? "ShortFuse RenoDX DLSS" : "Lecram DLSS5";
     public string FileNames => IsRenoDx ? ComponentStore.RenoDxFile : $"{ComponentStore.Lecram10File} (v10 and older) · {ComponentStore.Lecram11File} (v11 and newer)";
     public string AutomationName => $"Default {Title} version";
 
@@ -86,7 +86,7 @@ public sealed partial class AddonLibraryViewModel : ObservableObject
             if (SelectedBuild is not { } build)
                 return IsRenoDx
                     ? $"Not imported. ShortFuse's {ComponentStore.RenoDxFile} isn't published on GitHub; get it from ShortFuse's RenoDX Discord and import it here."
-                    : $"No builds yet. Check the author's public v11 channel or import your copy here ({ComponentStore.Lecram10File} for v10 and older, {ComponentStore.Lecram11File} for v11 and newer).";
+                    : $"No builds yet. Use Check now to fetch the latest v11 build, or import your own copy ({ComponentStore.Lecram10File} for v10 and older, {ComponentStore.Lecram11File} for v11 and newer).";
             var path = ComponentStore.AddonPathOf(_kind, build);
             var generation = build.Generation switch { LecramGeneration.V11 => "v11 and newer  ·  ", LecramGeneration.V10 => "v10 and older  ·  ", _ => "" };
             var size = File.Exists(path) ? $"{new FileInfo(path).Length / 1048576.0:0.0} MB  ·  " : "";
@@ -127,7 +127,7 @@ public sealed partial class AddonLibraryViewModel : ObservableObject
             await _changed();
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or InvalidDataException)
-        { Log.Error($"Import of {Title} failed", ex); Views.Dialog.Show("Import failed", ex.Message); }
+        { Log.Error($"Import of {Title} failed", ex); Views.Dialog.Show("Import failed", UserErrors.Message(ex)); }
     }
 
     [RelayCommand]
@@ -140,7 +140,7 @@ public sealed partial class AddonLibraryViewModel : ObservableObject
             await _changed();
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or FileNotFoundException)
-        { Log.Error($"Could not rename the {Title} build", ex); Views.Dialog.Show("Rename failed", ex.Message); }
+        { Log.Error($"Could not rename the {Title} build", ex); Views.Dialog.Show("Rename failed", UserErrors.Message(ex)); }
     }
 
     [RelayCommand]

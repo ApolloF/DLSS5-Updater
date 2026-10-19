@@ -401,6 +401,18 @@ public sealed class LecramUpdateTests : IDisposable
     }
 
     [Fact]
+    public async Task Update_SettingOff_StillChecksWhenForced()
+    {
+        var settings = new AppSettings { AutoDownloadLecram = false };
+        var server = Server(Channel(SetupRemote("v11.0.0-beta.24", "2026-10-18T18:51:16Z")));
+
+        await _store.CheckLecramAsync(settings, new MediaFireClient(server), CancellationToken.None, force: true);
+
+        Assert.NotEmpty(server.Requests);
+        Assert.Single(_store.LecramBuilds);
+    }
+
+    [Fact]
     public async Task Update_RemembersAMovedChannel()
     {
         var settings = new AppSettings();

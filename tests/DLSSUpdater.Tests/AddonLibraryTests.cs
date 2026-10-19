@@ -444,8 +444,8 @@ public sealed class AddonLibraryTests : IDisposable
         var sf = Sf(new Version(0, 2026, 928, 306));
         _settings.RenoDxId = sf.Id;
         var vm = NewGame();
-        Assert.Equal($"Use default ({sf.Label})", vm.RenoDxChoices[0].Label);
-        Assert.Equal("Use default (none imported)", vm.LecramChoices[0].Label);
+        Assert.Equal($"Default ({sf.Label})", vm.RenoDxChoices[0].Label);
+        Assert.Equal("Default (none imported)", vm.LecramChoices[0].Label);
         Assert.Equal(new string?[] { null, sf.Id }, vm.RenoDxChoices.Select(c => c.Tag));
 
         _settings.For(vm.Id).RenoDxId = new string('e', 64);

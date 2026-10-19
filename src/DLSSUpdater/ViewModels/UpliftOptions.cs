@@ -16,10 +16,10 @@ public static partial class SettingsOptions
                 [new($"Default ({def.Label})", value, def.Description), .. choices, new("Leave game setting", null)]).About("uplift");
         }
         IniOptionViewModel Enum(string label, string hint, string key, params string[] labels) =>
-            Choices(label, hint, key, labels.Select((name, i) => C(name, i.ToString(CultureInfo.InvariantCulture), name)).ToArray());
+            Choices(label, hint, key, labels.Select((name, i) => new OptionChoice(name, i.ToString(CultureInfo.InvariantCulture))).ToArray());
         IniOptionViewModel Bool(string label, string hint, string key) => Enum(label, hint, key, "Off", "On");
         IniOptionViewModel Number(string label, string hint, string key, params double[] values) =>
-            Choices(label, hint, key, values.Select(v => C(v.ToString(CultureInfo.InvariantCulture), v.ToString(CultureInfo.InvariantCulture), hint)).ToArray());
+            Choices(label, hint, key, values.Select(v => new OptionChoice(v.ToString(CultureInfo.InvariantCulture), v.ToString(CultureInfo.InvariantCulture))).ToArray());
         double[] Unit() => Enumerable.Range(0, 11).Select(i => i / 10d).ToArray();
         return
         [

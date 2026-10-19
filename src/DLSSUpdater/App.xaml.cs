@@ -35,7 +35,7 @@ public partial class App : Application
     private static void OnUnhandled(object sender, DispatcherUnhandledExceptionEventArgs e)
     {
         Log.Error("Unhandled", e.Exception);
-        Views.Dialog.Show("Unexpected error", e.Exception.Message);
+        Views.Dialog.Show("Something went wrong", "DLSS Updater kept running. The details are in the log.");
         e.Handled = true;
     }
 

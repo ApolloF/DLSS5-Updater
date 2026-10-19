@@ -84,7 +84,11 @@ public sealed partial class MainViewModel : ObservableObject
     [ObservableProperty] private bool _progressIndeterminate;
     [ObservableProperty] private bool _progressVisible;
     [ObservableProperty] private bool _settingsOpen;
-    [ObservableProperty] private bool _logOpen;
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(LogButtonName))]
+    private bool _logOpen;
+
+    public string LogButtonName => LogOpen ? "Hide log" : "Show log";
     [ObservableProperty] private bool _aboutOpen;
     [ObservableProperty] private string _streamlineVersion = "—";
     /// <summary>Guide entry to scroll to when the About page opens from an ⓘ button.</summary>
@@ -110,10 +114,18 @@ public sealed partial class MainViewModel : ObservableObject
 
     public string AppVersion => "v" + (typeof(MainViewModel).Assembly.GetName().Version?.ToString(3) ?? "1.0.0");
     [ObservableProperty]
-    [NotifyPropertyChangedFor(nameof(HasUpdates))]
+    [NotifyPropertyChangedFor(nameof(HasUpdates), nameof(UpdateAllName))]
     private int _updateCount;
 
     public bool HasUpdates => UpdateCount > 0;
+
+    /// <summary>What a screen reader says for Update all, which otherwise shows the count in a coloured badge only.</summary>
+    public string UpdateAllName => UpdateCount switch
+    {
+        0 => "Update all",
+        1 => "Update all, 1 update",
+        _ => $"Update all, {UpdateCount} updates",
+    };
 
     [ObservableProperty]
     [NotifyCanExecuteChangedFor(nameof(InstallCommand), nameof(DlssOnlyCommand), nameof(UninstallCommand),
@@ -125,13 +137,13 @@ public sealed partial class MainViewModel : ObservableObject
     [ObservableProperty] private string _dlssVersion = "—";
     [ObservableProperty] private string _upliftVersion = "\u2014";
     [ObservableProperty] private string _mfgVersion = "—";
-    [ObservableProperty] private string _dlssNrText = "missing";
-    [ObservableProperty] private string _reShadeText = "missing";
+    [ObservableProperty] private string _dlssNrText = "not imported";
+    [ObservableProperty] private string _reShadeText = "not imported";
     [ObservableProperty] private bool _dlssNrOk;
     [ObservableProperty] private bool _reShadeOk;
     [ObservableProperty] private bool _online = true;
 
-    partial void OnSearchChanged(string value) => GamesView.Refresh();
+    partial void OnSearchChanged(string value) => RefreshGames();
 
     partial void OnSettingsOpenChanged(bool value)
     {
@@ -160,7 +172,27 @@ public sealed partial class MainViewModel : ObservableObject
         }
         if (value && SettingsOpen) SettingsOpen = false;
     }
-    partial void OnFilterChanged(string value) => GamesView.Refresh();
+    partial void OnFilterChanged(string value) => RefreshGames();
+
+    /// <summary>Why the game list is empty, or null while it shows games.</summary>
+    public string? GameListEmptyText => EmptyListText(Games.Count, GamesView.Cast<object>().Count(), IsScanning);
+
+    internal static string? EmptyListText(int total, int shown, bool scanning) =>
+        shown > 0 ? null
+        : total > 0 ? "No games match the search or filter."
+        : scanning ? "Looking for games…"
+        : "No games found yet. Add a game or a library folder below.";
+
+    private void RefreshGames()
+    {
+        GamesView.Refresh();
+        OnPropertyChanged(nameof(GameListEmptyText));
+    }
+
+    /// <summary>A game scan is running; "Looking for games…" must not show for other busy work.</summary>
+    [ObservableProperty] private bool _isScanning;
+
+    partial void OnIsScanningChanged(bool value) => OnPropertyChanged(nameof(GameListEmptyText));
 
     private bool Matches(GameViewModel g)
     {
@@ -210,14 +242,14 @@ public sealed partial class MainViewModel : ObservableObject
         S.ReShadeSha = rs;
 
         DlssNrOk = nr is not null;
-        DlssNrText = nr is null ? "missing"
+        DlssNrText = nr is null ? "not imported"
             : FileUtil.Format(FileUtil.ReadVersion(store.DlssNrPath)) +
               (ComponentStore.KnownDlssNr.TryGetValue(nr, out var variant) ? $" · {variant.Split(" · ")[0]}" : " · unverified");
         var auto = S.Settings.AutoDownloadReShade && !store.ReShadeImported;
         ReShadeOk = rs is not null || (auto && store.ReShade is not null);
-        ReShadeText = rsPath is not null ? FileUtil.Format(FileUtil.ReadVersion(rsPath)) + (auto ? " · auto" : "")
-            : auto && store.ReShade is { } r ? $"{r.Tag} · auto"
-            : auto ? "auto" : "missing";
+        ReShadeText = rsPath is not null ? FileUtil.Format(FileUtil.ReadVersion(rsPath)) + (auto ? " · auto-download" : "")
+            : auto && store.ReShade is { } r ? $"{r.Tag} · auto-download"
+            : auto ? "auto-download" : "not imported";
         // An imported ReShade doesn't follow releases, so there is nothing new to point at.
         ReShadeNews.Load(auto ? store.ReShade : null);
         foreach (var g in Games) { g.RebuildNrChoices(); g.RebuildAddonChoices(); g.RefreshStatus(); }
@@ -227,10 +259,10 @@ public sealed partial class MainViewModel : ObservableObject
 
     public string LecramVersion => S.Settings.LecramLastVersion ?? S.Store.LecramBuildFor(null)?.DetectedLabel ?? "not in library";
 
-    internal async Task CheckLecramAsync()
+    internal async Task CheckLecramAsync(bool force = false)
     {
         if (Demo.Active) return;
-        await Task.Run(() => S.Store.CheckLecramAsync(S.Settings, _cts.Token));
+        await Task.Run(() => S.Store.CheckLecramAsync(S.Settings, _cts.Token, force));
         S.Settings.Save();
         await RefreshLocalComponentsAsync();
         SettingsVm.Reload();
@@ -280,7 +312,10 @@ public sealed partial class MainViewModel : ObservableObject
     private async Task ScanCore()
     {
         var progress = new Progress<int>(p => Status = $"Scanning games  {p}%");
-        var games = Demo.Active ? Demo.Games : await GameScanner.ScanAsync(S.Settings, progress, _cts.Token);
+        IsScanning = true;
+        List<GameInfo> games;
+        try { games = Demo.Active ? Demo.Games : await GameScanner.ScanAsync(S.Settings, progress, _cts.Token); }
+        finally { IsScanning = false; }
         ApplyScan(games);
         Log.Info($"Found {games.Count} games, {games.Count(g => g.Dlss.Count > 0)} with DLSS");
     }
@@ -297,7 +332,7 @@ public sealed partial class MainViewModel : ObservableObject
             if (byId.TryGetValue(info.Id, out var vm)) vm.Load(info);
             else Games.Add(new GameViewModel(info, S));
         }
-        GamesView.Refresh();
+        RefreshGames();
         CountUpdates();
         SelectedGame = Games.FirstOrDefault(g => g.Id == selectedId) ?? GamesView.Cast<GameViewModel>().FirstOrDefault();
     }
@@ -321,7 +356,7 @@ public sealed partial class MainViewModel : ObservableObject
             var o = g.UpdateOptions(m);
             if (g.HasAntiCheat && g.NeedsInjection(o) && !m.AntiCheatConfirmed)
             {
-                Log.Info($"{g.Name}: skipped (anti-cheat, not confirmed)");
+                Log.Info($"{g.Name}: skipped because it has anti-cheat. Install it once from its own page to confirm.");
                 continue;
             }
             try
@@ -333,7 +368,7 @@ public sealed partial class MainViewModel : ObservableObject
             catch (NeedsAdminException ex) { failed++; Log.Error($"{g.Name}: {ex.Message}"); }
             catch (Exception ex) when (ex is not OperationCanceledException) { failed++; Log.Error(g.Name, ex); }
         }
-        Log.Info(failed == 0 ? $"Updated {targets.Count} game(s)" : $"Updated with {failed} failure(s), see log");
+        Log.Info(failed == 0 ? $"Updated {targets.Count} game(s)" : $"{failed} game(s) couldn't be updated. Details are in the log.");
     });
 
     [RelayCommand]
@@ -355,6 +390,7 @@ public sealed partial class MainViewModel : ObservableObject
         var info = await Task.Run(() => GameScanner.Inspect(new GameEntry(Path.GetFileName(path), path, "Manual")));
         var vm = new GameViewModel(info, S);
         Games.Add(vm);
+        OnPropertyChanged(nameof(GameListEmptyText));
         SaveGameCache();
         Filter = "All";
         SelectedGame = vm;
@@ -513,7 +549,7 @@ public sealed partial class MainViewModel : ObservableObject
         if (o.Opti && !ConfirmCompat()) return;
 
         if (!dlssOnly && o.Opti && g.SelectedTarget.Exe is null && !g.Info.Exes.Any())
-            Log.Info($"{g.Name}: no executable found in the target folder, OptiScaler must sit next to the game exe");
+            Log.Info($"{g.Name}: no game .exe found in the install location. OptiScaler only works next to the game's .exe; pick that folder under Install location.");
 
         await Run(dlssOnly ? $"Updating DLSS for {g.Name}" : $"Installing to {g.Name}", async () =>
         {
@@ -581,7 +617,7 @@ public sealed partial class MainViewModel : ObservableObject
         if (SelectedGame is not { } g) return;
         if (Dialog.Prompt("Save as preset",
                 $"Saves {g.Name}'s settings, with the changes made for this game, under a name. The preset becomes the game's base and its own changes are cleared.",
-                g.PresetChoice?.Name ?? "My preset", "Only for this game (unticked: all games can use it)", true) is not { } answer) return;
+                g.PresetChoice?.Name ?? "My preset", "Only for this game (untick to let every game use it)", true) is not { } answer) return;
         var (name, gameOnly) = answer;
         if (GameConfig.SavePreset(S.Settings, g.Id, name, gameOnly) is { } error)
         {
@@ -654,6 +690,7 @@ public sealed partial class MainViewModel : ObservableObject
             S.Settings.HiddenGames.Add(g.Id);
         S.Settings.Save();
         Games.Remove(g);
+        OnPropertyChanged(nameof(GameListEmptyText));
         SaveGameCache();
         SelectedGame = GamesView.Cast<GameViewModel>().FirstOrDefault();
     }
@@ -664,7 +701,7 @@ public sealed partial class MainViewModel : ObservableObject
     {
         var info = Demo.Active ? Demo.Find(g.Root)! : await Task.Run(() => GameScanner.Inspect(new GameEntry(g.Name, g.Root, g.Source)));
         g.Load(info);
-        GamesView.Refresh();
+        RefreshGames();
         CountUpdates();
         SaveGameCache();
     }
@@ -704,9 +741,9 @@ public sealed partial class MainViewModel : ObservableObject
         }
         catch (Exception ex)
         {
-            Status = "Failed";
+            Status = "Failed. See the log.";
             Log.Error(label, ex);
-            Dialog.Show("Something went wrong", ex.Message);
+            Dialog.Show($"{label} didn't finish", UserErrors.Message(ex));
         }
         finally
         {

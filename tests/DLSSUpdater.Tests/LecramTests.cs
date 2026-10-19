@@ -540,7 +540,7 @@ public sealed class LecramTests : IDisposable
 
         var opti = await Assert.ThrowsAsync<InvalidOperationException>(() =>
             installer.InstallAsync(_game, _root, Lec() with { Mode = InstallMode.OptiScaler, Opti = true }, null, default));
-        Assert.Contains("ReShade-only", opti.Message);
+        Assert.Contains("ReShade + add-ons mode", opti.Message);
         var dfc = await Assert.ThrowsAsync<InvalidOperationException>(() =>
             installer.InstallAsync(_game, _root, Lec() with { Dfc = true }, null, default));
         Assert.Contains("Lecram", dfc.Message);

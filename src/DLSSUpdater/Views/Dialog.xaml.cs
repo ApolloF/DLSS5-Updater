@@ -10,6 +10,7 @@ public partial class Dialog : Window
         InitializeComponent();
         if (Application.Current.MainWindow is { IsLoaded: true } main && main != this) Owner = main;
         else WindowStartupLocation = WindowStartupLocation.CenterScreen;
+        Title = title;
         TitleText.Text = title;
         MessageText.Text = message;
         OkButton.Content = ok;
