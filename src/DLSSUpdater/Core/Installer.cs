@@ -235,6 +235,9 @@ public sealed class Installer(ComponentStore store)
                     RemoveReShadeProxy(ctx, pkg is not null ? o.Proxy : null);
                     if (pkg is null) m.Proxy = null;
                 }
+                // One proxy per install: a new name takes ours out under the old one and puts back what it replaced.
+                if ((o.ReShadeOnly || pkg is not null) && m.Proxy is { } oldProxy && !oldProxy.Equals(o.Proxy, StringComparison.OrdinalIgnoreCase))
+                    RemoveOwned(ctx, Path.Combine(targetDir, oldProxy));
                 if (o.ReShadeOnly || pkg is not null || reshade is not null) m.Mode = o.Mode;
 
                 // Only a run that sets up the injectors drops the add-on; a DLSS-only update keeps it.
@@ -1009,16 +1012,13 @@ public sealed class Installer(ComponentStore store)
         }
     }
 
-    /// <summary>Removes a conflicting file: deleted if we placed it, otherwise moved to the backup.</summary>
+    /// <summary>Removes a conflicting file: taken out if we placed it, and whatever is then there moved to the backup.</summary>
     private static void Displace(Ctx ctx, string full)
     {
         var rel = ctx.Rel(full);
-        if (ctx.M.Owns(rel))
-        {
-            File.Delete(full);
-            ctx.M.Files.RemoveAll(f => f.Equals(rel, StringComparison.OrdinalIgnoreCase));
-        }
-        else Backup(ctx, full, "file");
+        // Ours goes the usual way, which puts back what it replaced; that file must not stay here either.
+        RemoveOwned(ctx, full);
+        if (File.Exists(full)) Backup(ctx, full, "file");
         Log.Info($"  removed {rel}");
     }
 

@@ -1060,6 +1060,44 @@ public class InstallerTests : IDisposable
     private string Rel(string full) => Path.GetRelativePath(_root, full);
 
     [Fact]
+    public async Task ReShadeOnly_ProxyChange_RemovesOldProxyAndRestoresItsOriginal()
+    {
+        var before = Snapshot();
+        var installer = new Installer(_store);
+        var o = new InstallOptions { Mode = InstallMode.ReShadeOnly, ReShade = true, Proxy = "dxgi.dll" };
+        await installer.InstallAsync(Game(), _target, o, null, default);
+        Assert.Equal("RESHADE", T("dxgi.dll"));
+
+        await installer.InstallAsync(Game(), _target, o with { Proxy = "d3d11.dll" }, null, default);
+        Assert.Equal("RESHADE", T("d3d11.dll"));
+        Assert.Equal("OTHER-MOD", T("dxgi.dll"));
+        var m = InstallManifest.Read(_target)!;
+        Assert.Equal("d3d11.dll", m.Proxy);
+        Assert.False(m.Owns(Rel(Path.Combine(_target, "dxgi.dll"))));
+        Assert.Null(m.BackupOf(Rel(Path.Combine(_target, "dxgi.dll"))));
+
+        await installer.UninstallAsync(Game(), _target, default);
+        Assert.Equal(before, Snapshot());
+    }
+
+    [Fact]
+    public async Task OptiScalerMode_ProxyChange_RestoresTheOldProxysOriginal()
+    {
+        var before = Snapshot();
+        var installer = new Installer(_store);
+        await installer.InstallAsync(Game(), _target, Full, null, default);
+        Assert.Equal("OPTI-1", T("dxgi.dll"));
+
+        await installer.InstallAsync(Game(), _target, Full with { Proxy = "winmm.dll" }, null, default);
+        Assert.Equal("OPTI-1", T("winmm.dll"));
+        Assert.Equal("OTHER-MOD", T("dxgi.dll"));
+        Assert.Equal("winmm.dll", InstallManifest.Read(_target)!.Proxy);
+
+        await installer.UninstallAsync(Game(), _target, default);
+        Assert.Equal(before, Snapshot());
+    }
+
+    [Fact]
     public async Task DlssSwap_CopyFails_GameKeepsItsDll_AndRetryWorks()
     {
         var dll = Engine("nvngx_dlss.dll");
