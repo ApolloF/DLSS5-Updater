@@ -431,7 +431,7 @@ public sealed class Installer(ComponentStore store)
         }
         FileUtil.AtomicWriteText(iniPath, merged.Text);
         m.OptiIni = merged.Applied;
-        Log.Info($"  {o.Proxy} ← OptiScaler-NR, OptiScaler.ini merged");
+        Log.Info($"  {o.Proxy} ← {source.Name}, OptiScaler.ini merged");
     }
 
     /// <summary>
@@ -1066,7 +1066,7 @@ public sealed class Installer(ComponentStore store)
             if (!keepNr || name != ComponentStore.DlssNrFile) RemoveOwned(ctx, Path.Combine(ctx.Target, name));
         foreach (var name in OptiSources.All.SelectMany(s => s.ExtraFiles).Distinct(StringComparer.OrdinalIgnoreCase))
             RemoveOwned(ctx, Path.Combine(ctx.Target, name));
-        if (m.Opti || m.DlssNr) Log.Info("  OptiScaler-NR removed (ReShade + add-ons mode)");
+        if (m.Opti || m.DlssNr) Log.Info($"  {OptiSources.OfTag(m.OptiTag).Name} removed (ReShade + add-ons mode)");
         m.Opti = false;
         m.OptiTag = null;
         m.OptiIni.Clear();
