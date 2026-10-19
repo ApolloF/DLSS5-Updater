@@ -66,12 +66,43 @@ public static class FileUtil
     }
 
     /// <summary>Copies via a temp file next to the destination, then swaps it in. Preserves timestamps.</summary>
-    public static void AtomicCopy(string src, string dest)
+    public static void AtomicCopy(string src, string dest) => CommitStaged(StageCopy(src, dest), dest);
+
+    /// <summary>Copies <paramref name="src"/> to a temp file beside <paramref name="dest"/> for <see cref="CommitStaged"/>; a failed copy leaves no temp file.</summary>
+    public static string StageCopy(string src, string dest)
     {
         Directory.CreateDirectory(Path.GetDirectoryName(dest)!);
         var tmp = dest + ".dlssu-tmp";
-        File.Copy(src, tmp, true);
-        File.Move(tmp, dest, true);
+        try
+        {
+            ClearReadOnly(tmp);
+            File.Copy(src, tmp, true);
+        }
+        catch
+        {
+            TryDeleteFile(tmp);
+            throw;
+        }
+        return tmp;
+    }
+
+    /// <summary>
+    /// Moves a staged temp file over <paramref name="dest"/> in one rename. A read-only target (users lock configs and
+    /// dlls that way) is replaced and stays read-only. On failure the temp file goes and <paramref name="dest"/> is untouched.
+    /// </summary>
+    public static void CommitStaged(string tmp, string dest)
+    {
+        try
+        {
+            var locked = ClearReadOnly(dest);
+            try { File.Move(tmp, dest, true); }
+            finally { if (locked && File.Exists(dest)) File.SetAttributes(dest, File.GetAttributes(dest) | FileAttributes.ReadOnly); }
+        }
+        catch
+        {
+            TryDeleteFile(tmp);
+            throw;
+        }
     }
 
     /// <summary>Writes via a temp file that is flushed to disk before the rename, so a power loss leaves the old or the new text, never a torn file.</summary>
@@ -79,12 +110,44 @@ public static class FileUtil
     {
         Directory.CreateDirectory(Path.GetDirectoryName(dest)!);
         var tmp = dest + ".dlssu-tmp";
-        using (var fs = new FileStream(tmp, FileMode.Create, FileAccess.Write, FileShare.None))
+        try
         {
+            ClearReadOnly(tmp);
+            using var fs = new FileStream(tmp, FileMode.Create, FileAccess.Write, FileShare.None);
             fs.Write(new UTF8Encoding(false).GetBytes(text));
             fs.Flush(flushToDisk: true);
         }
-        File.Move(tmp, dest, true);
+        catch
+        {
+            TryDeleteFile(tmp);
+            throw;
+        }
+        CommitStaged(tmp, dest);
+    }
+
+    /// <summary>Takes the read-only flag off <paramref name="path"/>; true when it had one.</summary>
+    public static bool ClearReadOnly(string path)
+    {
+        var info = new FileInfo(path);
+        if (!info.Exists || !info.IsReadOnly) return false;
+        info.IsReadOnly = false;
+        return true;
+    }
+
+    /// <summary>Deletes a file, read-only or not; a missing file is fine.</summary>
+    public static void DeleteFile(string path)
+    {
+        if (!File.Exists(path)) return;
+        ClearReadOnly(path);
+        File.Delete(path);
+    }
+
+    /// <summary>Best-effort cleanup of a file of ours (a temp file) after another error, which is the one reported.</summary>
+    public static void TryDeleteFile(string path)
+    {
+        try { DeleteFile(path); }
+        catch (IOException) { }
+        catch (UnauthorizedAccessException) { }
     }
 
     public static bool IsUnder(string path, string root)
