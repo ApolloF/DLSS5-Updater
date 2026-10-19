@@ -251,6 +251,7 @@ public sealed class Installer(ComponentStore store)
                 if (!o.Dfc && m.Dfc && (o.ReShade || pkg is not null)) RemoveDfc(ctx);
                 if (!o.Uplift && m.Uplift && (o.ReShade || pkg is not null)) RemoveUplift(ctx);
                 if (!o.Mfg && !o.KeepMfg && m.Mfg && (o.ReShade || pkg is not null)) RemoveMfg(ctx);
+                if (!o.ReShade && m.ReShade && !o.ReShadeOnly && pkg is not null) RemoveReShade(ctx);
 
                 if (pkg is not null)
                 {
@@ -404,6 +405,9 @@ public sealed class Installer(ComponentStore store)
         string? currentIni = File.Exists(iniPath) ? File.ReadAllText(iniPath) : null;
         if (currentIni is not null && !m.Owns(ctx.Rel(iniPath))) Backup(ctx, iniPath, "file", copy: true);
         var profile = ConfigProfile.WithRequired(o.Overrides, o);
+        // Without a ReShade64.dll beside it, LoadReshade from the profile goes back to the release's value (off).
+        if (!o.ReShade && !File.Exists(Path.Combine(ctx.Target, ComponentStore.ReShadeFile)))
+            profile.RemoveAll(x => x.Id.Equals("Plugins/LoadReshade", StringComparison.OrdinalIgnoreCase));
         if (currentIni is not null && m.Owns(ctx.Rel(iniPath)) && m.OptiIni.Count == 0)
         {
             // Installs from 1.0.0 didn't record what they wrote; values still equal to the profile are ours.
@@ -602,6 +606,15 @@ public sealed class Installer(ComponentStore store)
         ctx.M.Mfg = false;
         ctx.M.MfgTag = null;
         Log.Info($"  {ComponentStore.MfgFile} removed");
+    }
+
+    /// <summary>OptiScaler mode without ReShade any more: take out the ReShade64.dll we placed (restoring what it replaced).</summary>
+    private static void RemoveReShade(Ctx ctx)
+    {
+        RemoveOwned(ctx, Path.Combine(ctx.Target, ComponentStore.ReShadeFile));
+        ctx.M.ReShade = false;
+        ctx.M.ReShadeSha = null;
+        Log.Info($"  {ComponentStore.ReShadeFile} removed");
     }
 
     private static void RemoveUplift(Ctx ctx)

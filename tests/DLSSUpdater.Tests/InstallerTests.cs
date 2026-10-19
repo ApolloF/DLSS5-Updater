@@ -1151,6 +1151,33 @@ public class InstallerTests : IDisposable
         Assert.Null(m.ReShadeSha);
     }
 
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task OptiScalerMode_ReShadeUnticked_RemovesItAndKeepsItOff(bool gameHadReShade)
+    {
+        if (gameHadReShade) Write(Path.Combine(_target, ComponentStore.ReShadeFile), "USERS-RESHADE");
+        var installer = new Installer(_store);
+        await installer.InstallAsync(Game(), _target, Full, null, default);
+        Assert.Equal("RESHADE", T(ComponentStore.ReShadeFile));
+        Assert.Equal("true", IniFile.Load(Path.Combine(_target, "OptiScaler.ini")).Get("Plugins", "LoadReshade"));
+
+        await installer.InstallAsync(Game(), _target, Full with { ReShade = false }, null, default);
+        var m = InstallManifest.Read(_target)!;
+        Assert.False(m.ReShade);
+        Assert.Null(m.ReShadeSha);
+        Assert.False(m.Owns(Rel(Path.Combine(_target, ComponentStore.ReShadeFile))));
+        // The game's own ReShade comes back and stays loaded; without one, LoadReshade returns to the release value.
+        if (gameHadReShade) Assert.Equal("USERS-RESHADE", T(ComponentStore.ReShadeFile));
+        else Assert.False(File.Exists(Path.Combine(_target, ComponentStore.ReShadeFile)));
+        Assert.Equal(gameHadReShade ? "true" : "auto", IniFile.Load(Path.Combine(_target, "OptiScaler.ini")).Get("Plugins", "LoadReshade"));
+
+        // "Update all" reproduces the record and doesn't bring ReShade back.
+        await installer.InstallAsync(Game(), _target, Full with { ReShade = m.ReShade }, null, default);
+        Assert.False(InstallManifest.Read(_target)!.ReShade);
+        if (!gameHadReShade) Assert.False(File.Exists(Path.Combine(_target, ComponentStore.ReShadeFile)));
+    }
+
     [Fact]
     public async Task DlssSwap_CopyFails_GameKeepsItsDll_AndRetryWorks()
     {
