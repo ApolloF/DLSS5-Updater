@@ -197,13 +197,14 @@ public static partial class SettingsOptions
             C("Inverse", "2", "Undocumented.")).About("rdx-exposure"),
     ];
 
-    // Keys, defaults and ranges from docs/addons/lecram-dlss5.md (v10.7 and v11.0.0-beta.6 / beta.18 / beta.22, read from the
-    // binaries and probed; beta.22 is the supported build). Values the docs don't confirm are not offered. Options of one generation
-    // only are hidden for the other (LecramIni.IsAvailable) and keys whose choices differ per generation carry a variant
+    // Keys, defaults and ranges from docs/addons/lecram-dlss5.md (v10.7 and v11.0.0-beta.6 / beta.18 / beta.22 / beta.29, read
+    // from the binaries and probed; beta.29 is the supported build). Values the docs don't confirm are not offered. Options of one
+    // generation only are hidden for the other (LecramIni.IsAvailable) and keys whose choices differ per generation carry a variant
     // (IniOptionViewModel.In). Within v11 only values that mean the same in beta.6 and beta.18+ are offered (NRPresentGuides 0
-    // flipped meaning, so it is not), so no per-build variant is needed. beta.22's NRMaskBlendMode (raw NGX value, undocumented)
-    // and NRGpuCrashWitness (D3D12 DRED diagnostics) are not offered. Not exposed: the other Present/HDR, normalisation, Look,
-    // model-lab, layer and screenshot keys, which are tuned in the add-on's own overlay.
+    // flipped meaning, so it is not), so no per-build variant is needed; keys an older v11 build lacks (NRPass2..4Preset before
+    // beta.29, NRGpuCrashWitness before beta.22) are ignored there. NRMaskBlendMode (raw NGX value, undocumented) is not offered.
+    // Not exposed: the other Present/HDR, normalisation, Look, model-lab, layer, per-pass look and screenshot keys, which are tuned
+    // in the add-on's own overlay.
     public static IniOptionViewModel[] Lecram(ObservableCollection<IniOverride> rs) =>
     [
         new IniOptionViewModel("Neural rendering", "Master switch of the neural model (v11 and newer).", LecramIni.Section, "NeuralUplift", rs,
@@ -276,11 +277,12 @@ public static partial class SettingsOptions
             C("Add-on default", null, "Leave the add-on's own choice (1.0)."),
             C("0.33", F(0.33), "The add-on's minimum."), C("0.5", F(0.5), "Half."), C("0.75", F(0.75), "Three quarters."),
             C("1.0", F(1.0), "Full resolution, the add-on's default and maximum.")).About("lc-scale"),
-        new IniOptionViewModel("Preset", "Which network inside nvngx_dlssnr.dll (v11 and newer).", LecramIni.Section, "NRPreset", rs,
+        new IniOptionViewModel("Preset", "Which model inside nvngx_dlssnr.dll (v11 and newer).", LecramIni.Section, "NRPreset", rs,
             C("Add-on default", null, "Leave the add-on's own choice (0)."),
             C("Default", "0", "The DLL's shipping default."),
-            C("Preset 1 (earlier model)", "1", "The 1 and 2 mapping is inferred from the changelog."),
-            C("Preset 2 (small model)", "2", "The 1 and 2 mapping is inferred from the changelog.")).About("lc-preset"),
+            C("Preset 1", "1", "DLL 310.9.16: honest_tench, the model the model lab edits."),
+            C("Preset 2", "2", "DLL 310.9.16: the small FP8 model.")).About("lc-preset"),
+        LecramPassPreset(2, rs), LecramPassPreset(3, rs), LecramPassPreset(4, rs),
         new IniOptionViewModel("VRAM buffering", "How much video memory the model keeps in reserve (v11 and newer).", LecramIni.Section, "NRVramBuffering", rs,
             C("Add-on default", null, "Leave the add-on's own choice (0, Full)."),
             C("Full", "0", "The add-on's default."), C("Reduced", "1", "Reduced."), C("Minimal", "2", "Minimal.")).About("lc-vram"),
@@ -318,7 +320,18 @@ public static partial class SettingsOptions
             C("Native", "native", "Present in Direct3D 11 needs native."),
             C("Foreign", "foreign", "Use the other NR producer's input."),
             C("Off", "off", "No Direct3D 11 support.")).About("lc-dx11"),
+        new IniOptionViewModel("GPU crash reports", "Diagnostics after a Direct3D 12 freeze or GPU reset (v11 beta.22 and newer).", LecramIni.Section, "NRGpuCrashWitness", rs,
+            C("Add-on default", null, "Leave the add-on's own choice (beta.29+: on, with DRED from the launch after a crash; beta.22: off)."),
+            C("Off", "0", "No crash report and no DRED."),
+            C("On, DRED always", "1", "Direct3D 12 DRED crash breadcrumbs from every launch (beta.29+ also writes the crash report).")).About("lc-crash"),
     ];
+
+    private static IniOptionViewModel LecramPassPreset(int pass, ObservableCollection<IniOverride> rs) =>
+        new IniOptionViewModel($"Pass {pass} preset", $"Model for pass {pass} alone (v11 beta.29 and newer; needs Passes {pass} or more).", LecramIni.Section, $"NRPass{pass}Preset", rs,
+            C("Add-on default", null, "Leave the add-on's own choice (0, same as pass 1)."),
+            C("Same as pass 1", "0", "The model pass 1 runs."),
+            C("Preset 1", "1", "DLL 310.9.16: honest_tench, the model the model lab edits."),
+            C("Preset 2", "2", "DLL 310.9.16: the small FP8 model.")).About("lc-pass-preset");
 
     public static IniOptionViewModel[] Nr(ObservableCollection<IniOverride> o) =>
     [

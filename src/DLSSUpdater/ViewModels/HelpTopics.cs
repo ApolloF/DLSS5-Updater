@@ -99,11 +99,11 @@ public static class HelpTopics
             "It keeps a shared nvngx_dlssnr.dll in %LOCALAPPDATA%\\DLSS5-NR\\runtime, which v11 also finds by itself."),
 
         new("lecram-updates", "General", "Lecram update source",
-            "The public MediaFire folder is the same source used by the author's DLSS5-NR-Setup installer (checked by static analysis of beta.22). " +
+            "The public MediaFire folder is the same source used by the author's DLSS5-NR-Setup installer (checked by static analysis of beta.22 and beta.29). " +
             "The newest upload wins; ties prefer the raw add-on, then ZIP, then setup EXE. Each download is checked against the listing's SHA-256. " +
             "Only dlss5-nr.addon64 is extracted; downloaded installers are never run and are removed afterwards. Channel moves are followed once. " +
             "Builds enter the existing library and only a newer build becomes its default. Games keep their installed build until you choose to change it. " +
-            "Offline or failed checks keep the library. New builds may have options beyond the last checked beta.22; automatic fetching does not mark their configuration as tested. No nvngx_dlssnr.dll is downloaded."),
+            "Offline or failed checks keep the library. New builds may have options beyond the last checked beta.29; automatic fetching does not mark their configuration as tested. No nvngx_dlssnr.dll is downloaded."),
 
         // ---------- Keybinds ----------
         new("keybinds", "Keybinds", "Keybinds",
@@ -113,7 +113,7 @@ public static class HelpTopics
 
         // ---------- ReShade ----------
         new("skip-tutorial", "ReShade", "Skip the tutorial",
-            "Marks ReShade's first-run guide as finished (TutorialProgress=4), so the overlay opens straight to the effect list."),
+            "Marks ReShade's first-run guide as finished (TutorialProgress=4), so the overlay opens straight to the effect list. Lecram v11 beta.29 and newer write 4 themselves when the key is absent or 0."),
         new("performance-mode", "ReShade", "Performance mode",
             "ReShade compiles effects with their current values baked in as constants. Gives more FPS, but effect settings can't be tweaked in the " +
             "overlay while it's on. Tweak with it off, then turn it on for playing. Only affects ReShade effects, not OptiScaler or DLSS."),
@@ -170,12 +170,17 @@ public static class HelpTopics
         new("lc-ui", "Lecram DLSS5", "UI correction",
             "NRUICorrection, off by default in both generations. The add-on does not document how it protects the HUD."),
         new("lc-passes", "Lecram DLSS5", "Passes",
-            "NRPasses, 1 to 4 (default 1). v11 also has per-pass keys that are left to the add-on's overlay. The cost per pass is not documented."),
+            "NRPasses, 1 to 4 (default 1). v11 also has per-pass keys; the app offers the per-pass model (Pass 2 to 4 preset) and leaves the per-pass look (style, tone, structure, skin) to the add-on's overlay. The cost per pass is not documented."),
         new("lc-scale", "Lecram DLSS5", "Resolution",
             "NRResolutionScale, 0.33 to 1 (default 1): the fraction of the frame the model works at."),
         new("lc-preset", "Lecram DLSS5", "Preset",
             "NRPreset, v11 and newer. 0 is the DLL's shipping default (documented); the value is sent as the DLSSNR render preset hint and changing it recreates the NR feature. " +
-            "It only matters when the DLL ships several models. 1 and 2 are labelled from the add-on's changelog (Preset 1 earlier model, Preset 2 newer small model); that mapping of the values is inferred, not documented."),
+            "It only matters when the DLL ships several models (otherwise the add-on sends 0 and hides the control). The add-on documents the ids for DLL 310.9.16, which ships two: 1 honest_tench (the model the model lab edits), 2 the small FP8 model. " +
+            "It accepts 0 to 3; 3 names no model in 310.9.16, so the app does not offer it, and other DLL versions may number their models differently."),
+        new("lc-pass-preset", "Lecram DLSS5", "Pass preset",
+            "NRPass2Preset, NRPass3Preset and NRPass4Preset, v11 beta.29 and newer (mixed models): the model one extra pass runs. 0 (default) runs the model pass 1 runs (Preset's choice); 1 to 3 is the DLL's preset id for that pass alone, as for Preset (310.9.16: 1 honest_tench, 2 small FP8 model). " +
+            "It only takes effect when Passes reaches that pass and the DLL ships several models; otherwise the add-on sends 0. Other values read as 0. Changing it recreates NR. " +
+            "Older v11 builds ignore the keys. The pass's own look (\"Same as pass 1\" off in the overlay) is a separate setting."),
         new("lc-vram", "Lecram DLSS5", "VRAM buffering",
             "NRVramBuffering, v11 and newer: 0 Full (default), 1 Reduced, 2 Minimal."),
         new("lc-present", "Lecram DLSS5", "Present runs on",
@@ -194,6 +199,10 @@ public static class HelpTopics
             "With a Streamline game and DLSS on, 1 is the setting to try; if the game crashes at boot, use 2."),
         new("lc-dx11", "Lecram DLSS5", "Direct3D 11 source",
             "DX11Source: auto (default), native, foreign or off. Present in Direct3D 11 needs native. Direct3D 11 support starts with v10.7; the 0928 build is Direct3D 12 only."),
+        new("lc-crash", "Lecram DLSS5", "GPU crash reports",
+            "NRGpuCrashWitness, Direct3D 12 only. v11 beta.29 and newer watch the GPU by default: after a freeze or GPU reset they save dlss5-nr-crash-<time>.txt beside ReShade.log (where the GPU stopped relative to NR's work, GPU, driver, NR's last log lines), name it on the panel's Home page at the next launch and turn on Windows' DRED crash breadcrumbs for the next runs. " +
+            "0 turns all of it off (the author's documented switch). A non-zero value turns DRED on from every launch. beta.22 reads the key too, with no watcher: there non-zero turns DRED on and the default is off. " +
+            "The author asks for the crash file when reporting a freeze. DRED's cost is not documented."),
 
         // ---------- Deep Fried Chicken ----------
         new("dfc-arm", "Deep Fried Chicken", "Deep Fried Chicken (master switch)",
@@ -432,6 +441,8 @@ public static class HelpTopics
         ["lc-passes"] = "1. Add passes only with headroom to spare.",
         ["lc-scale"] = "1.0; lower it to save FPS if you accept a softer image.",
         ["lc-preset"] = "Add-on default. Changing it recreates NR, which causes a short hitch in-game.",
+        ["lc-pass-preset"] = "Add-on default. Try Preset 2 on an extra pass to compare a mixed-model stack; it recreates NR.",
+        ["lc-crash"] = "Add-on default. Off only if you never want the crash files; On only while chasing a repeat crash.",
         ["lc-vram"] = "Full. Reduced or Minimal only if video memory runs out.",
         ["lc-foreign"] = "Add-on default alone; the app sets observe for you next to ShortFuse's add-on.",
         ["lc-hooks"] = "Add-on default. With a Streamline game and DLSS on set 1; if the game crashes at boot set 2.",
