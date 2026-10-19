@@ -1137,6 +1137,21 @@ public class InstallerTests : IDisposable
     }
 
     [Fact]
+    public async Task ReShadeOnly_ToOptiScalerWithoutReShade_ClearsTheReShadeRecord()
+    {
+        var installer = new Installer(_store);
+        await installer.InstallAsync(Game(), _target, new InstallOptions { Mode = InstallMode.ReShadeOnly, ReShade = true, Proxy = "dxgi.dll" }, null, default);
+        Assert.True(InstallManifest.Read(_target)!.ReShade);
+
+        await installer.InstallAsync(Game(), _target, new InstallOptions { Opti = true, Proxy = "dxgi.dll", Overrides = ConfigProfile.Recommended() }, null, default);
+        var m = InstallManifest.Read(_target)!;
+        Assert.Equal(InstallMode.OptiScaler, m.Mode);
+        Assert.Equal("OPTI-1", T("dxgi.dll"));
+        Assert.False(m.ReShade);
+        Assert.Null(m.ReShadeSha);
+    }
+
+    [Fact]
     public async Task DlssSwap_CopyFails_GameKeepsItsDll_AndRetryWorks()
     {
         var dll = Engine("nvngx_dlss.dll");

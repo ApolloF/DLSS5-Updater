@@ -237,6 +237,7 @@ public sealed class Installer(ComponentStore store)
                     // Without OptiScaler taking over the proxy name, ReShade's proxy goes whatever its name: ReShade64.dll waits for a loader.
                     RemoveReShadeProxy(ctx, pkg is not null ? o.Proxy : null);
                     if (pkg is null) m.Proxy = null;
+                    if (reshade is null) { m.ReShade = false; m.ReShadeSha = null; }
                 }
                 // One proxy per install: a new name takes ours out under the old one and puts back what it replaced.
                 if ((o.ReShadeOnly || pkg is not null) && m.Proxy is { } oldProxy && !oldProxy.Equals(o.Proxy, StringComparison.OrdinalIgnoreCase))
