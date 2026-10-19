@@ -215,7 +215,7 @@ public sealed partial class DriverProfileViewModel : ObservableObject
         }
         catch (Exception ex) when (ex is NvApiException or InvalidOperationException or EntryPointNotFoundException)
         {
-            Status = ex.Message;
+            Status = "Could not read the NVIDIA profile. The details are in the log.";
             Log.Error("Reading NVIDIA profile failed", ex);
         }
         finally
@@ -278,7 +278,7 @@ public sealed partial class DriverProfileViewModel : ObservableObject
         {
             Busy = false;
             Log.Error("Writing NVIDIA profile failed", ex);
-            Views.Dialog.Show("NVIDIA profile", ex.Message + "\nNothing was saved.");
+            Views.Dialog.Show("NVIDIA profile", UserErrors.Message(ex) + "\nNothing was saved.");
         }
     }
 

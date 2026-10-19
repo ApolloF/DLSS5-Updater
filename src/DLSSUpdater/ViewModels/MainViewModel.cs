@@ -704,9 +704,9 @@ public sealed partial class MainViewModel : ObservableObject
         }
         catch (Exception ex)
         {
-            Status = "Failed";
+            Status = "Failed. See the log.";
             Log.Error(label, ex);
-            Dialog.Show("Something went wrong", ex.Message);
+            Dialog.Show($"{label} didn't finish", UserErrors.Message(ex));
         }
         finally
         {

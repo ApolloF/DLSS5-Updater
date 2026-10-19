@@ -127,7 +127,7 @@ public sealed partial class AddonLibraryViewModel : ObservableObject
             await _changed();
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or InvalidDataException)
-        { Log.Error($"Import of {Title} failed", ex); Views.Dialog.Show("Import failed", ex.Message); }
+        { Log.Error($"Import of {Title} failed", ex); Views.Dialog.Show("Import failed", UserErrors.Message(ex)); }
     }
 
     [RelayCommand]
@@ -140,7 +140,7 @@ public sealed partial class AddonLibraryViewModel : ObservableObject
             await _changed();
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or FileNotFoundException)
-        { Log.Error($"Could not rename the {Title} build", ex); Views.Dialog.Show("Rename failed", ex.Message); }
+        { Log.Error($"Could not rename the {Title} build", ex); Views.Dialog.Show("Rename failed", UserErrors.Message(ex)); }
     }
 
     [RelayCommand]

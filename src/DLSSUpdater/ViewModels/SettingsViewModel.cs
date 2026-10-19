@@ -583,7 +583,7 @@ public sealed partial class SettingsViewModel : ObservableObject
             Reload();
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or InvalidDataException)
-        { Log.Error("DLSS import failed", ex); Views.Dialog.Show("Import failed", ex.Message); }
+        { Log.Error("DLSS import failed", ex); Views.Dialog.Show("Import failed", UserErrors.Message(ex)); }
     }
 
     [RelayCommand]
@@ -615,7 +615,7 @@ public sealed partial class SettingsViewModel : ObservableObject
             OnPropertyChanged(nameof(SelectedNrHint));
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or InvalidDataException)
-        { Log.Error($"Import of {fileName} failed", ex); Views.Dialog.Show("Import failed", ex.Message); }
+        { Log.Error($"Import of {fileName} failed", ex); Views.Dialog.Show("Import failed", UserErrors.Message(ex)); }
     }
 
     [RelayCommand]

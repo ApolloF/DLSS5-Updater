@@ -218,7 +218,7 @@ public sealed partial class GameViewModel : ObservableObject
             RefreshAddonPairStatus();
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
-        { Log.Error("Could not mark the ShortFuse + Lecram pair", ex); Views.Dialog.Show("Could not mark pair", ex.Message); }
+        { Log.Error("Could not mark the ShortFuse + Lecram pair", ex); Views.Dialog.Show("Could not mark pair", UserErrors.Message(ex)); }
     }
 
     /// <summary>Deep Fried Chicken is ticked for a game that ships no DLSS of its own (copies an install of ours added don't count).</summary>
