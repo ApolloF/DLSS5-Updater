@@ -31,6 +31,8 @@ public sealed class GameOverride
     public string? IniMode { get; set; }
     /// <summary>Presets that only this game can use.</summary>
     public List<ConfigPreset>? Presets { get; set; }
+    /// <summary>Fields this version doesn't know (written by a newer one); kept so saving doesn't drop them.</summary>
+    [JsonExtensionData] public Dictionary<string, JsonElement>? Unknown { get; set; }
 }
 
 /// <summary>A named snapshot of the OptiScaler.ini and ReShade.ini settings (incl. keybinds and options).</summary>
@@ -118,6 +120,8 @@ public sealed class AppSettings
     public Dictionary<string, string> SeenReleases { get; set; } = [];
     /// <summary>Component -> newest release tag already announced in the log.</summary>
     public Dictionary<string, string> AnnouncedReleases { get; set; } = [];
+    /// <summary>Fields this version doesn't know (written by a newer one); kept so saving doesn't drop them.</summary>
+    [JsonExtensionData] public Dictionary<string, JsonElement>? Unknown { get; set; }
 
     /// <summary>Built-in presets first, then the user's.</summary>
     [JsonIgnore]
@@ -169,7 +173,7 @@ public sealed class AppSettings
                 var s = JsonSerializer.Deserialize(File.ReadAllText(AppPaths.SettingsFile), JsonCtx.Default.AppSettings);
                 if (s is not null)
                 {
-                    s.Games = new Dictionary<string, GameOverride>(s.Games, StringComparer.OrdinalIgnoreCase);
+                    s.Repair();
                     if (!s.CarryOverGameIni && s.IniMode == "keep") s.IniMode = "fresh";
                     s.CarryOverGameIni = true;
                     var sourceMigrated = s.OptiSource == ComponentStore.LegacyOptiRepo;
@@ -181,11 +185,86 @@ public sealed class AppSettings
                 }
             }
         }
-        catch (Exception ex) when (ex is JsonException or IOException)
+        catch (Exception ex) when (ex is JsonException or IOException or UnauthorizedAccessException)
         {
             Log.Error("settings.json unreadable, using defaults", ex);
+            KeepUnreadable();
         }
         return new AppSettings();
+    }
+
+    internal static string BadSettingsFile => AppPaths.SettingsFile + ".bad";
+
+    /// <summary>Fields older versions of this app wrote and that nothing reads anymore; dropped instead of kept as unknown.</summary>
+    private static readonly string[] RetiredKeys = ["AddonCombos", "TestedComboSeeded"];
+
+    /// <summary>The next save overwrites settings.json with defaults; one copy of the unreadable file survives for repair.</summary>
+    private static void KeepUnreadable()
+    {
+        try
+        {
+            File.Copy(AppPaths.SettingsFile, BadSettingsFile, true);
+            Log.Info($"Kept a copy of the unreadable settings as {BadSettingsFile}");
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            Log.Error("Could not keep a copy of the unreadable settings.json", ex);
+        }
+    }
+
+    /// <summary>
+    /// A hand-edited or damaged settings.json may hold null for any collection or text; the app expects them set.
+    /// Nulls become the defaults, null items are dropped, and game ids match case-insensitively.
+    /// </summary>
+    private void Repair()
+    {
+        var defaults = new AppSettings();
+        if (Unknown is not null)
+        {
+            foreach (var key in Unknown.Keys.Where(k => RetiredKeys.Contains(k, StringComparer.OrdinalIgnoreCase)).ToList()) Unknown.Remove(key);
+            if (Unknown.Count == 0) Unknown = null;
+        }
+        ManualGames = Strings(ManualGames);
+        LibraryRoots = Strings(LibraryRoots);
+        HiddenGames = Strings(HiddenGames);
+        Games = new Dictionary<string, GameOverride>((Games ?? []).Where(g => g.Value is not null), StringComparer.OrdinalIgnoreCase);
+        foreach (var g in Games.Values)
+        {
+            if (g.Opti is not null) g.Opti = Overrides(g.Opti);
+            if (g.ReShade is not null) g.ReShade = Overrides(g.ReShade);
+            if (g.Presets is not null) g.Presets = PresetList(g.Presets);
+        }
+        IniOverrides = IniOverrides is null ? defaults.IniOverrides : Overrides(IniOverrides);
+        ReShadeOverrides = ReShadeOverrides is null ? defaults.ReShadeOverrides : Overrides(ReShadeOverrides);
+        Presets = PresetList(Presets);
+        SeenReleases ??= [];
+        AnnouncedReleases ??= [];
+        AddonPairTests = (AddonPairTests ?? []).Where(t => t is not null).ToList();
+        DefaultProxy ??= defaults.DefaultProxy;
+        IniMode ??= defaults.IniMode;
+        OptiSource ??= defaults.OptiSource;
+        LecramFolderKey ??= defaults.LecramFolderKey;
+        LecramLastResult ??= defaults.LecramLastResult;
+
+        static List<string> Strings(List<string>? list) => (list ?? []).Where(s => s is not null).ToList();
+
+        static List<IniOverride> Overrides(List<IniOverride> list) =>
+            list.Where(o => o is not null).Select(o =>
+            {
+                o.Section ??= "";
+                o.Key ??= "";
+                o.Value ??= "";
+                return o;
+            }).ToList();
+
+        static List<ConfigPreset> PresetList(List<ConfigPreset>? list) =>
+            (list ?? []).Where(p => p is not null).Select(p =>
+            {
+                p.Name ??= "";
+                p.Opti = Overrides(p.Opti ?? []);
+                p.ReShade = Overrides(p.ReShade ?? []);
+                return p;
+            }).ToList();
     }
 
     public void Save()
