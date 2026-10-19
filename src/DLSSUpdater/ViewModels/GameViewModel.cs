@@ -438,7 +438,7 @@ public sealed partial class GameViewModel : ObservableObject
     public string? AntiCheat => Info.AntiCheat;
     public bool IsInstalled => Manifest is not null || Info.Installs.Count > 0;
     public bool IsOptiInstalled => Manifest?.Opti == true;
-    public bool IsReShadeOnlyInstalled => Manifest is { Mode: InstallMode.ReShadeOnly, ReShade: true };
+    public string? ModBadge => Manifest?.ModLabel();
     public bool AnyEnabled => Components.Any(c => c.Enabled);
 
     public string DlssBadge
@@ -726,7 +726,7 @@ public sealed partial class GameViewModel : ObservableObject
         OnPropertyChanged(nameof(ActionText));
         OnPropertyChanged(nameof(IsInstalled));
         OnPropertyChanged(nameof(IsOptiInstalled));
-        OnPropertyChanged(nameof(IsReShadeOnlyInstalled));
+        OnPropertyChanged(nameof(ModBadge));
         OnPropertyChanged(nameof(DlssCurrent));
     }
 

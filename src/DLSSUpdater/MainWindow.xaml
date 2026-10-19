@@ -26,6 +26,12 @@
             <Setter Property="FontSize" Value="15" />
             <Setter Property="FontWeight" Value="SemiBold" />
             <Setter Property="Margin" Value="0,3,0,0" />
+            <Setter Property="TextTrimming" Value="CharacterEllipsis" />
+        </Style>
+        <!-- Strip cell without release notes; same box as a ReleaseChip so the texts line up -->
+        <Style x:Key="StripCell" TargetType="Border">
+            <Setter Property="Padding" Value="9,5" />
+            <Setter Property="Margin" Value="0,0,12,2" />
         </Style>
         <Style x:Key="SectionTitle" TargetType="TextBlock" BasedOn="{StaticResource Caps}">
             <Setter Property="Margin" Value="0,28,0,10" />
@@ -92,7 +98,7 @@
             <Setter Property="Background" Value="Transparent" />
             <Setter Property="BorderBrush" Value="Transparent" />
             <Setter Property="Padding" Value="8,4" />
-            <Setter Property="Margin" Value="-8,-4,20,-4" />
+            <Setter Property="Margin" Value="0,0,12,2" />
             <Setter Property="Cursor" Value="Hand" />
             <Setter Property="FocusVisualStyle" Value="{x:Null}" />
             <Setter Property="IsEnabled" Value="{Binding Tag.Available, RelativeSource={RelativeSource Self}}" />
@@ -333,7 +339,8 @@
                     <ColumnDefinition Width="*" />
                     <ColumnDefinition Width="Auto" />
                 </Grid.ColumnDefinitions>
-                <WrapPanel Orientation="Horizontal">
+                <!-- Fixed-width cells so the chips line up in columns when the strip wraps -->
+                <WrapPanel Orientation="Horizontal" ItemWidth="224" Margin="-8,-4,0,-4">
                     <ToggleButton Style="{StaticResource ReleaseChip}" Tag="{Binding OptiNews}">
                         <StackPanel>
                             <TextBlock Text="OPTISCALER-NR" Style="{StaticResource Caps}" />
@@ -345,58 +352,56 @@
                             </StackPanel>
                         </StackPanel>
                     </ToggleButton>
-                    <Border Width="1" Background="{StaticResource Line}" Margin="0,2,28,2" />
                     <ToggleButton Style="{StaticResource ReleaseChip}" Tag="{Binding DlssNews}">
                         <StackPanel>
                             <TextBlock Text="DLSS" Style="{StaticResource Caps}" />
                             <TextBlock Text="{Binding DlssVersion}" Style="{StaticResource ChipValue}" />
                         </StackPanel>
                     </ToggleButton>
-                    <Border Width="1" Background="{StaticResource Line}" Margin="0,2,28,2" />
                     <ToggleButton Style="{StaticResource ReleaseChip}" Tag="{Binding UpliftNews}">
                         <StackPanel>
                             <TextBlock Text="GITC UPLIFT" Style="{StaticResource Caps}" />
                             <TextBlock Text="{Binding UpliftVersion}" Style="{StaticResource ChipValue}" />
                         </StackPanel>
                     </ToggleButton>
-                    <Border Width="1" Background="{StaticResource Line}" Margin="0,2,28,2" />
                     <ToggleButton Style="{StaticResource ReleaseChip}" Tag="{Binding MfgNews}">
                         <StackPanel>
                             <TextBlock Text="MFG UNLOCK" Style="{StaticResource Caps}" />
                             <TextBlock Text="{Binding MfgVersion}" Style="{StaticResource ChipValue}" />
                         </StackPanel>
                     </ToggleButton>
-                    <Border Width="1" Background="{StaticResource Line}" Margin="0,2,28,2" />
                     <ToggleButton Style="{StaticResource ReleaseChip}" Tag="{Binding StreamlineNews}">
                         <StackPanel>
                             <TextBlock Text="STREAMLINE" Style="{StaticResource Caps}" />
                             <TextBlock Text="{Binding StreamlineVersion}" Style="{StaticResource ChipValue}" />
                         </StackPanel>
                     </ToggleButton>
-                    <Border Width="1" Background="{StaticResource Line}" Margin="0,2,28,2" />
-                    <StackPanel Margin="0,0,28,0">
-                        <TextBlock Text="DLSSNR" Style="{StaticResource Caps}" />
-                        <TextBlock Text="{Binding DlssNrText}">
-                            <TextBlock.Style>
-                                <Style TargetType="TextBlock" BasedOn="{StaticResource ChipValue}">
-                                    <Style.Triggers>
-                                        <DataTrigger Binding="{Binding DlssNrOk}" Value="False">
-                                            <Setter Property="Foreground" Value="{StaticResource Danger}" />
-                                        </DataTrigger>
-                                    </Style.Triggers>
-                                </Style>
-                            </TextBlock.Style>
-                        </TextBlock>
-                    </StackPanel>
-                    <Border Width="1" Background="{StaticResource Line}" Margin="0,2,28,2" />
-                    <StackPanel Margin="0,0,24,0" ToolTip="Lecram v11 update channel; builds are added to the library. Games keep their installed build.">
-                        <TextBlock Text="LECRAM DLSS5" Style="{StaticResource Caps}" />
-                        <TextBlock Text="{Binding LecramVersion}" Style="{StaticResource ChipValue}" />
-                    </StackPanel>
-                    <ToggleButton Style="{StaticResource ReleaseChip}" Tag="{Binding ReShadeNews}" Margin="-8,-4,-8,-4">
+                    <Border Style="{StaticResource StripCell}">
+                        <StackPanel>
+                            <TextBlock Text="DLSSNR" Style="{StaticResource Caps}" />
+                            <TextBlock Text="{Binding DlssNrText}" ToolTip="{Binding DlssNrText}">
+                                <TextBlock.Style>
+                                    <Style TargetType="TextBlock" BasedOn="{StaticResource ChipValue}">
+                                        <Style.Triggers>
+                                            <DataTrigger Binding="{Binding DlssNrOk}" Value="False">
+                                                <Setter Property="Foreground" Value="{StaticResource Danger}" />
+                                            </DataTrigger>
+                                        </Style.Triggers>
+                                    </Style>
+                                </TextBlock.Style>
+                            </TextBlock>
+                        </StackPanel>
+                    </Border>
+                    <Border Style="{StaticResource StripCell}" ToolTip="Lecram v11 update channel; builds are added to the library. Games keep their installed build.">
+                        <StackPanel>
+                            <TextBlock Text="LECRAM DLSS5" Style="{StaticResource Caps}" />
+                            <TextBlock Text="{Binding LecramVersion}" Style="{StaticResource ChipValue}" />
+                        </StackPanel>
+                    </Border>
+                    <ToggleButton Style="{StaticResource ReleaseChip}" Tag="{Binding ReShadeNews}">
                         <StackPanel>
                             <TextBlock Text="RESHADE" Style="{StaticResource Caps}" />
-                            <TextBlock Text="{Binding ReShadeText}">
+                            <TextBlock Text="{Binding ReShadeText}" ToolTip="{Binding ReShadeText}">
                                 <TextBlock.Style>
                                     <Style TargetType="TextBlock" BasedOn="{StaticResource ChipValue}">
                                         <Style.Triggers>
@@ -485,14 +490,30 @@
                                         <ColumnDefinition Width="*" />
                                         <ColumnDefinition Width="Auto" />
                                     </Grid.ColumnDefinitions>
-                                    <TextBlock Text="{Binding Name}" FontWeight="SemiBold" TextTrimming="CharacterEllipsis" />
-                                    <Ellipse Grid.Column="1" Width="6" Height="6" Fill="{StaticResource Warn}" VerticalAlignment="Center"
-                                             ToolTip="Update available" Visibility="{Binding NeedsUpdate, Converter={StaticResource BoolToVis}}" />
-                                    <StackPanel Grid.Row="1" Grid.ColumnSpan="2" Orientation="Horizontal" Margin="0,5,0,0">
-                                        <TextBlock Text="{Binding Source}" FontSize="11" Foreground="{StaticResource Dim}" Width="52" VerticalAlignment="Center" />
+                                    <TextBlock Text="{Binding Name}" FontWeight="SemiBold" TextTrimming="CharacterEllipsis" ToolTip="{Binding Name}" />
+                                    <StackPanel Grid.Column="1" Orientation="Horizontal" Margin="8,0,0,0">
+                                        <TextBlock Text="{Binding Source}" FontSize="11" Foreground="{StaticResource Dim}" VerticalAlignment="Center" />
+                                        <Ellipse Width="6" Height="6" Fill="{StaticResource Warn}" VerticalAlignment="Center" Margin="6,0,0,0"
+                                                 ToolTip="Update available" Visibility="{Binding NeedsUpdate, Converter={StaticResource BoolToVis}}" />
+                                    </StackPanel>
+                                    <!-- Wraps instead of clipping; the installed mods come first so they always show -->
+                                    <WrapPanel Grid.Row="1" Grid.ColumnSpan="2" Margin="0,5,0,-4">
+                                        <WrapPanel.Resources>
+                                            <Style TargetType="Border" BasedOn="{StaticResource Badge}">
+                                                <Setter Property="Margin" Value="0,0,4,4" />
+                                            </Style>
+                                        </WrapPanel.Resources>
+                                        <Border Background="{StaticResource Accent}" BorderBrush="{StaticResource Accent}"
+                                                Visibility="{Binding ModBadge, Converter={StaticResource NullToVis}}" ToolTip="Installed mods">
+                                            <TextBlock Text="{Binding ModBadge}" Style="{StaticResource BadgeText}" Foreground="#0B0B0B" />
+                                        </Border>
+                                        <Border BorderBrush="{StaticResource Danger}"
+                                                Visibility="{Binding HasAntiCheat, Converter={StaticResource BoolToVis}}" ToolTip="{Binding AntiCheat}">
+                                            <TextBlock Text="AC" Style="{StaticResource BadgeText}" Foreground="{StaticResource Danger}" />
+                                        </Border>
                                         <Border Visibility="{Binding HasDlss, Converter={StaticResource BoolToVis}}">
                                             <Border.Style>
-                                                <Style TargetType="Border" BasedOn="{StaticResource Badge}">
+                                                <Style TargetType="Border" BasedOn="{StaticResource {x:Type Border}}">
                                                     <Setter Property="BorderBrush" Value="{StaticResource Warn}" />
                                                     <Style.Triggers>
                                                         <DataTrigger Binding="{Binding DlssCurrent}" Value="True">
@@ -503,23 +524,11 @@
                                             </Border.Style>
                                             <TextBlock Text="{Binding DlssBadge}" Style="{StaticResource BadgeText}" />
                                         </Border>
-                                        <Border Style="{StaticResource Badge}" Visibility="{Binding HasFeatureBadge, Converter={StaticResource BoolToVis}}"
+                                        <Border Visibility="{Binding HasFeatureBadge, Converter={StaticResource BoolToVis}}"
                                                 ToolTip="DLSS features found in the game files (Ray Reconstruction, Frame Generation, Reflex)">
                                             <TextBlock Text="{Binding FeatureBadge}" Style="{StaticResource BadgeText}" />
                                         </Border>
-                                        <Border Style="{StaticResource Badge}" Background="{StaticResource Accent}" BorderBrush="{StaticResource Accent}"
-                                                Visibility="{Binding IsOptiInstalled, Converter={StaticResource BoolToVis}}">
-                                            <TextBlock Text="OPTI" Style="{StaticResource BadgeText}" Foreground="#0B0B0B" />
-                                        </Border>
-                                        <Border Style="{StaticResource Badge}" BorderBrush="{StaticResource Accent}"
-                                                Visibility="{Binding IsReShadeOnlyInstalled, Converter={StaticResource BoolToVis}}" ToolTip="ReShade + add-ons, no OptiScaler">
-                                            <TextBlock Text="RESHADE" Style="{StaticResource BadgeText}" />
-                                        </Border>
-                                        <Border Style="{StaticResource Badge}" BorderBrush="{StaticResource Danger}"
-                                                Visibility="{Binding HasAntiCheat, Converter={StaticResource BoolToVis}}" ToolTip="{Binding AntiCheat}">
-                                            <TextBlock Text="AC" Style="{StaticResource BadgeText}" Foreground="{StaticResource Danger}" />
-                                        </Border>
-                                    </StackPanel>
+                                    </WrapPanel>
                                 </Grid>
                             </DataTemplate>
                         </ListBox.ItemTemplate>
