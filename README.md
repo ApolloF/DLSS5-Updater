@@ -8,17 +8,17 @@ It is an unofficial tool, not affiliated with or endorsed by NVIDIA or the mod a
 
 ## Screenshots
 
-![The game list: games found on this PC, with their installed and latest mod versions and a filter for All, DLSS, Installed and Updates.](docs/images/games.png)
+![DLSS Updater with the game list on the left and one game selected. The top bar shows the latest version of each component next to Check for updates and Update all. The selected game lists its components with installed and latest versions and a switch for each.](docs/images/games.png)
 
-The game list. DLSS Updater finds your games and shows which ones have mods installed or updates waiting.
+The game list and one game's components. Badges show what each game has installed, and an arrow marks an outdated DLSS version.
 
-![A game's options: install mode, DLSS version, mod settings and the Install, DLSS only, Restore DLSS and Uninstall buttons.](docs/images/game-options.png)
+![The Game config tab of one game: a base preset, how to treat existing config files, and neural rendering options that inherit from the global settings unless you change them.](docs/images/game-options.png)
 
-The options for one game. Each game can have its own settings.
+Settings for one game. Anything you don't change here follows your global settings.
 
-![The Settings page with the General tab open: default install mode, DLSS version, local components and game folders.](docs/images/settings.png)
+![The Settings page on the OptiScaler-NR tab, with neural rendering options, each with a short explanation and a help button.](docs/images/settings.png)
 
-The Settings page. These values are the defaults for all games.
+Settings for all games. Every option has a short explanation, and the help button next to it tells you more.
 
 ## Features
 
@@ -92,10 +92,12 @@ Existing config files are handled in the way you choose under **Existing game co
 ## Safety, backups and restore
 
 - Before the app replaces or removes a game file, it moves the original into a `.dlssupdater\backup` folder next to the game's exe. A record in that folder lists every file the app added or changed.
-- **Restore DLSS** puts the original DLSS files back.
+- **Restore DLSS** puts the original DLSS and Streamline files back.
 - **Uninstall** removes everything the app installed in that game and restores the original files.
 - The app only changes files inside the game folder you pick. It checks its own records before restoring so a damaged record cannot make it touch files elsewhere.
 - Games that ship anti-cheat software are marked with an **AC** badge. Before installing a mod into one, the app shows a warning and asks you to confirm.
+
+![A game marked with EasyAntiCheat. A red banner warns that adding mods can get you banned in online modes and that DLSS only is safe.](docs/images/anti-cheat.png)
 
 **Do not use these mods in online games with anti-cheat.** Replacing or injecting DLL files can get your account banned, and many online modes refuse to start. The app recognises common anti-cheat systems (Easy Anti-Cheat, BattlEye, EA Javelin, GameGuard, XIGNCODE3, PunkBuster, Vanguard and others), but no check is complete. If you are unsure, do not install. **DLSS only** swaps the DLSS files without injecting anything and does not ask for this confirmation, but changing game files is never risk-free. For online games, use the DLSS override in the NVIDIA app instead.
 
@@ -104,8 +106,8 @@ Existing config files are handled in the way you choose under **Existing game co
 **A game is missing from the list.**
 Press **Rescan**. If it is still missing, add its folder with **Add game**, or its library folder with **Add library**.
 
-**The app says it needs administrator rights.**
-The game is in a protected folder. Choose **Restart as admin** when asked.
+**The app says Windows blocked access to a game folder.**
+Close the game and anything that may be using its files, such as overlays or a running antivirus scan, then try again. If the game is in a protected folder, choose **Restart as admin** when asked.
 
 **A game crashes or looks wrong after installing.**
 Press **Uninstall** for that game to restore the original files. Then try the **ReShade + add-ons** mode, a different proxy DLL name (Settings, General) or a different DLSS version.
