@@ -17,10 +17,10 @@ public partial class App : Application
     {
         if (e.Args.Contains("--unregister-addon"))
         {
-            // Run by the uninstaller so stale Seaglass links from older versions get cleaned up; only removes the link when it points at this exe.
+            // Run by the uninstaller so old add-on links from earlier versions get cleaned up; only removes the link when it points at this exe.
             ShutdownMode = ShutdownMode.OnExplicitShutdown;
             try { Addon.AddonRegistration.UnregisterIfThisExe(); }
-            catch (Exception ex) { Log.Error("Disconnect from Seaglass", ex); }
+            catch (Exception ex) { Log.Error("Remove old add-on link", ex); }
             Shutdown();
             return;
         }

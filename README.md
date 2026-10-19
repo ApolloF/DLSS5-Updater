@@ -1,112 +1,166 @@
 # DLSS Updater
 
-Windows app that keeps an OptiScaler-NR + ReShade + DLSS setup current across all your games.
+DLSS Updater is a free Windows app that finds the PC games on your computer and installs or updates graphics mods in them: OptiScaler, NVIDIA DLSS, NVIDIA Streamline, MFG Unlock, ReShade and a few add-ons. It downloads the files from their official sources, puts them in the right game folder and keeps a backup of everything it replaces. One click puts your original files back.
 
-It pulls the latest releases of:
+It is for people with an NVIDIA RTX card who play single-player games and want newer DLSS versions or the extra graphics options these mods offer, without copying DLL files around by hand.
 
-- [OptiScaler-DLSSNR-PreSR-Multipass](https://github.com/ShyVortex/OptiScaler-DLSSNR-PreSR-Multipass/releases) (standard package, prereleases included)
-- [GITC Uplift](https://github.com/ghostinthecamera/GITC-Uplift/releases) (MIT ReShade DLSS-NR add-on, 64-bit; exclusive alternative to OptiScaler-NR, ShortFuse, Lecram and DFC)
-- [MFGAdaUnlock-RenoDx](https://github.com/mavismmg/MFGAdaUnlock-RenoDx/releases) (`renodx-mfgunlock.addon64`)
-- [NVIDIA DLSS](https://github.com/NVIDIA/DLSS) runtime DLLs: `nvngx_dlss.dll` (SR), `nvngx_dlssd.dll` (RR), `nvngx_dlssg.dll` (FG)
-- [NVIDIA Streamline](https://github.com/NVIDIA-RTX/Streamline) (optional, signed `sl.*.dll` set for Dynamic MFG)
-- [ReShade](https://reshade.me) with full add-on support (`ReShade64.dll` taken from the official setup)
+It is an unofficial tool, not affiliated with or endorsed by NVIDIA or the mod authors (see [Credits](#credits)).
 
-and installs them next to each game's executable, together with your own `nvngx_dlssnr.dll`. Uplift puts that runtime in `GITC-Uplift\nvngx_dlssnr.dll` so NVIDIA DLSS cannot load a game-folder copy first.
+## Screenshots
 
-> **Single-player games only.** Replacing or injecting DLLs can trigger anti-cheat in online games. DLSS Updater flags games with known anti-cheat (EAC, BattlEye, GameGuard, …) and asks before touching them, but no check is complete. For online games, use the DLSS override in the NVIDIA app instead.
->
-> Not affiliated with or endorsed by NVIDIA. NVIDIA and DLSS are trademarks of NVIDIA Corporation, used here only to describe compatibility. Everything is downloaded from the official sources listed above; nothing from NVIDIA is bundled.
+![DLSS Updater with the game list on the left and one game selected. The top bar shows the latest version of each component next to Check for updates and Update all. The selected game lists its components with installed and latest versions and a switch for each.](docs/images/games.png)
 
-## Download
+The game list and one game's components. Badges show what each game has installed, and an arrow marks an outdated DLSS version.
 
-Each [release](https://github.com/ApolloF/dlssupdater/releases/latest) has two builds of the same app:
+![The Game config tab of one game: a base preset, how to treat existing config files, and neural rendering options that inherit from the global settings unless you change them.](docs/images/game-options.png)
 
-- **`DLSSUpdater-Setup-<version>.exe`**: installer. Installs for your user without admin rights (or for all users), adds a Start menu entry and an optional desktop icon, and has an uninstaller. Run a newer setup to update.
-- **`DLSSUpdater.exe`**: portable. A single self-contained exe; put it anywhere and run it.
+Settings for one game. Anything you don't change here follows your global settings.
 
-Both keep settings and downloads in `%LocalAppData%\DLSSUpdater`, so you can switch between them. Uninstalling keeps that folder and also removes a stale Seaglass add-on link left by older versions if it pointed at the installed copy.
+![The Settings page on the OptiScaler-NR tab, with neural rendering options, each with a short explanation and a help button.](docs/images/settings.png)
 
-## What an install does
+Settings for all games. Every option has a short explanation, and the help button next to it tells you more.
 
-1. Finds the real game exe (Unreal `*-Win64-Shipping.exe`, Unity players, etc.; you can pick another folder).
-2. Copies `OptiScaler.dll` as the chosen proxy (`dxgi.dll` by default) plus its `OptiScaler\` backend folder.
-3. Builds `OptiScaler.ini` from the release ini plus your settings and patches `ReShade.ini` (keybinds, MFG Unlock options). Out of the box nothing is changed from what the upstream projects ship, except `LoadReshade=true` when ReShade is installed and `[DlssNr] Enabled=true` when the DLSSNR runtime is installed (both default to off upstream).
-4. Places `ReShade64.dll`, `renodx-mfgunlock.addon64` and `nvngx_dlssnr.dll` beside it.
-5. Replaces every `nvngx_dlss*.dll` in the game with the latest NVIDIA build, or with a pinned version (globally or per game, also downgrading). Games that ship no DLSS have this off by default; OptiScaler still gets an `nvngx_dlss.dll` so it can offer DLSS.
-6. Optionally replaces all `sl.*.dll` the game ships with one matching Streamline release (never mixed, never adds plugins).
-7. Moves anything it replaces into `.dlssupdater\backup` next to the exe. **Uninstall** and **Restore DLSS** put the originals back.
+## Features
 
-Existing configs (Settings → General): **Keep game settings** (default: values the app wrote follow your settings, anything the game had or you changed in-game stays), **Apply app settings** (your settings overwrite the same keys everywhere) or **Fresh config** (OptiScaler.ini rebuilt from the release; old one backed up).
+- Finds games from Steam, Epic, GOG, EA, Ubisoft and Xbox. You can also add a single game folder or a whole library folder.
+- Checks for new releases of every component and shows installed and latest versions side by side.
+- Installs or updates the mods for one game, or for all managed games with **Update all**.
+- Swaps only the DLSS files with **DLSS only**, without adding any other mod. You can pin an older DLSS version if a newer one looks worse in a game.
+- Backs up every game file it replaces. **Restore DLSS** and **Uninstall** bring them back.
+- Warns before touching a game that ships anti-cheat software.
+- Lets you change the mods' settings in the app, as defaults for all games or for single games. Presets save a whole setup under a name. Every option has a short explanation, and the About page has a guide.
+- Can set per-game NVIDIA driver profile options such as DLSS presets, Smooth Motion, RTX HDR, the FPS limiter and power mode. It never writes the global driver profile.
+- Shows a short summary of what is new when a component gets a new release.
 
-Settings also pre-configures DLSSNR (passes, model resolution, style, strengths) and its HDR tone mapping (curve, white point, paper white, highlight protection, max brightening) plus OptiScaler's HDR output. Every option has an ⓘ tooltip and a guide entry on the About page that explains each dropdown choice.
+## What it supports
 
-Settings has key-capture fields for the OptiScaler hotkeys (menu, FPS overlay, frame generation, DLSSNR) and ReShade (overlay, effects, screenshot, reload).
+| Component | What it is | Where it comes from |
+|---|---|---|
+| [OptiScaler-NR](https://github.com/ShyVortex/OptiScaler-DLSSNR-PreSR-Multipass) | A fork of OptiScaler that adds DLSS neural rendering (NR). The main install mode. | Downloaded from GitHub. |
+| [OptiScaler](https://github.com/optiscaler/OptiScaler) | Lets a game use DLSS, FSR or XeSS as its upscaler. | Parent project of the fork above. An experimental fork by janblade (OptiScaler F5) can be chosen in Settings. |
+| [NVIDIA DLSS](https://github.com/NVIDIA/DLSS) | The DLSS runtime files for upscaling, ray reconstruction and frame generation. | Downloaded from NVIDIA's GitHub. |
+| [NVIDIA Streamline](https://github.com/NVIDIA-RTX/Streamline) | The layer between a game and DLSS frame generation. Optional. | Downloaded from NVIDIA's GitHub. |
+| [MFG Unlock](https://github.com/mavismmg/MFGAdaUnlock-RenoDx) | A ReShade add-on that unlocks multi frame generation on RTX 40 cards. | Downloaded from GitHub. |
+| [ReShade](https://reshade.me) | Post-processing and add-on loader. | Downloaded from reshade.me (the add-on build). |
+| [GITC Uplift](https://github.com/ghostinthecamera/GITC-Uplift) | A ReShade add-on that runs DLSS neural rendering. Replaces the other neural rendering routes. | Downloaded from GitHub. |
+| [RenoDX DLSS add-on](https://github.com/clshortfuse/renodx) | ShortFuse's ReShade add-on for neural rendering. | You import the file yourself. |
+| Lecram DLSS5 add-on | A ReShade add-on for neural rendering by Lecram. | You can import it. Newer builds can also be fetched from the author's public download folder. |
+| Deep Fried Chicken | A neural rendering add-on. Its licence allows personal use only. | You import the file yourself. |
 
-**Install mode**: OptiScaler-NR (default, the main purpose) or **ReShade + add-ons**, which installs ReShade itself as the proxy (`dxgi.dll`, `d3d12.dll`, `d3d11.dll`, `d3d9.dll`, `dinput8.dll` or `opengl32.dll`) with MFG Unlock and the DLSS / Streamline updates, without OptiScaler or DLSSNR. Set the default in Settings and override it per game; switching removes the other mode's files.
+The app only replaces files in a game with files from the sources above or files you imported. Which of these you use is up to you. Most people only need OptiScaler-NR or **DLSS only**.
 
-**Presets**: save the whole OptiScaler / ReShade configuration (options, keybinds, overrides) under a name, load it, or assign it to single games. The built-in **Recommended (ApolloF)** preset holds the tuned setup (DLSS upscaler, preset override, overlay on **Del**, DLSSNR strengths and HDR tone mapping, ReShade tutorial skipped). **Reset to defaults** goes back to the upstream defaults.
+## Requirements
 
-**Config check**: before installing a new OptiScaler-NR release the app compares its OptiScaler.ini with every key it manages and warns when keys disappeared or the release is a newer major line than tested.
+- Windows 10 or Windows 11, 64-bit.
+- An NVIDIA RTX graphics card for DLSS. Some features need a newer card (frame generation needs RTX 40 or 50, for example). Each option's explanation in the app says so.
+- An internet connection to download components. The app keeps what it has downloaded and works offline with that.
+- A game in a folder you can write to. If a game sits in a protected folder, the app asks to restart with administrator rights.
 
-**NVIDIA profile** (per game only; the global driver profile is read, never written): DLSS SR / RR / FG preset overrides, DLSS render resolution, multi frame generation count, Smooth Motion, RTX HDR, RTX Dynamic Vibrance, FPS limiter, VSync and power mode, written straight to the driver profile via NvAPI like NVIDIA Profile Inspector. Nothing is loaded until the tab is opened. The scan detects which DLSS features a game ships (SR, RR, FG, Reflex, from `nvngx_*` and Streamline `sl.*` files); the tab lists them, moves presets for missing features into a collapsed group, and suggests Smooth Motion for games without FG. The game list shows RR / FG / Reflex badges.
+You do not need to install .NET. The app brings what it needs.
 
-**What's new**: when a component has a newer release than the last one you looked at, its version in the header gets a green dot. Click any version for a short summary of that release (headline and first points of its notes) and a link to the full release notes; closing it clears the dot. Nothing is flagged on the first check, only releases that arrive later.
+## Download and install
 
-**Update all** re-applies everything to each managed game after a new release or after a game patch reverts the DLLs.
+Get the latest version from the [releases page](https://github.com/ApolloF/dlssupdater/releases/latest). Each release has two files:
 
-Games are discovered from Steam, Epic, GOG, EA, Ubisoft and `XboxGames` folders. Standalone games can be added one by one or as a library folder whose subfolders are games.
+- `DLSSUpdater-Setup-<version>.exe` is the installer. It installs for your user without administrator rights (or for all users if you choose), adds a Start menu entry, can add a desktop icon and has an uninstaller. To update the app, run a newer setup.
+- `DLSSUpdater.exe` is the portable version. It is a single file. Put it anywhere and run it.
 
-Games with anti-cheat (EAC, BattlEye, GameGuard, …) are flagged and need an extra confirmation before anything is injected. DLSS-only swaps work without it.
+Both versions keep settings and downloads in `%LocalAppData%\DLSSUpdater`, so you can switch between them without losing anything.
 
 ## First run
 
-`nvngx_dlssnr.dll` can't be redistributed. Put it next to `DLSSUpdater.exe` on first launch, or import it under **Settings → Local components**. It's stored in `%LocalAppData%\DLSSUpdater\components`.
+1. Start the app. It scans your game libraries and lists the games it finds. To add a game it missed, use **Add game** (one game folder) or **Add library** (a folder whose subfolders are games) at the bottom of the list.
+2. Add `nvngx_dlssnr.dll` if you want to use neural rendering. This file belongs to NVIDIA, and its licence does not allow other people to share it, so this app does not include it and never downloads it. You supply your own copy. Put it next to `DLSSUpdater.exe` before the first start, or open **Settings** and import it under **Local components**. The app stores it in `%LocalAppData%\DLSSUpdater\components`. You can keep several versions side by side and pick a default.
+3. You can skip step 2 if you only want newer DLSS files. **DLSS only** does not need it.
+4. ReShade is downloaded the first time an install needs it. If you prefer your own `ReShade64.dll`, import it under **Local components**. **Use download** switches back.
 
-ReShade is downloaded from reshade.me on the first install that needs it (add-on build, cached per version). To use your own build, import `ReShade64.dll` the same way; **Use download** switches back.
+## Everyday use
 
-## Seaglass add-on
+1. Pick a game in the list. The filters at the top (**All**, **DLSS**, **Installed**, **Updates**) help you find games.
+2. Choose how to install:
+   - **OptiScaler-NR** is the default. It installs OptiScaler as a proxy DLL (`dxgi.dll` unless you change it), plus ReShade, MFG Unlock and the DLSS files.
+   - **ReShade + add-ons** installs ReShade itself as the proxy, with MFG Unlock and the DLSS and Streamline updates, and without OptiScaler.
+   - You can set the default mode in Settings and change it for a single game.
+3. Press **Install**. The button reads **Update** when a newer release is available and **Reinstall** when the game is current.
+4. Press **DLSS only** if you just want the game's DLSS files replaced and nothing else added.
+5. After a new release or a game patch, press **Update all** at the top to re-apply everything to every managed game.
+6. Change settings in the game's own tab, or in **Settings** for all games. Tabs in Settings cover General, Keybinds, ReShade add-ons, OptiScaler-NR and Advanced. Hover the info icons or open the guide on the About page when you are unsure what an option does.
+7. In the game, the OptiScaler menu opens with the **Insert** key by default (the Recommended preset uses **Delete**), and the ReShade overlay with **Home**. Both can be changed in the Keybinds tab.
 
-Seaglass add-on support lives on the [`feature/seaglass-addon`](https://github.com/ApolloF/dlssupdater/tree/feature/seaglass-addon) branch until Seaglass ships add-on support. Releases of DLSS Updater no longer include it.
+Existing config files are handled in the way you choose under **Existing game configs**: keep the game's values (the default), apply your app settings over them, or start from a fresh config.
 
-## Support
+## Safety, backups and restore
 
-DLSS Updater is free. If it's useful to you, [sponsor it on GitHub](https://github.com/sponsors/ApolloF) or leave a one-off tip on [Ko-fi](https://ko-fi.com/apollof).
+- Before the app replaces or removes a game file, it moves the original into a `.dlssupdater\backup` folder next to the game's exe. A record in that folder lists every file the app added or changed.
+- **Restore DLSS** puts the original DLSS and Streamline files back.
+- **Uninstall** removes everything the app installed in that game and restores the original files.
+- The app only changes files inside the game folder you pick. It checks its own records before restoring so a damaged record cannot make it touch files elsewhere.
+- Games that ship anti-cheat software are marked with an **AC** badge. Before installing a mod into one, the app shows a warning and asks you to confirm.
 
-## Build
+![A game marked with EasyAntiCheat. A red banner warns that adding mods can get you banned in online modes and that DLSS only is safe.](docs/images/anti-cheat.png)
+
+**Do not use these mods in online games with anti-cheat.** Replacing or injecting DLL files can get your account banned, and many online modes refuse to start. The app recognises common anti-cheat systems (Easy Anti-Cheat, BattlEye, EA Javelin, GameGuard, XIGNCODE3, PunkBuster, Vanguard and others), but no check is complete. If you are unsure, do not install. **DLSS only** swaps the DLSS files without injecting anything and does not ask for this confirmation, but changing game files is never risk-free. For online games, use the DLSS override in the NVIDIA app instead.
+
+## Troubleshooting
+
+**A game is missing from the list.**
+Press **Rescan**. If it is still missing, add its folder with **Add game**, or its library folder with **Add library**.
+
+**The app says Windows blocked access to a game folder.**
+Close the game and anything that may be using its files, such as overlays or a running antivirus scan, then try again. If the game is in a protected folder, choose **Restart as admin** when asked.
+
+**A game crashes or looks wrong after installing.**
+Press **Uninstall** for that game to restore the original files. Then try the **ReShade + add-ons** mode, a different proxy DLL name (Settings, General) or a different DLSS version.
+
+**There are no OptiScaler updates.**
+The OptiScaler-NR fork publishes pre-releases only. Keep **Include pre-releases** turned on in Settings.
+
+**The app cannot reach GitHub.**
+It uses what it already downloaded and shows an **OFFLINE** label. Try again later with **Check for updates**.
+
+**Where are the logs?**
+Open the log panel in the app. Data, cache and the log file are in `%LocalAppData%\DLSSUpdater`.
+
+## Uninstall
+
+Use **Uninstall** on each game first if you want the original game files back. Then remove the app through Windows Settings, Apps (installer version) or delete `DLSSUpdater.exe` (portable version). The uninstaller keeps `%LocalAppData%\DLSSUpdater`. Delete that folder yourself if you want the settings and downloads gone as well.
+
+## Build from source
+
+You need the .NET 8 SDK on Windows.
 
 ```
+dotnet build -warnaserror
 dotnet test
 dotnet publish src/DLSSUpdater -c Release -o publish
 ```
 
-Produces a single self-contained `publish\DLSSUpdater.exe` (.NET 8, WPF), the portable build. The installer wraps it with [Inno Setup](https://jrsoftware.org/isinfo.php):
+The last command makes the portable `publish\DLSSUpdater.exe`. The installer needs [Inno Setup 6](https://jrsoftware.org/isinfo.php):
 
 ```
 iscc /DAppVersion=1.10.3 installer\DLSSUpdater.iss
 ```
 
-Tagging `v*` (matching `<Version>` in the csproj) builds both on GitHub Actions and attaches them to a release.
+Pushing a tag like `v1.10.3` that matches the version in the project file builds both files on GitHub Actions and attaches them to a release. Setting `DLSSU_INTEGRATION=1` turns on a test that downloads the real releases and installs them into a temporary folder.
 
-`DLSSU_INTEGRATION=1` enables a test that downloads the real releases (including ReShade from reshade.me) and installs them into a temporary folder.
+`DLSSUpdater.exe --demo` starts the app on a made-up game library in a temporary folder. It never scans your launchers, downloads anything or touches your games, so it is a safe way to look around. `--demo --screenshots <folder>` saves the screenshots used in this README to that folder and exits.
 
-## License
+## Credits
 
-DLSS Updater is released under the [MIT License](LICENSE). The third-party files it downloads and installs (OptiScaler, MFG Unlock, NVIDIA DLSS and Streamline, ReShade) and your own `nvngx_dlssnr.dll` keep their own licences.
+DLSS Updater would not exist without the work of these projects and their authors. It only downloads and installs their files. It does not change them.
 
-## DLSS 5 / NR library and maintained sources
+- [OptiScaler](https://github.com/optiscaler/OptiScaler) and the [OptiScaler-NR fork](https://github.com/ShyVortex/OptiScaler-DLSSNR-PreSR-Multipass) by ShyVortex.
+- [MFG Unlock](https://github.com/mavismmg/MFGAdaUnlock-RenoDx) by mavismmg.
+- [ReShade](https://reshade.me) by crosire.
+- [RenoDX](https://github.com/clshortfuse/renodx) and [openNR](https://github.com/clshortfuse/openNR) by ShortFuse.
+- [GITC Uplift](https://github.com/ghostinthecamera/GITC-Uplift) by ghostinthecamera.
+- The DLSS5 add-on by Lecram and Deep Fried Chicken by its author.
+- [NVIDIA DLSS](https://github.com/NVIDIA/DLSS) and [NVIDIA Streamline](https://github.com/NVIDIA-RTX/Streamline) by NVIDIA.
 
-Import each `nvngx_dlssnr.dll` under **Settings → Local components**. Every build is kept side by side in `%LocalAppData%\DLSSUpdater\components\dlssnr`, including builds with the same version but different contents. Version numbers come from the DLL version resource; SHA-256 identifies the build. Existing single-file imports are retained automatically. NR is never downloaded or distributed by this app.
+DLSS Updater is released under the [MIT License](LICENSE). The files it downloads and installs, and your own `nvngx_dlssnr.dll`, keep their own licences.
 
-Choose the global NR default in Settings, or choose a version on a game and press **Switch NR**. **Switch back** restores the previous game file; **Switch default back** restores the previous default. Changes to the default apply on the next install or update for games following it. Full uninstall still restores the game's original files. Downloaded DLSS SDK versions are also retained and available in the DLSS version picker, including offline.
+DLSS Updater is an unofficial tool. It is not affiliated with or endorsed by NVIDIA or by the authors of the projects above. NVIDIA, DLSS and Streamline belong to NVIDIA Corporation. OptiScaler, ReShade and the other projects belong to their authors. Their names are used here only to say what the app works with.
 
-OptiScaler-NR now comes from [ShyVortex's maintained continuation](https://github.com/ShyVortex/OptiScaler-DLSSNR-PreSR-Multipass). Existing installs, cached releases and settings remain usable. The [janblade F5 fork](https://github.com/janblade/OptiScaler-F5-DLSSNR-Multipass) is an advanced alternative described in the research report; it is not an automatic source in this release.
+## Support
 
-The optional **RenoDX DLSS add-on** is ShortFuse's `renodx-dlss.addon64` (neural rendering for ReShade). It isn't published on any official GitHub, so it is import-only: import it under **Settings → Local components** (row "ShortFuse RenoDX DLSS"); only a file that names itself `renodx-dlss.addon64` is accepted. Every import is kept as its own build in `%LocalAppData%\DLSSUpdater\components\renodx-dlss` (importing the same file again changes nothing, and **Remove** deletes just the selected build): pick the default build in Settings, a build per game on its Game config tab, and give a build your own name with **Save name**. It works in ReShade-only mode (it replaces OptiScaler's NR, so the two never run together), with ReShade 6+ (full add-on support), an imported NR runtime and a game with native DLSS. The installer keeps other early-loaded add-ons, adds the add-on to `LoadFromDllMain`, moves older `renodx-dlssfix` add-ons (and Lecram's files, unless you install Lecram's add-on too) out of the way (restored on uninstall), and writes the options you pick in Settings to `[RENODX-DLSS]` in `ReShade.ini`. With OptiScaler-NR v0.9+, don't combine its built-in MFG unlock (`AdaMfgUnlock` / `AmpereMfgUnlock`) with the MFG Unlock add-on; the installer refuses that.
-
-The optional **Lecram DLSS5 add-on** (`renodx-dlss5.addon64` for v10 and older, `dlss5-nr.addon64` for v11 and newer) can also be imported by hand under **Settings → Local components** (row "Lecram DLSS5 Neural Rendering"); v10 is recognised by its version resource, v11 (which has none) by strings in the file. Lecram's builds carry no public version name, so each one is labelled by the highest `vX.Y.Z` string inside it (for example `v8.5.0-rc10-model-sdr1` for the 0928 build) and you can name it yourself. All imported builds are kept side by side in `%LocalAppData%\DLSSUpdater\components\lecram-dlss5`, both generations included, with a default in Settings and an optional pick per game. It has the same requirements as the RenoDX add-on, can run next to it (the app then sets `ForeignNr=observe` in `[RenoDX.DLSS5]`, and warns when the ShortFuse build a game uses is newer than the tested 0.2026.0928), and replaces OptiScaler-NR and Deep Fried Chicken. Its options appear in the ReShade add-ons tab; the ones the build's generation doesn't have are hidden, per game too. v11 builds are also fetched automatically from the author's public MediaFire channel (the one his installer uses) on every update check: the Setup exe is opened as an archive, never run, its add-on is checked against the listed SHA-256 and added to the library (the newest becomes the default, games are not switched). Turn this off or use **Check now** in the same row. The author's own installer (DLSS5 NR Setup, from v11 Patch 4) finds the add-on in every game and its Update all replaces it there, so manage a game with either that installer or this app, not both.
-
-The optional **Deep Fried Chicken** add-on is import-only as well (personal-use licence). Under **Settings → Local components** (row "Deep Fried Chicken") pick `deep-fried-chicken.addon64` from the extracted package's `64-bit` folder: the NGX bridge, the default cfg and, from 4.x, `deep-fried-chicken-present-support.dll`, the `deep-fried-chicken-neural` folder and `reshade-shaders\Shaders\DFC_OutputState.addonfx` come along, and a new import replaces the old set as a whole. Installs (ReShade-only mode, ReShade 6+, imported NR runtime) place that whole set beside the game exe, add `.\reshade-shaders\Shaders\**` to ReShade's `EffectSearchPaths` when nothing covers that folder, and replace RenoDX, Lecram and OptiScaler-NR; uninstall or switching away takes every file out again. DFC 2.x needs a game with native DLSS. DFC 4.x also installs into games without their own DLSS: it then runs NR on its own (or an external ReShade provider's) motion vectors, without DLSS upscaling, and the app adds `nvngx_dlss.dll` from NVIDIA's DLSS release beside the exe, plus `nvngx_dlssg.dll` when you tick the game's DLSS-G frame generation toggle (frame generation itself is set in DFC's overlay; it needs borderless or windowed mode, and DLSS-G an RTX 40/50 GPU). DFC's 32-bit route is not supported. Details: [docs/addons/deep-fried-chicken.md](docs/addons/deep-fried-chicken.md).
-
-Single `renodx-dlss.addon64`, `renodx-dlss5.addon64` and `dlss5-nr.addon64` files from earlier versions move into the libraries on first start and become the defaults.
-
-[ShortFuse's openNR](https://github.com/clshortfuse/openNR) describes the FP16 compatibility builds for RTX 20/30/40, including **compat-fp16-310.9.16-cuda13.4.3**. Download or build the file yourself, extract `nvngx_dlssnr.dll`, and import it. Known stock/compat hashes for 310.8.0 and 310.9.16 are labelled; other builds are marked unverified. A matching version alone does not establish hardware compatibility.
+DLSS Updater is free. If it is useful to you, you can leave a tip on [Ko-fi](https://ko-fi.com/apollof). Bug reports and ideas are welcome on the [issues page](https://github.com/ApolloF/dlssupdater/issues).
