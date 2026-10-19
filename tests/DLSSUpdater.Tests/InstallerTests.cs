@@ -509,6 +509,18 @@ public class InstallerTests : IDisposable
         Assert.True(m.ReShade);
         Assert.Null(m.Proxy);
 
+        // OptiScaler on afterwards takes the proxy name and loads the ReShade64.dll already there.
+        await installer.InstallAsync(Game(), _target, new InstallOptions { Opti = true, ReShade = true, Proxy = proxy }, null, default);
+        Assert.Equal("OPTI-1", T(proxy));
+        Assert.Equal("RESHADE", T("ReShade64.dll"));
+        Assert.Equal(proxy, InstallManifest.Load(_target)!.Proxy);
+
+        // And back to ReShade-only: ReShade is the proxy again, ReShade64.dll goes.
+        await installer.InstallAsync(Game(), _target, ReShadeOnly(), null, default);
+        Assert.Equal("RESHADE", T("dxgi.dll"));
+        Assert.False(File.Exists(Path.Combine(_target, "ReShade64.dll")));
+        Assert.Equal(InstallMode.ReShadeOnly, InstallManifest.Load(_target)!.Mode);
+
         await installer.UninstallAsync(Game(), _target, default);
         Assert.Equal(before.OrderBy(k => k.Key), Snapshot().OrderBy(k => k.Key));
     }
