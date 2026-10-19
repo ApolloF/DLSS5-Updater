@@ -40,7 +40,13 @@ public class InstallerTests : IDisposable
 
     public void Dispose()
     {
-        try { Directory.Delete(_tmp, true); } catch (IOException) { }
+        try
+        {
+            // Tests lock files read-only the way users do; Directory.Delete refuses those.
+            foreach (var f in Directory.EnumerateFiles(_tmp, "*", SearchOption.AllDirectories)) File.SetAttributes(f, FileAttributes.Normal);
+            Directory.Delete(_tmp, true);
+        }
+        catch (IOException) { }
     }
 
     private static void Write(string path, string content)
@@ -1047,5 +1053,243 @@ public class InstallerTests : IDisposable
             new InstallManifest { Mode = InstallMode.ReShadeOnly, ReShade = true, RenoDx = true, Lecram = true }.ModLabel());
         Assert.Equal("ReShade + Uplift", new InstallManifest { Mode = InstallMode.ReShadeOnly, ReShade = true, Uplift = true }.ModLabel());
         Assert.Equal("OptiScaler + DFC + Streamline", new InstallManifest { Opti = true, Dfc = true, Streamline = true }.ModLabel());
+    }
+
+    // ---------- proxy changes, MFG removal, swap safety, read-only files ----------
+
+    private string Rel(string full) => Path.GetRelativePath(_root, full);
+
+    [Fact]
+    public async Task ReShadeOnly_ProxyChange_RemovesOldProxyAndRestoresItsOriginal()
+    {
+        var before = Snapshot();
+        var installer = new Installer(_store);
+        var o = new InstallOptions { Mode = InstallMode.ReShadeOnly, ReShade = true, Proxy = "dxgi.dll" };
+        await installer.InstallAsync(Game(), _target, o, null, default);
+        Assert.Equal("RESHADE", T("dxgi.dll"));
+
+        await installer.InstallAsync(Game(), _target, o with { Proxy = "d3d11.dll" }, null, default);
+        Assert.Equal("RESHADE", T("d3d11.dll"));
+        Assert.Equal("OTHER-MOD", T("dxgi.dll"));
+        var m = InstallManifest.Read(_target)!;
+        Assert.Equal("d3d11.dll", m.Proxy);
+        Assert.False(m.Owns(Rel(Path.Combine(_target, "dxgi.dll"))));
+        Assert.Null(m.BackupOf(Rel(Path.Combine(_target, "dxgi.dll"))));
+
+        await installer.UninstallAsync(Game(), _target, default);
+        Assert.Equal(before, Snapshot());
+    }
+
+    [Fact]
+    public async Task OptiScalerMode_ProxyChange_RestoresTheOldProxysOriginal()
+    {
+        var before = Snapshot();
+        var installer = new Installer(_store);
+        await installer.InstallAsync(Game(), _target, Full, null, default);
+        Assert.Equal("OPTI-1", T("dxgi.dll"));
+
+        await installer.InstallAsync(Game(), _target, Full with { Proxy = "winmm.dll" }, null, default);
+        Assert.Equal("OPTI-1", T("winmm.dll"));
+        Assert.Equal("OTHER-MOD", T("dxgi.dll"));
+        Assert.Equal("winmm.dll", InstallManifest.Read(_target)!.Proxy);
+
+        await installer.UninstallAsync(Game(), _target, default);
+        Assert.Equal(before, Snapshot());
+    }
+
+    [Fact]
+    public async Task MfgUnticked_RemovesTheAddon_SoTheBuiltInUnlockCanTakeOver()
+    {
+        var installer = new Installer(_store);
+        await installer.InstallAsync(Game(), _target, Full, null, default);
+        Assert.Equal("MFG-1", T(ComponentStore.MfgFile));
+
+        var builtIn = Full with { Mfg = false, Overrides = [.. ConfigProfile.Recommended(), new("DLSSG", "AdaMfgUnlock", "true")] };
+        await installer.InstallAsync(Game(), _target, builtIn, null, default);
+        Assert.False(File.Exists(Path.Combine(_target, ComponentStore.MfgFile)));
+        Assert.Equal("true", IniFile.Load(Path.Combine(_target, "OptiScaler.ini")).Get("DLSSG", "AdaMfgUnlock"));
+        var m = InstallManifest.Read(_target)!;
+        Assert.False(m.Mfg);
+        Assert.Null(m.MfgTag);
+        Assert.False(m.Owns(Rel(Path.Combine(_target, ComponentStore.MfgFile))));
+
+        // "Update all" reproduces the record: no add-on, so nothing clashes with the built-in unlock.
+        await installer.InstallAsync(Game(), _target, builtIn with { Mfg = m.Mfg }, null, default);
+        Assert.False(File.Exists(Path.Combine(_target, ComponentStore.MfgFile)));
+    }
+
+    [Fact]
+    public async Task MfgReleaseLeftTheCache_ReinstallKeepsTheAddon_AndStillGuardsTheBuiltInUnlock()
+    {
+        var installer = new Installer(_store);
+        await installer.InstallAsync(Game(), _target, Full, null, default);
+        Directory.Delete(ComponentStore.TagDir(Component.MfgUnlock, "1.0"), true);
+
+        var o = Full.KeepingInstalledVersions(InstallManifest.Read(_target)!);
+        Assert.False(o.Mfg);
+        Assert.True(o.KeepMfg);
+        await installer.InstallAsync(Game(), _target, o, null, default);
+        Assert.Equal("MFG-1", T(ComponentStore.MfgFile));
+        Assert.True(InstallManifest.Read(_target)!.Mfg);
+
+        var withBuiltIn = o with { Overrides = [.. ConfigProfile.Recommended(), new("DLSSG", "AdaMfgUnlock", "true")] };
+        await Assert.ThrowsAsync<InvalidOperationException>(() => installer.InstallAsync(Game(), _target, withBuiltIn, null, default));
+    }
+
+    [Fact]
+    public async Task ReShadeOnly_ToOptiScalerWithoutReShade_ClearsTheReShadeRecord()
+    {
+        var installer = new Installer(_store);
+        await installer.InstallAsync(Game(), _target, new InstallOptions { Mode = InstallMode.ReShadeOnly, ReShade = true, Proxy = "dxgi.dll" }, null, default);
+        Assert.True(InstallManifest.Read(_target)!.ReShade);
+
+        await installer.InstallAsync(Game(), _target, new InstallOptions { Opti = true, Proxy = "dxgi.dll", Overrides = ConfigProfile.Recommended() }, null, default);
+        var m = InstallManifest.Read(_target)!;
+        Assert.Equal(InstallMode.OptiScaler, m.Mode);
+        Assert.Equal("OPTI-1", T("dxgi.dll"));
+        Assert.False(m.ReShade);
+        Assert.Null(m.ReShadeSha);
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task OptiScalerMode_ReShadeUnticked_RemovesItAndKeepsItOff(bool gameHadReShade)
+    {
+        if (gameHadReShade) Write(Path.Combine(_target, ComponentStore.ReShadeFile), "USERS-RESHADE");
+        var installer = new Installer(_store);
+        await installer.InstallAsync(Game(), _target, Full, null, default);
+        Assert.Equal("RESHADE", T(ComponentStore.ReShadeFile));
+        Assert.Equal("true", IniFile.Load(Path.Combine(_target, "OptiScaler.ini")).Get("Plugins", "LoadReshade"));
+
+        await installer.InstallAsync(Game(), _target, Full with { ReShade = false }, null, default);
+        var m = InstallManifest.Read(_target)!;
+        Assert.False(m.ReShade);
+        Assert.Null(m.ReShadeSha);
+        Assert.False(m.Owns(Rel(Path.Combine(_target, ComponentStore.ReShadeFile))));
+        // The game's own ReShade comes back and stays loaded; without one, LoadReshade returns to the release value.
+        if (gameHadReShade) Assert.Equal("USERS-RESHADE", T(ComponentStore.ReShadeFile));
+        else Assert.False(File.Exists(Path.Combine(_target, ComponentStore.ReShadeFile)));
+        Assert.Equal(gameHadReShade ? "true" : "auto", IniFile.Load(Path.Combine(_target, "OptiScaler.ini")).Get("Plugins", "LoadReshade"));
+
+        // "Update all" reproduces the record and doesn't bring ReShade back.
+        await installer.InstallAsync(Game(), _target, Full with { ReShade = m.ReShade }, null, default);
+        Assert.False(InstallManifest.Read(_target)!.ReShade);
+        if (!gameHadReShade) Assert.False(File.Exists(Path.Combine(_target, ComponentStore.ReShadeFile)));
+    }
+
+    [Fact]
+    public async Task DlssSwap_CopyFails_GameKeepsItsDll_AndRetryWorks()
+    {
+        var dll = Engine("nvngx_dlss.dll");
+        // A folder where the staged copy goes makes the copy fail, as a full disk would.
+        Directory.CreateDirectory(dll + ".dlssu-tmp");
+        var installer = new Installer(_store);
+
+        await Assert.ThrowsAnyAsync<Exception>(() => installer.InstallAsync(Game(), _target, new InstallOptions { Dlss = true }, null, default));
+        Assert.Equal("OLD-SR", File.ReadAllText(dll));
+        Assert.Null(InstallManifest.Read(_target)?.BackupOf(Rel(dll)));
+
+        Directory.Delete(dll + ".dlssu-tmp");
+        await installer.InstallAsync(Game(), _target, new InstallOptions { Dlss = true }, null, default);
+        Assert.Equal("NEW-nvngx_dlss.dll", File.ReadAllText(dll));
+        await installer.UninstallAsync(Game(), _target, default);
+        Assert.Equal("OLD-SR", File.ReadAllText(dll));
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task Swap_FileInUse_LeavesOriginalAndRecordAsTheyWere(bool proxy)
+    {
+        var path = proxy ? Path.Combine(_target, "dxgi.dll") : Engine("nvngx_dlss.dll");
+        var original = File.ReadAllText(path);
+        var o = proxy ? new InstallOptions { Opti = true, Proxy = "dxgi.dll", Overrides = ConfigProfile.Recommended() } : new InstallOptions { Dlss = true };
+        var installer = new Installer(_store);
+
+        // Readable but not replaceable, like a file an antivirus scanner holds open.
+        using (new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.Read))
+            await Assert.ThrowsAnyAsync<Exception>(() => installer.InstallAsync(Game(), _target, o, null, default));
+        Assert.Equal(original, File.ReadAllText(path));
+        Assert.False(File.Exists(path + ".dlssu-tmp"));
+        var m = InstallManifest.Read(_target);
+        Assert.False(m?.Owns(Rel(path)) ?? false);
+        Assert.Null(m?.BackupOf(Rel(path)));
+
+        await installer.InstallAsync(Game(), _target, o, null, default);
+        Assert.NotEqual(original, File.ReadAllText(path));
+        await installer.UninstallAsync(Game(), _target, default);
+        Assert.Equal(original, File.ReadAllText(path));
+    }
+
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public async Task TwoInstallFolders_DlssOriginalsSurviveEitherUninstallOrder(bool firstInstallGoesFirst)
+    {
+        var other = Path.Combine(_root, "Other");
+        Write(Path.Combine(other, "Other.exe"), "EXE2");
+        var installer = new Installer(_store);
+        await installer.InstallAsync(Game(), _target, new InstallOptions { Dlss = true }, null, default);
+        SeedDlss("v310.10.0", "NEWER");
+
+        // The second install folder leaves the files the first one swapped to that install.
+        await installer.InstallAsync(Game(), other, new InstallOptions { Dlss = true }, null, default);
+        Assert.Equal("NEW-nvngx_dlss.dll", File.ReadAllText(Engine("nvngx_dlss.dll")));
+        Assert.Null(InstallManifest.Read(other)?.BackupOf(Rel(Engine("nvngx_dlss.dll"))));
+        await installer.InstallAsync(Game(), _target, new InstallOptions { Dlss = true }, null, default);
+        Assert.Equal("NEWER-nvngx_dlss.dll", File.ReadAllText(Engine("nvngx_dlss.dll")));
+
+        foreach (var dir in firstInstallGoesFirst ? new[] { _target, other } : [other, _target])
+            if (InstallManifest.Read(dir) is not null) await installer.UninstallAsync(Game(), dir, default);
+        Assert.Equal("OLD-SR", File.ReadAllText(Engine("nvngx_dlss.dll")));
+        Assert.Equal("OLD-FG", T("nvngx_dlssg.dll"));
+    }
+
+    [Fact]
+    public async Task ReadOnlyFiles_AreReplacedAndRestored()
+    {
+        var ini = Path.Combine(_target, "ReShade.ini");
+        Write(ini, "[GENERAL]\nX=1\n");
+        var dll = Engine("nvngx_dlss.dll");
+        File.SetAttributes(ini, FileAttributes.ReadOnly);
+        File.SetAttributes(dll, FileAttributes.ReadOnly);
+        var before = Snapshot();
+        var installer = new Installer(_store);
+
+        await installer.InstallAsync(Game(), _target, ReShadeOnly() with { Mfg = false, Dlss = true }, null, default);
+        Assert.Equal("4", IniFile.Load(ini).Get("OVERLAY", "TutorialProgress"));
+        Assert.Equal("NEW-nvngx_dlss.dll", File.ReadAllText(dll));
+        Assert.True(new FileInfo(ini).IsReadOnly);
+        Assert.False(File.Exists(ini + ".dlssu-tmp"));
+        // A file we placed and the user locked afterwards still goes on uninstall.
+        File.SetAttributes(Path.Combine(_target, "dxgi.dll"), FileAttributes.ReadOnly);
+
+        await installer.UninstallAsync(Game(), _target, default);
+        Assert.Equal(before, Snapshot());
+        Assert.True(new FileInfo(dll).IsReadOnly);
+    }
+
+    [Fact]
+    public async Task FreshConfig_KeepsOneCopyOfTheConfigItRebuilds()
+    {
+        var installer = new Installer(_store);
+        await installer.InstallAsync(Game(), _target, Full, null, default);
+        var ini = Path.Combine(_target, "OptiScaler.ini");
+        var previous = Path.Combine(InstallManifest.DirFor(_target), "previous", "OptiScaler.ini");
+        File.AppendAllText(ini, "[Mine]\nEdit=1\n");
+
+        await installer.InstallAsync(Game(), _target, Full with { CarryOverIni = false }, null, default);
+        Assert.Null(IniFile.Load(ini).Get("Mine", "Edit"));
+        Assert.Equal("1", IniFile.Load(previous).Get("Mine", "Edit"));
+
+        File.AppendAllText(ini, "[Mine]\nEdit=2\n");
+        await installer.InstallAsync(Game(), _target, Full with { CarryOverIni = false }, null, default);
+        Assert.Equal("2", IniFile.Load(previous).Get("Mine", "Edit"));
+        Assert.Single(Directory.EnumerateFiles(Path.GetDirectoryName(previous)!));
+
+        await installer.UninstallAsync(Game(), _target, default);
+        Assert.Equal("[Hotfix]\nManualInputPolling=true\n", T("OptiScaler.ini"));
+        Assert.False(Directory.Exists(InstallManifest.DirFor(_target)));
     }
 }
