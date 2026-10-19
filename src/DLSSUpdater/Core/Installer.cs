@@ -77,7 +77,8 @@ public sealed record InstallOptions
 }
 
 public sealed class NeedsAdminException(string path)
-    : Exception($"No write access to {path}. Restart DLSS Updater as administrator.");
+    : Exception($"Windows blocked access to {path}. Close the game and any program using its files (overlays, antivirus scans), then try again. " +
+                "If the game is in a protected folder, restart DLSS Updater as administrator.");
 
 public sealed class GameRunningException(string exe)
     : Exception($"{Path.GetFileName(exe)} is running. Close the game first.");
