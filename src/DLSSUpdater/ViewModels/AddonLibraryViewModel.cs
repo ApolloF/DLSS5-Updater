@@ -23,6 +23,11 @@ public sealed partial class AddonLibraryViewModel : ObservableObject
         _main = main;
         _kind = kind;
         _changed = changed;
+        // Check now is a run like any other: off while a scan, check or install is going.
+        main.PropertyChanged += (_, e) =>
+        {
+            if (e.PropertyName == nameof(MainViewModel.IsBusy)) CheckNowCommand.NotifyCanExecuteChanged();
+        };
         Reload();
     }
 
@@ -44,7 +49,7 @@ public sealed partial class AddonLibraryViewModel : ObservableObject
     }
     public string LastResult => Settings.LecramLastResult;
 
-    private bool CanCheckNow() => CanCheckUpdates && AutoDownload;
+    private bool CanCheckNow() => CanCheckUpdates && AutoDownload && !_main.IsBusy;
 
     [RelayCommand(CanExecute = nameof(CanCheckNow))]
     private async Task CheckNow()
