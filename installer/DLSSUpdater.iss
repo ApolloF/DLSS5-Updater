@@ -51,5 +51,5 @@ Name: "{autodesktop}\{#AppName}"; Filename: "{app}\{#AppExe}"; Tasks: desktopico
 Filename: "{app}\{#AppExe}"; Description: "{cm:LaunchProgram,{#AppName}}"; Flags: nowait postinstall skipifsilent
 
 [UninstallRun]
-; Drop the Seaglass add-on link if it points at this copy. Settings and caches in %LocalAppData%\DLSSUpdater are kept.
+; Drop the old add-on link if it points at this copy. Settings and caches in %LocalAppData%\DLSSUpdater are kept.
 Filename: "{app}\{#AppExe}"; Parameters: "--unregister-addon"; Flags: runhidden waituntilterminated; RunOnceId: "UnregisterAddon"
