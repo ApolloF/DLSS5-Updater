@@ -679,7 +679,7 @@ public class InstallerTests : IDisposable
 
         await Assert.ThrowsAsync<UnsafeManifestException>(() => installer.InstallAsync(Game(), _target, ReShadeOnly(), null, default));
         Assert.Equal("precious", File.ReadAllText(Path.Combine(victim, "keep.txt")));
-        await Assert.ThrowsAsync<ArgumentException>(() =>
+        await Assert.ThrowsAsync<InvalidOperationException>(() =>
             installer.InstallAsync(Game(), _target, new InstallOptions { Opti = true, Proxy = @"..\..\evil.dll" }, null, default));
     }
 

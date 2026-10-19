@@ -1636,7 +1636,7 @@
                 <StackPanel Grid.Column="2" Orientation="Horizontal">
                     <Button Content="Cancel" Style="{StaticResource BtnGhost}" Padding="10,3" Command="{Binding CancelCommand}"
                             Visibility="{Binding IsBusy, Converter={StaticResource BoolToVis}}" />
-                    <Button Style="{StaticResource BtnGhost}" Padding="10,3" Command="{Binding ToggleLogCommand}" AutomationProperties.Name="Show log">
+                    <Button Style="{StaticResource BtnGhost}" Padding="10,3" Command="{Binding ToggleLogCommand}" AutomationProperties.Name="{Binding LogButtonName}">
                         <StackPanel Orientation="Horizontal">
                             <TextBlock Text="Log" FontSize="12" />
                             <TextBlock Text="&#xE70E;" Style="{StaticResource Icon}" FontSize="9" Margin="6,0,0,0" />

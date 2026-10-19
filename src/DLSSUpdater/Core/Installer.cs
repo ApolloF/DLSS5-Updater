@@ -76,6 +76,9 @@ public sealed record InstallOptions
 public sealed class NeedsAdminException(string path)
     : Exception($"No write access to {path}. Restart DLSS Updater as administrator.");
 
+public sealed class GameFileInUseException(string gameName, Exception inner)
+    : IOException($"A game file is in use. Close {gameName} and retry.", inner);
+
 public sealed class GameRunningException(string exe)
     : Exception($"{Path.GetFileName(exe)} is running. Close the game first.");
 
@@ -142,7 +145,7 @@ public sealed class Installer(ComponentStore store)
             }
         }
         if (o.ReShadeOnly && !o.ReShade) throw new InvalidOperationException("ReShade + add-ons mode installs ReShade as the proxy; ReShade can't be left out.");
-        if (!AppSettings.IsKnownProxy(o.Proxy)) throw new ArgumentException($"\"{o.Proxy}\" is not a proxy name DLSS Updater installs under.", nameof(o));
+        if (!AppSettings.IsKnownProxy(o.Proxy)) throw new InvalidOperationException($"\"{o.Proxy}\" is not a proxy name DLSS Updater installs under.");
         EnsureNoDoubleMfgUnlock(targetDir, o);
         // Fetch everything first so a network failure never leaves a half-installed game.
         var pkg = o.Opti && !o.ReShadeOnly ? await store.EnsureOptiAsync(o.OptiTag, progress, ct) : null;
@@ -340,7 +343,7 @@ public sealed class Installer(ComponentStore store)
                 Log.Info($"{game.Name}: done ({targetDir})");
             }
             catch (UnauthorizedAccessException) { throw new NeedsAdminException(targetDir); }
-            catch (IOException ex) when (IsSharingViolation(ex)) { throw new IOException($"A game file is in use. Close {game.Name} and retry.", ex); }
+            catch (IOException ex) when (IsSharingViolation(ex)) { throw new GameFileInUseException(game.Name, ex); }
             finally
             {
                 if (!m.IsEmpty) m.Save(targetDir);

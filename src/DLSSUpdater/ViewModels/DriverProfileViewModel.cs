@@ -279,7 +279,7 @@ public sealed partial class DriverProfileViewModel : ObservableObject
         {
             Busy = false;
             Log.Error("Writing NVIDIA profile failed", ex);
-            Views.Dialog.Show("NVIDIA profile", UserErrors.Message(ex) + "\nNothing was saved.");
+            Views.Dialog.Show("NVIDIA profile", (ex is NvApiException ? "The NVIDIA driver didn't accept the change." : UserErrors.Message(ex)) + "\nNothing was saved.");
         }
     }
 

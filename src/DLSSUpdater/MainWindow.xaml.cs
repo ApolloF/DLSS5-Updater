@@ -113,10 +113,29 @@ public partial class MainWindow : Window
 
     private void UpdateMaximized()
     {
-        // A chrome-less maximized window overhangs the screen by the resize border.
-        RootGrid.Margin = WindowState == WindowState.Maximized ? SystemParameters.WindowResizeBorderThickness : new Thickness(0);
+        var maximized = WindowState == WindowState.Maximized;
+        RootGrid.Margin = maximized ? MaximizedOverhang() : new Thickness(0);
+        System.Windows.Automation.AutomationProperties.SetName(MaxButton, maximized ? "Restore" : "Maximize");
         MaxButton.Content = WindowState == WindowState.Maximized ? "" : "";
     }
+
+    /// <summary>
+    /// A chrome-less maximized window overhangs the screen by the sizing frame plus the padded border. SystemParameters
+    /// may leave the padded border out, which would clip a few pixels, so both metrics are read for this window's DPI.
+    /// </summary>
+    private Thickness MaximizedOverhang()
+    {
+        var scale = VisualTreeHelper.GetDpi(this);
+        var dpi = (uint)Math.Round(scale.PixelsPerInchX);
+        var x = (GetSystemMetricsForDpi(SmCxSizeFrame, dpi) + GetSystemMetricsForDpi(SmCxPaddedBorder, dpi)) / scale.DpiScaleX;
+        var y = (GetSystemMetricsForDpi(SmCySizeFrame, dpi) + GetSystemMetricsForDpi(SmCxPaddedBorder, dpi)) / scale.DpiScaleY;
+        return new Thickness(x, y, x, y);
+    }
+
+    private const int SmCxSizeFrame = 32, SmCySizeFrame = 33, SmCxPaddedBorder = 92;
+
+    [DllImport("user32.dll")]
+    private static extern int GetSystemMetricsForDpi(int index, uint dpi);
 
     private void OnMinimize(object sender, RoutedEventArgs e) => WindowState = WindowState.Minimized;
 

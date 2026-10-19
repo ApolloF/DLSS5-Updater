@@ -84,7 +84,11 @@ public sealed partial class MainViewModel : ObservableObject
     [ObservableProperty] private bool _progressIndeterminate;
     [ObservableProperty] private bool _progressVisible;
     [ObservableProperty] private bool _settingsOpen;
-    [ObservableProperty] private bool _logOpen;
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(LogButtonName))]
+    private bool _logOpen;
+
+    public string LogButtonName => LogOpen ? "Hide log" : "Show log";
     [ObservableProperty] private bool _aboutOpen;
     [ObservableProperty] private string _streamlineVersion = "—";
     /// <summary>Guide entry to scroll to when the About page opens from an ⓘ button.</summary>
@@ -171,7 +175,7 @@ public sealed partial class MainViewModel : ObservableObject
     partial void OnFilterChanged(string value) => RefreshGames();
 
     /// <summary>Why the game list is empty, or null while it shows games.</summary>
-    public string? GameListEmptyText => EmptyListText(Games.Count, GamesView.Cast<object>().Count(), IsBusy);
+    public string? GameListEmptyText => EmptyListText(Games.Count, GamesView.Cast<object>().Count(), IsScanning);
 
     internal static string? EmptyListText(int total, int shown, bool scanning) =>
         shown > 0 ? null
@@ -185,7 +189,10 @@ public sealed partial class MainViewModel : ObservableObject
         OnPropertyChanged(nameof(GameListEmptyText));
     }
 
-    partial void OnIsBusyChanged(bool value) => OnPropertyChanged(nameof(GameListEmptyText));
+    /// <summary>A game scan is running; "Looking for games…" must not show for other busy work.</summary>
+    [ObservableProperty] private bool _isScanning;
+
+    partial void OnIsScanningChanged(bool value) => OnPropertyChanged(nameof(GameListEmptyText));
 
     private bool Matches(GameViewModel g)
     {
@@ -305,7 +312,10 @@ public sealed partial class MainViewModel : ObservableObject
     private async Task ScanCore()
     {
         var progress = new Progress<int>(p => Status = $"Scanning games  {p}%");
-        var games = Demo.Active ? Demo.Games : await GameScanner.ScanAsync(S.Settings, progress, _cts.Token);
+        IsScanning = true;
+        List<GameInfo> games;
+        try { games = Demo.Active ? Demo.Games : await GameScanner.ScanAsync(S.Settings, progress, _cts.Token); }
+        finally { IsScanning = false; }
         ApplyScan(games);
         Log.Info($"Found {games.Count} games, {games.Count(g => g.Dlss.Count > 0)} with DLSS");
     }

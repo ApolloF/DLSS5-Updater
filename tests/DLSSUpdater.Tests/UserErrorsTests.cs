@@ -16,6 +16,16 @@ public class UserErrorsTests
     }
 
     [Fact]
+    public void A_game_file_in_use_keeps_its_message_but_a_plain_IOException_does_not()
+    {
+        var inner = new IOException("The process cannot access the file");
+        var ex = new GameFileInUseException("Ember Crown", inner);
+        Assert.Same(inner, ex.InnerException);
+        Assert.Equal("A game file is in use. Close Ember Crown and retry.", UserErrors.Message(ex));
+        Assert.Equal(UserErrors.Generic, UserErrors.Message(new IOException("x")));
+    }
+
+    [Fact]
     public void App_exceptions_keep_their_message()
     {
         Assert.Equal("game.exe is running. Close the game first.", UserErrors.Message(new GameRunningException("game.exe")));
