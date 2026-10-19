@@ -999,4 +999,16 @@ public class InstallerTests : IDisposable
         Assert.DoesNotContain(token, File.ReadAllText(AppPaths.SettingsFile));
         Assert.Equal(token, AppSettings.Load().GitHubToken);
     }
+
+    [Fact]
+    public void ModLabel_names_loader_then_addons()
+    {
+        Assert.Null(new InstallManifest { Dlss = true }.ModLabel());
+        Assert.Equal("OptiScaler", new InstallManifest { Opti = true, ReShade = true, DlssNr = true }.ModLabel());
+        Assert.Equal("OptiScaler + MFG", new InstallManifest { Opti = true, Mfg = true }.ModLabel());
+        Assert.Equal("ReShade + ShortFuse + Lecram",
+            new InstallManifest { Mode = InstallMode.ReShadeOnly, ReShade = true, RenoDx = true, Lecram = true }.ModLabel());
+        Assert.Equal("ReShade + Uplift", new InstallManifest { Mode = InstallMode.ReShadeOnly, ReShade = true, Uplift = true }.ModLabel());
+        Assert.Equal("OptiScaler + DFC + Streamline", new InstallManifest { Opti = true, Dfc = true, Streamline = true }.ModLabel());
+    }
 }
