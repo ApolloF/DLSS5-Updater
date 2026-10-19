@@ -632,7 +632,7 @@ public sealed partial class SettingsViewModel : ObservableObject
     {
         Settings.HiddenGames.Clear();
         Save();
-        _main.RescanCommand.Execute(null);
+        _main.RequestRescan();
     }
 
     [RelayCommand]

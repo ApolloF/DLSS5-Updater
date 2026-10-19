@@ -49,7 +49,7 @@ public sealed partial class AddonLibraryViewModel : ObservableObject
     [RelayCommand(CanExecute = nameof(CanCheckNow))]
     private async Task CheckNow()
     {
-        await _main.CheckLecramAsync();
+        await _main.CheckLecramNowAsync();
         await _changed();
     }
 
