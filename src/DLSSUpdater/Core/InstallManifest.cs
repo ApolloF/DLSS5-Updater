@@ -88,6 +88,25 @@ public sealed class InstallManifest
     public static string PathFor(string targetDir) => Path.Combine(DirFor(targetDir), "manifest.json");
     public static string BackupDirFor(string targetDir) => Path.Combine(DirFor(targetDir), "backup");
 
+    /// <summary>
+    /// Game list label of what runs in the game: the loader (OptiScaler, or ReShade in ReShade-only mode) followed by the
+    /// add-ons, e.g. "OptiScaler + MFG + Lecram"; null when no mod is installed (a DLSS swap only).
+    /// </summary>
+    public string? ModLabel()
+    {
+        var parts = new[]
+        {
+            Opti ? "OptiScaler" : Mode == InstallMode.ReShadeOnly && ReShade ? "ReShade" : null,
+            RenoDx ? "ShortFuse" : null,
+            Lecram ? "Lecram" : null,
+            Dfc ? "DFC" : null,
+            Uplift ? "Uplift" : null,
+            Mfg ? "MFG" : null,
+            Streamline ? "Streamline" : null,
+        }.OfType<string>().ToList();
+        return parts.Count == 0 ? null : string.Join(" + ", parts);
+    }
+
     /// <summary>For display: the manifest, or null when there is none or it can't be read.</summary>
     public static InstallManifest? Load(string targetDir)
     {
