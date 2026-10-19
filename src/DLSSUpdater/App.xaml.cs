@@ -45,13 +45,14 @@ public partial class App : Application
             }
             return;
         }
-        if (demo) Demo.Enable(screenshotDir: Demo.ScreenshotArg(e.Args));
         DispatcherUnhandledException += OnUnhandled;
         TaskScheduler.UnobservedTaskException += (_, args) =>
         {
             Log.Error("Background task failed", args.Exception);
             args.SetObserved();
         };
+        // Inside the handler's reach: a locked demo folder shows a message instead of crashing the process.
+        if (demo) Demo.Enable(screenshotDir: Demo.ScreenshotArg(e.Args));
         base.OnStartup(e);
         MainWindow = new MainWindow();
         MainWindow.Show();

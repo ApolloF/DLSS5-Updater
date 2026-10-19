@@ -686,7 +686,7 @@ public sealed class Installer(ComponentStore store)
     private static void KeepPrevious(Ctx ctx, string path)
     {
         var dest = Path.Combine(InstallManifest.DirFor(ctx.Target), PreviousDir, Path.GetFileName(path));
-        if (FileUtil.LinkBelow(ctx.Target, dest) is { } link) throw new UnsafeManifestException(ctx.Target, $"{link} is a link");
+        if (FileUtil.LinkBelow(ctx.Target, dest) is { } link) throw new InvalidOperationException($"Couldn't keep a copy of the previous {Path.GetFileName(path)}: {link} is a link. Remove the link in {InstallManifest.DirName} and try again.");
         Directory.CreateDirectory(Path.GetDirectoryName(dest)!);
         FileUtil.ClearReadOnly(dest);
         FileUtil.AtomicCopy(path, dest);
@@ -1192,7 +1192,8 @@ public sealed class Installer(ComponentStore store)
         {
             // A failed record write must not leave the game on an unrecorded version.
             if (previous is not null) FileUtil.AtomicCopy(store.VerifiedDlssNrPath(previous.Id), target);
-            else File.Delete(target);
+            else FileUtil.DeleteFile(target);
+            if (ex is IOException io && IsSharingViolation(io)) throw new GameFileInUseException(game.Name, io);
             throw;
         }
     }, ct);
@@ -1222,7 +1223,7 @@ public sealed class Installer(ComponentStore store)
             foreach (var rel in m.Dirs.ToList())
             {
                 var d = ctx.Full(rel);
-                if (Directory.Exists(d)) Directory.Delete(d, true);
+                FileUtil.DeleteDirectory(d);
                 m.Dirs.Remove(rel);
                 m.Save(targetDir);
             }
@@ -1237,6 +1238,7 @@ public sealed class Installer(ComponentStore store)
             Log.Info($"{game.Name}: uninstalled, originals restored");
         }
         catch (UnauthorizedAccessException) { throw new NeedsAdminException(targetDir); }
+        catch (IOException ex) when (IsSharingViolation(ex)) { throw new GameFileInUseException(game.Name, ex); }
     }, ct);
 
     public Task RestoreDlssAsync(GameInfo game, string targetDir, CancellationToken ct) => Demo.Active ? Demo.RestoreDlssAsync(game, targetDir, ct) : Task.Run(() =>
@@ -1270,6 +1272,7 @@ public sealed class Installer(ComponentStore store)
             Log.Info($"{game.Name}: original DLSS and Streamline files restored");
         }
         catch (UnauthorizedAccessException) { throw new NeedsAdminException(targetDir); }
+        catch (IOException ex) when (IsSharingViolation(ex)) { throw new GameFileInUseException(game.Name, ex); }
     }, ct);
 
     private static void Restore(Ctx ctx, BackupEntry b)

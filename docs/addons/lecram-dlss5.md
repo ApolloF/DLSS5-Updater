@@ -219,7 +219,7 @@ OptiScaler-NR and Deep Fried Chicken. It is not added to `[ADDON] LoadFromDllMai
   file name, file version, generation V10/V11, detected build label, the user's own label, import date). Importing the same file
   again changes nothing, an import never deletes another build, and Remove deletes the selected one. The first run after the
   library arrived moves the old single files (`components\renodx-dlss5.addon64`, `components\dlss5-nr.addon64`) into it and
-  makes them the default. Settings picks the default build; a game can pick its own ("Use default (...)" follows Settings).
+  makes them the default. Settings picks the default build; a game can pick its own ("Default (...)" follows Settings).
   The install records the build's id next to its tag, and automatic reinstalls keep the build that is installed.
 - **Generations.** v10 is identified by the version resource's OriginalFilename. v11 has no version resource,
   so it is identified as a PE file containing the strings `RenoDX.DLSS5`, `NR-SETTINGS` and `NR-COMPAT` (checked: the v11 binary
