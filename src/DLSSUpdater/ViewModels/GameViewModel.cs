@@ -15,7 +15,7 @@ public sealed partial class ComponentRow(string key, string name) : ObservableOb
     [ObservableProperty] private bool _enabled = true;
     /// <summary>Hidden when it doesn't apply to the install mode (OptiScaler / DLSSNR in ReShade-only).</summary>
     [ObservableProperty] private bool _visible = true;
-    /// <summary>False when the mode requires this component (ReShade in ReShade-only).</summary>
+    /// <summary>False when the mode requires this component (OptiScaler in OptiScaler mode, ReShade in ReShade-only).</summary>
     [ObservableProperty] private bool _editable = true;
     [ObservableProperty] private string _installed = "—";
     [ObservableProperty] private string _latest = "—";
@@ -155,7 +155,8 @@ public sealed partial class GameViewModel : ObservableObject
         foreach (var c in Components)
         {
             c.Visible = !(IsReShadeOnly && c.Key == "opti");
-            c.Editable = !(IsReShadeOnly && c.Key == "reshade");
+            // The loader of the mode is always installed: without it nothing else in the game loads.
+            c.Editable = c.Key != (IsReShadeOnly ? "reshade" : "opti");
             if (!c.Editable) c.Enabled = true;
             // The add-on replaces OptiScaler's NR, so it exists in ReShade-only mode alone.
             if (c.Key is "renodx" or "lecram" or "dfc" or "uplift" && !IsReShadeOnly) { c.Visible = false; c.Enabled = false; }
