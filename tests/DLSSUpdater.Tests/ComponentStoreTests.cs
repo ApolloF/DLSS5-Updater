@@ -166,6 +166,25 @@ public class ComponentStoreTests
     }
 
     [Fact]
+    public void RunBeforeSr_ShowsEachBuildsUpstreamDefault_AndOffIsWritten()
+    {
+        var overrides = new System.Collections.ObjectModel.ObservableCollection<IniOverride>();
+        var before = DLSSUpdater.ViewModels.SettingsOptions.Nr(overrides).Single(o => o.Key == "RunBeforeSR");
+        Assert.False(before.IsToggle);
+        Assert.Null(before.Selected.Value);
+        Assert.Contains("(on)", before.Selected.Description);
+
+        before.Selected = before.Choices.Single(c => c.Label == "Off");
+        Assert.Equal("false", Assert.Single(overrides).Value);
+
+        before.ApplySource(OptiSources.F5);
+        Assert.Equal("false", before.Selected.Value);
+        before.Selected = before.Choices[0];
+        Assert.Empty(overrides);
+        Assert.Contains("(off)", before.Selected.Description);
+    }
+
+    [Fact]
     public void OptionVariants_FollowTheChosenBuild()
     {
         var overrides = new System.Collections.ObjectModel.ObservableCollection<IniOverride> { new("DlssNr", "ReversibleMode", "6") };
