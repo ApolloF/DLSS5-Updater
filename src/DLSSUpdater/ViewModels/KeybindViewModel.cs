@@ -12,7 +12,7 @@ public sealed record KeybindDef(string Label, bool ReShade, string Section, stri
         new("FPS overlay", false, "Menu", "FpsShortcutKey", 0x21),
         new("FPS overlay type", false, "Menu", "FpsCycleShortcutKey", 0x22),
         new("Frame generation on / off", false, "Menu", "FGShortcutKey", 0x23),
-        new("DLSSNR on / off", false, "DlssNr", "ToggleKey", 0),
+        new("NR on / off", false, "DlssNr", "ToggleKey", 0),
     ];
 
     public static readonly KeybindDef[] ReShadeKeys =

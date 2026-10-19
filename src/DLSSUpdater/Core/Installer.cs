@@ -141,7 +141,7 @@ public sealed class Installer(ComponentStore store)
                     throw new InvalidOperationException("GITC Uplift supports 64-bit x64 games only in this app.");
             }
         }
-        if (o.ReShadeOnly && !o.ReShade) throw new InvalidOperationException("ReShade-only mode installs ReShade as the proxy; ReShade can't be left out.");
+        if (o.ReShadeOnly && !o.ReShade) throw new InvalidOperationException("ReShade + add-ons mode installs ReShade as the proxy; ReShade can't be left out.");
         if (!AppSettings.IsKnownProxy(o.Proxy)) throw new ArgumentException($"\"{o.Proxy}\" is not a proxy name DLSS Updater installs under.", nameof(o));
         EnsureNoDoubleMfgUnlock(targetDir, o);
         // Fetch everything first so a network failure never leaves a half-installed game.
@@ -149,7 +149,7 @@ public sealed class Installer(ComponentStore store)
         var dlssNr = o.DlssNr;
         var nrPath = dlssNr ? store.VerifiedDlssNrPath(o.DlssNrId ?? store.SelectedDlssNr()) : null;
         if (o.RenoDx && !o.ReShadeOnly)
-            throw new InvalidOperationException("The RenoDX DLSS add-on only works in ReShade-only mode: with OptiScaler-NR there would be two NR injectors.");
+            throw new InvalidOperationException("The RenoDX DLSS add-on only works in ReShade + add-ons mode: with OptiScaler-NR there would be two NR injectors.");
         if (o.RenoDx && (!o.ReShade || !dlssNr))
             throw new InvalidOperationException("RenoDX needs ReShade with add-on support and an imported NR runtime.");
         // DLSS files an earlier install of ours added (for DFC or OptiScaler) don't make the game a DLSS game.
@@ -157,7 +157,7 @@ public sealed class Installer(ComponentStore store)
         if (o.RenoDx && !nativeDlss)
             throw new InvalidOperationException("RenoDX needs a game with native DLSS.");
         if (o.Lecram && !o.ReShadeOnly)
-            throw new InvalidOperationException("Lecram's DLSS5 add-on only works in ReShade-only mode: with OptiScaler-NR there would be two NR injectors.");
+            throw new InvalidOperationException("Lecram's DLSS5 add-on only works in ReShade + add-ons mode: with OptiScaler-NR there would be two NR injectors.");
         if (o.Lecram && (!o.ReShade || !dlssNr))
             throw new InvalidOperationException("Lecram's DLSS5 add-on needs ReShade with add-on support and an imported NR runtime.");
         if (o.Lecram && !nativeDlss)
@@ -167,7 +167,7 @@ public sealed class Installer(ComponentStore store)
         if (o.Dfc && o.Lecram)
             throw new InvalidOperationException("Deep Fried Chicken and Lecram's DLSS5 add-on can't run together: pick one.");
         if (o.Dfc && !o.ReShadeOnly)
-            throw new InvalidOperationException("Deep Fried Chicken only works in ReShade-only mode: with OptiScaler-NR there would be two NR injectors.");
+            throw new InvalidOperationException("Deep Fried Chicken only works in ReShade + add-ons mode: with OptiScaler-NR there would be two NR injectors.");
         if (o.Dfc && (!o.ReShade || !dlssNr))
             throw new InvalidOperationException("Deep Fried Chicken needs ReShade with add-on support and an imported NR runtime.");
         var renoDx = o.RenoDx ? store.RequireAddon(AddonKind.RenoDx, o.RenoDxId) : null;
@@ -260,7 +260,7 @@ public sealed class Installer(ComponentStore store)
                     if (o.ReShadeOnly)
                     {
                         m.Proxy = o.Proxy;
-                        Log.Info($"  {o.Proxy} ← ReShade (no OptiScaler)");
+                        Log.Info($"  {o.Proxy} ← ReShade");
                     }
                     m.ReShade = true;
                     m.ReShadeSha = HashCache.Get(reshade);
@@ -905,7 +905,7 @@ public sealed class Installer(ComponentStore store)
             if (!keepNr || name != ComponentStore.DlssNrFile) RemoveOwned(ctx, Path.Combine(ctx.Target, name));
         foreach (var name in OptiSources.All.SelectMany(s => s.ExtraFiles).Distinct(StringComparer.OrdinalIgnoreCase))
             RemoveOwned(ctx, Path.Combine(ctx.Target, name));
-        if (m.Opti || m.DlssNr) Log.Info("  OptiScaler-NR removed (ReShade-only)");
+        if (m.Opti || m.DlssNr) Log.Info("  OptiScaler-NR removed (ReShade + add-ons mode)");
         m.Opti = false;
         m.OptiTag = null;
         m.OptiIni.Clear();
