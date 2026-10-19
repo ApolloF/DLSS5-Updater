@@ -190,6 +190,7 @@
         <Setter Property="Margin" Value="4,0,0,0" />
         <Setter Property="VerticalAlignment" Value="Center" />
         <Setter Property="Content" Value="&#xE946;" />
+        <Setter Property="AutomationProperties.Name" Value="Help" />
         <Setter Property="ToolTipService.InitialShowDelay" Value="150" />
         <Setter Property="ToolTipService.ShowDuration" Value="60000" />
         <Setter Property="Command" Value="{Binding DataContext.ShowHelpCommand, RelativeSource={RelativeSource AncestorType=Window}}" />

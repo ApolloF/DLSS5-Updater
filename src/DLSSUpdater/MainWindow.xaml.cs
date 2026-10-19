@@ -35,6 +35,7 @@ public partial class MainWindow : Window
         StateChanged += (_, _) => UpdateMaximized();
         Closed += (_, _) => Core.HashCache.Save();
         PreviewKeyDown += OnPreviewKeyDown;
+        KeyDown += OnKeyDown;
         SettingsHost.Realized += root => _settingsScroll = Deferred.Find<ScrollViewer>(root, "SettingsScroll");
         AboutHost.Realized += root =>
         {
@@ -64,6 +65,27 @@ public partial class MainWindow : Window
             mods.HasFlag(System.Windows.Input.ModifierKeys.Control),
             mods.HasFlag(System.Windows.Input.ModifierKeys.Shift),
             mods.HasFlag(System.Windows.Input.ModifierKeys.Alt));
+    }
+
+    /// <summary>Esc closes Settings or About. It runs after the controls, so an open dropdown or a keybind capture gets Esc first.</summary>
+    private void OnKeyDown(object sender, System.Windows.Input.KeyEventArgs e)
+    {
+        if (e.Handled || e.Key != System.Windows.Input.Key.Escape || !(_vm.SettingsOpen || _vm.AboutOpen)) return;
+        if (_vm.AboutOpen && _vm.CanGoBack) _vm.BackCommand.Execute(null);
+        else _vm.ShowGameView();
+        e.Handled = true;
+    }
+
+    private static readonly System.Windows.Input.Key[] ListKeys =
+    [
+        System.Windows.Input.Key.Up, System.Windows.Input.Key.Down, System.Windows.Input.Key.PageUp, System.Windows.Input.Key.PageDown,
+        System.Windows.Input.Key.Home, System.Windows.Input.Key.End, System.Windows.Input.Key.Enter, System.Windows.Input.Key.Space,
+    ];
+
+    /// <summary>Picking a game with the keyboard leaves Settings / About, as a click does.</summary>
+    private void OnGameListKeyUp(object sender, System.Windows.Input.KeyEventArgs e)
+    {
+        if (ListKeys.Contains(e.Key)) _vm.ShowGameView();
     }
 
     private void OnGameListClick(object sender, System.Windows.Input.MouseButtonEventArgs e)
