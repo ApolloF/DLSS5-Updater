@@ -55,7 +55,8 @@ public sealed partial class ComponentStore
             if (!string.IsNullOrWhiteSpace(channel.Notice)) settings.LecramLastResult += " " + channel.Notice;
             Log.Info("Lecram: " + settings.LecramLastResult);
         }
-        catch (Exception ex) when (ex is HttpRequestException or OperationCanceledException or IOException or InvalidDataException
+        catch (Exception ex) when (!(ex is OperationCanceledException && ct.IsCancellationRequested)
+                                   && ex is HttpRequestException or OperationCanceledException or IOException or InvalidDataException
                                       or UnauthorizedAccessException or System.Text.Json.JsonException or KeyNotFoundException or InvalidOperationException or FormatException)
         {
             settings.LecramLastResult = "Check failed; keeping the Lecram library. " + (UserErrors.IsCurated(ex) ? ex.Message : "The details are in the log.");

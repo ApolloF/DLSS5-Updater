@@ -63,6 +63,30 @@ public sealed class RenoDxTests : IDisposable
         ReShadeOverrides = [new("RENODX-DLSS", "DirectNeuralRenderingHookStage", "1"), new(RenoDxIni.PresetSection, "DirectNeuralRenderingPassCount", "2")],
     };
 
+    [Fact]
+    public async Task CharacterMask_ShowsTheAddonDefaultOn_AndOffIsWritten()
+    {
+        ImportGood();
+        var rs = new System.Collections.ObjectModel.ObservableCollection<IniOverride>();
+        var mask = DLSSUpdater.ViewModels.SettingsOptions.RenoDx(rs).Single(o => o.Key == "DirectNeuralRenderingAutoMask");
+        Assert.False(mask.IsToggle);
+        Assert.Null(mask.Selected.Value);
+        Assert.Contains("(On)", mask.Selected.Description);
+
+        var installer = new Installer(_store);
+        await installer.InstallAsync(_game, _root, Reno() with { ReShadeOverrides = [.. rs] }, null, default);
+        Assert.Null(Ini().Get(RenoDxIni.PresetSection, "DirectNeuralRenderingAutoMask"));
+
+        mask.Selected = mask.Choices.Single(c => c.Label == "Off");
+        Assert.Equal(new IniOverride(RenoDxIni.PresetSection, "DirectNeuralRenderingAutoMask", "0").Id, Assert.Single(rs).Id);
+        await installer.InstallAsync(_game, _root, Reno() with { ReShadeOverrides = [.. rs] }, null, default);
+        Assert.Equal("0", Ini().Get(RenoDxIni.PresetSection, "DirectNeuralRenderingAutoMask"));
+
+        mask.Selected = mask.Choices.Single(c => c.Label == "On");
+        await installer.InstallAsync(_game, _root, Reno() with { ReShadeOverrides = [.. rs] }, null, default);
+        Assert.Equal("1", Ini().Get(RenoDxIni.PresetSection, "DirectNeuralRenderingAutoMask"));
+    }
+
     [Theory]
     [InlineData(true, false, "3", "old")]
     [InlineData(true, true, "1", "old")]

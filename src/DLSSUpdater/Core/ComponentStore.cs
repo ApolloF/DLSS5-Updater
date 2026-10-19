@@ -12,6 +12,8 @@ public sealed class ReleaseInfo
     public bool Prerelease { get; init; }
     public DateTime? Published { get; init; }
     public bool FromCache { get; init; }
+    /// <summary>Resolved from the API cache because GitHub failed: downloadable, but maybe not the latest.</summary>
+    public bool Stale { get; init; }
     /// <summary>Release notes as published (markdown); null when offline or the source has none.</summary>
     public string? Notes { get; init; }
     public List<(string Name, string Url, string? Sha256)> Files { get; init; } = [];
@@ -189,7 +191,7 @@ public sealed partial class ComponentStore
         {
             set(await resolve(ct) ?? Offline(c));
         }
-        catch (Exception ex) when (ex is HttpRequestException or TaskCanceledException or JsonException or IOException)
+        catch (Exception ex) when (!ct.IsCancellationRequested && ex is HttpRequestException or TaskCanceledException or JsonException or IOException)
         {
             var cached = Offline(c);
             Log.Info($"{c}: GitHub unreachable ({ex.Message}){(cached is null ? "" : $", using cached {cached.Tag}")}");
@@ -232,7 +234,7 @@ public sealed partial class ComponentStore
             if (zip is null) continue;
             return new ReleaseInfo
             {
-                Tag = r.TagName + source.TagSuffix, Prerelease = r.Prerelease, Published = r.PublishedAt, Notes = r.Body,
+                Tag = r.TagName + source.TagSuffix, Prerelease = r.Prerelease, Published = r.PublishedAt, Notes = r.Body, Stale = r.Stale,
                 Files = [(zip.Name, zip.Url, zip.Sha256)],
             };
         }
@@ -248,7 +250,7 @@ public sealed partial class ComponentStore
             if (addon is null) continue;
             return new ReleaseInfo
             {
-                Tag = r.TagName, Prerelease = r.Prerelease, Published = r.PublishedAt, Notes = r.Body,
+                Tag = r.TagName, Prerelease = r.Prerelease, Published = r.PublishedAt, Notes = r.Body, Stale = r.Stale,
                 Files = [(MfgFile, addon.Url, addon.Sha256)],
             };
         }
@@ -259,14 +261,14 @@ public sealed partial class ComponentStore
     {
         DlssReleases = (await _gh.GetReleasesAsync(DlssRepo, 40, ct))
             .Where(Accept)
-            .Select(r => DlssRelease(r.TagName, r.Prerelease, r.PublishedAt, r.Body))
+            .Select(r => DlssRelease(r.TagName, r.Prerelease, r.PublishedAt, r.Body, r.Stale))
             .ToList();
         return DlssReleases.FirstOrDefault();
     }
 
-    private static ReleaseInfo DlssRelease(string tag, bool pre = false, DateTime? published = null, string? notes = null) => new()
+    private static ReleaseInfo DlssRelease(string tag, bool pre = false, DateTime? published = null, string? notes = null, bool stale = false) => new()
     {
-        Tag = tag, Prerelease = pre, Published = published, Notes = notes,
+        Tag = tag, Prerelease = pre, Published = published, Notes = notes, Stale = stale,
         Files = DlssFiles.Select(f => (f, DlssRawUrl(tag, f), (string?)null)).ToList(),
     };
 
@@ -286,7 +288,7 @@ public sealed partial class ComponentStore
             if (zip is null) continue;
             return new ReleaseInfo
             {
-                Tag = r.TagName, Prerelease = r.Prerelease, Published = r.PublishedAt, Notes = r.Body,
+                Tag = r.TagName, Prerelease = r.Prerelease, Published = r.PublishedAt, Notes = r.Body, Stale = r.Stale,
                 Files = [(zip.Name, zip.Url, zip.Sha256)],
             };
         }
@@ -311,7 +313,8 @@ public sealed partial class ComponentStore
     {
         string? version = null;
         try { version = ParseReShadePage(await _gh.GetStringAsync(ReShadeSite, ct)); }
-        catch (HttpRequestException ex) { Log.Info($"reshade.me unreachable ({ex.Message}), trying GitHub tags"); }
+        catch (Exception ex) when (!ct.IsCancellationRequested && ex is HttpRequestException or TaskCanceledException)
+        { Log.Info($"reshade.me unreachable ({ex.Message}), trying GitHub tags"); }
 
         version ??= (await _gh.GetTagsAsync(ReShadeRepo, 10, ct))
             .Select(t => t.TrimStart('v', 'V'))
