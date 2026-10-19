@@ -351,7 +351,7 @@
                 <WrapPanel Orientation="Horizontal" ItemWidth="224" Margin="-8,-4,0,-4">
                     <ToggleButton Style="{StaticResource ReleaseChip}" Tag="{Binding OptiNews}" AutomationProperties.HelpText="{Binding Compat.Summary}">
                         <StackPanel>
-                            <TextBlock Text="OPTISCALER-NR" Style="{StaticResource Caps}" />
+                            <TextBlock Text="{Binding OptiChipTitle}" Style="{StaticResource Caps}" />
                             <DockPanel>
                                 <TextBlock DockPanel.Dock="Right" Text="&#xE7BA;" Style="{StaticResource Icon}" Foreground="{StaticResource Warn}" FontSize="14" Margin="8,3,0,0"
                                            Background="Transparent" ToolTip="{Binding Compat.Summary}" ToolTipService.InitialShowDelay="100" ToolTipService.ShowOnDisabled="True"
@@ -752,7 +752,7 @@
                         <TextBlock Text="INSTALL MODE" Style="{StaticResource Caps}" VerticalAlignment="Center" Margin="0,0,12,0" Width="140" />
                         <ComboBox Width="240" ItemsSource="{Binding Modes}" SelectedItem="{Binding ModeChoice}"
                                   ItemContainerStyle="{StaticResource DescribedItem}" AutomationProperties.Name="Install mode"
-                                  ToolTip="OptiScaler-NR, or ReShade + add-ons without OptiScaler" />
+                                  ToolTip="{Binding ModeHint}" />
                         <Button Style="{StaticResource InfoBtn}" CommandParameter="install-mode" VerticalAlignment="Center"
                                 ToolTip="{Binding Source=install-mode, Converter={StaticResource HelpTip}}" />
                     </StackPanel>
@@ -993,7 +993,7 @@
                                                          IsChecked="{Binding Tab, Converter={StaticResource EqualsToBool}, ConverterParameter=Keybinds}" />
                                             <RadioButton Style="{StaticResource Segment}" Content="ReShade add-ons" GroupName="st" Margin="0,0,24,0"
                                                          IsChecked="{Binding Tab, Converter={StaticResource EqualsToBool}, ConverterParameter=ReShade}" />
-                                            <RadioButton Style="{StaticResource Segment}" Content="OptiScaler-NR" GroupName="st" Margin="0,0,24,0"
+                                            <RadioButton Style="{StaticResource Segment}" Content="{Binding OptiName}" GroupName="st" Margin="0,0,24,0"
                                                          IsChecked="{Binding Tab, Converter={StaticResource EqualsToBool}, ConverterParameter=Nr}" />
                                             <RadioButton Style="{StaticResource Segment}" Content="Advanced" GroupName="st"
                                                          IsChecked="{Binding Tab, Converter={StaticResource EqualsToBool}, ConverterParameter=Advanced}" />
@@ -1362,7 +1362,7 @@
                                                        Text="Written to ReShade.ini next to the game's .exe. The RenoDX and Lecram options only apply when that add-on is installed; Lecram options that the imported generation lacks are hidden. For Dynamic MFG also set the NVIDIA App's DLSS Frame Generation override to 'Use the 3D application setting', then fully close and restart the game." />
                                         </StackPanel>
 
-                                        <!-- ===== OptiScaler-NR ===== -->
+                                        <!-- ===== OptiScaler (name follows the selected build) ===== -->
                                         <StackPanel Visibility="{Binding Tab, Converter={StaticResource EqualsToVis}, ConverterParameter=Nr}">
                                             <TextBlock Text="NEURAL RENDERING" Style="{StaticResource SectionTitle}" />
                                             <Border Style="{StaticResource Card}" Padding="16,4">
@@ -1435,7 +1435,7 @@
                                             </Border>
 
                                             <TextBlock Style="{StaticResource MutedText}" FontSize="11.5" TextWrapping="Wrap" Margin="0,8,0,0"
-                                                       Text="Raw section / key / value pairs, also edited by the Keybinds, ReShade add-ons and OptiScaler-NR tabs. A value a game already set itself is kept; values written by this app follow your changes." />
+                                                       Text="Raw section / key / value pairs, also edited by the Keybinds, ReShade add-ons and OptiScaler tabs. A value a game already set itself is kept; values written by this app follow your changes." />
                                             <Button Content="Reset to defaults" Style="{StaticResource BtnGhost}" HorizontalAlignment="Left" Margin="0,16,0,0"
                                                     Command="{Binding ResetAllCommand}" />
                                         </StackPanel>

@@ -139,7 +139,10 @@ public static class Demo
         store.Dlss = Release(LatestDlss, today.AddDays(-4), "## Neural texture compression\n- DLSS Super Resolution 310.10 improves stability of the preset A transformer model.\n- Frame Generation fixes for dynamic multi frame generation.\n- Smaller memory footprint on RTX 40 and 50 GPUs.");
         store.DlssReleases = [store.Dlss, Release("v310.9.1", today.AddDays(-45)), Release("v310.4.0", today.AddDays(-150)), Release("v310.2.1", today.AddDays(-230)), Release("v3.7.10", today.AddDays(-400))];
         store.Streamline = Release(LatestStreamline, today.AddDays(-20));
-        store.Opti = Release(LatestOpti, today.AddDays(-2), "## Faster NR pass\n- DLSSNR runs about 15% faster with the small model.\n- New tonemap and HDR output options.\n- Fixes the flicker in games that resize their swap chain.");
+        // DLSSU_DEMO_F5=1 pretends the F5 build is selected, to check its labels.
+        var f5 = Environment.GetEnvironmentVariable("DLSSU_DEMO_F5") == "1";
+        if (f5) settings.OptiSource = OptiSources.F5.Repo;
+        store.Opti = Release(f5 ? "v0.1.32" + OptiSources.F5.TagSuffix : LatestOpti, today.AddDays(-2), "## Faster NR pass\n- DLSSNR runs about 15% faster with the small model.\n- New tonemap and HDR output options.\n- Fixes the flicker in games that resize their swap chain.");
         store.Mfg = Release(LatestMfg, today.AddDays(-30), "## MFG Unlock\n- Works with Streamline 2.14.\n- Fixes a crash on startup in some Unreal Engine 5 games.");
         store.Uplift = Release(LatestUplift, today.AddDays(-12), "## GITC Uplift\n- New mask editor.\n- Lower VRAM use with the performance preset.");
         store.ReShade = Release(LatestReShade, today.AddDays(-60));

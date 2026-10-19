@@ -1,3 +1,5 @@
+using DLSSUpdater.Core;
+
 namespace DLSSUpdater.ViewModels;
 
 /// <summary>A mod whose option cards the "MOD" dropdown can show on its own. OptiScalerNr covers the NR, tone mapping and HDR output cards.</summary>
@@ -15,7 +17,7 @@ public static class ModPicker
 
     private static readonly ModChoice[] Always =
     [
-        new(Mod.OptiScalerNr, "OptiScaler-NR"),
+        new(Mod.OptiScalerNr, OptiSources.Default.Name),
         new(Mod.ReShade, "ReShade"),
         new(Mod.Mfg, "MFG Unlock"),
     ];
@@ -29,8 +31,8 @@ public static class ModPicker
     ];
 
     /// <summary>The add-ons replace OptiScaler's NR pass, so their options exist in ReShade-only mode alone.</summary>
-    public static IReadOnlyList<ModChoice> Available(bool reShadeOnly) =>
-        [.. Always, .. (reShadeOnly ? AddOns : []), AllMods];
+    public static IReadOnlyList<ModChoice> Available(bool reShadeOnly, string? optiName = null) =>
+        [new(Mod.OptiScalerNr, optiName ?? OptiSources.Default.Name), Always[1], Always[2], .. (reShadeOnly ? AddOns : []), AllMods];
 
     /// <summary>Settings keeps OptiScaler-NR on its own tab, so the ReShade tab lists everything else.</summary>
     public static IReadOnlyList<ModChoice> AvailableInSettings { get; } = [Always[1], Always[2], .. AddOns, AllMods];

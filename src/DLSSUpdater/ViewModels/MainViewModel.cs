@@ -41,7 +41,7 @@ public sealed partial class MainViewModel : ObservableObject
             foreach (var game in Games) game.RefreshAddonPairStatus();
             SettingsVm.RefreshAddonPairStatus();
         };
-        OptiNews = new ReleaseNewsViewModel(Component.OptiScaler, "OptiScaler-NR", settings);
+        OptiNews = new ReleaseNewsViewModel(Component.OptiScaler, OptiSources.For(settings.OptiSource).Name, settings);
         DlssNews = new ReleaseNewsViewModel(Component.Dlss, "DLSS", settings);
         UpliftNews = new ReleaseNewsViewModel(Component.Uplift, "GITC Uplift", settings);
         MfgNews = new ReleaseNewsViewModel(Component.MfgUnlock, "MFG Unlock", settings);
@@ -67,6 +67,10 @@ public sealed partial class MainViewModel : ObservableObject
     public ICollectionView GamesView { get; }
     public ObservableCollection<string> LogLines { get; } = [];
     public ReleaseNewsViewModel OptiNews { get; }
+
+    /// <summary>The selected OptiScaler build's name, shared by every label that names it.</summary>
+    public string OptiName => OptiSources.For(S.Settings.OptiSource).Name;
+    public string OptiChipTitle => OptiName.ToUpperInvariant();
     public ReleaseNewsViewModel DlssNews { get; }
     public ReleaseNewsViewModel UpliftNews { get; }
     public ReleaseNewsViewModel MfgNews { get; }
@@ -222,7 +226,11 @@ public sealed partial class MainViewModel : ObservableObject
         _startup = null;
         await Run("Starting", async ct =>
         {
-            if (Demo.Active) Demo.Seed(S.Store, S.Settings);
+            if (Demo.Active)
+            {
+                Demo.Seed(S.Store, S.Settings);
+                RefreshBuildNames();
+            }
             else
                 await Task.Run(() =>
                 {
@@ -322,7 +330,7 @@ public sealed partial class MainViewModel : ObservableObject
         CountUpdates();
         await RefreshLocalComponentsAsync();
         if (!Demo.Active) await CheckCompatAsync(ct);
-        Log.Info($"Latest: OptiScaler-NR {OptiVersion} · DLSS {DlssVersion} · MFG Unlock {MfgVersion}{(Online ? "" : " (offline)")}");
+        Log.Info($"Latest: {OptiName} {OptiVersion} · DLSS {DlssVersion} · MFG Unlock {MfgVersion}{(Online ? "" : " (offline)")}");
     }
 
     [RelayCommand(CanExecute = nameof(CanRun))]
@@ -490,8 +498,19 @@ public sealed partial class MainViewModel : ObservableObject
     public void OptiSourceChanged()
     {
         SettingsVm.ApplyOptiSource();
+        RefreshBuildNames();
         _refreshPending = true;
         StartPendingWork();
+    }
+
+    /// <summary>Renames every label that names the OptiScaler build: the chip, the Settings tab, and each game's mode and rows.</summary>
+    private void RefreshBuildNames()
+    {
+        OptiNews.Name = OptiName;
+        OnPropertyChanged(nameof(OptiName));
+        OnPropertyChanged(nameof(OptiChipTitle));
+        SettingsVm.RefreshBuildName();
+        foreach (var g in Games) g.RefreshBuildName();
     }
 
     /// <summary>Rescans now, or right after the current run.</summary>

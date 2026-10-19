@@ -6,9 +6,12 @@ using DLSSUpdater.Core;
 namespace DLSSUpdater.ViewModels;
 
 /// <summary>"What's new" behind a component chip: a short summary of the latest release and a link to its notes.</summary>
-public sealed partial class ReleaseNewsViewModel(Component component, string name, AppSettings settings) : ObservableObject
+public sealed partial class ReleaseNewsViewModel(Component component, string initialName, AppSettings settings) : ObservableObject
 {
-    public string Name { get; } = name;
+    /// <summary>What the chip is called in messages; the OptiScaler chip follows the selected build.</summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(AutomationName))]
+    private string _name = initialName;
 
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(Available))]
