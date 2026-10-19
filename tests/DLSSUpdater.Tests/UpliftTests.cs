@@ -429,8 +429,8 @@ public sealed class UpliftTests : IDisposable
         await store.RefreshAsync(default);
         Assert.Equal("v1.4.3", store.Uplift?.Tag);
         Assert.Equal(pkg, await store.EnsureUpliftAsync(null, null, default));
-        var cached = new ComponentStore(new GitHubClient(handler), () => false);
-        await cached.RefreshAsync(new CancellationToken(true));
+        var cached = new ComponentStore(new GitHubClient(new CaptivePortal()), () => false);
+        await cached.RefreshAsync(default);
         Assert.True(cached.Uplift!.FromCache);
         Assert.Equal("Uplift release notes", cached.Uplift.Notes);
         Assert.Equal(pkg, await cached.EnsureUpliftAsync(null, null, default));

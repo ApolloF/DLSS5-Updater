@@ -166,6 +166,25 @@ public class ComponentStoreTests
     }
 
     [Fact]
+    public void RunBeforeSr_ShowsEachBuildsUpstreamDefault_AndOffIsWritten()
+    {
+        var overrides = new System.Collections.ObjectModel.ObservableCollection<IniOverride>();
+        var before = DLSSUpdater.ViewModels.SettingsOptions.Nr(overrides).Single(o => o.Key == "RunBeforeSR");
+        Assert.False(before.IsToggle);
+        Assert.Null(before.Selected.Value);
+        Assert.Contains("(on)", before.Selected.Description);
+
+        before.Selected = before.Choices.Single(c => c.Label == "Off");
+        Assert.Equal("false", Assert.Single(overrides).Value);
+
+        before.ApplySource(OptiSources.F5);
+        Assert.Equal("false", before.Selected.Value);
+        before.Selected = before.Choices[0];
+        Assert.Empty(overrides);
+        Assert.Contains("(off)", before.Selected.Description);
+    }
+
+    [Fact]
     public void OptionVariants_FollowTheChosenBuild()
     {
         var overrides = new System.Collections.ObjectModel.ObservableCollection<IniOverride> { new("DlssNr", "ReversibleMode", "6") };
@@ -224,5 +243,31 @@ public class ComponentStoreTests
     {
         FileUtil.AtomicWriteText(AppPaths.SettingsFile, """{"OptiSource":"someone/else"}""");
         Assert.Same(OptiSources.Default, OptiSources.For(AppSettings.Load().OptiSource));
+    }
+
+    [Fact]
+    public async Task Refresh_CancelledByTheUser_StopsInsteadOfFallingBackToTheCache()
+    {
+        var handler = new FakeGitHub(_ => Json("[]"));
+        var store = new ComponentStore(new GitHubClient(handler), () => true);
+        using var cts = new CancellationTokenSource();
+        cts.Cancel();
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() => store.RefreshAsync(cts.Token));
+    }
+
+    [Fact]
+    public async Task ReShade_SiteTimeout_FallsBackToGitHubTags()
+    {
+        var handler = new FakeGitHub(r =>
+        {
+            var url = r.RequestUri!.ToString();
+            if (url.StartsWith(ComponentStore.ReShadeSite)) throw new TaskCanceledException("timed out");
+            if (url.Contains(ComponentStore.ReShadeRepo + "/tags")) return Json("""[{"name":"v6.4.1"},{"name":"v6.3.3"}]""");
+            if (url.StartsWith("https://api.github.com/")) return Json("[]");
+            return new HttpResponseMessage(HttpStatusCode.NotFound);
+        });
+        var store = new ComponentStore(new GitHubClient(handler), () => true);
+        await store.RefreshAsync(default);
+        Assert.Equal("6.4.1", store.ReShade?.Tag);
     }
 }

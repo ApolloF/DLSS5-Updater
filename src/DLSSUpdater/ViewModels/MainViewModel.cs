@@ -17,7 +17,11 @@ namespace DLSSUpdater.ViewModels;
 public sealed partial class MainViewModel : ObservableObject
 {
     private readonly Dispatcher _ui = Application.Current.Dispatcher;
-    private CancellationTokenSource _cts = new();
+    private readonly BusyGate _busy = new();
+    /// <summary>Work asked for while another run was going; it starts when that run ends.</summary>
+    private bool _refreshPending, _rescanPending;
+    /// <summary>Held from construction until <see cref="InitializeAsync"/> hands it to the startup run.</summary>
+    private BusyGate.Lease? _startup;
 
     public MainViewModel()
     {
@@ -28,6 +32,9 @@ public sealed partial class MainViewModel : ObservableObject
         var store = new ComponentStore(gh, () => settings.IncludePrereleases) { AutoReShade = () => settings.AutoDownloadReShade, SelectedDlssNr = () => settings.DlssNrId, SelectedRenoDx = () => settings.RenoDxId, SelectedLecram = () => settings.LecramId, PairTests = () => settings.AddonPairTests, OptiSourceRepo = () => settings.OptiSource };
         S = new Services { Settings = settings, Store = store, Installer = new Installer(store) };
         Gh = gh;
+        _busy.Changed += () => IsBusy = _busy.IsBusy;
+        // Busy from the start: no command may take the gate before the startup scan and update check have run.
+        _startup = _busy.TryEnter();
         SettingsVm = new SettingsViewModel(this);
         store.PairStatusChanged += () =>
         {
@@ -129,7 +136,8 @@ public sealed partial class MainViewModel : ObservableObject
 
     [ObservableProperty]
     [NotifyCanExecuteChangedFor(nameof(InstallCommand), nameof(DlssOnlyCommand), nameof(UninstallCommand),
-        nameof(RestoreDlssCommand), nameof(SwitchNrCommand), nameof(UndoNrCommand), nameof(UpdateAllCommand), nameof(CheckUpdatesCommand), nameof(RescanCommand))]
+        nameof(RestoreDlssCommand), nameof(SwitchNrCommand), nameof(UndoNrCommand), nameof(UpdateAllCommand), nameof(CheckUpdatesCommand), nameof(RescanCommand),
+        nameof(AddGameFolderCommand), nameof(AddLibraryRootCommand), nameof(RemoveGameCommand))]
     private bool _isBusy;
 
     // component chips
@@ -210,19 +218,24 @@ public sealed partial class MainViewModel : ObservableObject
 
     public async Task InitializeAsync()
     {
-        if (Demo.Active) Demo.Seed(S.Store, S.Settings);
-        else
-            await Task.Run(() =>
-            {
-                HashCache.Load();
-                S.Store.AutoImport();
-            });
-        await RefreshLocalComponentsAsync();
+        var lease = _startup;
+        _startup = null;
+        await Run("Starting", async ct =>
+        {
+            if (Demo.Active) Demo.Seed(S.Store, S.Settings);
+            else
+                await Task.Run(() =>
+                {
+                    HashCache.Load();
+                    S.Store.AutoImport();
+                });
+            await RefreshLocalComponentsAsync();
 
-        var cached = GameScanner.LoadCache();
-        if (cached.Count > 0) ApplyScan(cached);
+            var cached = GameScanner.LoadCache();
+            if (cached.Count > 0) ApplyScan(cached);
 
-        await Run("Starting", () => Task.WhenAll(CheckUpdatesCore(), ScanCore()));
+            await Task.WhenAll(CheckUpdatesCore(ct), ScanCore(ct));
+        }, lease);
         if (UpdateCount > 0) Log.Info($"{UpdateCount} game(s) have updates available");
         if (!Demo.Active) await Task.Run(HashCache.Save);
     }
@@ -259,10 +272,13 @@ public sealed partial class MainViewModel : ObservableObject
 
     public string LecramVersion => S.Settings.LecramLastVersion ?? S.Store.LecramBuildFor(null)?.DetectedLabel ?? "not in library";
 
-    internal async Task CheckLecramAsync(bool force = false)
+    /// <summary>Lecram check on its own (Add-on library "Check now", even with automatic checks off), as a run like any other.</summary>
+    internal Task CheckLecramNowAsync() => Run("Checking Lecram", ct => CheckLecramAsync(ct, force: true));
+
+    private async Task CheckLecramAsync(CancellationToken ct, bool force = false)
     {
         if (Demo.Active) return;
-        await Task.Run(() => S.Store.CheckLecramAsync(S.Settings, _cts.Token, force));
+        await Task.Run(() => S.Store.CheckLecramAsync(S.Settings, ct, force));
         S.Settings.Save();
         await RefreshLocalComponentsAsync();
         SettingsVm.Reload();
@@ -275,16 +291,16 @@ public sealed partial class MainViewModel : ObservableObject
     [RelayCommand(CanExecute = nameof(CanRun))]
     private Task CheckUpdates() => Run("Checking for updates", CheckUpdatesCore);
 
-    private async Task CheckUpdatesCore()
+    private async Task CheckUpdatesCore(CancellationToken ct)
     {
         if (!Demo.Active)
         {
             Gh.Token = S.Settings.GitHubToken;
-            await S.Store.RefreshAsync(_cts.Token);
-            await CheckLecramAsync();
+            await S.Store.RefreshAsync(ct);
+            await CheckLecramAsync(ct);
         }
         var s = S.Store;
-        Online = s.Opti is { FromCache: false } || s.Dlss is { FromCache: false } || s.Mfg is { FromCache: false } || s.Uplift is { FromCache: false };
+        Online = new[] { s.Opti, s.Dlss, s.Mfg, s.Uplift }.Any(r => r is { FromCache: false, Stale: false });
         OptiVersion = s.Opti is null ? "—" : s.Opti.Tag + (s.Opti.Prerelease ? " pre" : "");
         DlssVersion = s.Dlss?.Tag.TrimStart('v') ?? "—";
         UpliftVersion = s.Uplift?.Tag ?? "\u2014";
@@ -302,19 +318,19 @@ public sealed partial class MainViewModel : ObservableObject
         }
         CountUpdates();
         await RefreshLocalComponentsAsync();
-        if (!Demo.Active) await CheckCompatAsync();
+        if (!Demo.Active) await CheckCompatAsync(ct);
         Log.Info($"Latest: OptiScaler-NR {OptiVersion} · DLSS {DlssVersion} · MFG Unlock {MfgVersion}{(Online ? "" : " (offline)")}");
     }
 
     [RelayCommand(CanExecute = nameof(CanRun))]
     private Task Rescan() => Run("Scanning games", ScanCore);
 
-    private async Task ScanCore()
+    private async Task ScanCore(CancellationToken ct)
     {
         var progress = new Progress<int>(p => Status = $"Scanning games  {p}%");
         IsScanning = true;
         List<GameInfo> games;
-        try { games = Demo.Active ? Demo.Games : await GameScanner.ScanAsync(S.Settings, progress, _cts.Token); }
+        try { games = Demo.Active ? Demo.Games : await GameScanner.ScanAsync(S.Settings, progress, ct); }
         finally { IsScanning = false; }
         ApplyScan(games);
         Log.Info($"Found {games.Count} games, {games.Count(g => g.Dlss.Count > 0)} with DLSS");
@@ -323,24 +339,41 @@ public sealed partial class MainViewModel : ObservableObject
     private void ApplyScan(List<GameInfo> games)
     {
         var selectedId = SelectedGame?.Id;
-        var byId = Games.ToDictionary(g => g.Id);
-        var ids = games.Select(g => g.Id).ToHashSet();
-
-        foreach (var stale in Games.Where(g => !ids.Contains(g.Id)).ToList()) Games.Remove(stale);
-        foreach (var info in games)
-        {
-            if (byId.TryGetValue(info.Id, out var vm)) vm.Load(info);
-            else Games.Add(new GameViewModel(info, S));
-        }
+        MergeById(Games, games, g => g.Id, i => i.Id, (vm, info) => vm.Load(info), info => new GameViewModel(info, S));
         RefreshGames();
         CountUpdates();
         SelectedGame = Games.FirstOrDefault(g => g.Id == selectedId) ?? GamesView.Cast<GameViewModel>().FirstOrDefault();
     }
 
+    /// <summary>
+    /// Makes <paramref name="list"/> hold one item per id in <paramref name="incoming"/>: existing items are updated, new
+    /// ones created, and items whose id is gone or that duplicate an earlier one are removed.
+    /// </summary>
+    internal static void MergeById<TItem, TInfo>(IList<TItem> list, IEnumerable<TInfo> incoming, Func<TItem, string> itemId,
+        Func<TInfo, string> infoId, Action<TItem, TInfo> update, Func<TInfo, TItem> create)
+    {
+        var byId = new Dictionary<string, TItem>();
+        for (var i = 0; i < list.Count;)
+        {
+            if (byId.TryAdd(itemId(list[i]), list[i])) i++;
+            else list.RemoveAt(i);
+        }
+        var seen = new HashSet<string>();
+        foreach (var info in incoming)
+        {
+            var id = infoId(info);
+            if (!seen.Add(id)) continue;
+            if (byId.TryGetValue(id, out var item)) update(item, info);
+            else list.Add(create(info));
+        }
+        for (var i = list.Count - 1; i >= 0; i--)
+            if (!seen.Contains(itemId(list[i]))) list.RemoveAt(i);
+    }
+
     private void CountUpdates() => UpdateCount = Games.Count(g => g.NeedsUpdate);
 
     [RelayCommand(CanExecute = nameof(CanRun))]
-    private Task UpdateAll() => Run("Updating", async () =>
+    private Task UpdateAll() => Run("Updating", async ct =>
     {
         var targets = Games.Where(g => g.NeedsUpdate && g.Manifest is not null).ToList();
         if (targets.Count == 0)
@@ -362,7 +395,7 @@ public sealed partial class MainViewModel : ObservableObject
             try
             {
                 Log.Info($"Updating {g.Name}");
-                await S.Installer.InstallAsync(g.Info, g.SelectedTarget!.Dir, o, TransferProgress(), _cts.Token);
+                await S.Installer.InstallAsync(g.Info, g.SelectedTarget!.Dir, o, TransferProgress(), ct);
                 await RescanOne(g);
             }
             catch (NeedsAdminException ex) { failed++; Log.Error($"{g.Name}: {ex.Message}"); }
@@ -371,7 +404,7 @@ public sealed partial class MainViewModel : ObservableObject
         Log.Info(failed == 0 ? $"Updated {targets.Count} game(s)" : $"{failed} game(s) couldn't be updated. Details are in the log.");
     });
 
-    [RelayCommand]
+    [RelayCommand(CanExecute = nameof(CanRun))]
     private async Task AddGameFolder()
     {
         var dlg = new OpenFolderDialog { Title = "Select a game folder" };
@@ -381,23 +414,26 @@ public sealed partial class MainViewModel : ObservableObject
         S.Settings.HiddenGames.RemoveAll(h => h.Equals(GameInfo.MakeId(path), StringComparison.OrdinalIgnoreCase));
         S.Settings.Save();
 
-        var existing = Games.FirstOrDefault(g => g.Id == GameInfo.MakeId(path));
-        if (existing is not null)
+        await Run("Adding game", async _ =>
         {
-            SelectedGame = existing;
-            return;
-        }
-        var info = await Task.Run(() => GameScanner.Inspect(new GameEntry(Path.GetFileName(path), path, "Manual")));
-        var vm = new GameViewModel(info, S);
-        Games.Add(vm);
-        OnPropertyChanged(nameof(GameListEmptyText));
-        SaveGameCache();
-        Filter = "All";
-        SelectedGame = vm;
-        Log.Info($"Added {info.Name}");
+            var existing = Games.FirstOrDefault(g => g.Id == GameInfo.MakeId(path));
+            if (existing is not null)
+            {
+                SelectedGame = existing;
+                return;
+            }
+            var info = await Task.Run(() => GameScanner.Inspect(new GameEntry(Path.GetFileName(path), path, "Manual")));
+            var vm = new GameViewModel(info, S);
+            Games.Add(vm);
+            OnPropertyChanged(nameof(GameListEmptyText));
+            SaveGameCache();
+            Filter = "All";
+            SelectedGame = vm;
+            Log.Info($"Added {info.Name}");
+        });
     }
 
-    [RelayCommand]
+    [RelayCommand(CanExecute = nameof(CanRun))]
     private async Task AddLibraryRoot()
     {
         var dlg = new OpenFolderDialog { Title = "Select a folder that contains game folders" };
@@ -444,11 +480,37 @@ public sealed partial class MainViewModel : ObservableObject
         SettingsVm.RefreshPresetNames();
     }
 
-    /// <summary>The OptiScaler build changed: hide options it lacks, then re-resolve releases and the config check.</summary>
+    /// <summary>
+    /// The OptiScaler build changed: hide options it lacks, then re-resolve releases and the config check. When a run is
+    /// going, the refresh waits for it, so no install pairs the old build's binary with the new build's options.
+    /// </summary>
     public void OptiSourceChanged()
     {
         SettingsVm.ApplyOptiSource();
-        if (CheckUpdatesCommand.CanExecute(null)) CheckUpdatesCommand.Execute(null);
+        _refreshPending = true;
+        StartPendingWork();
+    }
+
+    /// <summary>Rescans now, or right after the current run.</summary>
+    public void RequestRescan()
+    {
+        _rescanPending = true;
+        StartPendingWork();
+    }
+
+    private void StartPendingWork()
+    {
+        if (_busy.IsBusy) return;
+        if (_refreshPending)
+        {
+            _refreshPending = false;
+            _ = CheckUpdates();
+        }
+        else if (_rescanPending)
+        {
+            _rescanPending = false;
+            _ = Rescan();
+        }
     }
 
     /// <summary>Every OptiScaler.ini key this app can write: profile, keybinds and friendly options.</summary>
@@ -461,16 +523,16 @@ public sealed partial class MainViewModel : ObservableObject
             .Concat(KeybindDef.Opti.Select(k => (k.Section, k.Key)))
             .Concat(SettingsVm.NrOptions.Concat(SettingsVm.TonemapOptions).Concat(SettingsVm.HdrOptions).Where(o => o.IsAvailable).Select(o => (o.Section, o.Key)));
 
-    private async Task CheckCompatAsync()
+    private async Task CheckCompatAsync(CancellationToken ct)
     {
         if (S.Store.Opti is not { } opti) return;
         try
         {
-            Compat = await OptiCompat.CheckAsync(Gh, opti.Tag, ManagedOptiKeys(), _cts.Token);
+            Compat = await OptiCompat.CheckAsync(Gh, opti.Tag, ManagedOptiKeys(), ct);
             CompatWarning = Compat.HasIssues || Compat.ChangedKeys.Count > 0;
             if (CompatWarning) Log.Info("Config check: " + Compat.Summary.Replace("\n", " "));
         }
-        catch (Exception ex) when (ex is HttpRequestException or TaskCanceledException or IOException)
+        catch (Exception ex) when (!ct.IsCancellationRequested && ex is HttpRequestException or TaskCanceledException or IOException)
         {
             Log.Info($"Config check skipped ({ex.Message})");
         }
@@ -503,11 +565,7 @@ public sealed partial class MainViewModel : ObservableObject
     }
 
     [RelayCommand]
-    private void Cancel()
-    {
-        _cts.Cancel();
-        _cts = new CancellationTokenSource();
-    }
+    private void Cancel() => _busy.Cancel();
 
     // ---------- commands: selected game ----------
 
@@ -551,9 +609,9 @@ public sealed partial class MainViewModel : ObservableObject
         if (!dlssOnly && o.Opti && g.SelectedTarget.Exe is null && !g.Info.Exes.Any())
             Log.Info($"{g.Name}: no game .exe found in the install location. OptiScaler only works next to the game's .exe; pick that folder under Install location.");
 
-        await Run(dlssOnly ? $"Updating DLSS for {g.Name}" : $"Installing to {g.Name}", async () =>
+        await Run(dlssOnly ? $"Updating DLSS for {g.Name}" : $"Installing to {g.Name}", async ct =>
         {
-            await S.Installer.InstallAsync(g.Info, g.SelectedTarget.Dir, o, TransferProgress(), _cts.Token);
+            await S.Installer.InstallAsync(g.Info, g.SelectedTarget.Dir, o, TransferProgress(), ct);
             await RescanOne(g);
         });
     }
@@ -570,9 +628,9 @@ public sealed partial class MainViewModel : ObservableObject
         if (g?.SelectedTarget is null || !g.CanSwitchNr) return Task.CompletedTask;
         var id = undo ? g.Manifest?.PreviousDlssNrId : g.EffectiveNrId;
         if (undo && id is null) return Task.CompletedTask;
-        return Run($"Switching NR for {g.Name}", async () =>
+        return Run($"Switching NR for {g.Name}", async ct =>
         {
-            await S.Installer.SwitchDlssNrAsync(g.Info, g.SelectedTarget.Dir, id, _cts.Token);
+            await S.Installer.SwitchDlssNrAsync(g.Info, g.SelectedTarget.Dir, id, ct);
             if (undo)
             {
                 S.Settings.For(g.Id).DlssNrId = id;
@@ -589,9 +647,9 @@ public sealed partial class MainViewModel : ObservableObject
         if (g?.SelectedTarget is null) return;
         if (!Dialog.Confirm("Uninstall", $"Remove everything DLSS Updater installed in {g.Name} and restore the original files?", "Uninstall", danger: true))
             return;
-        await Run($"Uninstalling from {g.Name}", async () =>
+        await Run($"Uninstalling from {g.Name}", async ct =>
         {
-            await S.Installer.UninstallAsync(g.Info, g.SelectedTarget.Dir, _cts.Token);
+            await S.Installer.UninstallAsync(g.Info, g.SelectedTarget.Dir, ct);
             await RescanOne(g);
         });
     }
@@ -601,9 +659,9 @@ public sealed partial class MainViewModel : ObservableObject
     {
         var g = SelectedGame;
         if (g?.SelectedTarget is null) return Task.CompletedTask;
-        return Run($"Restoring DLSS for {g.Name}", async () =>
+        return Run($"Restoring DLSS for {g.Name}", async ct =>
         {
-            await S.Installer.RestoreDlssAsync(g.Info, g.SelectedTarget.Dir, _cts.Token);
+            await S.Installer.RestoreDlssAsync(g.Info, g.SelectedTarget.Dir, ct);
             await RescanOne(g);
         });
     }
@@ -679,7 +737,7 @@ public sealed partial class MainViewModel : ObservableObject
         if (dlg.ShowDialog() == true) g.AddCustomTarget(FileUtil.Normalize(dlg.FolderName));
     }
 
-    [RelayCommand]
+    [RelayCommand(CanExecute = nameof(CanRun))]
     private void RemoveGame()
     {
         var g = SelectedGame;
@@ -715,15 +773,22 @@ public sealed partial class MainViewModel : ObservableObject
         Progress = p.Fraction ?? 0;
     });
 
-    private async Task Run(string label, Func<Task> work)
+    /// <summary>Runs one operation with the busy state, progress and error handling. Skipped when another run is going.</summary>
+    /// <param name="held">A lease the caller already holds (startup); otherwise one is taken here.</param>
+    private async Task Run(string label, Func<CancellationToken, Task> work, BusyGate.Lease? held = null)
     {
-        IsBusy = true;
+        var lease = held ?? _busy.TryEnter();
+        if (lease is null)
+        {
+            Log.Info($"{label}: skipped, another task is still running");
+            return;
+        }
         Status = label;
         ProgressVisible = true;
         ProgressIndeterminate = true;
         try
         {
-            await work();
+            await work(lease.Token);
             // An install may have downloaded ReShade for the first time.
             if (S.Store.ReShade is not null && !S.Store.ReShadeImported) await RefreshLocalComponentsAsync();
             Status = "Ready";
@@ -747,10 +812,11 @@ public sealed partial class MainViewModel : ObservableObject
         }
         finally
         {
-            IsBusy = false;
             ProgressVisible = false;
             ProgressIndeterminate = false;
             Progress = 0;
+            lease.Dispose();
         }
+        StartPendingWork();
     }
 }

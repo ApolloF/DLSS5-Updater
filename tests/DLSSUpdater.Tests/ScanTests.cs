@@ -137,6 +137,68 @@ public class ScanTests : IDisposable
     public void MakeId_IgnoresCaseAndTrailingSlash() =>
         Assert.Equal(GameInfo.MakeId(@"C:\Games\Foo\"), GameInfo.MakeId(@"c:\games\FOO"));
 
+    [Fact]
+    public void Normalize_KeepsTheSeparatorOfADriveRoot()
+    {
+        Assert.Equal(@"C:\", Core.FileUtil.Normalize(@"C:\"));
+        Assert.Equal(@"C:\Games", Core.FileUtil.Normalize(@"C:\Games\"));
+        Assert.Equal(@"c:\", GameInfo.MakeId(@"C:\"));
+        Assert.Equal(@"C:\Games", Path.Combine(Core.FileUtil.Normalize(@"C:\"), "Games"));
+    }
+
+    private string SteamLibrary(string name, string game)
+    {
+        var lib = Path.Combine(_root, name);
+        var apps = Path.Combine(lib, "steamapps");
+        Directory.CreateDirectory(Path.Combine(apps, "common", game));
+        File.WriteAllText(Path.Combine(apps, "appmanifest_1.acf"), $$"""
+            "AppState" { "appid" "1" "name" "{{game}}" "installdir" "{{game}}" }
+            """);
+        return lib;
+    }
+
+    [Fact]
+    public void Steam_UnreadableLibrary_OnlyDropsItself()
+    {
+        var locked = SteamLibrary("locked", "Hidden Game");
+        var open = SteamLibrary("open", "Good Game");
+        var apps = new DirectoryInfo(Path.Combine(locked, "steamapps"));
+        var deny = new System.Security.AccessControl.FileSystemAccessRule(
+            System.Security.Principal.WindowsIdentity.GetCurrent().User!,
+            System.Security.AccessControl.FileSystemRights.ListDirectory, System.Security.AccessControl.AccessControlType.Deny);
+        var acl = apps.GetAccessControl();
+        acl.AddAccessRule(deny);
+        apps.SetAccessControl(acl);
+        try
+        {
+            var games = Launchers.SteamLibraries([locked, open]);
+            Assert.Equal("Good Game", Assert.Single(games).Name);
+        }
+        finally
+        {
+            acl.RemoveAccessRule(deny);
+            apps.SetAccessControl(acl);
+        }
+    }
+
+    [Fact]
+    public void Epic_DamagedManifest_OnlyDropsItself()
+    {
+        var dir = Path.Combine(_root, "epic");
+        var game = Path.Combine(_root, "EpicGame");
+        Directory.CreateDirectory(dir);
+        Directory.CreateDirectory(game);
+        var location = System.Text.Json.JsonSerializer.Serialize(game);
+        File.WriteAllText(Path.Combine(dir, "a.item"), $$"""{"AppCategories":[1,{"x":2}],"DisplayName":5,"InstallLocation":{{location}}}""");
+        File.WriteAllText(Path.Combine(dir, "b.item"), "[1,2]");
+        File.WriteAllText(Path.Combine(dir, "c.item"), $$"""{"AppCategories":["games"],"DisplayName":"Epic Game","InstallLocation":{{location}}}""");
+        File.WriteAllText(Path.Combine(dir, "d.item"), $$"""{"DisplayName":7,"InstallLocation":{{location}}}""");
+
+        var games = Launchers.EpicManifests(dir);
+
+        Assert.Equal(["Epic Game", "EpicGame"], games.Select(g => g.Name).ToArray());
+    }
+
     private const string FakeRoot = @"X:\Games\Starfield";
 
     [Fact]

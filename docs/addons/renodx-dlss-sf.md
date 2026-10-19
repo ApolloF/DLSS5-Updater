@@ -104,6 +104,9 @@ ReShade-only mode with ReShade 6+, a game with native DLSS and an imported `nvng
   build their own name in Settings (for example `SF 0928`); lists show that name, else `<file version> (<import date>)`.
 - **Selection.** Settings picks the default build; a game can pick its own ("Use default (...)" follows Settings). The install
   records the build's id next to its tag, and automatic reinstalls keep the build that is installed.
+- **Options.** Each option's first choice, "Add-on default", writes nothing, so the add-on's own default (table above) applies.
+  A switch (Off/On) in the app writes nothing for Off, which only fits keys whose default is off. `AutoMask` defaults to 1, so
+  Character mask is a list instead: Add-on default (on), On writes `1`, Off writes `0`.
 - **With Lecram.** The tested pair is `renodx-dlss` 0.2026.928.x with Lecram 0928 (see [lecram-dlss5.md](lecram-dlss5.md)). The
   Install tab shows the exact selected pair's recorded status (Works, Crashed or Untested), and offers buttons to mark it working
   or crashed. Untested is neutral information; only Crashed warns, with its recorded date. Neither blocks installation.

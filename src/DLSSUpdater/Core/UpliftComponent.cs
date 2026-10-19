@@ -14,7 +14,7 @@ public sealed partial class ComponentStore
             var files = new List<(string, string, string?)> { (zip.Name, zip.Url, zip.Sha256) };
             if (r.Assets.FirstOrDefault(a => a.Name.Equals("SHA256SUMS.txt", StringComparison.OrdinalIgnoreCase)) is { } sums)
                 files.Add((sums.Name, sums.Url, null));
-            return new ReleaseInfo { Tag = r.TagName, Published = r.PublishedAt, Prerelease = r.Prerelease, Notes = r.Body, Files = files };
+            return new ReleaseInfo { Tag = r.TagName, Published = r.PublishedAt, Prerelease = r.Prerelease, Notes = r.Body, Stale = r.Stale, Files = files };
         }
         return null;
     }

@@ -505,7 +505,8 @@ public sealed class AddonLibraryTests : IDisposable
     [Fact]
     public void Settings_LoadLegacyCombosAndKeepSeparateGameBuildChoices()
     {
-        var old = JsonSerializer.Deserialize("""{"AddonCombos":[{"Name":"Pair","RenoDxId":"sf","LecramId":"lec"}],"TestedComboSeeded":true,"Games":{"game":{"RenoDxId":"sf-game","LecramId":"lec-game"}}}""", JsonCtx.Default.AppSettings)!;
+        File.WriteAllText(AppPaths.SettingsFile, """{"AddonCombos":[{"Name":"Pair","RenoDxId":"sf","LecramId":"lec"}],"TestedComboSeeded":true,"Games":{"game":{"RenoDxId":"sf-game","LecramId":"lec-game"}}}""");
+        var old = AppSettings.Load();
         Assert.Empty(old.AddonPairTests);
         Assert.Equal("sf-game", old.Games["game"].RenoDxId);
         Assert.Equal("lec-game", old.Games["game"].LecramId);

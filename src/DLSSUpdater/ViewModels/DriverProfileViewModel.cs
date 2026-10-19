@@ -271,15 +271,22 @@ public sealed partial class DriverProfileViewModel : ObservableObject
         }
         catch (NvApiException ex) when (ex.NeedsAdmin)
         {
-            Busy = false;
             if (Views.Dialog.Confirm("Administrator rights needed", "The NVIDIA driver only saves profile changes for administrators.", "Restart as admin"))
                 App.RestartElevated();
         }
         catch (Exception ex) when (ex is NvApiException or InvalidOperationException)
         {
-            Busy = false;
             Log.Error("Writing NVIDIA profile failed", ex);
             Views.Dialog.Show("NVIDIA profile", (ex is NvApiException ? "The NVIDIA driver didn't accept the change." : UserErrors.Message(ex)) + "\nNothing was saved.");
+        }
+        catch (Exception ex) when (ex is EntryPointNotFoundException or DllNotFoundException)
+        {
+            Log.Error("Writing NVIDIA profile failed", ex);
+            Views.Dialog.Show("NVIDIA profile", "This NVIDIA driver doesn't offer the profile functions this app needs. Updating the driver usually fixes it.\nNothing was saved.");
+        }
+        finally
+        {
+            Busy = false;
         }
     }
 

@@ -14,6 +14,8 @@ public sealed class GhRelease
     [JsonPropertyName("published_at")] public DateTime? PublishedAt { get; set; }
     [JsonPropertyName("body")] public string? Body { get; set; }
     [JsonPropertyName("assets")] public List<GhAsset> Assets { get; set; } = [];
+    /// <summary>Served from the ETag cache because GitHub answered with an error or couldn't be reached.</summary>
+    [JsonIgnore] public bool Stale { get; set; }
 }
 
 public sealed class GhAsset
@@ -64,8 +66,10 @@ public sealed class GitHubClient
 
     public async Task<List<GhRelease>> GetReleasesAsync(string repo, int perPage, CancellationToken ct)
     {
-        var body = await GetApiAsync($"https://api.github.com/repos/{repo}/releases?per_page={perPage}", ct);
-        return JsonSerializer.Deserialize(body, JsonCtx.Default.ListGhRelease) ?? [];
+        var (body, stale) = await GetApiAsync($"https://api.github.com/repos/{repo}/releases?per_page={perPage}", ct);
+        var releases = JsonSerializer.Deserialize(body, JsonCtx.Default.ListGhRelease) ?? [];
+        foreach (var r in releases) r.Stale = stale;
+        return releases;
     }
 
     /// <summary>Releases of <paramref name="repo"/> from the ETag cache only (no request), for when GitHub can't be reached.</summary>
@@ -85,7 +89,7 @@ public sealed class GitHubClient
 
     public async Task<List<string>> GetTagsAsync(string repo, int perPage, CancellationToken ct)
     {
-        var body = await GetApiAsync($"https://api.github.com/repos/{repo}/tags?per_page={perPage}", ct);
+        var (body, _) = await GetApiAsync($"https://api.github.com/repos/{repo}/tags?per_page={perPage}", ct);
         using var doc = JsonDocument.Parse(body);
         return doc.RootElement.EnumerateArray()
             .Select(t => t.TryGetProperty("name", out var n) ? n.GetString() : null)
@@ -103,39 +107,79 @@ public sealed class GitHubClient
         return await res.Content.ReadAsStringAsync(cts.Token);
     }
 
-    private async Task<string> GetApiAsync(string url, CancellationToken ct)
+    /// <summary>The token GitHub refused (401, or a 403 that isn't a rate limit); requests go without it until it changes.</summary>
+    private string? _rejectedToken;
+
+    /// <summary>
+    /// Body of an API request, and whether it came from the ETag cache because GitHub failed (stale). A token GitHub
+    /// refuses is dropped for the rest of the session, with one warning, so an expired token never hides new releases.
+    /// </summary>
+    private async Task<(string Body, bool Stale)> GetApiAsync(string url, CancellationToken ct)
     {
         var cacheFile = CacheFileFor(url);
         var cached = ReadEntry(cacheFile) is { } e && e.Url == url ? e : null;
-
-        using var req = new HttpRequestMessage(HttpMethod.Get, url);
-        req.Headers.Accept.Add(new MediaTypeWithQualityHeaderValue("application/vnd.github+json"));
-        req.Headers.Add("X-GitHub-Api-Version", "2022-11-28");
-        if (!string.IsNullOrWhiteSpace(Token)) req.Headers.Authorization = new AuthenticationHeaderValue("Bearer", Token.Trim());
-        if (cached is not null) req.Headers.IfNoneMatch.Add(EntityTagHeaderValue.Parse(cached.ETag));
+        var token = string.IsNullOrWhiteSpace(Token) ? null : Token.Trim();
+        if (token is not null && token == _rejectedToken) token = null;
 
         using var cts = CancellationTokenSource.CreateLinkedTokenSource(ct);
         cts.CancelAfter(TimeSpan.FromSeconds(30));
         try
         {
-            using var res = await _http.SendAsync(req, cts.Token);
-            if (res.StatusCode == HttpStatusCode.NotModified && cached is not null) return cached.Body;
-            if (!res.IsSuccessStatusCode && cached is not null)
+            var res = await SendApiAsync(url, token, cached, cts.Token);
+            try
             {
-                Log.Info($"GitHub returned {(int)res.StatusCode}, using cached release data");
-                return cached.Body;
+                if (token is not null && await IsTokenRejectedAsync(res, cts.Token))
+                {
+                    if (Interlocked.Exchange(ref _rejectedToken, token) != token)
+                        Log.Warn($"GitHub rejected the saved access token ({(int)res.StatusCode}); it may be expired or revoked. " +
+                                 "Checking without it for now. Replace or clear it in Settings.");
+                    res.Dispose();
+                    res = await SendApiAsync(url, null, cached, cts.Token);
+                }
+                if (res.StatusCode == HttpStatusCode.NotModified && cached is not null) return (cached.Body, false);
+                if (!res.IsSuccessStatusCode && cached is not null)
+                {
+                    Log.Info($"GitHub returned {(int)res.StatusCode}, using cached release data");
+                    return (cached.Body, true);
+                }
+                res.EnsureSuccessStatusCode();
+                var body = await res.Content.ReadAsStringAsync(cts.Token);
+                if (res.Headers.ETag is { } etag)
+                    WriteEntry(cacheFile, new ApiCacheEntry { Url = url, ETag = etag.ToString(), Body = body });
+                return (body, false);
             }
-            res.EnsureSuccessStatusCode();
-            var body = await res.Content.ReadAsStringAsync(cts.Token);
-            if (res.Headers.ETag is { } etag)
-                WriteEntry(cacheFile, new ApiCacheEntry { Url = url, ETag = etag.ToString(), Body = body });
-            return body;
+            finally { res.Dispose(); }
         }
         catch (Exception ex) when (cached is not null && !ct.IsCancellationRequested && ex is HttpRequestException or TaskCanceledException)
         {
             Log.Info($"GitHub unreachable ({ex.Message}), using cached release data");
-            return cached.Body;
+            return (cached.Body, true);
         }
+    }
+
+    private async Task<HttpResponseMessage> SendApiAsync(string url, string? token, ApiCacheEntry? cached, CancellationToken ct)
+    {
+        using var req = new HttpRequestMessage(HttpMethod.Get, url);
+        req.Headers.Accept.Add(new MediaTypeWithQualityHeaderValue("application/vnd.github+json"));
+        req.Headers.Add("X-GitHub-Api-Version", "2022-11-28");
+        if (token is not null) req.Headers.Authorization = new AuthenticationHeaderValue("Bearer", token);
+        if (cached is not null) req.Headers.IfNoneMatch.Add(EntityTagHeaderValue.Parse(cached.ETag));
+        return await _http.SendAsync(req, ct);
+    }
+
+    /// <summary>
+    /// 401, or a 403 that isn't a rate limit. GitHub's rate-limit 403s carry no requests left, a Retry-After, or (the
+    /// secondary limit, which may have neither) a message about the rate limit or abuse detection.
+    /// </summary>
+    internal static async Task<bool> IsTokenRejectedAsync(HttpResponseMessage res, CancellationToken ct)
+    {
+        if (res.StatusCode == HttpStatusCode.Unauthorized) return true;
+        if (res.StatusCode != HttpStatusCode.Forbidden) return false;
+        if (res.Headers.RetryAfter is not null) return false;
+        if (res.Headers.TryGetValues("X-RateLimit-Remaining", out var left) && left.FirstOrDefault() == "0") return false;
+        var body = await res.Content.ReadAsStringAsync(ct);
+        return !body.Contains("rate limit", StringComparison.OrdinalIgnoreCase)
+               && !body.Contains("abuse", StringComparison.OrdinalIgnoreCase);
     }
 
     public async Task DownloadAsync(string url, string dest, string label, IProgress<TransferProgress>? progress, CancellationToken ct)
