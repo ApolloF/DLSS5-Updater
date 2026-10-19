@@ -54,6 +54,15 @@ public sealed class StartupTests : IDisposable
     }
 
     [Fact]
+    public void GameIdsDifferingOnlyInCase_KeepTheFirst()
+    {
+        File.WriteAllText(AppPaths.SettingsFile, """{"Games":{"C:\\Games\\X":{"Preset":"First"},"c:\\games\\x":{"Preset":"Second"}}}""");
+        var s = AppSettings.Load();
+        Assert.Equal("First", Assert.Single(s.Games).Value.Preset);
+        Assert.Equal("First", s.Games[@"c:\games\x"].Preset);
+    }
+
+    [Fact]
     public void UnreadableSettings_AreKeptBeforeDefaultsOverwriteThem()
     {
         const string broken = """{"ManualGames":["D:\\Games\\A"], oops""";

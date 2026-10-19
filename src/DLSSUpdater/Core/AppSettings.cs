@@ -227,7 +227,13 @@ public sealed class AppSettings
         ManualGames = Strings(ManualGames);
         LibraryRoots = Strings(LibraryRoots);
         HiddenGames = Strings(HiddenGames);
-        Games = new Dictionary<string, GameOverride>((Games ?? []).Where(g => g.Value is not null), StringComparer.OrdinalIgnoreCase);
+        var games = new Dictionary<string, GameOverride>(StringComparer.OrdinalIgnoreCase);
+        foreach (var (id, game) in Games ?? [])
+        {
+            // Keys differing only in case (hand-edited, or folders renamed by case) point at the same game: first wins.
+            if (game is not null && !games.TryAdd(id, game)) Log.Info($"settings.json: duplicate game entry {id} ignored");
+        }
+        Games = games;
         foreach (var g in Games.Values)
         {
             if (g.Opti is not null) g.Opti = Overrides(g.Opti);
