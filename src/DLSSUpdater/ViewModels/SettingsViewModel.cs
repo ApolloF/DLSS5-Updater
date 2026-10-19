@@ -404,8 +404,8 @@ public sealed partial class SettingsViewModel : ObservableObject
             var store = _main.S.Store;
             return store.DfcImported
                 ? $"Imported  ·  {store.DfcVersion}  ·  {HashCache.Get(store.DfcPath)[..12]}" +
-                  (DfcWarning is null ? "" : $"  ·  differs from the tested {DfcConfig.TestedVersion} / config_schema {DfcConfig.TestedSchema} (see log)")
-                : "Not imported. Personal-use licence: import your own copy: deep-fried-chicken.addon64 from the extracted package's 64-bit folder (the files beside it come along). 32-bit games are not supported.";
+                  (DfcWarning is null ? "" : $"  ·  not the tested version ({DfcConfig.TestedVersion}, config schema {DfcConfig.TestedSchema}); see the log")
+                : "Not imported. Its licence is personal use only, so import your own copy: choose deep-fried-chicken.addon64 in the extracted package's 64-bit folder (the files next to it are imported too). 32-bit games are not supported.";
         }
     }
 
@@ -589,7 +589,7 @@ public sealed partial class SettingsViewModel : ObservableObject
             Reload();
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or InvalidDataException)
-        { Log.Error("DLSS import failed", ex); Views.Dialog.Show("Import failed", ex.Message); }
+        { Log.Error("DLSS import failed", ex); Views.Dialog.Show("Import failed", UserErrors.Message(ex)); }
     }
 
     [RelayCommand]
@@ -621,7 +621,7 @@ public sealed partial class SettingsViewModel : ObservableObject
             OnPropertyChanged(nameof(SelectedNrHint));
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or InvalidDataException)
-        { Log.Error($"Import of {fileName} failed", ex); Views.Dialog.Show("Import failed", ex.Message); }
+        { Log.Error($"Import of {fileName} failed", ex); Views.Dialog.Show("Import failed", UserErrors.Message(ex)); }
     }
 
     [RelayCommand]

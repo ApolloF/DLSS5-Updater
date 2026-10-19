@@ -35,6 +35,7 @@ public partial class MainWindow : Window
         StateChanged += (_, _) => UpdateMaximized();
         Closed += (_, _) => Core.HashCache.Save();
         PreviewKeyDown += OnPreviewKeyDown;
+        KeyDown += OnKeyDown;
         SettingsHost.Realized += root => _settingsScroll = Deferred.Find<ScrollViewer>(root, "SettingsScroll");
         AboutHost.Realized += root =>
         {
@@ -66,6 +67,27 @@ public partial class MainWindow : Window
             mods.HasFlag(System.Windows.Input.ModifierKeys.Alt));
     }
 
+    /// <summary>Esc closes Settings or About. It runs after the controls, so an open dropdown or a keybind capture gets Esc first.</summary>
+    private void OnKeyDown(object sender, System.Windows.Input.KeyEventArgs e)
+    {
+        if (e.Handled || e.Key != System.Windows.Input.Key.Escape || !(_vm.SettingsOpen || _vm.AboutOpen)) return;
+        if (_vm.AboutOpen && _vm.CanGoBack) _vm.BackCommand.Execute(null);
+        else _vm.ShowGameView();
+        e.Handled = true;
+    }
+
+    private static readonly System.Windows.Input.Key[] ListKeys =
+    [
+        System.Windows.Input.Key.Up, System.Windows.Input.Key.Down, System.Windows.Input.Key.PageUp, System.Windows.Input.Key.PageDown,
+        System.Windows.Input.Key.Home, System.Windows.Input.Key.End, System.Windows.Input.Key.Enter, System.Windows.Input.Key.Space,
+    ];
+
+    /// <summary>Picking a game with the keyboard leaves Settings / About, as a click does.</summary>
+    private void OnGameListKeyUp(object sender, System.Windows.Input.KeyEventArgs e)
+    {
+        if (ListKeys.Contains(e.Key)) _vm.ShowGameView();
+    }
+
     private void OnGameListClick(object sender, System.Windows.Input.MouseButtonEventArgs e)
     {
         if (e.OriginalSource is DependencyObject d && ItemsControl.ContainerFromElement((ItemsControl)sender, d) is ListBoxItem)
@@ -91,10 +113,29 @@ public partial class MainWindow : Window
 
     private void UpdateMaximized()
     {
-        // A chrome-less maximized window overhangs the screen by the resize border.
-        RootGrid.Margin = WindowState == WindowState.Maximized ? new Thickness(7) : new Thickness(0);
-        MaxButton.Content = WindowState == WindowState.Maximized ? "î¤£" : "î¤¢";
+        var maximized = WindowState == WindowState.Maximized;
+        RootGrid.Margin = maximized ? MaximizedOverhang() : new Thickness(0);
+        System.Windows.Automation.AutomationProperties.SetName(MaxButton, maximized ? "Restore" : "Maximize");
+        MaxButton.Content = WindowState == WindowState.Maximized ? "" : "";
     }
+
+    /// <summary>
+    /// A chrome-less maximized window overhangs the screen by the sizing frame plus the padded border. SystemParameters
+    /// may leave the padded border out, which would clip a few pixels, so both metrics are read for this window's DPI.
+    /// </summary>
+    private Thickness MaximizedOverhang()
+    {
+        var scale = VisualTreeHelper.GetDpi(this);
+        var dpi = (uint)Math.Round(scale.PixelsPerInchX);
+        var x = (GetSystemMetricsForDpi(SmCxSizeFrame, dpi) + GetSystemMetricsForDpi(SmCxPaddedBorder, dpi)) / scale.DpiScaleX;
+        var y = (GetSystemMetricsForDpi(SmCySizeFrame, dpi) + GetSystemMetricsForDpi(SmCxPaddedBorder, dpi)) / scale.DpiScaleY;
+        return new Thickness(x, y, x, y);
+    }
+
+    private const int SmCxSizeFrame = 32, SmCySizeFrame = 33, SmCxPaddedBorder = 92;
+
+    [DllImport("user32.dll")]
+    private static extern int GetSystemMetricsForDpi(int index, uint dpi);
 
     private void OnMinimize(object sender, RoutedEventArgs e) => WindowState = WindowState.Minimized;
 

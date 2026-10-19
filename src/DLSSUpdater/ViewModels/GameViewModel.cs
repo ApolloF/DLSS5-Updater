@@ -40,8 +40,8 @@ public sealed record ModeChoice(InstallMode Mode, string Label, string Descripti
 {
     public static readonly ModeChoice[] All =
     [
-        new(InstallMode.OptiScaler, "OptiScaler-NR", "OptiScaler-NR as the proxy; it loads ReShade, add-ons and DLSSNR."),
-        new(InstallMode.ReShadeOnly, "ReShade + add-ons", "ReShade as the proxy with MFG Unlock and DLSS updates, without OptiScaler."),
+        new(InstallMode.OptiScaler, "OptiScaler-NR", "OptiScaler-NR loads into the game and brings ReShade, MFG Unlock and NR with it."),
+        new(InstallMode.ReShadeOnly, "ReShade + add-ons", "ReShade loads into the game with MFG Unlock, DLSS updates and an optional NR add-on. No OptiScaler."),
     ];
 
     public override string ToString() => Label;
@@ -75,13 +75,13 @@ public sealed partial class GameViewModel : ObservableObject
             new ComponentRow("opti", "OptiScaler-NR"),
             new ComponentRow("reshade", "ReShade"),
             new ComponentRow("mfg", "MFG Unlock"),
-            new ComponentRow("dlssnr", "DLSSNR runtime"),
-            new ComponentRow("renodx", "ShortFuse RenoDX DLSS add-on (own NR pass; replaces OptiScaler NR)"),
-            new ComponentRow("lecram", "Lecram DLSS5 add-on (own NR pass; with ShortFuse both passes run)"),
-            new ComponentRow("uplift", "GITC Uplift (exclusive DLSS-NR route)"),
-            new ComponentRow("dfc", "Deep Fried Chicken (replaces OptiScaler NR, RenoDX and Lecram)"),
-            new ComponentRow("dlss", "DLSS SR · RR · FG"),
-            new ComponentRow("streamline", "Streamline (Dynamic MFG)"),
+            new ComponentRow("dlssnr", "NR runtime"),
+            new ComponentRow("renodx", "ShortFuse RenoDX DLSS add-on"),
+            new ComponentRow("lecram", "Lecram DLSS5 add-on"),
+            new ComponentRow("uplift", "GITC Uplift"),
+            new ComponentRow("dfc", "Deep Fried Chicken"),
+            new ComponentRow("dlss", "DLSS (SR · RR · FG)"),
+            new ComponentRow("streamline", "Streamline (for Dynamic MFG)"),
         ];
         foreach (var c in Components) c.PropertyChanged += (_, e) =>
         {
@@ -125,8 +125,8 @@ public sealed partial class GameViewModel : ObservableObject
 
     public bool IsReShadeOnly => Mode == InstallMode.ReShadeOnly;
     public string ProxyHint => IsReShadeOnly
-        ? "Files go next to the game executable. Proxy is the name ReShade is loaded as (dxgi.dll for DX10–12, d3d9.dll, opengl32.dll …)."
-        : "Files go next to the game executable. Proxy is the name OptiScaler is loaded as.";
+        ? "Files go next to the game's .exe. This is the file name the game loads ReShade as: dxgi.dll for DirectX 10–12, d3d9.dll for DirectX 9, opengl32.dll for OpenGL."
+        : "Files go next to the game's .exe. This is the file name the game loads OptiScaler as.";
 
     public ModeChoice ModeChoice
     {
@@ -189,6 +189,12 @@ public sealed partial class GameViewModel : ObservableObject
 
     public string? SfLecramMessage => _s.Store.SfLecramMessage(RenoDxEnabled, LecramEnabled, EffectiveRenoDxId, EffectiveLecramId);
     public bool HasSfLecramMessage => SfLecramMessage is not null;
+    public string PairStatusText => PairStatus switch
+    {
+        AddonPairStatus.Works => "Works",
+        AddonPairStatus.Crashed => "Crashed",
+        _ => "Not tested together yet",
+    };
     public AddonPairStatus PairStatus => _s.Store.PairTestFor(EffectiveRenoDxId, EffectiveLecramId)?.Status ?? AddonPairStatus.Untested;
     public bool IsPairCrashed => PairStatus == AddonPairStatus.Crashed;
     public bool CanMarkAddonPair => BothAddonsEnabled && _s.Store.RenoDxBuildFor(EffectiveRenoDxId) is not null && _s.Store.LecramBuildFor(EffectiveLecramId) is not null;
@@ -198,6 +204,7 @@ public sealed partial class GameViewModel : ObservableObject
         OnPropertyChanged(nameof(SfLecramMessage));
         OnPropertyChanged(nameof(HasSfLecramMessage));
         OnPropertyChanged(nameof(PairStatus));
+        OnPropertyChanged(nameof(PairStatusText));
         OnPropertyChanged(nameof(IsPairCrashed));
         OnPropertyChanged(nameof(CanMarkAddonPair));
         MarkPairWorkingCommand.NotifyCanExecuteChanged();
@@ -218,7 +225,7 @@ public sealed partial class GameViewModel : ObservableObject
             RefreshAddonPairStatus();
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
-        { Log.Error("Could not mark the ShortFuse + Lecram pair", ex); Views.Dialog.Show("Could not mark pair", ex.Message); }
+        { Log.Error("Could not mark the ShortFuse + Lecram pair", ex); Views.Dialog.Show("Could not mark pair", UserErrors.Message(ex)); }
     }
 
     /// <summary>Deep Fried Chicken is ticked for a game that ships no DLSS of its own (copies an install of ours added don't count).</summary>
@@ -454,6 +461,10 @@ public sealed partial class GameViewModel : ObservableObject
         }
     }
 
+    /// <summary>The game's DLSS differs from the one this app would install (newer release, or the chosen pin).</summary>
+    public bool DlssOutdated => HasDlss && LatestDlss is not null && !DlssCurrent;
+    public string? DlssOutdatedTip => !DlssOutdated ? null : DlssPinned ? "Not the DLSS version chosen for this game" : "Newer DLSS available";
+    public string DlssBadgeText => DlssBadge + (DlssOutdated ? " ↑" : "");
     public bool DlssCurrent => LatestDlss is { } l && Info.Dlss.All(d => d.Version is { } v && (DlssPinned ? Trim(v) == l : Trim(v) >= l));
 
     [ObservableProperty] private bool _needsUpdate;
@@ -520,7 +531,7 @@ public sealed partial class GameViewModel : ObservableObject
         _loading = loading;
     }
 
-    /// <summary>The add-on dropdowns: "Use default" plus every library build.</summary>
+    /// <summary>The add-on dropdowns: "Default" plus every library build.</summary>
     public void RebuildAddonChoices()
     {
         var loading = _loading;
@@ -540,7 +551,7 @@ public sealed partial class GameViewModel : ObservableObject
         var global = _s.Settings.AddonId(kind);
         var follows = builds.FirstOrDefault(b => b.Id == global) ?? builds.FirstOrDefault();
         list.Clear();
-        list.Add(new DlssChoice(null, $"Use default ({follows?.Label ?? "none imported"})"));
+        list.Add(new DlssChoice(null, $"Default ({follows?.Label ?? "none imported"})"));
         foreach (var b in builds) list.Add(new DlssChoice(b.Id, b.Label));
         if (pin is not null && list.All(c => c.Tag != pin)) list.Add(new DlssChoice(pin, "Missing add-on file · import again"));
         return list.FirstOrDefault(c => c.Tag == pin) ?? list[0];
@@ -673,7 +684,7 @@ public sealed partial class GameViewModel : ObservableObject
         {
             // MFG Unlock only unlocks frame generation the game ships through Streamline; the installer skips it here.
             var mfgRow = Components.First(c => c.Key == "mfg");
-            mfgRow.Latest = "needs Streamline FG";
+            mfgRow.Latest = "game has no Streamline FG";
             mfgRow.State = RowState.Missing;
         }
         var nrPath = store.DlssNrFor(EffectiveNrId);
@@ -732,6 +743,9 @@ public sealed partial class GameViewModel : ObservableObject
         OnPropertyChanged(nameof(IsOptiInstalled));
         OnPropertyChanged(nameof(ModBadge));
         OnPropertyChanged(nameof(DlssCurrent));
+        OnPropertyChanged(nameof(DlssOutdated));
+        OnPropertyChanged(nameof(DlssOutdatedTip));
+        OnPropertyChanged(nameof(DlssBadgeText));
     }
 
     private static bool IsTracked(InstallManifest m, string key) => key switch

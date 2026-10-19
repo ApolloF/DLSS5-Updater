@@ -685,7 +685,7 @@ public class InstallerTests : IDisposable
 
         await Assert.ThrowsAsync<UnsafeManifestException>(() => installer.InstallAsync(Game(), _target, ReShadeOnly(), null, default));
         Assert.Equal("precious", File.ReadAllText(Path.Combine(victim, "keep.txt")));
-        await Assert.ThrowsAsync<ArgumentException>(() =>
+        await Assert.ThrowsAsync<InvalidOperationException>(() =>
             installer.InstallAsync(Game(), _target, new InstallOptions { Opti = true, Proxy = @"..\..\evil.dll" }, null, default));
     }
 
@@ -1291,5 +1291,90 @@ public class InstallerTests : IDisposable
         await installer.UninstallAsync(Game(), _target, default);
         Assert.Equal("[Hotfix]\nManualInputPolling=true\n", T("OptiScaler.ini"));
         Assert.False(Directory.Exists(InstallManifest.DirFor(_target)));
+    }
+
+    [Fact]
+    public async Task Uninstall_ReadOnlyLeftoverInRecordFolder_StillCompletes()
+    {
+        var installer = new Installer(_store);
+        await installer.InstallAsync(Game(), _target, Full, null, default);
+        var stray = Path.Combine(InstallManifest.BackupDirFor(_target), "stray.dll");
+        Write(stray, "LEFTOVER");
+        File.SetAttributes(stray, FileAttributes.ReadOnly);
+
+        await installer.UninstallAsync(Game(), _target, default);
+        Assert.False(Directory.Exists(InstallManifest.DirFor(_target)));
+        Assert.Equal("OTHER-MOD", T("dxgi.dll"));
+    }
+
+    [Fact]
+    public async Task OtherInstallRecordUnreadable_DlssSwapSkipped()
+    {
+        var installer = new Installer(_store);
+        await installer.InstallAsync(Game(), _target, new InstallOptions { Dlss = true }, null, default);
+        File.WriteAllText(InstallManifest.PathFor(_target), "{ not json");
+        SeedDlss("v310.10.0", "NEWER");
+        var other = Path.Combine(_root, "Other");
+        Write(Path.Combine(other, "Other.exe"), "EXE2");
+
+        await installer.InstallAsync(Game(), other, new InstallOptions { Dlss = true }, null, default);
+        Assert.Equal("NEW-nvngx_dlss.dll", File.ReadAllText(Engine("nvngx_dlss.dll")));
+        Assert.Equal("NEW-nvngx_dlssg.dll", T("nvngx_dlssg.dll"));
+        Assert.Null(InstallManifest.Read(other)?.BackupOf(Rel(Engine("nvngx_dlss.dll"))));
+    }
+
+    [Fact]
+    public async Task RecordIsOnDiskBeforeTheRunEnds()
+    {
+        // What a run killed just before its final save would leave: the record must already know every swap.
+        InstallManifest? onDisk = null;
+        var done = $"done ({_target})";
+        void Capture(string line) { if (line.EndsWith(done, StringComparison.Ordinal)) onDisk = InstallManifest.Read(_target); }
+        Log.Line += Capture;
+        try { await new Installer(_store).InstallAsync(Game(), _target, Full, null, default); }
+        finally { Log.Line -= Capture; }
+
+        Assert.NotNull(onDisk);
+        var proxy = Rel(Path.Combine(_target, "dxgi.dll"));
+        Assert.True(onDisk.Owns(proxy));
+        Assert.NotNull(onDisk.BackupOf(proxy));
+        Assert.True(onDisk.Owns(Rel(Path.Combine(_target, "OptiScaler.ini"))));
+        Assert.NotNull(onDisk.BackupOf(Rel(Path.Combine(_target, "OptiScaler.ini"))));
+        var sr = onDisk.BackupOf(Rel(Engine("nvngx_dlss.dll")));
+        Assert.NotNull(sr);
+        Assert.Equal(HashCache.Get(Engine("nvngx_dlss.dll")), sr.InstalledSha);
+    }
+
+    [Fact]
+    public async Task FailedBackupOfAGamePatch_RestoreDlssStillKeepsThePatch()
+    {
+        var installer = new Installer(_store);
+        await installer.InstallAsync(Game(), _target, new InstallOptions { Dlss = true }, null, default);
+        var dll = Engine("nvngx_dlss.dll");
+        File.WriteAllText(dll, "GAME-PATCH");
+        var backup = Path.Combine(InstallManifest.BackupDirFor(_target), InstallManifest.Read(_target)!.BackupOf(Rel(dll))!.Backup);
+
+        // The game patch can't be saved over the old original: the update fails and the record must still tell the two apart.
+        using (new FileStream(backup, FileMode.Open, FileAccess.Read, FileShare.None))
+            await Assert.ThrowsAnyAsync<Exception>(() => installer.InstallAsync(Game(), _target, new InstallOptions { Dlss = true }, null, default));
+        Assert.Equal("GAME-PATCH", File.ReadAllText(dll));
+
+        await installer.RestoreDlssAsync(Game(), _target, default);
+        Assert.Equal("GAME-PATCH", File.ReadAllText(dll));
+    }
+
+    [Fact]
+    public void DeleteDirectory_OnAJunction_RemovesOnlyTheLink()
+    {
+        var outside = Path.Combine(_tmp, "outside");
+        Write(Path.Combine(outside, "keep.txt"), "KEEP");
+        File.SetAttributes(Path.Combine(outside, "keep.txt"), FileAttributes.ReadOnly);
+        var link = Path.Combine(_tmp, "link");
+        Junction(link, outside);
+
+        FileUtil.DeleteDirectory(link);
+        Assert.False(Directory.Exists(link));
+        Assert.Equal("KEEP", File.ReadAllText(Path.Combine(outside, "keep.txt")));
+        Assert.True(new FileInfo(Path.Combine(outside, "keep.txt")).IsReadOnly);
     }
 }

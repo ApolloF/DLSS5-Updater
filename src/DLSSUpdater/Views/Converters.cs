@@ -44,6 +44,23 @@ public sealed class StateToBrush : IValueConverter
     public object ConvertBack(object? value, Type targetType, object? parameter, CultureInfo culture) => throw new NotSupportedException();
 }
 
+/// <summary>The colour of a state dot as words, for tooltips and screen readers.</summary>
+public sealed class StateToText : IValueConverter
+{
+    public static string Describe(RowState state) => state switch
+    {
+        RowState.Current => "Up to date",
+        RowState.Update => "Update available",
+        RowState.Missing => "Not available",
+        _ => "Not applicable",
+    };
+
+    public object Convert(object? value, Type targetType, object? parameter, CultureInfo culture) =>
+        Describe(value is RowState s ? s : RowState.None);
+
+    public object ConvertBack(object? value, Type targetType, object? parameter, CultureInfo culture) => throw new NotSupportedException();
+}
+
 /// <summary>HelpTopics id -> tooltip text (plus a hint that the ⓘ opens the guide).</summary>
 public sealed class HelpTip : IValueConverter
 {

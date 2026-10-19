@@ -193,7 +193,7 @@ public sealed partial class DriverProfileViewModel : ObservableObject
         }
         var status = profile is { } gp
             ? $"Driver profile: {drs.ProfileName(gp)}"
-            : $"No driver profile for {Path.GetFileName(_exePath)} yet · one is created when you apply";
+            : $"No NVIDIA profile for {Path.GetFileName(_exePath)} yet. Apply creates one.";
         return new Snapshot(status, user, fallback, gameDefaults);
     }
 
@@ -215,7 +215,7 @@ public sealed partial class DriverProfileViewModel : ObservableObject
         }
         catch (Exception ex) when (ex is NvApiException or InvalidOperationException or EntryPointNotFoundException)
         {
-            Status = ex.Message;
+            Status = "Could not read the NVIDIA profile. The details are in the log.";
             Log.Error("Reading NVIDIA profile failed", ex);
         }
         finally
@@ -263,7 +263,8 @@ public sealed partial class DriverProfileViewModel : ObservableObject
             {
                 var detail = string.Join(", ", wrong.Select(w => $"0x{w.Key:X8} expected {(w.Value is { } v ? $"0x{v:X}" : "unset")}, got {(after.User.GetValueOrDefault(w.Key) is { } g ? $"0x{g:X}" : "unset")}"));
                 Log.Error($"NVIDIA profile {_gameName}: verification mismatch: {detail}");
-                Views.Dialog.Show("NVIDIA profile", "The driver didn't keep every value:\n" + detail);
+                var labels = string.Join(", ", changed.Where(o => o.Ids.Any(id => wrong.Any(w => w.Key == id))).Select(o => o.Label));
+                Views.Dialog.Show("NVIDIA profile", $"The driver didn't keep these settings: {labels}. Try Apply again or check the profile in the NVIDIA App.");
             }
             Busy = false;
             await Load();
@@ -276,7 +277,7 @@ public sealed partial class DriverProfileViewModel : ObservableObject
         catch (Exception ex) when (ex is NvApiException or InvalidOperationException)
         {
             Log.Error("Writing NVIDIA profile failed", ex);
-            Views.Dialog.Show("NVIDIA profile", ex.Message + "\nNothing was saved.");
+            Views.Dialog.Show("NVIDIA profile", (ex is NvApiException ? "The NVIDIA driver didn't accept the change." : UserErrors.Message(ex)) + "\nNothing was saved.");
         }
         catch (Exception ex) when (ex is EntryPointNotFoundException or DllNotFoundException)
         {
@@ -338,7 +339,7 @@ public static class NvSettings
             C("Quality (67%)", W(SrMode, 2), "Renders at 67% per axis."),
             C("Balanced (58%)", W(SrMode, 1), "Renders at 58% per axis."),
             C("Performance (50%)", W(SrMode, 0), "Renders at 50% per axis."),
-            C("Ultra performance (33%)", W(SrMode, 5), "Renders at 33% per axis."),
+            C("Ultra Performance (33%)", W(SrMode, 5), "Renders at 33% per axis."),
             C("Custom 77%", W(SrMode, 6, SrRatio, 77), "Between Quality and DLAA."),
             C("Custom 85%", W(SrMode, 6, SrRatio, 85), "Close to native."),
         ]) { Requires = GameFeatures.SR },

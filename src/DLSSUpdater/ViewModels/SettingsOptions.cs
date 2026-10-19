@@ -338,7 +338,7 @@ public static partial class SettingsOptions
     public static IniOptionViewModel[] Nr(ObservableCollection<IniOverride> o) =>
     [
         new IniOptionViewModel("Neural rendering", "Run the DLSS 5 NR model (nvngx_dlssnr.dll).", "DlssNr", "Enabled", o,
-            C("Automatic", null, "On when the DLSSNR runtime is installed with OptiScaler; upstream default (off) otherwise."),
+            C("Automatic", null, "On when the NR runtime is installed with OptiScaler; upstream default (off) otherwise."),
             C("On", "true", "Always write Enabled=true."),
             C("Off", "false", "Keep NR off even with the runtime installed; toggle it in the OptiScaler menu when you want it.")).About("nr-enabled"),
         new IniOptionViewModel("Run before upscaling", "Edit the low-res input before SR / RR instead of the upscaled output.", "DlssNr", "RunBeforeSR", o,
@@ -528,9 +528,9 @@ public static partial class SettingsOptions
 
     public static IniOptionViewModel[] HdrOutput(ObservableCollection<IniOverride> o) =>
     [
-        IniOptionViewModel.Toggle("Force HDR color space", "Make the swapchain HDR even if the game doesn't ask.", "HDR", "ForceHDR", "true", o).About("hdr-force"),
+        IniOptionViewModel.Toggle("Force HDR colour space", "Make the swapchain HDR even if the game doesn't ask.", "HDR", "ForceHDR", "true", o).About("hdr-force"),
         IniOptionViewModel.Toggle("Use HDR10", "10-bit HDR10 instead of 16-bit scRGB when forcing HDR.", "HDR", "UseHDR10", "true", o).About("hdr-10"),
-        IniOptionViewModel.Toggle("Skip color space", "Don't set the HDR color space (for games that set it themselves).", "HDR", "SkipColorSpace", "true", o).About("hdr-skip"),
+        IniOptionViewModel.Toggle("Skip colour space", "Don't set the HDR colour space (for games that set it themselves).", "HDR", "SkipColorSpace", "true", o).About("hdr-skip"),
     ];
 
     /// <summary>What to do when a game already has its own config values.</summary>

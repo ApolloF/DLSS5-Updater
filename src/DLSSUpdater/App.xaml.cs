@@ -66,7 +66,7 @@ public partial class App : Application
     private void OnUnhandled(object sender, DispatcherUnhandledExceptionEventArgs e)
     {
         Log.Error("Unhandled", e.Exception);
-        Views.Dialog.Show("Unexpected error", e.Exception.Message);
+        Views.Dialog.Show("Something went wrong", "DLSS Updater kept running. The details are in the log.");
         e.Handled = true;
         // Failed before the main window was up: nothing would ever close the process.
         if (MainWindow is not { IsLoaded: true }) Shutdown(1);
