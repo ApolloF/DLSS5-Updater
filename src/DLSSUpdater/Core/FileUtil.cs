@@ -157,7 +157,14 @@ public static class FileUtil
         return p.StartsWith(r, StringComparison.OrdinalIgnoreCase);
     }
 
-    public static string Normalize(string path) => Path.GetFullPath(path).TrimEnd(Path.DirectorySeparatorChar);
+    /// <summary>Full path without a trailing separator, except for a drive root: "C:" alone means the current folder on C.</summary>
+    public static string Normalize(string path)
+    {
+        var full = Path.GetFullPath(path);
+        var trimmed = full.TrimEnd(Path.DirectorySeparatorChar);
+        var root = Path.GetPathRoot(full) ?? "";
+        return trimmed.Length < root.Length ? root : trimmed;
+    }
 
     /// <summary>
     /// The first junction or symbolic link on the way from <paramref name="root"/> (not included) down to
