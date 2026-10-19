@@ -607,7 +607,7 @@
                                          IsChecked="{Binding DetailTab, Converter={StaticResource EqualsToBool}, ConverterParameter=Install}" />
                             <RadioButton Style="{StaticResource Segment}" Content="Game config" GroupName="{Binding Id}" Margin="0,0,24,0"
                                          IsChecked="{Binding DetailTab, Converter={StaticResource EqualsToBool}, ConverterParameter=Config}" />
-                            <RadioButton Style="{StaticResource Segment}" Content="NVIDIA profile" GroupName="{Binding Id}"
+                            <RadioButton Style="{StaticResource Segment}" Content="NVIDIA profile" GroupName="{Binding Id}" Visibility="{Binding ShowDriverTab, Converter={StaticResource BoolToVis}}"
                                          IsChecked="{Binding DetailTab, Converter={StaticResource EqualsToBool}, ConverterParameter=Nvidia}" />
                         </StackPanel>
                     </Grid>

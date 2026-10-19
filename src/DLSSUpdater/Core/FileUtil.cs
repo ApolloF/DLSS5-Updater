@@ -8,6 +8,7 @@ public static class FileUtil
 {
     public static Version? ReadVersion(string path)
     {
+        if (Demo.Active && Demo.VersionOf(path) is { } demo) return demo;
         try
         {
             var v = FileVersionInfo.GetVersionInfo(path);

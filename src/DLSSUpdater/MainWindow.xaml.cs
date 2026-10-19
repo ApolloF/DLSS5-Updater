@@ -4,6 +4,7 @@ using System.Windows.Controls;
 using System.Windows.Interop;
 using System.Windows.Media;
 using System.Windows.Media.Imaging;
+using DLSSUpdater.Core;
 using DLSSUpdater.ViewModels;
 using DLSSUpdater.Views;
 
@@ -21,13 +22,15 @@ public partial class MainWindow : Window
     public MainWindow()
     {
         InitializeComponent();
+        if (Demo.ScreenshotDir is not null) PrepareScreenshots();
         _vm = new MainViewModel();
         DataContext = _vm;
 
         Loaded += async (_, _) =>
         {
             await _vm.InitializeAsync();
-            if (Environment.GetEnvironmentVariable("DLSSU_SNAPSHOT") is { Length: > 0 } shot) await Snapshot(shot);
+            if (Demo.Active && Demo.ScreenshotDir is { } shots) await RunScreenshotExport(shots);
+            else if (Environment.GetEnvironmentVariable("DLSSU_SNAPSHOT") is { Length: > 0 } shot) await Snapshot(shot);
         };
         StateChanged += (_, _) => UpdateMaximized();
         Closed += (_, _) => Core.HashCache.Save();

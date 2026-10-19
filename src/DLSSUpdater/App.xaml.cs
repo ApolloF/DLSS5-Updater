@@ -19,6 +19,8 @@ public partial class App : Application
             Shutdown();
             return;
         }
+        // Made-up games for screenshots and trying the interface; see Core/Demo.cs.
+        if (e.Args.Contains("--demo")) Demo.Enable(screenshotDir: Demo.ScreenshotArg(e.Args));
         DispatcherUnhandledException += OnUnhandled;
         TaskScheduler.UnobservedTaskException += (_, args) =>
         {
