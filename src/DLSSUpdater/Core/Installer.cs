@@ -411,6 +411,7 @@ public sealed class Installer(ComponentStore store)
                 if (string.Equals(cur.Get(ov.Section, ov.Key), ov.Value, StringComparison.OrdinalIgnoreCase)) m.OptiIni[ov.Id] = ov.Value;
         }
         var merged = ConfigProfile.Merge(releaseIni, currentIni, profile, o.CarryOverIni, m.OptiIni, o.OverwriteIni);
+        if (!o.CarryOverIni && currentIni is not null && m.Owns(ctx.Rel(iniPath)) && merged.Text != currentIni) KeepPrevious(ctx, iniPath);
         FileUtil.AtomicWriteText(iniPath, merged.Text);
         m.OptiIni = merged.Applied;
         m.AddFile(ctx.Rel(iniPath));
@@ -641,9 +642,28 @@ public sealed class Installer(ComponentStore store)
         m.DfcCfg = merged.Applied;
         if (original == merged.Text) return;
         if (exists && !m.Owns(rel) && m.BackupOf(rel) is null) Backup(ctx, path, "file", copy: true);
+        else if (exists && !o.CarryOverIni) KeepPrevious(ctx, path);
         FileUtil.AtomicWriteText(path, merged.Text);
         if (!exists) m.AddFile(rel);
     }
+
+    /// <summary>
+    /// Fresh mode is about to rebuild a config whose original is already saved (or that we created), which would drop the
+    /// user's edits since: the version it replaces is kept as .dlssupdater\previous\&lt;name&gt;, one copy per file.
+    /// </summary>
+    private static void KeepPrevious(Ctx ctx, string path)
+    {
+        var dest = Path.Combine(InstallManifest.DirFor(ctx.Target), PreviousDir, Path.GetFileName(path));
+        if (FileUtil.LinkBelow(ctx.Target, dest) is { } link) throw new UnsafeManifestException(ctx.Target, $"{link} is a link");
+        Directory.CreateDirectory(Path.GetDirectoryName(dest)!);
+        FileUtil.ClearReadOnly(dest);
+        File.Copy(path, dest, true);
+        // Uninstall deletes the whole record folder, which a read-only copy would stop.
+        FileUtil.ClearReadOnly(dest);
+        Log.Info($"  previous {Path.GetFileName(path)} kept in {Path.Combine(InstallManifest.DirName, PreviousDir)}");
+    }
+
+    private const string PreviousDir = "previous";
 
     /// <summary>
     /// Copies the imported 64-bit set into the game with the package's layout (add-on, bridge, present-support dll, the

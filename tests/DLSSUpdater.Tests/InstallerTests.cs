@@ -1242,4 +1242,27 @@ public class InstallerTests : IDisposable
         Assert.Equal(before, Snapshot());
         Assert.True(new FileInfo(dll).IsReadOnly);
     }
+
+    [Fact]
+    public async Task FreshConfig_KeepsOneCopyOfTheConfigItRebuilds()
+    {
+        var installer = new Installer(_store);
+        await installer.InstallAsync(Game(), _target, Full, null, default);
+        var ini = Path.Combine(_target, "OptiScaler.ini");
+        var previous = Path.Combine(InstallManifest.DirFor(_target), "previous", "OptiScaler.ini");
+        File.AppendAllText(ini, "[Mine]\nEdit=1\n");
+
+        await installer.InstallAsync(Game(), _target, Full with { CarryOverIni = false }, null, default);
+        Assert.Null(IniFile.Load(ini).Get("Mine", "Edit"));
+        Assert.Equal("1", IniFile.Load(previous).Get("Mine", "Edit"));
+
+        File.AppendAllText(ini, "[Mine]\nEdit=2\n");
+        await installer.InstallAsync(Game(), _target, Full with { CarryOverIni = false }, null, default);
+        Assert.Equal("2", IniFile.Load(previous).Get("Mine", "Edit"));
+        Assert.Single(Directory.EnumerateFiles(Path.GetDirectoryName(previous)!));
+
+        await installer.UninstallAsync(Game(), _target, default);
+        Assert.Equal("[Hotfix]\nManualInputPolling=true\n", T("OptiScaler.ini"));
+        Assert.False(Directory.Exists(InstallManifest.DirFor(_target)));
+    }
 }
