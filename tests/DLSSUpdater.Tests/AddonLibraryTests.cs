@@ -125,10 +125,13 @@ public sealed class AddonLibraryTests : IDisposable
     [Fact]
     public void Label_ReadsTheV11Beta18AndBeta22Layouts()
     {
-        // The string layout of v11 beta.18 / beta.22 (docs/addons/lecram-dlss5.md): the add-on description ends in "(v11.0.0-beta.NN)".
+        // The string layout of v11 beta.18 / beta.22 / beta.29 (docs/addons/lecram-dlss5.md): the add-on description ends in "(v11.0.0-beta.NN)".
         Assert.Equal("v11.0.0-beta.22", Label(
             "v11.0.0-H\0dlss5-nr11.0.0-beta.22nr_inputs\0v11.0.0-beta.22NR onNR offbytessha256\0" +
             "opens the DLSS 5 NR menu; Shift+key opens ReShade (v11.0.0-beta.22)\0v11.0.0-beta.22\0"));
+        Assert.Equal("v11.0.0-beta.29", Label(
+            "v11.0.0-H\0dlss5-nr11.0.0-beta.29nr_inputs\0v11.0.0-beta.29NR onNR offbytessha256\0" +
+            "opens the DLSS 5 NR menu; Shift+key opens ReShade (v11.0.0-beta.29)\0v11.0.0-beta.29\0"));
         Assert.Equal("v11.0.0-beta.18", Label(
             "v11.0.0-H\0dlss5-nr11.0.0-beta.18nr_inputs\0v11.0.0-beta.18NR onNR offbytessha256\0" +
             "opens the DLSS 5 NR menu; Shift+key opens ReShade (v11.0.0-beta.18)\0v11.0.0-beta.18\0"));
