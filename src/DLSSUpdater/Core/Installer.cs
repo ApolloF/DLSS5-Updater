@@ -54,6 +54,8 @@ public sealed record InstallOptions
     public string? OptiTag { get; init; }
     /// <summary>MFG Unlock release to install from the cache ("local" = the imported file); null = the newest.</summary>
     public string? MfgTag { get; init; }
+    /// <summary>MFG Unlock is off here only because the installed release left the cache: the add-on in the game stays as it is.</summary>
+    public bool KeepMfg { get; init; }
 
     /// <summary>
     /// The same install with OptiScaler-NR and MFG Unlock held at the versions the game already has, for automatic
@@ -65,6 +67,7 @@ public sealed record InstallOptions
         Opti = Opti && m.OptiTag is { } ot && ComponentStore.IsCached(Component.OptiScaler, ot),
         OptiTag = m.OptiTag,
         Mfg = Mfg && m.MfgTag is { } mt && ComponentStore.HasMfg(mt),
+        KeepMfg = Mfg && !(m.MfgTag is { } kt && ComponentStore.HasMfg(kt)),
         MfgTag = m.MfgTag,
         UpliftTag = m.UpliftTag,
         DlssNrId = m.DlssNrId,
@@ -74,7 +77,8 @@ public sealed record InstallOptions
 }
 
 public sealed class NeedsAdminException(string path)
-    : Exception($"No write access to {path}. Restart DLSS Updater as administrator.");
+    : Exception($"Windows blocked access to {path}. Close the game and any program using its files (overlays, antivirus scans), then try again. " +
+                "If the game is in a protected folder, restart DLSS Updater as administrator.");
 
 public sealed class GameRunningException(string exe)
     : Exception($"{Path.GetFileName(exe)} is running. Close the game first.");
@@ -234,7 +238,11 @@ public sealed class Installer(ComponentStore store)
                     // Without OptiScaler taking over the proxy name, ReShade's proxy goes whatever its name: ReShade64.dll waits for a loader.
                     RemoveReShadeProxy(ctx, pkg is not null ? o.Proxy : null);
                     if (pkg is null) m.Proxy = null;
+                    if (reshade is null) { m.ReShade = false; m.ReShadeSha = null; }
                 }
+                // One proxy per install: a new name takes ours out under the old one and puts back what it replaced.
+                if ((o.ReShadeOnly || pkg is not null) && m.Proxy is { } oldProxy && !oldProxy.Equals(o.Proxy, StringComparison.OrdinalIgnoreCase))
+                    RemoveOwned(ctx, Path.Combine(targetDir, oldProxy));
                 if (o.ReShadeOnly || pkg is not null || reshade is not null) m.Mode = o.Mode;
 
                 // Only a run that sets up the injectors drops the add-on; a DLSS-only update keeps it.
@@ -242,6 +250,8 @@ public sealed class Installer(ComponentStore store)
                 if (!o.Lecram && m.Lecram && (o.ReShade || pkg is not null)) RemoveLecram(ctx);
                 if (!o.Dfc && m.Dfc && (o.ReShade || pkg is not null)) RemoveDfc(ctx);
                 if (!o.Uplift && m.Uplift && (o.ReShade || pkg is not null)) RemoveUplift(ctx);
+                if (!o.Mfg && !o.KeepMfg && m.Mfg && (o.ReShade || pkg is not null)) RemoveMfg(ctx);
+                if (!o.ReShade && m.ReShade && !o.ReShadeOnly && pkg is not null) RemoveReShade(ctx);
 
                 if (pkg is not null)
                 {
@@ -395,6 +405,9 @@ public sealed class Installer(ComponentStore store)
         string? currentIni = File.Exists(iniPath) ? File.ReadAllText(iniPath) : null;
         if (currentIni is not null && !m.Owns(ctx.Rel(iniPath))) Backup(ctx, iniPath, "file", copy: true);
         var profile = ConfigProfile.WithRequired(o.Overrides, o);
+        // Without a ReShade64.dll beside it, LoadReshade from the profile goes back to the release's value (off).
+        if (!o.ReShade && !File.Exists(Path.Combine(ctx.Target, ComponentStore.ReShadeFile)))
+            profile.RemoveAll(x => x.Id.Equals("Plugins/LoadReshade", StringComparison.OrdinalIgnoreCase));
         if (currentIni is not null && m.Owns(ctx.Rel(iniPath)) && m.OptiIni.Count == 0)
         {
             // Installs from 1.0.0 didn't record what they wrote; values still equal to the profile are ours.
@@ -403,6 +416,7 @@ public sealed class Installer(ComponentStore store)
                 if (string.Equals(cur.Get(ov.Section, ov.Key), ov.Value, StringComparison.OrdinalIgnoreCase)) m.OptiIni[ov.Id] = ov.Value;
         }
         var merged = ConfigProfile.Merge(releaseIni, currentIni, profile, o.CarryOverIni, m.OptiIni, o.OverwriteIni);
+        if (!o.CarryOverIni && currentIni is not null && m.Owns(ctx.Rel(iniPath)) && merged.Text != currentIni) KeepPrevious(ctx, iniPath);
         FileUtil.AtomicWriteText(iniPath, merged.Text);
         m.OptiIni = merged.Applied;
         m.AddFile(ctx.Rel(iniPath));
@@ -585,6 +599,24 @@ public sealed class Installer(ComponentStore store)
         Log.Info("  Lecram's DLSS5 add-on removed");
     }
 
+    /// <summary>The install no longer has MFG Unlock: take the add-on out (restoring what it replaced).</summary>
+    private static void RemoveMfg(Ctx ctx)
+    {
+        RemoveOwned(ctx, Path.Combine(ctx.Target, ComponentStore.MfgFile));
+        ctx.M.Mfg = false;
+        ctx.M.MfgTag = null;
+        Log.Info($"  {ComponentStore.MfgFile} removed");
+    }
+
+    /// <summary>OptiScaler mode without ReShade any more: take out the ReShade64.dll we placed (restoring what it replaced).</summary>
+    private static void RemoveReShade(Ctx ctx)
+    {
+        RemoveOwned(ctx, Path.Combine(ctx.Target, ComponentStore.ReShadeFile));
+        ctx.M.ReShade = false;
+        ctx.M.ReShadeSha = null;
+        Log.Info($"  {ComponentStore.ReShadeFile} removed");
+    }
+
     private static void RemoveUplift(Ctx ctx)
     {
         foreach (var rel in ComponentStore.UpliftFiles) RemoveOwned(ctx, Path.Combine(ctx.Target, rel));
@@ -624,9 +656,28 @@ public sealed class Installer(ComponentStore store)
         m.DfcCfg = merged.Applied;
         if (original == merged.Text) return;
         if (exists && !m.Owns(rel) && m.BackupOf(rel) is null) Backup(ctx, path, "file", copy: true);
+        else if (exists && !o.CarryOverIni) KeepPrevious(ctx, path);
         FileUtil.AtomicWriteText(path, merged.Text);
         if (!exists) m.AddFile(rel);
     }
+
+    /// <summary>
+    /// Fresh mode is about to rebuild a config whose original is already saved (or that we created), which would drop the
+    /// user's edits since: the version it replaces is kept as .dlssupdater\previous\&lt;name&gt;, one copy per file.
+    /// </summary>
+    private static void KeepPrevious(Ctx ctx, string path)
+    {
+        var dest = Path.Combine(InstallManifest.DirFor(ctx.Target), PreviousDir, Path.GetFileName(path));
+        if (FileUtil.LinkBelow(ctx.Target, dest) is { } link) throw new UnsafeManifestException(ctx.Target, $"{link} is a link");
+        Directory.CreateDirectory(Path.GetDirectoryName(dest)!);
+        FileUtil.ClearReadOnly(dest);
+        File.Copy(path, dest, true);
+        // Uninstall deletes the whole record folder, which a read-only copy would stop.
+        FileUtil.ClearReadOnly(dest);
+        Log.Info($"  previous {Path.GetFileName(path)} kept in {Path.Combine(InstallManifest.DirName, PreviousDir)}");
+    }
+
+    private const string PreviousDir = "previous";
 
     /// <summary>
     /// Copies the imported 64-bit set into the game with the package's layout (add-on, bridge, present-support dll, the
@@ -767,11 +818,13 @@ public sealed class Installer(ComponentStore store)
 
     /// <summary>
     /// OptiScaler-NR v0.9+ can unlock MFG itself ([DLSSG] AdaMfgUnlock / AmpereMfgUnlock) and says never to combine that
-    /// with an external unlocker, which the MFG Unlock add-on is. Checked before anything is fetched or written.
+    /// with an external unlocker, which the MFG Unlock add-on is. Checked before anything is fetched or written. The add-on
+    /// already in the game counts too while this run leaves it there (<see cref="InstallOptions.KeepMfg"/>).
     /// </summary>
     private static void EnsureNoDoubleMfgUnlock(string targetDir, InstallOptions o)
     {
-        if (!o.Mfg || o.ReShadeOnly) return;
+        var addonStays = o.KeepMfg && o.Opti && InstallManifest.Read(targetDir)?.Mfg == true;
+        if (!(o.Mfg || addonStays) || o.ReShadeOnly) return;
         var iniPath = Path.Combine(targetDir, "OptiScaler.ini");
         // An MFG-only update still runs next to the OptiScaler already in the game.
         if (!o.Opti) { if (!File.Exists(iniPath)) return; o = o with { Overrides = [], CarryOverIni = true }; }
@@ -810,6 +863,7 @@ public sealed class Installer(ComponentStore store)
         var m = ctx.M;
         var scan = new GameInfo { Root = ctx.Root };
         GameInspector.Inspect(scan);
+        var claimed = ClaimedByOtherInstalls(ctx, scan);
         foreach (var dll in scan.Streamline)
         {
             var rel = ctx.Rel(dll.Path);
@@ -820,10 +874,10 @@ public sealed class Installer(ComponentStore store)
                 continue;
             }
             if (FileUtil.SameFile(src, dll.Path)) continue;
+            if (LeftToOtherInstall(ctx, claimed, dll.Path)) continue;
             var entry = m.BackupOf(rel);
             var ours = entry?.InstalledSha is { } s && s == HashCache.Get(dll.Path);
-            if (!ours) Backup(ctx, dll.Path, "streamline");
-            FileUtil.AtomicCopy(src, dll.Path);
+            Replace(ctx, src, dll.Path, ours ? null : "streamline");
             if (m.BackupOf(rel) is { } b) b.InstalledSha = HashCache.Get(src);
             Log.Info($"  {rel}: {FileUtil.Format(dll.Version)} → {FileUtil.Format(FileUtil.ReadVersion(src))}");
         }
@@ -838,6 +892,7 @@ public sealed class Installer(ComponentStore store)
         var m = ctx.M;
         var scan = new GameInfo { Root = ctx.Root };
         GameInspector.Inspect(scan);
+        var claimed = ClaimedByOtherInstalls(ctx, scan);
 
         foreach (var dll in replace ? scan.Dlss : [])
         {
@@ -847,12 +902,12 @@ public sealed class Installer(ComponentStore store)
             var rel = ctx.Rel(dll.Path);
             // Latest: only ever upgrade. Pinned: move to exactly that version, up or down.
             if (dll.Version is not null && newVer is not null && (exact ? dll.Version == newVer : dll.Version >= newVer)) continue;
+            if (LeftToOtherInstall(ctx, claimed, dll.Path)) continue;
 
             var srcSha = HashCache.Get(src);
             var entry = m.BackupOf(rel);
             var ours = m.Owns(rel) || (entry?.InstalledSha is { } s && s == HashCache.Get(dll.Path));
-            if (!ours) Backup(ctx, dll.Path, "dlss");
-            FileUtil.AtomicCopy(src, dll.Path);
+            Replace(ctx, src, dll.Path, ours ? null : "dlss");
             if (m.BackupOf(rel) is { } b) b.InstalledSha = srcSha;
             Log.Info($"  {rel}: {FileUtil.Format(dll.Version)} → {FileUtil.Format(newVer)}");
         }
@@ -868,17 +923,74 @@ public sealed class Installer(ComponentStore store)
         }
     }
 
+    /// <summary>
+    /// Game files (by full path) another install folder of this game has placed or backed up, with that folder. Swapping
+    /// one from here would save that install's copy as the original, and uninstalling both would then lose the real one.
+    /// The swap scans the whole game (DLSS often sits in an engine folder, not beside the exe), so such files are left to
+    /// the install that holds them. A record that can't be read claims nothing; its own install refuses to run anyway.
+    /// </summary>
+    private static Dictionary<string, string> ClaimedByOtherInstalls(Ctx ctx, GameInfo scan)
+    {
+        var claimed = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+        foreach (var dir in scan.Installs.Select(FileUtil.Normalize).Where(d => !d.Equals(ctx.Target, StringComparison.OrdinalIgnoreCase)))
+        {
+            var other = InstallManifest.Load(dir);
+            if (other is null) continue;
+            try
+            {
+                other.Contain(dir, ctx.Root);
+                foreach (var entry in other.Files.Concat(other.Backups.Select(b => b.Original)))
+                    claimed.TryAdd(InstallManifest.Resolve(entry, dir, ctx.Root), dir);
+            }
+            catch (UnsafeManifestException ex) { Log.Warn(ex.Message); }
+        }
+        return claimed;
+    }
+
+    /// <summary>True when another install holds <paramref name="full"/> and this one has no claim on it.</summary>
+    private static bool LeftToOtherInstall(Ctx ctx, Dictionary<string, string> claimed, string full)
+    {
+        var rel = ctx.Rel(full);
+        if (ctx.M.Owns(rel) || ctx.M.BackupOf(rel) is not null || !claimed.TryGetValue(FileUtil.Normalize(full), out var dir)) return false;
+        Log.Info($"  {rel}: managed by the install in {dir}, left to it");
+        return true;
+    }
+
     /// <summary>Puts <paramref name="src"/> at <paramref name="dest"/>, backing up anything we don't own.</summary>
     private static void Place(Ctx ctx, string src, string dest)
     {
         var rel = ctx.Rel(dest);
-        if (File.Exists(dest))
-        {
-            if (ctx.M.Owns(rel) && FileUtil.SameFile(src, dest)) return;
-            if (!ctx.M.Owns(rel)) Backup(ctx, dest, "file");
-        }
-        FileUtil.AtomicCopy(src, dest);
+        if (File.Exists(dest) && ctx.M.Owns(rel) && FileUtil.SameFile(src, dest)) return;
+        Replace(ctx, src, dest, ctx.M.Owns(rel) ? null : "file");
         ctx.M.AddFile(rel);
+    }
+
+    /// <summary>
+    /// Puts <paramref name="src"/> at <paramref name="dest"/> so the game never goes without the file: the copy is staged
+    /// beside it first, the original is saved to the backup (<paramref name="backupKind"/>; null = ours, not saved) and the
+    /// copy then takes its place in one rename. A failure leaves <paramref name="dest"/> and the record as they were.
+    /// </summary>
+    private static void Replace(Ctx ctx, string src, string dest, string? backupKind)
+    {
+        var tmp = FileUtil.StageCopy(src, dest);
+        var rel = ctx.Rel(dest);
+        var newBackup = backupKind is not null && File.Exists(dest) && ctx.M.BackupOf(rel) is null;
+        try
+        {
+            if (backupKind is not null && File.Exists(dest)) Backup(ctx, dest, backupKind, copy: true);
+            FileUtil.CommitStaged(tmp, dest);
+        }
+        catch
+        {
+            FileUtil.TryDeleteFile(tmp);
+            // The original never left. A backup entry made for this swap goes again; a reused one now holds that same original.
+            if (newBackup && ctx.M.BackupOf(rel) is { } b)
+            {
+                FileUtil.TryDeleteFile(Path.Combine(ctx.BackupDir, b.Backup));
+                ctx.M.Backups.Remove(b);
+            }
+            throw;
+        }
     }
 
     /// <summary>
@@ -950,16 +1062,13 @@ public sealed class Installer(ComponentStore store)
         }
     }
 
-    /// <summary>Removes a conflicting file: deleted if we placed it, otherwise moved to the backup.</summary>
+    /// <summary>Removes a conflicting file: taken out if we placed it, and whatever is then there moved to the backup.</summary>
     private static void Displace(Ctx ctx, string full)
     {
         var rel = ctx.Rel(full);
-        if (ctx.M.Owns(rel))
-        {
-            File.Delete(full);
-            ctx.M.Files.RemoveAll(f => f.Equals(rel, StringComparison.OrdinalIgnoreCase));
-        }
-        else Backup(ctx, full, "file");
+        // Ours goes the usual way, which puts back what it replaced; that file must not stay here either.
+        RemoveOwned(ctx, full);
+        if (File.Exists(full)) Backup(ctx, full, "file");
         Log.Info($"  removed {rel}");
     }
 
@@ -970,6 +1079,7 @@ public sealed class Installer(ComponentStore store)
         var backupRel = entry?.Backup ?? FreeBackupName(ctx, BackupName(rel));
         var dest = Path.Combine(ctx.BackupDir, backupRel);
         Directory.CreateDirectory(Path.GetDirectoryName(dest)!);
+        FileUtil.ClearReadOnly(dest);
         if (copy) File.Copy(full, dest, true);
         else File.Move(full, dest, true);
         if (entry is null) ctx.M.Backups.Add(new BackupEntry { Original = rel, Backup = backupRel, Kind = kind });
@@ -1120,18 +1230,16 @@ public sealed class Installer(ComponentStore store)
         // A game patch replaced the file we put in: the game's newer file stays and the stale original goes.
         if (b.InstalledSha is { } ours && File.Exists(dest) && !string.Equals(HashCache.Get(dest), ours, StringComparison.OrdinalIgnoreCase))
         {
-            File.Delete(src);
+            FileUtil.DeleteFile(src);
             Log.Info($"  {b.Original}: changed by the game since, kept");
             return;
         }
         Directory.CreateDirectory(Path.GetDirectoryName(dest)!);
+        FileUtil.ClearReadOnly(dest);
         File.Move(src, dest, true);
     }
 
-    private static void TryDelete(string path)
-    {
-        if (File.Exists(path)) File.Delete(path);
-    }
+    private static void TryDelete(string path) => FileUtil.DeleteFile(path);
 
     // ---------- checks ----------
 
