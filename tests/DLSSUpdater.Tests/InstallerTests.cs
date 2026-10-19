@@ -673,7 +673,7 @@ public class InstallerTests : IDisposable
     [Fact]
     public async Task CraftedManifest_LaunchStyleReinstall_RefusesProxyOutsideTheGame()
     {
-        // Seaglass's beforeLaunch reinstalls from the record: its proxy and files must not reach outside either.
+        // A launcher-style reinstall works from the record: its proxy and files must not reach outside either.
         var victim = Victim();
         var installer = new Installer(_store);
         await installer.InstallAsync(Game(), _target, Full, null, default);

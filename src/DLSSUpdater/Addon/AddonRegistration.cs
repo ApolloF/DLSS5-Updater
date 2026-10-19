@@ -4,16 +4,15 @@ using DLSSUpdater.Core;
 namespace DLSSUpdater.Addon;
 
 /// <summary>
-/// Cleans up the Seaglass add-on link that older versions wrote. The add-on itself lives on the
-/// feature/seaglass-addon branch; the uninstaller still calls --unregister-addon for stale links.
+/// Cleans up the launcher add-on link that older versions wrote. The uninstaller calls
+/// --unregister-addon to remove stale links.
 /// </summary>
 public static class AddonRegistration
 {
     static string Local => Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData);
 
     /// <summary>
-    /// Seaglass's add-ons folder. Seaglass was called WaterLauncher before 1.5; a WaterLauncher
-    /// that hasn't updated yet still has its own folder.
+    /// The launcher's add-ons folder. Older launcher versions used the WaterLauncher folder name.
     /// </summary>
     static string AddonsDir =>
         !Directory.Exists(Path.Combine(Local, "Seaglass")) && Directory.Exists(Path.Combine(Local, "WaterLauncher"))
@@ -35,6 +34,6 @@ public static class AddonRegistration
     {
         var dir = Path.GetDirectoryName(ManifestPath)!;
         if (Directory.Exists(dir)) Directory.Delete(dir, true);
-        Log.Info("Disconnected from Seaglass");
+        Log.Info("Removed old add-on link");
     }
 }
