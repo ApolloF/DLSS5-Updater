@@ -91,10 +91,10 @@ Existing config files are handled in the way you choose under **Existing game co
 
 ## Safety, backups and restore
 
-- Before the app replaces or removes a game file, it moves the original into a `.dlssupdater\backup` folder next to the game's exe. A record in that folder lists every file the app added or changed.
+- Before the app replaces or removes a game file, it saves the original in a `.dlssupdater\backup` folder next to the game's exe. A record in that folder lists every file the app added or changed.
 - **Restore DLSS** puts the original DLSS and Streamline files back.
 - **Uninstall** removes everything the app installed in that game and restores the original files.
-- The app only changes files inside the game folder you pick. It checks its own records before restoring so a damaged record cannot make it touch files elsewhere.
+- The app only changes files inside the game's own folder. It checks its own records before restoring so a damaged record cannot make it touch files elsewhere.
 - Games that ship anti-cheat software are marked with an **AC** badge. Before installing a mod into one, the app shows a warning and asks you to confirm.
 
 ![A game marked with EasyAntiCheat. A red banner warns that adding mods can get you banned in online modes and that DLSS only is safe.](docs/images/anti-cheat.png)
@@ -138,16 +138,16 @@ dotnet publish src/DLSSUpdater -c Release -o publish
 The last command makes the portable `publish\DLSSUpdater.exe`. The installer needs [Inno Setup 6](https://jrsoftware.org/isinfo.php):
 
 ```
-iscc /DAppVersion=1.10.3 installer\DLSSUpdater.iss
+iscc /DAppVersion=1.11.0 installer\DLSSUpdater.iss
 ```
 
-Pushing a tag like `v1.10.3` that matches the version in the project file builds both files on GitHub Actions and attaches them to a release. Setting `DLSSU_INTEGRATION=1` turns on a test that downloads the real releases and installs them into a temporary folder.
+Pushing a tag like `v1.11.0` that matches the version in the project file builds both files on GitHub Actions and attaches them to a release. If `docs/releases/v<version>.md` exists, it becomes the release text. Setting `DLSSU_INTEGRATION=1` turns on a test that downloads the real releases and installs them into a temporary folder.
 
 `DLSSUpdater.exe --demo` starts the app on a made-up game library in a temporary folder. It never scans your launchers, downloads anything or touches your games, so it is a safe way to look around. `--demo --screenshots <folder>` saves the screenshots used in this README to that folder and exits.
 
 ## Credits
 
-DLSS Updater would not exist without the work of these projects and their authors. It only downloads and installs their files. It does not change them.
+DLSS Updater installs the work of these projects and their authors. It downloads their files as released and does not change them.
 
 - [OptiScaler](https://github.com/optiscaler/OptiScaler) and the [OptiScaler-NR fork](https://github.com/ShyVortex/OptiScaler-DLSSNR-PreSR-Multipass) by ShyVortex.
 - [MFG Unlock](https://github.com/mavismmg/MFGAdaUnlock-RenoDx) by mavismmg.
