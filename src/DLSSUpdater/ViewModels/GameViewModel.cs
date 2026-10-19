@@ -8,10 +8,11 @@ namespace DLSSUpdater.ViewModels;
 
 public enum RowState { None, Current, Update, Missing }
 
-public sealed partial class ComponentRow(string key, string name) : ObservableObject
+public sealed partial class ComponentRow(string key, string initialName) : ObservableObject
 {
     public string Key { get; } = key;
-    public string Name { get; } = name;
+    /// <summary>The OptiScaler row is renamed to the build it shows.</summary>
+    [ObservableProperty] private string _name = initialName;
     [ObservableProperty] private bool _enabled = true;
     /// <summary>Hidden when it doesn't apply to the install mode (OptiScaler / DLSSNR in ReShade-only).</summary>
     [ObservableProperty] private bool _visible = true;
@@ -38,9 +39,10 @@ public sealed record DlssChoice(string? Tag, string Label)
 
 public sealed record ModeChoice(InstallMode Mode, string Label, string Description)
 {
-    public static readonly ModeChoice[] All =
+    /// <summary>The install modes with the OptiScaler entry named after <paramref name="source"/>.</summary>
+    public static ModeChoice[] For(OptiSource source) =>
     [
-        new(InstallMode.OptiScaler, "OptiScaler-NR", "OptiScaler-NR loads into the game and brings ReShade, MFG Unlock and NR with it."),
+        new(InstallMode.OptiScaler, source.Name, $"{source.Name} loads into the game and brings ReShade, MFG Unlock and NR with it."),
         new(InstallMode.ReShadeOnly, "ReShade + add-ons", "ReShade loads into the game with MFG Unlock, DLSS updates and an optional NR add-on. No OptiScaler."),
     ];
 
@@ -70,6 +72,7 @@ public sealed partial class GameViewModel : ObservableObject
     public GameViewModel(GameInfo info, Services services)
     {
         _s = services;
+        _modChoices = ModPicker.Available(false, SelectedBuild.Name);
         Components =
         [
             new ComponentRow("opti", "OptiScaler-NR"),
@@ -117,7 +120,10 @@ public sealed partial class GameViewModel : ObservableObject
     public ObservableCollection<ComponentRow> Components { get; }
     public ObservableCollection<DlssRow> DlssRows { get; } = [];
     public IReadOnlyList<string> ProxyNames => IsReShadeOnly ? AppSettings.ReShadeProxyNames : AppSettings.ProxyNames;
-    public IReadOnlyList<ModeChoice> Modes => ModeChoice.All;
+    /// <summary>The OptiScaler build selected in Settings; games installed with the other one name theirs in the component row.</summary>
+    private OptiSource SelectedBuild => OptiSources.For(_s.Settings.OptiSource);
+    public IReadOnlyList<ModeChoice> Modes => ModeChoice.For(SelectedBuild);
+    public string ModeHint => $"{SelectedBuild.Name}, or ReShade + add-ons without OptiScaler";
 
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(IsReShadeOnly), nameof(ProxyNames), nameof(ModeChoice), nameof(ProxyHint))]
@@ -130,7 +136,7 @@ public sealed partial class GameViewModel : ObservableObject
 
     public ModeChoice ModeChoice
     {
-        get => ModeChoice.All.First(m => m.Mode == Mode);
+        get => Modes.First(m => m.Mode == Mode);
         set
         {
             if (value is null) return;
@@ -327,7 +333,7 @@ public sealed partial class GameViewModel : ObservableObject
 
     private ModChoice? _pickedMod;
 
-    private IReadOnlyList<ModChoice> _modChoices = ModPicker.Available(false);
+    private IReadOnlyList<ModChoice> _modChoices = [];
     public IReadOnlyList<ModChoice> ModChoices => _modChoices;
 
     /// <summary>The mod whose options the Game config tab shows. Follows the NR route in use until the user picks one; not saved.</summary>
@@ -355,13 +361,24 @@ public sealed partial class GameViewModel : ObservableObject
     /// <summary>Mode or ticks changed: keep the user's pick while that mod is still listed; otherwise follow the route.</summary>
     private void RefreshModPick()
     {
-        if (_modChoices.Count != ModPicker.Available(IsReShadeOnly).Count)
+        var available = ModPicker.Available(IsReShadeOnly, SelectedBuild.Name);
+        if (!_modChoices.SequenceEqual(available))
         {
-            _modChoices = ModPicker.Available(IsReShadeOnly);
+            _modChoices = available;
             OnPropertyChanged(nameof(ModChoices));
         }
-        if (_pickedMod is not null && !ModChoices.Contains(_pickedMod)) _pickedMod = null;
+        if (_pickedMod is not null) _pickedMod = ModChoices.FirstOrDefault(c => c.Mod == _pickedMod.Mod);
         NotifyModShown();
+    }
+
+    /// <summary>The selected OptiScaler build changed: rename the mode entry, the mod entry and the component row.</summary>
+    public void RefreshBuildName()
+    {
+        OnPropertyChanged(nameof(Modes));
+        OnPropertyChanged(nameof(ModeChoice));
+        OnPropertyChanged(nameof(ModeHint));
+        RefreshModPick();
+        RefreshStatus();
     }
 
     private void NotifyModShown()
@@ -677,6 +694,8 @@ public sealed partial class GameViewModel : ObservableObject
         var m = Manifest;
         var store = _s.Store;
 
+        // The row names the build actually installed (the manifest tag carries it); without an install it names the selected one.
+        Components.First(c => c.Key == "opti").Name = (m?.Opti == true && m.OptiTag is not null ? OptiSources.OfTag(m.OptiTag) : SelectedBuild).Name;
         Row("opti", m?.Opti == true ? m.OptiTag : null, store.Opti?.Tag, true);
         Row("reshade", m?.ReShade == true ? InstalledVersion(ReShadeInstalledName(m)) : null, ReShadeLatest(), ReShadeCurrent(m));
         Row("mfg", m?.Mfg == true ? m.MfgTag : null, store.Mfg?.Tag, true);

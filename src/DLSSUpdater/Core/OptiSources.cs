@@ -4,10 +4,11 @@ namespace DLSSUpdater.Core;
 
 /// <summary>
 /// One OptiScaler build the app can install. <paramref name="TagSuffix"/> is appended to the GitHub tag inside this
-/// app so cache folders, manifests and "installed vs latest" stay separate per build.
+/// app so cache folders, manifests and "installed vs latest" stay separate per build. <paramref name="Name"/> is the
+/// product name every label in the app uses; <paramref name="Label"/> adds the maintainer for the build dropdown.
 /// </summary>
 public sealed record OptiSource(
-    string Repo, string Label, Regex Asset, string TagSuffix, string TestedTag,
+    string Repo, string Name, string Label, Regex Asset, string TagSuffix, string TestedTag,
     string[] ExtraFiles, (string Section, string Key)[] UnsupportedKeys)
 {
     public bool IsUnsupported(string section, string key) =>
@@ -20,11 +21,11 @@ public sealed record OptiSource(
 public static class OptiSources
 {
     public static readonly OptiSource Default = new(
-        ComponentStore.OptiRepo, "OptiScaler-NR (ShyVortex)",
+        ComponentStore.OptiRepo, "OptiScaler-NR", "OptiScaler-NR (ShyVortex)",
         new Regex(@"^OptiScaler-NR-v[\d.]+\.zip$", RegexOptions.IgnoreCase), "", "v0.9.51", [], []);
 
     public static readonly OptiSource F5 = new(
-        "janblade/OptiScaler-F5-DLSSNR-Multipass", "OptiScaler F5 (janblade)",
+        "janblade/OptiScaler-F5-DLSSNR-Multipass", "OptiScaler F5", "OptiScaler F5 (janblade)",
         new Regex(@"^OptiScaler-DLSSNR-F5-[\d.]+\.zip$", RegexOptions.IgnoreCase), "-f5", "v0.1.32",
         ["nvngx.dll_dlssnr.dll"],
         [("DlssNr", "DenoiseFirst"), ("DlssNr", "PrivateUpscaler"), ("DlssNr", "ResidualAcrossRR"), ("DlssNr", "HdrTransfer"), ("DlssNr", "AutoExposureHighlightProtection")]);

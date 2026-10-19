@@ -206,11 +206,22 @@ public sealed partial class SettingsViewModel : ObservableObject
 
     // ---------- general ----------
 
-    public IReadOnlyList<ModeChoice> Modes => ModeChoice.All;
+    public IReadOnlyList<ModeChoice> Modes => ModeChoice.For(OptiBuild);
+
+    /// <summary>Name of the selected OptiScaler build; the Settings tab with its options carries it.</summary>
+    public string OptiName => OptiBuild.Name;
+
+    /// <summary>The selected build changed: rename the tab and the default-mode entry.</summary>
+    public void RefreshBuildName()
+    {
+        OnPropertyChanged(nameof(OptiName));
+        OnPropertyChanged(nameof(Modes));
+        OnPropertyChanged(nameof(DefaultMode));
+    }
 
     public ModeChoice DefaultMode
     {
-        get => ModeChoice.All.First(m => m.Mode == Settings.DefaultMode);
+        get => Modes.First(m => m.Mode == Settings.DefaultMode);
         set
         {
             if (value is null) return;

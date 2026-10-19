@@ -367,13 +367,14 @@ public sealed partial class ComponentStore
     // ---------- ensure (download + verify) ----------
 
     /// <summary>
-    /// Returns the folder holding the extracted OptiScaler-NR package. <paramref name="tag"/> null means the newest
+    /// Returns the folder holding the extracted OptiScaler package. <paramref name="tag"/> null means the newest
     /// release; another tag must already be cached.
     /// </summary>
     public async Task<string> EnsureOptiAsync(string? tag, IProgress<TransferProgress>? progress, CancellationToken ct)
     {
-        var r = CachedOrNewest(Component.OptiScaler, tag, Opti, "OptiScaler-NR")
-                ?? throw new InvalidOperationException("OptiScaler-NR release unknown (offline and nothing cached).");
+        var name = (tag is null ? OptiSource : OptiSources.OfTag(tag)).Name;
+        var r = CachedOrNewest(Component.OptiScaler, tag, Opti, name)
+                ?? throw new InvalidOperationException($"{name} release unknown (offline and nothing cached).");
         var dir = TagDir(Component.OptiScaler, r.Tag);
         var pkg = Path.Combine(dir, "pkg");
         await _locks[Component.OptiScaler].WaitAsync(ct);
@@ -382,13 +383,13 @@ public sealed partial class ComponentStore
             if (IsCached(Component.OptiScaler, r.Tag)) return pkg;
             if (r.FromCache) throw new InvalidOperationException("Cached OptiScaler package is incomplete.");
 
-            var (name, url, sha) = r.Files[0];
-            var zip = Path.Combine(dir, name);
-            await _gh.DownloadAsync(url, zip, $"OptiScaler-NR {r.Tag}", progress, ct);
-            progress?.Report(new TransferProgress("Verifying OptiScaler-NR", null));
+            var (file, url, sha) = r.Files[0];
+            var zip = Path.Combine(dir, file);
+            await _gh.DownloadAsync(url, zip, $"{name} {r.Tag}", progress, ct);
+            progress?.Report(new TransferProgress($"Verifying {name}", null));
             await VerifyAsync(zip, sha, ct);
 
-            progress?.Report(new TransferProgress("Extracting OptiScaler-NR", null));
+            progress?.Report(new TransferProgress($"Extracting {name}", null));
             if (Directory.Exists(pkg)) Directory.Delete(pkg, true);
             await Task.Run(() => ZipFile.ExtractToDirectory(zip, pkg, true), ct);
             File.Delete(zip);
@@ -396,7 +397,7 @@ public sealed partial class ComponentStore
                 throw new InvalidDataException("OptiScaler.dll missing from release package.");
 
             MarkComplete(Component.OptiScaler, r);
-            Log.Info($"Cached OptiScaler-NR {r.Tag}");
+            Log.Info($"Cached {name} {r.Tag}");
             return pkg;
         }
         finally { _locks[Component.OptiScaler].Release(); }

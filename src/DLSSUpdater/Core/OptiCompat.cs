@@ -7,20 +7,23 @@ public sealed record CompatReport(string Tag, IReadOnlyList<string> MissingKeys,
     /// <summary>Managed keys whose ini comment differs from the tested release: values or defaults may have changed.</summary>
     public IReadOnlyList<string> ChangedKeys { get; init; } = [];
 
+    /// <summary>The build the checked release belongs to, as the app names it.</summary>
+    public string Name { get; init; } = OptiSources.Default.Name;
+
     public string Summary
     {
         get
         {
             var parts = new List<string>();
             if (NewerThanTested)
-                parts.Add($"OptiScaler-NR {Tag} is a newer major line than this app was tested with ({TestedTag}).");
+                parts.Add($"{Name} {Tag} is a newer major line than this app was tested with ({TestedTag}).");
             if (MissingKeys.Count > 0)
                 parts.Add($"{MissingKeys.Count} setting(s) this app writes no longer exist in its OptiScaler.ini and would be ignored or appended " +
                           "as unknown keys:\n  " + string.Join("\n  ", MissingKeys.Take(12)) + (MissingKeys.Count > 12 ? "\n  …" : ""));
             if (ChangedKeys.Count > 0)
                 parts.Add($"{ChangedKeys.Count} setting(s) this app writes are described differently than in {TestedTag}; their values or defaults may have changed:\n  " +
                           string.Join("\n  ", ChangedKeys.Take(12)) + (ChangedKeys.Count > 12 ? "\n  …" : ""));
-            return parts.Count == 0 ? $"OptiScaler-NR {Tag}: config compatible." : string.Join("\n\n", parts);
+            return parts.Count == 0 ? $"{Name} {Tag}: config compatible." : string.Join("\n\n", parts);
         }
     }
 }
@@ -58,7 +61,7 @@ public static class OptiCompat
         var v = FileUtil.ParseTag(tag);
         var tested = FileUtil.ParseTag(source.TestedTag)!;
         var newer = v is not null && (v.Major > tested.Major || (v.Major == tested.Major && v.Minor > tested.Minor));
-        return new CompatReport(tag, missing, newer, source.TestedTag) { ChangedKeys = changed };
+        return new CompatReport(tag, missing, newer, source.TestedTag) { ChangedKeys = changed, Name = source.Name };
     }
 
     private static async Task<string> FetchIniAsync(GitHubClient gh, string tag, CancellationToken ct)
