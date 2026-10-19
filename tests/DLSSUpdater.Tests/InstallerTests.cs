@@ -1344,4 +1344,37 @@ public class InstallerTests : IDisposable
         Assert.NotNull(sr);
         Assert.Equal(HashCache.Get(Engine("nvngx_dlss.dll")), sr.InstalledSha);
     }
+
+    [Fact]
+    public async Task FailedBackupOfAGamePatch_RestoreDlssStillKeepsThePatch()
+    {
+        var installer = new Installer(_store);
+        await installer.InstallAsync(Game(), _target, new InstallOptions { Dlss = true }, null, default);
+        var dll = Engine("nvngx_dlss.dll");
+        File.WriteAllText(dll, "GAME-PATCH");
+        var backup = Path.Combine(InstallManifest.BackupDirFor(_target), InstallManifest.Read(_target)!.BackupOf(Rel(dll))!.Backup);
+
+        // The game patch can't be saved over the old original: the update fails and the record must still tell the two apart.
+        using (new FileStream(backup, FileMode.Open, FileAccess.Read, FileShare.None))
+            await Assert.ThrowsAnyAsync<Exception>(() => installer.InstallAsync(Game(), _target, new InstallOptions { Dlss = true }, null, default));
+        Assert.Equal("GAME-PATCH", File.ReadAllText(dll));
+
+        await installer.RestoreDlssAsync(Game(), _target, default);
+        Assert.Equal("GAME-PATCH", File.ReadAllText(dll));
+    }
+
+    [Fact]
+    public void DeleteDirectory_OnAJunction_RemovesOnlyTheLink()
+    {
+        var outside = Path.Combine(_tmp, "outside");
+        Write(Path.Combine(outside, "keep.txt"), "KEEP");
+        File.SetAttributes(Path.Combine(outside, "keep.txt"), FileAttributes.ReadOnly);
+        var link = Path.Combine(_tmp, "link");
+        Junction(link, outside);
+
+        FileUtil.DeleteDirectory(link);
+        Assert.False(Directory.Exists(link));
+        Assert.Equal("KEEP", File.ReadAllText(Path.Combine(outside, "keep.txt")));
+        Assert.True(new FileInfo(Path.Combine(outside, "keep.txt")).IsReadOnly);
+    }
 }

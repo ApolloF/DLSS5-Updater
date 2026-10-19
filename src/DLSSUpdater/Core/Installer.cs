@@ -527,9 +527,9 @@ public sealed class Installer(ComponentStore store)
         if (original == merged.Text) { ctx.M.ReShadeIni = merged.Applied; return; }
 
         if (exists && !ctx.M.Owns(rel) && ctx.M.BackupOf(rel) is null) Backup(ctx, path, "file", copy: true);
+        if (!exists) RecordNew(ctx, rel);
         FileUtil.AtomicWriteText(path, merged.Text);
         ctx.M.ReShadeIni = merged.Applied;
-        if (!exists) ctx.M.AddFile(rel);
     }
 
     private static List<string> EarlyAddons(IniFile ini) =>
@@ -665,8 +665,15 @@ public sealed class Installer(ComponentStore store)
         if (original == merged.Text) return;
         if (exists && !m.Owns(rel) && m.BackupOf(rel) is null) Backup(ctx, path, "file", copy: true);
         else if (exists && !o.CarryOverIni) KeepPrevious(ctx, path);
+        if (!exists) RecordNew(ctx, rel);
         FileUtil.AtomicWriteText(path, merged.Text);
-        if (!exists) m.AddFile(rel);
+    }
+
+    /// <summary>A file we are about to create is recorded (and saved) first, so a run stopped part-way never leaves it unrecorded.</summary>
+    private static void RecordNew(Ctx ctx, string rel)
+    {
+        ctx.M.AddFile(rel);
+        Persist(ctx);
     }
 
     /// <summary>
@@ -979,9 +986,10 @@ public sealed class Installer(ComponentStore store)
     /// Puts <paramref name="src"/> at <paramref name="dest"/> so the game never goes without the file: the copy is staged
     /// beside it first, the original is saved to the backup (<paramref name="backupKind"/>; null = ours, not saved) and the
     /// copy then takes its place in one rename. A failure leaves <paramref name="dest"/> and the record as they were.
-    /// The record of the swap (<paramref name="own"/>: the file is ours from now on; <paramref name="installedSha"/>: what
-    /// the backup entry's file now holds) is saved before the rename, so a run killed part-way never leaves a file of ours
-    /// that the record takes for an original.
+    /// The record of the swap (<paramref name="own"/>: the file is ours from now on; <paramref name="installedSha"/>: the
+    /// hash of the file we put in place) is saved before the rename. A run killed part-way then leaves no original that the
+    /// record doesn't know, and no newly placed file the record would back up as an original next time; only a file that
+    /// was already ours under a reused entry can, in the moment between that save and the rename, look changed by the game.
     /// </summary>
     private static void Replace(Ctx ctx, string src, string dest, string? backupKind, bool own = false, string? installedSha = null)
     {
@@ -1010,7 +1018,8 @@ public sealed class Installer(ComponentStore store)
                 FileUtil.TryDeleteFile(Path.Combine(ctx.BackupDir, made.Backup));
                 m.Backups.Remove(made);
             }
-            else if (entry is not null) entry.InstalledSha = backedUp ? null : oldSha;
+            // A reused entry keeps its hash: if the copy into the backup failed, the backup still holds the older original.
+            else if (entry is not null) entry.InstalledSha = oldSha;
             if (own && !wasOwned) m.Files.RemoveAll(f => f.Equals(rel, StringComparison.OrdinalIgnoreCase));
             TryPersist(ctx);
             throw;

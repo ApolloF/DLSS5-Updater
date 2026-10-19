@@ -164,6 +164,12 @@ public static class FileUtil
     public static void DeleteDirectory(string dir)
     {
         if (!Directory.Exists(dir)) return;
+        // A link in place of the folder: only the link goes, never what it points to.
+        if (IsLink(dir))
+        {
+            Directory.Delete(dir);
+            return;
+        }
         var walk = new EnumerationOptions { RecurseSubdirectories = true, AttributesToSkip = FileAttributes.ReparsePoint, IgnoreInaccessible = true };
         foreach (var f in Directory.EnumerateFiles(dir, "*", walk)) ClearReadOnly(f);
         Directory.Delete(dir, true);
