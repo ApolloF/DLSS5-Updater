@@ -329,6 +329,24 @@ public sealed class LecramTests : IDisposable
     }
 
     [Fact]
+    public async Task Beta29Keys_AreWrittenForV11_AndRemovedOnUninstall()
+    {
+        _store.ImportLecram(FakeV11("v11.0.0-beta.29"));
+        var installer = new Installer(_store);
+
+        await installer.InstallAsync(_game, _root,
+            Lec(overrides: [Key("NRPasses", "2"), Key("NRPass2Preset", "2"), Key("NRGpuCrashWitness", "0")]), null, default);
+        var ini = Ini();
+        Assert.Equal("2", ini.Get(LecramIni.Section, "NRPass2Preset"));
+        Assert.Equal("0", ini.Get(LecramIni.Section, "NRGpuCrashWitness"));
+        Assert.True(File.Exists(G(V11File)));
+
+        await installer.UninstallAsync(_game, _root, default);
+        Assert.False(File.Exists(G("ReShade.ini")) && Ini().Get(LecramIni.Section, "NRPass2Preset") is not null);
+        Assert.False(File.Exists(G("ReShade.ini")) && Ini().Get(LecramIni.Section, "NRGpuCrashWitness") is not null);
+    }
+
+    [Fact]
     public async Task ForeignCopiesOfEitherGeneration_AreDisplaced_AndRestoredOnUninstall()
     {
         File.WriteAllText(G(V10File), "FOREIGN-10");
@@ -632,7 +650,7 @@ public sealed class LecramTests : IDisposable
     public void Options_HideKeysTheImportedGenerationLacks_AndSwitchChoicesPerGeneration()
     {
         var options = SettingsOptions.Lecram([]);
-        string[] v11Only = ["NeuralUplift", "NRPreset", "NRVramBuffering"];
+        string[] v11Only = ["NeuralUplift", "NRPreset", "NRPass2Preset", "NRPass3Preset", "NRPass4Preset", "NRVramBuffering", "NRGpuCrashWitness"];
         string[] values(string key) => Option(options, key).Choices.Select(c => c.Value ?? "").ToArray();
 
         foreach (var o in options) o.ApplyGeneration(null);
@@ -696,6 +714,9 @@ public sealed class LecramTests : IDisposable
         Assert.All(Numbers(Option(options, "NRHookPoint")), v => Assert.InRange(v, 0, v10 ? 2 : 3));
         Assert.All(Numbers(Option(options, "NRStyle")), v => Assert.InRange(v, 0, 2));
         Assert.All(Numbers(Option(options, "NRPreset")), v => Assert.InRange(v, 0, 2));
+        // NRPass2..4Preset (beta.29): 0 same as pass 1, 1 and 2 the two models of DLL 310.9.16; 3 is accepted but names no model.
+        Assert.All(new[] { "NRPass2Preset", "NRPass3Preset", "NRPass4Preset" }, k => Assert.Equal([0.0, 1, 2], Numbers(Option(options, k))));
+        Assert.Equal([0.0, 1], Numbers(Option(options, "NRGpuCrashWitness")));
         Assert.All(Numbers(Option(options, "NRVramBuffering")), v => Assert.InRange(v, 0, 2));
         Assert.All(Numbers(Option(options, "EnableHooks")), v => Assert.InRange(v, 0, 2));
         // NRPresentGuides 0 is Always on in v11 beta.18+ but DLSS frames in beta.6: only 1 and 2 mean the same in every v11 build.

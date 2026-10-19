@@ -9,17 +9,20 @@
 | v10.7 (stable) | `renodx-dlss5.addon64` | 0.2026.1013.0940 | `v10.7.0` (also holds `v10.1.0-rc3` in tooltip texts) | 2026-10-18 (static + probe) | Adds D3D11 and Vulkan. Ships with `Offline Studio for Neural Rendering.exe`. |
 | v11.1 patch 3 (experimental) | `dlss5-nr.addon64` | **none** | `v11.0.0-beta.6` | 2026-10-18 (static + probe) | Ground-up rewrite, settings layer in Rust (`nr-settings`). Identify by strings, tag by hash. |
 | v11 Patch 4 | `dlss5-nr.addon64` (sha256 `79af73dc1e77…`) | **none** | `v11.0.0-beta.18` | 2026-10-18 (static + probe) | Intermediate. Same key set and catalog as beta.6 except the `NRHookPoint` default (After Upscaling) and the `NRPresentGuides` numbering; `NRFeedMode` read again. Ships inside the author's installer `DLSS5-NR-Setup-v11.0.0-beta.18.exe` (static only, never run). |
-| v11 beta.22 (**supported**) | `dlss5-nr.addon64` (sha256 `94e41518596d…`) | **none** | `v11.0.0-beta.22` | 2026-10-18 (static + probe) | Settings catalog and probed behaviour identical to beta.18; adds the API keys `NRMaskBlendMode` and `NRGpuCrashWitness`, and stays active next to a `renodx-dlss5.addon64` that ReShade has disabled. |
+| v11 beta.22 (Patch 5) | `dlss5-nr.addon64` (sha256 `94e41518596d…`) | **none** | `v11.0.0-beta.22` | 2026-10-18 (static + probe) | Settings catalog and probed behaviour identical to beta.18; adds the API keys `NRMaskBlendMode` and `NRGpuCrashWitness`, and stays active next to a `renodx-dlss5.addon64` that ReShade has disabled. |
+| v11 Patch 8 / beta.29 (**supported**) | `dlss5-nr.addon64` (sha256 `f7ac2d030790…`) | **none** | `v11.0.0-beta.29` | 2026-10-19 (static + probe) | Catalog, classification and all 38 migration/value probes identical to beta.22. Adds `NRPass2Preset`..`NRPass4Preset` (mixed models), a default-on D3D12 crash watcher behind `NRGpuCrashWitness`, and writes `[OVERLAY] TutorialProgress=4`. Same file standalone and inside `DLSS5-NR-Setup-v11.0.0-beta.29.exe`. beta.24 (Patch 6) and beta.26 (Patch 7) were not checked. |
 
 The author's own names (from the beta.18 installer's `sources.json`): `v11.0.0-beta.5`..`beta.11` = "v11 Patch 3",
-`beta.12`..`beta.18` = "v11 Patch 4" (C). beta.22 has no name there (no installer checked).
+`beta.12`..`beta.18` = "v11 Patch 4" (C). The beta.29 installer's `sources.json` adds beta.22 = "v11 Patch 5", beta.24 = "Patch 6",
+beta.26 = "Patch 7", beta.29 = "Patch 8" (C).
 
 The detected build label is the app's own name for a build (the add-ons publish none): the highest `vX.Y.Z[-pre]` ASCII string in
 the binary. Every build also carries the RenoDX framework strings `v6.1.0` / `v6.1.2`, which lose by being lower. The v10.7
 binary has `v10.7.0` once (next to its overlay name) and `v10.1.0-rc3` twice in localised tooltips, so the highest string is
 `v10.7.0`; a user can name any build themselves in Settings (for example `v10.1`). beta.18 and beta.22 carry
 `v11.0.0-beta.NN` twice (add-on description and a bare string), `v11.0.0-beta.NNNR` once (glued to "NR on") and `v11.0.0-H`;
-the tie at 11.0.0 goes to the most frequent, `v11.0.0-beta.NN` (C, test `Label_ReadsTheV11Beta18AndBeta22Layouts`). v11 has no
+the tie at 11.0.0 goes to the most frequent, `v11.0.0-beta.NN` (C, test `Label_ReadsTheV11Beta18AndBeta22Layouts`). beta.29 has the
+same layout; the app's import reads `v11.0.0-beta.29` from the real file and extracts the same add-on from its setup exe (C). v11 has no
 framework `v6.1.x` strings.
 
 Licence: no restriction found; THIRD-PARTY-NOTICES lists MIT RenoDX, ReShade, ImGui, Detours, nlohmann/json, gtl,
@@ -98,6 +101,19 @@ Runtime (probe, `tools/addon-probe`):
   diagnostic) and `NRMaskBlendMode` (any integer is passed on and logged as `NR-COMPAT v1 mask_blend_mode=N
   source=NRMaskBlendMode`, text is ignored; the binary sends it as the NGX parameter `DLSSNR.MaskBlendMode`, D). Neither key is
   in the settings catalog; their value meanings are undocumented, so the app offers neither.
+- **v11 beta.29** reports `v11.0.0-beta.29`. Catalog (apart from the new keys), classification (`classify111.py`) and every
+  migration and value probe of beta.22 (38 seeded inis) give the same result (C). New:
+  - `NRPass2Preset`..`NRPass4Preset`, catalog (C): "0 Same as pass 1 (default: the model pass 1 runs, Render preset's choice or
+    the model lab's Preset 1), 1-3 the DLL's preset id for this pass alone (310.9.16: 1 honest_tench, the model the lab edits; 2
+    the small FP8 model). Sent at this pass's feature create only while the DLL ships several models, else 0. A change replaces
+    the live NR features." Probe (C): 1, 2, 3 are kept (logged as non-default); 4, -1, 1.5 and text read as 0. Accepted whatever
+    `NRPasses` and `NRPass<N>FollowPass1` say (the settings layer does not tie them). `NRPreset` also accepts 0..3 (4 reads as 0).
+  - `NRGpuCrashWitness` (C, release notes + probe): absent = crash watcher on, DRED off (`NR-DRED v1 event=start watch=1 dred=0
+    source=off`); `0` = all off (`watch=0`); any non-zero = watcher and DRED on from launch (`event=enabled ... source=ini`).
+    After a D3D12 freeze or device removal it writes `dlss5-nr-crash-<time>.txt` beside ReShade.log, names it on Home at the next
+    launch and turns DRED on for the next launches "until it catches a crash or another build is installed" (C).
+  - Reads `[OVERLAY] TutorialProgress` and writes `4` when it is absent or 0 (probe: 1, 3, 4 kept, C).
+  - 007 First Light (`007firstlight.exe` in the binary): After and Before Upscaling run as Auto (Present) there (release notes, C).
 
 ### Main keys
 
@@ -116,7 +132,8 @@ Runtime (probe, `tools/addon-probe`):
 | `NRAutoMask` | bool | 0 | retired (always on) | Character mask | D/C |
 | `NRUICorrection` | bool | 0 | 0 | | D |
 | `NRPasses` | int | 1, 1..4 | 1, 1..4 (+ `NRPass2..4*` per-pass keys) | | D/C |
-| `NRPreset` | int | not read | 0 | 0 = DLL's shipping default; sent as `DLSSNR.Hint.Render.Preset`; recreates NR; shown only when the DLL has several models. Changelog: Preset 1 = earlier model, Preset 2 = newer small model | C; 1/2 value mapping I |
+| `NRPreset` | int | not read | 0, 0..3 | 0 = DLL's shipping default; sent as `DLSSNR.Hint.Render.Preset`; recreates NR; shown only when the DLL has several models. DLL 310.9.16 (beta.29 catalog): 1 honest_tench (the model the lab edits), 2 small FP8 model | C |
+| `NRPass2Preset`..`NRPass4Preset` | int | — | beta.29+: 0, 0..3 | 0 same as pass 1, else the DLL's preset id for that pass (as `NRPreset`) | C |
 | `NRResolutionScale` | float | 1.0, 0.33..1 | 0.33..1 | | D/C |
 | `NRFollowInputRes` | int | 0 | dev | | D/C |
 | `NRVramBuffering` | int | — | 0 | 0 Full, 1 Reduced, 2 Minimal | C |
@@ -124,8 +141,8 @@ Runtime (probe, `tools/addon-probe`):
 | `NRFeedMode` | int | 0, 0..2 | beta.6: retired; beta.18+: read through the API (settings layer still logs it retired) | Auto, v1 frame meter, v2 game exposure. beta.18+: 1 keeps NR's meter, 2 forces the game's exposure (D3D12 at After Upscaling; Vulkan keeps the meter) | C |
 | `NRCodecMode` | int | 2, 0..5 | retired | 2 Auto, 0 Classic, 1 Anchored, 3 Display, 4 PsychoVisual, 5 Source preserving | C |
 | `NRPresentGuides` | int | 0 | 0, 0..2 (3 and text read as 0) | v10: 0 Optional, 1 Required, 2 Never. beta.6: 0 DLSS frames (1 read as 0), 2 Always on. beta.18+: 0 Always on (stock), 1 DLSS frames, 2 Always on. Only 1 and 2 mean the same in every v11 build | C |
-| `NRMaskBlendMode` | int | — | beta.22 only, absent = not sent | Passed to NGX `DLSSNR.MaskBlendMode`; meanings undocumented | C/D |
-| `NRGpuCrashWitness` | int | — | beta.22 only | non-zero enables D3D12 DRED breadcrumbs (diagnostic) | C |
+| `NRMaskBlendMode` | int | — | beta.22+, absent = not sent | Passed to NGX `DLSSNR.MaskBlendMode`; meanings undocumented | C/D |
+| `NRGpuCrashWitness` | int | — | beta.22+ | beta.22: absent/0 off, non-zero DRED breadcrumbs. beta.29: absent = crash watcher on (DRED after a crash), 0 all off, non-zero watcher + DRED from launch | C |
 | `NRToggleKey` / `NRScreenshotKey` / `NRShotKey` | VK | 117 F6 / 116 F5 / 118 F7 | unbound when absent | | D/C |
 
 v10.7 also has Present/HDR keys (`NRPresentEncoding` Auto/SDR/HDR10/scRGB, `NRPresentWhiteSource` Auto/Windows/Game,
@@ -214,10 +231,11 @@ OptiScaler-NR and Deep Fried Chicken. It is not added to `[ADDON] LoadFromDllMai
   NR injectors (`renodx-dlssfix`, Deep Fried Chicken) are moved aside too. Uninstall restores everything. ShortFuse's add-on is left alone.
 - **Keys written.** Only the options set in Settings, only to `[RenoDX.DLSS5]`, only while the add-on is installed. Options that
   exist in one generation only are hidden for the other (v10 only: `NRAutoMask`; v11 only: `NeuralUplift`, `NRPreset`,
-  `NRVramBuffering`); `NRHookPoint`, `NRStyle`, `NRLocalStructure`, `NRSkinStructure` and `NRPresentGuides` offer
-  per-generation values. Within v11 the options only offer values that mean the same in beta.6, beta.18 and beta.22
+  `NRPass2Preset`..`NRPass4Preset`, `NRVramBuffering`, `NRGpuCrashWitness`); `NRHookPoint`, `NRStyle`, `NRLocalStructure`, `NRSkinStructure` and `NRPresentGuides` offer
+  per-generation values. Within v11 the options only offer values that mean the same in beta.6, beta.18, beta.22 and beta.29
   (`NRPresentGuides` 1/2, not 0), so there is no per-build variant; `NRFeedMode` (1/2) is offered for both generations and
-  beta.6 ignores it. Because v11 resets `NRHookPoint` once in a v10-era ini, a hook point set here has to be applied again
+  beta.6 ignores it. The pass presets (offered 0..2, the two models of 310.9.16) and GPU crash reports (Off 0, On 1)
+  are ignored by v11 builds that lack them. Because v11 resets `NRHookPoint` once in a v10-era ini, a hook point set here has to be applied again
   after the game's first start with v11 if that game ran v10 before. The
   Settings page follows the default build's generation; a game's options follow the generation of the build that game uses.
   Keys the app wrote are removed again when the add-on is dropped, unless you changed them since.

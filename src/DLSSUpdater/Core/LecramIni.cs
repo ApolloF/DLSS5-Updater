@@ -15,7 +15,9 @@ public static class LecramIni
     private static readonly HashSet<string> V10Only = new(["NRAutoMask"], StringComparer.OrdinalIgnoreCase);
 
     /// <summary>v11 only: v10.7 does not read these.</summary>
-    private static readonly HashSet<string> V11Only = new(["NeuralUplift", "NRPreset", "NRVramBuffering"], StringComparer.OrdinalIgnoreCase);
+    private static readonly HashSet<string> V11Only = new(
+        ["NeuralUplift", "NRPreset", "NRPass2Preset", "NRPass3Preset", "NRPass4Preset", "NRVramBuffering", "NRGpuCrashWitness"],
+        StringComparer.OrdinalIgnoreCase);
 
     public static bool IsLecram(IniOverride o) => o.Section.Trim().Equals(Section, StringComparison.OrdinalIgnoreCase);
 
