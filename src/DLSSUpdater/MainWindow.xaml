@@ -344,12 +344,12 @@
                     <ToggleButton Style="{StaticResource ReleaseChip}" Tag="{Binding OptiNews}">
                         <StackPanel>
                             <TextBlock Text="OPTISCALER-NR" Style="{StaticResource Caps}" />
-                            <StackPanel Orientation="Horizontal">
-                                <TextBlock Text="{Binding OptiVersion}" Style="{StaticResource ChipValue}" />
-                                <TextBlock Text="&#xE7BA;" Style="{StaticResource Icon}" Foreground="{StaticResource Warn}" FontSize="14" Margin="8,3,0,0"
+                            <DockPanel>
+                                <TextBlock DockPanel.Dock="Right" Text="&#xE7BA;" Style="{StaticResource Icon}" Foreground="{StaticResource Warn}" FontSize="14" Margin="8,3,0,0"
                                            Background="Transparent" ToolTip="{Binding Compat.Summary}" ToolTipService.InitialShowDelay="100" ToolTipService.ShowOnDisabled="True"
                                            Visibility="{Binding CompatWarning, Converter={StaticResource BoolToVis}}" />
-                            </StackPanel>
+                                <TextBlock Text="{Binding OptiVersion}" Style="{StaticResource ChipValue}" ToolTip="{Binding OptiVersion}" />
+                            </DockPanel>
                         </StackPanel>
                     </ToggleButton>
                     <ToggleButton Style="{StaticResource ReleaseChip}" Tag="{Binding DlssNews}">
@@ -395,7 +395,7 @@
                     <Border Style="{StaticResource StripCell}" ToolTip="Lecram v11 update channel; builds are added to the library. Games keep their installed build.">
                         <StackPanel>
                             <TextBlock Text="LECRAM DLSS5" Style="{StaticResource Caps}" />
-                            <TextBlock Text="{Binding LecramVersion}" Style="{StaticResource ChipValue}" />
+                            <TextBlock Text="{Binding LecramVersion}" Style="{StaticResource ChipValue}" ToolTip="{Binding LecramVersion}" />
                         </StackPanel>
                     </Border>
                     <ToggleButton Style="{StaticResource ReleaseChip}" Tag="{Binding ReShadeNews}">
@@ -504,8 +504,8 @@
                                             </Style>
                                         </WrapPanel.Resources>
                                         <Border Background="{StaticResource Accent}" BorderBrush="{StaticResource Accent}"
-                                                Visibility="{Binding ModBadge, Converter={StaticResource NullToVis}}" ToolTip="Installed mods">
-                                            <TextBlock Text="{Binding ModBadge}" Style="{StaticResource BadgeText}" Foreground="#0B0B0B" />
+                                                Visibility="{Binding ModBadge, Converter={StaticResource NullToVis}}" ToolTip="{Binding ModBadge}">
+                                            <TextBlock Text="{Binding ModBadge}" Style="{StaticResource BadgeText}" Foreground="#0B0B0B" TextTrimming="CharacterEllipsis" />
                                         </Border>
                                         <Border BorderBrush="{StaticResource Danger}"
                                                 Visibility="{Binding HasAntiCheat, Converter={StaticResource BoolToVis}}" ToolTip="{Binding AntiCheat}">
