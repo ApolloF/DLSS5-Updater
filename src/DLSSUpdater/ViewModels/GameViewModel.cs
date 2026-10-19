@@ -264,7 +264,7 @@ public sealed partial class GameViewModel : ObservableObject
     partial void OnDetailTabChanged(string value)
     {
         if (value == "Config") EnsureConfigRows();
-        if (value != "Nvidia") return;
+        if (value != "Nvidia" || Demo.Active) return;
         if (Driver is null && DriverExe is { } exe) Driver = new DriverProfileViewModel(exe, Name, Features, Info.FgVersion);
         if (Driver is { Loaded: false, Busy: false } d) d.LoadCommand.Execute(null);
     }
@@ -435,6 +435,8 @@ public sealed partial class GameViewModel : ObservableObject
         Info.Features.HasFlag(GameFeatures.Reflex) ? "Reflex" : null,
     }.OfType<string>());
     public bool HasFeatureBadge => FeatureBadge.Length > 0;
+    /// <summary>The NVIDIA driver profile tab; the demo never opens the driver.</summary>
+    public bool ShowDriverTab => !Demo.Active;
     public bool HasAntiCheat => Info.AntiCheat is not null;
     public string? AntiCheat => Info.AntiCheat;
     public bool IsInstalled => Manifest is not null || Info.Installs.Count > 0;
@@ -630,7 +632,7 @@ public sealed partial class GameViewModel : ObservableObject
     private void LoadManifest()
     {
         _loading = true;
-        Manifest = SelectedTarget is null ? null : InstallManifest.Load(SelectedTarget.Dir);
+        Manifest = SelectedTarget is null ? null : Demo.Active ? Demo.ManifestAt(SelectedTarget.Dir) : InstallManifest.Load(SelectedTarget.Dir);
         var over = _s.Settings.Games.GetValueOrDefault(Id);
         Mode = Manifest is { } im && (im.Opti || im.ReShade) ? im.Mode : over?.Mode ?? _s.Settings.DefaultMode;
         Proxy = Manifest?.Proxy ?? _s.Settings.Games.GetValueOrDefault(Id)?.Proxy ?? ExistingOptiProxy() ?? _s.Settings.DefaultProxy;
@@ -655,7 +657,7 @@ public sealed partial class GameViewModel : ObservableObject
     }
 
     /// <summary>A manual OptiScaler install keeps its proxy name so the update replaces the file the game loads.</summary>
-    private string? ExistingOptiProxy() => SelectedTarget is null ? null
+    private string? ExistingOptiProxy() => SelectedTarget is null || Demo.Active ? null
         : AppSettings.ProxyNames.FirstOrDefault(n => File.Exists(Path.Combine(SelectedTarget.Dir, n)) && Installer.IsOptiScaler(Path.Combine(SelectedTarget.Dir, n)));
 
     /// <summary>Recomputes installed-vs-latest for every component and DLSS file.</summary>
@@ -677,9 +679,10 @@ public sealed partial class GameViewModel : ObservableObject
         var nrPath = store.DlssNrFor(EffectiveNrId);
         var nrFile = m?.Uplift == true ? Path.Combine(ComponentStore.UpliftNrDir, ComponentStore.DlssNrFile) : ComponentStore.DlssNrFile;
         var gameNr = SelectedTarget is null ? null : Path.Combine(SelectedTarget.Dir, nrFile);
-        Row("dlssnr", gameNr is not null && File.Exists(gameNr) ? InstalledVersion(nrFile) : null,
+        var nrInGame = gameNr is not null && (Demo.Active ? m?.DlssNr == true : File.Exists(gameNr));
+        Row("dlssnr", nrInGame ? InstalledVersion(nrFile) : null,
             File.Exists(nrPath) ? FileUtil.Format(FileUtil.ReadVersion(nrPath)) : null,
-            gameNr is null || !File.Exists(gameNr) || (File.Exists(nrPath) && FileUtil.SameFile(gameNr, nrPath)));
+            !nrInGame || (File.Exists(nrPath) && (Demo.Active || FileUtil.SameFile(gameNr!, nrPath))));
         var sf = store.RenoDxBuildFor(EffectiveRenoDxId);
         var lecram = store.LecramBuildFor(EffectiveLecramId);
         Row("renodx", m?.RenoDx == true ? InstalledAddon(AddonKind.RenoDx, m.RenoDxId, m.RenoDxTag) : null, sf?.Name, sf is not null && sf.Matches(m?.RenoDxId, m?.RenoDxTag));

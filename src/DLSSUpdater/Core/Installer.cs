@@ -105,6 +105,11 @@ public sealed class Installer(ComponentStore store)
 
     public async Task InstallAsync(GameInfo game, string targetDir, InstallOptions o, IProgress<TransferProgress>? progress, CancellationToken ct)
     {
+        if (Demo.Active)
+        {
+            await Demo.InstallAsync(store, game, targetDir, o, progress, ct);
+            return;
+        }
         targetDir = FileUtil.Normalize(targetDir);
         EnsureNotRunning(game.Root);
         EnsureWritable(targetDir);
@@ -1006,7 +1011,7 @@ public sealed class Installer(ComponentStore store)
         ctx.M.DlssNrSha = selected.Sha256;
     }
 
-    public Task SwitchDlssNrAsync(GameInfo game, string targetDir, string? id, CancellationToken ct) => Task.Run(() =>
+    public Task SwitchDlssNrAsync(GameInfo game, string targetDir, string? id, CancellationToken ct) => Demo.Active ? Demo.SwitchNrAsync(targetDir, id, ct) : Task.Run(() =>
     {
         targetDir = FileUtil.Normalize(targetDir);
         EnsureNotRunning(game.Root);
@@ -1034,7 +1039,7 @@ public sealed class Installer(ComponentStore store)
 
     // ---------- uninstall / restore ----------
 
-    public Task UninstallAsync(GameInfo game, string targetDir, CancellationToken ct) => Task.Run(() =>
+    public Task UninstallAsync(GameInfo game, string targetDir, CancellationToken ct) => Demo.Active ? Demo.UninstallAsync(game, targetDir, ct) : Task.Run(() =>
     {
         targetDir = FileUtil.Normalize(targetDir);
         EnsureNotRunning(game.Root);
@@ -1074,7 +1079,7 @@ public sealed class Installer(ComponentStore store)
         catch (UnauthorizedAccessException) { throw new NeedsAdminException(targetDir); }
     }, ct);
 
-    public Task RestoreDlssAsync(GameInfo game, string targetDir, CancellationToken ct) => Task.Run(() =>
+    public Task RestoreDlssAsync(GameInfo game, string targetDir, CancellationToken ct) => Demo.Active ? Demo.RestoreDlssAsync(game, targetDir, ct) : Task.Run(() =>
     {
         targetDir = FileUtil.Normalize(targetDir);
         EnsureNotRunning(game.Root);
