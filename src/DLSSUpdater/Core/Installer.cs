@@ -392,8 +392,12 @@ public sealed class Installer(ComponentStore store)
             var owned = m.Dirs.Contains(ctx.Rel(dest), StringComparer.OrdinalIgnoreCase);
             if (owned || !Directory.Exists(dest))
             {
+                if (!owned)
+                {
+                    m.AddDir(ctx.Rel(dest));
+                    Persist(ctx);
+                }
                 MirrorDir(src, dest);
-                m.AddDir(ctx.Rel(dest));
             }
             else
             {
@@ -420,9 +424,13 @@ public sealed class Installer(ComponentStore store)
         }
         var merged = ConfigProfile.Merge(releaseIni, currentIni, profile, o.CarryOverIni, m.OptiIni, o.OverwriteIni);
         if (!o.CarryOverIni && currentIni is not null && m.Owns(ctx.Rel(iniPath)) && merged.Text != currentIni) KeepPrevious(ctx, iniPath);
+        if (!m.Owns(ctx.Rel(iniPath)))
+        {
+            m.AddFile(ctx.Rel(iniPath));
+            Persist(ctx);
+        }
         FileUtil.AtomicWriteText(iniPath, merged.Text);
         m.OptiIni = merged.Applied;
-        m.AddFile(ctx.Rel(iniPath));
         Log.Info($"  {o.Proxy} ← OptiScaler-NR, OptiScaler.ini merged");
     }
 
@@ -522,9 +530,9 @@ public sealed class Installer(ComponentStore store)
         if (original == merged.Text) { ctx.M.ReShadeIni = merged.Applied; return; }
 
         if (exists && !ctx.M.Owns(rel) && ctx.M.BackupOf(rel) is null) Backup(ctx, path, "file", copy: true);
+        if (!exists) RecordNew(ctx, rel);
         FileUtil.AtomicWriteText(path, merged.Text);
         ctx.M.ReShadeIni = merged.Applied;
-        if (!exists) ctx.M.AddFile(rel);
     }
 
     private static List<string> EarlyAddons(IniFile ini) =>
@@ -660,8 +668,15 @@ public sealed class Installer(ComponentStore store)
         if (original == merged.Text) return;
         if (exists && !m.Owns(rel) && m.BackupOf(rel) is null) Backup(ctx, path, "file", copy: true);
         else if (exists && !o.CarryOverIni) KeepPrevious(ctx, path);
+        if (!exists) RecordNew(ctx, rel);
         FileUtil.AtomicWriteText(path, merged.Text);
-        if (!exists) m.AddFile(rel);
+    }
+
+    /// <summary>A file we are about to create is recorded (and saved) first, so a run stopped part-way never leaves it unrecorded.</summary>
+    private static void RecordNew(Ctx ctx, string rel)
+    {
+        ctx.M.AddFile(rel);
+        Persist(ctx);
     }
 
     /// <summary>
@@ -674,8 +689,7 @@ public sealed class Installer(ComponentStore store)
         if (FileUtil.LinkBelow(ctx.Target, dest) is { } link) throw new UnsafeManifestException(ctx.Target, $"{link} is a link");
         Directory.CreateDirectory(Path.GetDirectoryName(dest)!);
         FileUtil.ClearReadOnly(dest);
-        File.Copy(path, dest, true);
-        // Uninstall deletes the whole record folder, which a read-only copy would stop.
+        FileUtil.AtomicCopy(path, dest);
         FileUtil.ClearReadOnly(dest);
         Log.Info($"  previous {Path.GetFileName(path)} kept in {Path.Combine(InstallManifest.DirName, PreviousDir)}");
     }
@@ -866,7 +880,7 @@ public sealed class Installer(ComponentStore store)
         var m = ctx.M;
         var scan = new GameInfo { Root = ctx.Root };
         GameInspector.Inspect(scan);
-        var claimed = ClaimedByOtherInstalls(ctx, scan);
+        if (ClaimedByOtherInstalls(ctx, scan, "Streamline files") is not { } claimed) return;
         foreach (var dll in scan.Streamline)
         {
             var rel = ctx.Rel(dll.Path);
@@ -880,8 +894,7 @@ public sealed class Installer(ComponentStore store)
             if (LeftToOtherInstall(ctx, claimed, dll.Path)) continue;
             var entry = m.BackupOf(rel);
             var ours = entry?.InstalledSha is { } s && s == HashCache.Get(dll.Path);
-            Replace(ctx, src, dll.Path, ours ? null : "streamline");
-            if (m.BackupOf(rel) is { } b) b.InstalledSha = HashCache.Get(src);
+            Replace(ctx, src, dll.Path, ours ? null : "streamline", installedSha: HashCache.Get(src));
             Log.Info($"  {rel}: {FileUtil.Format(dll.Version)} → {FileUtil.Format(FileUtil.ReadVersion(src))}");
         }
     }
@@ -895,9 +908,9 @@ public sealed class Installer(ComponentStore store)
         var m = ctx.M;
         var scan = new GameInfo { Root = ctx.Root };
         GameInspector.Inspect(scan);
-        var claimed = ClaimedByOtherInstalls(ctx, scan);
+        var claimed = replace ? ClaimedByOtherInstalls(ctx, scan, "DLSS files") : null;
 
-        foreach (var dll in replace ? scan.Dlss : [])
+        foreach (var dll in claimed is not null ? scan.Dlss : [])
         {
             if (FileUtil.IsUnder(dll.Path, InstallManifest.DirFor(ctx.Target))) continue;
             if (!latest.TryGetValue(dll.Name, out var src)) continue;
@@ -905,13 +918,12 @@ public sealed class Installer(ComponentStore store)
             var rel = ctx.Rel(dll.Path);
             // Latest: only ever upgrade. Pinned: move to exactly that version, up or down.
             if (dll.Version is not null && newVer is not null && (exact ? dll.Version == newVer : dll.Version >= newVer)) continue;
-            if (LeftToOtherInstall(ctx, claimed, dll.Path)) continue;
+            if (LeftToOtherInstall(ctx, claimed!, dll.Path)) continue;
 
             var srcSha = HashCache.Get(src);
             var entry = m.BackupOf(rel);
             var ours = m.Owns(rel) || (entry?.InstalledSha is { } s && s == HashCache.Get(dll.Path));
-            Replace(ctx, src, dll.Path, ours ? null : "dlss");
-            if (m.BackupOf(rel) is { } b) b.InstalledSha = srcSha;
+            Replace(ctx, src, dll.Path, ours ? null : "dlss", installedSha: srcSha);
             Log.Info($"  {rel}: {FileUtil.Format(dll.Version)} → {FileUtil.Format(newVer)}");
         }
 
@@ -930,22 +942,28 @@ public sealed class Installer(ComponentStore store)
     /// Game files (by full path) another install folder of this game has placed or backed up, with that folder. Swapping
     /// one from here would save that install's copy as the original, and uninstalling both would then lose the real one.
     /// The swap scans the whole game (DLSS often sits in an engine folder, not beside the exe), so such files are left to
-    /// the install that holds them. A record that can't be read claims nothing; its own install refuses to run anyway.
+    /// the install that holds them. Null when another install's record can't be read or is unsafe: then nobody can tell
+    /// which files it holds, and the swap is skipped (logged with <paramref name="what"/>).
     /// </summary>
-    private static Dictionary<string, string> ClaimedByOtherInstalls(Ctx ctx, GameInfo scan)
+    private static Dictionary<string, string>? ClaimedByOtherInstalls(Ctx ctx, GameInfo scan, string what)
     {
         var claimed = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
         foreach (var dir in scan.Installs.Select(FileUtil.Normalize).Where(d => !d.Equals(ctx.Target, StringComparison.OrdinalIgnoreCase)))
         {
-            var other = InstallManifest.Load(dir);
-            if (other is null) continue;
             try
             {
+                var other = InstallManifest.Read(dir);
+                if (other is null) continue;
                 other.Contain(dir, ctx.Root);
                 foreach (var entry in other.Files.Concat(other.Backups.Select(b => b.Original)))
                     claimed.TryAdd(InstallManifest.Resolve(entry, dir, ctx.Root), dir);
             }
-            catch (UnsafeManifestException ex) { Log.Warn(ex.Message); }
+            catch (Exception ex) when (ex is InvalidDataException or UnsafeManifestException)
+            {
+                Log.Warn($"  {what} left as they are: the install record in {dir} can't be used ({ex.Message}), so it is unclear " +
+                         "which game files that install holds. Repair or uninstall that install, then update again.");
+                return null;
+            }
         }
         return claimed;
     }
@@ -964,36 +982,64 @@ public sealed class Installer(ComponentStore store)
     {
         var rel = ctx.Rel(dest);
         if (File.Exists(dest) && ctx.M.Owns(rel) && FileUtil.SameFile(src, dest)) return;
-        Replace(ctx, src, dest, ctx.M.Owns(rel) ? null : "file");
-        ctx.M.AddFile(rel);
+        Replace(ctx, src, dest, ctx.M.Owns(rel) ? null : "file", own: true);
     }
 
     /// <summary>
     /// Puts <paramref name="src"/> at <paramref name="dest"/> so the game never goes without the file: the copy is staged
     /// beside it first, the original is saved to the backup (<paramref name="backupKind"/>; null = ours, not saved) and the
     /// copy then takes its place in one rename. A failure leaves <paramref name="dest"/> and the record as they were.
+    /// The record of the swap (<paramref name="own"/>: the file is ours from now on; <paramref name="installedSha"/>: the
+    /// hash of the file we put in place) is saved before the rename. A run killed part-way then leaves no original that the
+    /// record doesn't know, and no newly placed file the record would back up as an original next time; only a file that
+    /// was already ours under a reused entry can, in the moment between that save and the rename, look changed by the game.
     /// </summary>
-    private static void Replace(Ctx ctx, string src, string dest, string? backupKind)
+    private static void Replace(Ctx ctx, string src, string dest, string? backupKind, bool own = false, string? installedSha = null)
     {
         var tmp = FileUtil.StageCopy(src, dest);
+        var m = ctx.M;
         var rel = ctx.Rel(dest);
-        var newBackup = backupKind is not null && File.Exists(dest) && ctx.M.BackupOf(rel) is null;
+        var backedUp = backupKind is not null && File.Exists(dest);
+        var entry = m.BackupOf(rel);
+        var oldSha = entry?.InstalledSha;
+        var wasOwned = m.Owns(rel);
         try
         {
-            if (backupKind is not null && File.Exists(dest)) Backup(ctx, dest, backupKind, copy: true);
+            if (backedUp) Backup(ctx, dest, backupKind!, copy: true);
+            var changed = backedUp;
+            if (own && !wasOwned) { m.AddFile(rel); changed = true; }
+            if (installedSha is not null && m.BackupOf(rel) is { } b && b.InstalledSha != installedSha) { b.InstalledSha = installedSha; changed = true; }
+            if (changed) Persist(ctx);
             FileUtil.CommitStaged(tmp, dest);
         }
         catch
         {
             FileUtil.TryDeleteFile(tmp);
             // The original never left. A backup entry made for this swap goes again; a reused one now holds that same original.
-            if (newBackup && ctx.M.BackupOf(rel) is { } b)
+            if (entry is null && backedUp && m.BackupOf(rel) is { } made)
             {
-                FileUtil.TryDeleteFile(Path.Combine(ctx.BackupDir, b.Backup));
-                ctx.M.Backups.Remove(b);
+                FileUtil.TryDeleteFile(Path.Combine(ctx.BackupDir, made.Backup));
+                m.Backups.Remove(made);
             }
+            // A reused entry keeps its hash: if the copy into the backup failed, the backup still holds the older original.
+            else if (entry is not null) entry.InstalledSha = oldSha;
+            if (own && !wasOwned) m.Files.RemoveAll(f => f.Equals(rel, StringComparison.OrdinalIgnoreCase));
+            TryPersist(ctx);
             throw;
         }
+    }
+
+    /// <summary>Saves the record now, so what is on disk and what it says never drift apart if the run stops here.</summary>
+    private static void Persist(Ctx ctx)
+    {
+        if (ctx.M.IsEmpty) FileUtil.DeleteFile(InstallManifest.PathFor(ctx.Target));
+        else ctx.M.Save(ctx.Target);
+    }
+
+    private static void TryPersist(Ctx ctx)
+    {
+        try { Persist(ctx); }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) { Log.Warn($"Install record in {ctx.Target} not saved: {ex.Message}"); }
     }
 
     /// <summary>
@@ -1087,6 +1133,7 @@ public sealed class Installer(ComponentStore store)
         else File.Move(full, dest, true);
         if (entry is null) ctx.M.Backups.Add(new BackupEntry { Original = rel, Backup = backupRel, Kind = kind });
         else entry.InstalledSha = null;
+        Persist(ctx);
     }
 
     /// <summary>The entry as a path inside the backup folder: install-folder entries go under "_install".</summary>
@@ -1186,7 +1233,7 @@ public sealed class Installer(ComponentStore store)
                 m.Save(targetDir);
             }
             foreach (var log in LogFiles) TryDelete(Path.Combine(targetDir, log));
-            Directory.Delete(InstallManifest.DirFor(targetDir), true);
+            FileUtil.DeleteDirectory(InstallManifest.DirFor(targetDir));
             Log.Info($"{game.Name}: uninstalled, originals restored");
         }
         catch (UnauthorizedAccessException) { throw new NeedsAdminException(targetDir); }
@@ -1218,7 +1265,7 @@ public sealed class Installer(ComponentStore store)
             m.DlssPinned = false;
             m.Streamline = false;
             m.StreamlineTag = null;
-            if (m.IsEmpty) Directory.Delete(InstallManifest.DirFor(targetDir), true);
+            if (m.IsEmpty) FileUtil.DeleteDirectory(InstallManifest.DirFor(targetDir));
             else m.Save(targetDir);
             Log.Info($"{game.Name}: original DLSS and Streamline files restored");
         }

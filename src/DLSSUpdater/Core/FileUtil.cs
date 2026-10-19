@@ -89,19 +89,34 @@ public static class FileUtil
     /// <summary>
     /// Moves a staged temp file over <paramref name="dest"/> in one rename. A read-only target (users lock configs and
     /// dlls that way) is replaced and stays read-only. On failure the temp file goes and <paramref name="dest"/> is untouched.
+    /// Once the rename is done the swap counts as done: putting the lock back is best effort.
     /// </summary>
     public static void CommitStaged(string tmp, string dest)
     {
+        var locked = false;
         try
         {
-            var locked = ClearReadOnly(dest);
-            try { File.Move(tmp, dest, true); }
-            finally { if (locked && File.Exists(dest)) File.SetAttributes(dest, File.GetAttributes(dest) | FileAttributes.ReadOnly); }
+            locked = ClearReadOnly(dest);
+            File.Move(tmp, dest, true);
         }
         catch
         {
             TryDeleteFile(tmp);
+            if (locked) TryLock(dest);
             throw;
+        }
+        if (locked) TryLock(dest);
+    }
+
+    private static void TryLock(string path)
+    {
+        try
+        {
+            if (File.Exists(path)) File.SetAttributes(path, File.GetAttributes(path) | FileAttributes.ReadOnly);
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            Log.Warn($"{path} could not be made read-only again ({ex.Message})");
         }
     }
 
@@ -140,6 +155,24 @@ public static class FileUtil
         if (!File.Exists(path)) return;
         ClearReadOnly(path);
         File.Delete(path);
+    }
+
+    /// <summary>
+    /// Deletes a folder of ours with everything in it, read-only files included. Links inside are removed, never followed,
+    /// so nothing outside the folder is touched.
+    /// </summary>
+    public static void DeleteDirectory(string dir)
+    {
+        if (!Directory.Exists(dir)) return;
+        // A link in place of the folder: only the link goes, never what it points to.
+        if (IsLink(dir))
+        {
+            Directory.Delete(dir);
+            return;
+        }
+        var walk = new EnumerationOptions { RecurseSubdirectories = true, AttributesToSkip = FileAttributes.ReparsePoint, IgnoreInaccessible = true };
+        foreach (var f in Directory.EnumerateFiles(dir, "*", walk)) ClearReadOnly(f);
+        Directory.Delete(dir, true);
     }
 
     /// <summary>Best-effort cleanup of a file of ours (a temp file) after another error, which is the one reported.</summary>
