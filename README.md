@@ -36,7 +36,7 @@ The Settings page. These values are the defaults for all games.
 
 | Component | What it is | Where it comes from |
 |---|---|---|
-| [OptiScaler-NR](https://github.com/ShyVortex/OptiScaler-DLSSNR-PreSR-Multipass) | A fork of OptiScaler that adds DLSS neural rendering (DLSSNR). The main install mode. | Downloaded from GitHub. |
+| [OptiScaler-NR](https://github.com/ShyVortex/OptiScaler-DLSSNR-PreSR-Multipass) | A fork of OptiScaler that adds DLSS neural rendering (NR). The main install mode. | Downloaded from GitHub. |
 | [OptiScaler](https://github.com/optiscaler/OptiScaler) | Lets a game use DLSS, FSR or XeSS as its upscaler. | Parent project of the fork above. An experimental fork by janblade (OptiScaler F5) can be chosen in Settings. |
 | [NVIDIA DLSS](https://github.com/NVIDIA/DLSS) | The DLSS runtime files for upscaling, ray reconstruction and frame generation. | Downloaded from NVIDIA's GitHub. |
 | [NVIDIA Streamline](https://github.com/NVIDIA-RTX/Streamline) | The layer between a game and DLSS frame generation. Optional. | Downloaded from NVIDIA's GitHub. |
@@ -69,7 +69,7 @@ Both versions keep settings and downloads in `%LocalAppData%\DLSSUpdater`, so yo
 
 ## First run
 
-1. Start the app. It scans your game libraries and lists the games it finds. To add a game it missed, use **Game** (one game folder) or **Library** (a folder whose subfolders are games) at the bottom of the list.
+1. Start the app. It scans your game libraries and lists the games it finds. To add a game it missed, use **Add game** (one game folder) or **Add library** (a folder whose subfolders are games) at the bottom of the list.
 2. Add `nvngx_dlssnr.dll` if you want to use neural rendering. This file belongs to NVIDIA, and its licence does not allow other people to share it, so this app does not include it and never downloads it. You supply your own copy. Put it next to `DLSSUpdater.exe` before the first start, or open **Settings** and import it under **Local components**. The app stores it in `%LocalAppData%\DLSSUpdater\components`. You can keep several versions side by side and pick a default.
 3. You can skip step 2 if you only want newer DLSS files. **DLSS only** does not need it.
 4. ReShade is downloaded the first time an install needs it. If you prefer your own `ReShade64.dll`, import it under **Local components**. **Use download** switches back.
@@ -102,7 +102,7 @@ Existing config files are handled in the way you choose under **Existing game co
 ## Troubleshooting
 
 **A game is missing from the list.**
-Press **Rescan**. If it is still missing, add its folder with **Game**, or its library folder with **Library**.
+Press **Rescan**. If it is still missing, add its folder with **Add game**, or its library folder with **Add library**.
 
 **The app says it needs administrator rights.**
 The game is in a protected folder. Choose **Restart as admin** when asked.
@@ -111,10 +111,10 @@ The game is in a protected folder. Choose **Restart as admin** when asked.
 Press **Uninstall** for that game to restore the original files. Then try the **ReShade + add-ons** mode, a different proxy DLL name (Settings, General) or a different DLSS version.
 
 **There are no OptiScaler updates.**
-The OptiScaler-NR fork publishes prereleases only. Keep **Include prereleases** turned on in Settings.
+The OptiScaler-NR fork publishes pre-releases only. Keep **Include pre-releases** turned on in Settings.
 
 **The app cannot reach GitHub.**
-It uses what it already downloaded and shows an **Offline** label. Try again later with **Check updates**.
+It uses what it already downloaded and shows an **OFFLINE** label. Try again later with **Check for updates**.
 
 **Where are the logs?**
 Open the log panel in the app. Data, cache and the log file are in `%LocalAppData%\DLSSUpdater`.
@@ -140,6 +140,8 @@ iscc /DAppVersion=1.10.3 installer\DLSSUpdater.iss
 ```
 
 Pushing a tag like `v1.10.3` that matches the version in the project file builds both files on GitHub Actions and attaches them to a release. Setting `DLSSU_INTEGRATION=1` turns on a test that downloads the real releases and installs them into a temporary folder.
+
+`DLSSUpdater.exe --demo` starts the app on a made-up game library in a temporary folder. It never scans your launchers, downloads anything or touches your games, so it is a safe way to look around. `--demo --screenshots <folder>` saves the screenshots used in this README to that folder and exits.
 
 ## Credits
 
