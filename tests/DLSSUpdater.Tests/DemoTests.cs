@@ -37,6 +37,18 @@ public class DemoTests : IDisposable
     }
 
     [Fact]
+    public void Enable_withLockedLeftoverFile_failsWithAClearMessage()
+    {
+        var data = Path.Combine(_tmp, "data");
+        var locked = Directory.EnumerateFiles(data, "*", SearchOption.AllDirectories).First();
+        using var hold = new FileStream(locked, FileMode.Open, FileAccess.Read, FileShare.None);
+
+        var ex = Assert.Throws<IOException>(() => Demo.Enable(data));
+
+        Assert.Contains("still in use", ex.Message);
+    }
+
+    [Fact]
     public void Screenshot_folder_comes_from_the_argument()
     {
         Assert.Equal(@"C:\x", Demo.ScreenshotArg(["--demo", "--screenshots", @"C:\x"]));

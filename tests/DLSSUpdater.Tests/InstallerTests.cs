@@ -1029,6 +1029,44 @@ public class InstallerTests : IDisposable
     }
 
     [Fact]
+    public async Task Uninstall_FileHeldOpen_ReportsGameFileInUse()
+    {
+        var installer = new Installer(_store);
+        await installer.InstallAsync(Game(), _target, Full, null, default);
+
+        using (new FileStream(Engine("nvngx_dlss.dll"), FileMode.Open, FileAccess.ReadWrite, FileShare.None))
+            await Assert.ThrowsAsync<GameFileInUseException>(() => installer.UninstallAsync(Game(), _target, default));
+
+        await installer.UninstallAsync(Game(), _target, default);
+    }
+
+    [Fact]
+    public async Task RestoreDlss_FileHeldOpen_ReportsGameFileInUse()
+    {
+        var installer = new Installer(_store);
+        await installer.InstallAsync(Game(), _target, Full, null, default);
+
+        using (new FileStream(Engine("nvngx_dlss.dll"), FileMode.Open, FileAccess.ReadWrite, FileShare.None))
+            await Assert.ThrowsAsync<GameFileInUseException>(() => installer.RestoreDlssAsync(Game(), _target, default));
+    }
+
+    [Fact]
+    public async Task Uninstall_ReadOnlyFileInsideOurFolder_StillCompletes()
+    {
+        var installer = new Installer(_store);
+        await installer.InstallAsync(Game(), _target, new InstallOptions { Dlss = true }, null, default);
+        var held = Path.Combine(_target, "OptiScaler", "sub", "locked.txt");
+        Write(held, "X");
+        File.SetAttributes(held, FileAttributes.ReadOnly);
+        EditManifest(m => m.Dirs.Add(InstallManifest.Entry(Path.Combine(_target, "OptiScaler"), _target, _root)));
+
+        await installer.UninstallAsync(Game(), _target, default);
+
+        Assert.False(Directory.Exists(Path.Combine(_target, "OptiScaler")));
+        Assert.False(Directory.Exists(InstallManifest.DirFor(_target)));
+    }
+
+    [Fact]
     public void GitHubToken_IsSavedEncrypted_AndPlainTextIsMigrated()
     {
         const string token = "github_pat_TEST_ONLY_not_a_real_token";
