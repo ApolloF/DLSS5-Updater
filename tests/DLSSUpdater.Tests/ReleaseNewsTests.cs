@@ -72,10 +72,10 @@ public class ReleaseNewsTests : IDisposable
         WriteApiCache(DlssReleasesUrl, "v310.9.1", DlssNotes);
         MarkDownloaded(Component.Dlss, "v310.9.1");
         MarkDownloaded(Component.Streamline, "v2.12.0");
-        var store = new ComponentStore(new GitHubClient(), () => false);
+        var store = new ComponentStore(new GitHubClient(new CaptivePortal()), () => false);
 
-        // A cancelled refresh fails every request before it is sent, like having no network.
-        await store.RefreshAsync(new CancellationToken(true));
+        // No usable answer from GitHub, so every component falls back to its download.
+        await store.RefreshAsync(default);
 
         Assert.True(store.Dlss!.FromCache);
         Assert.Equal(DlssNotes, store.Dlss.Notes);

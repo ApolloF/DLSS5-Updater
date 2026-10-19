@@ -225,4 +225,30 @@ public class ComponentStoreTests
         FileUtil.AtomicWriteText(AppPaths.SettingsFile, """{"OptiSource":"someone/else"}""");
         Assert.Same(OptiSources.Default, OptiSources.For(AppSettings.Load().OptiSource));
     }
+
+    [Fact]
+    public async Task Refresh_CancelledByTheUser_StopsInsteadOfFallingBackToTheCache()
+    {
+        var handler = new FakeGitHub(_ => Json("[]"));
+        var store = new ComponentStore(new GitHubClient(handler), () => true);
+        using var cts = new CancellationTokenSource();
+        cts.Cancel();
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() => store.RefreshAsync(cts.Token));
+    }
+
+    [Fact]
+    public async Task ReShade_SiteTimeout_FallsBackToGitHubTags()
+    {
+        var handler = new FakeGitHub(r =>
+        {
+            var url = r.RequestUri!.ToString();
+            if (url.StartsWith(ComponentStore.ReShadeSite)) throw new TaskCanceledException("timed out");
+            if (url.Contains(ComponentStore.ReShadeRepo + "/tags")) return Json("""[{"name":"v6.4.1"},{"name":"v6.3.3"}]""");
+            if (url.StartsWith("https://api.github.com/")) return Json("[]");
+            return new HttpResponseMessage(HttpStatusCode.NotFound);
+        });
+        var store = new ComponentStore(new GitHubClient(handler), () => true);
+        await store.RefreshAsync(default);
+        Assert.Equal("6.4.1", store.ReShade?.Tag);
+    }
 }
