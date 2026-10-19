@@ -10,11 +10,12 @@
     <Color x:Key="BorderStrongColor">#363636</Color>
     <Color x:Key="TextColor">#EDEDED</Color>
     <Color x:Key="MutedColor">#8C8C8C</Color>
-    <Color x:Key="DimColor">#5C5C5C</Color>
+    <Color x:Key="DimColor">#6E6E6E</Color>
     <Color x:Key="AccentColor">#76B900</Color>
     <Color x:Key="AccentHoverColor">#86CC0A</Color>
     <Color x:Key="WarnColor">#E0A100</Color>
-    <Color x:Key="DangerColor">#E5484D</Color>
+    <Color x:Key="DangerColor">#EC5D61</Color>
+    <Color x:Key="InputBorderColor">#6E6E6E</Color>
 
     <SolidColorBrush x:Key="Bg" Color="{StaticResource BgColor}" />
     <SolidColorBrush x:Key="Surface" Color="{StaticResource SurfaceColor}" />
@@ -25,13 +26,14 @@
     <SolidColorBrush x:Key="Text" Color="{StaticResource TextColor}" />
     <SolidColorBrush x:Key="Muted" Color="{StaticResource MutedColor}" />
     <SolidColorBrush x:Key="Dim" Color="{StaticResource DimColor}" />
+    <SolidColorBrush x:Key="InputBorder" Color="{StaticResource InputBorderColor}" />
     <SolidColorBrush x:Key="Accent" Color="{StaticResource AccentColor}" />
     <SolidColorBrush x:Key="AccentHover" Color="{StaticResource AccentHoverColor}" />
     <SolidColorBrush x:Key="AccentSoft" Color="#1A76B900" />
     <SolidColorBrush x:Key="Warn" Color="{StaticResource WarnColor}" />
     <SolidColorBrush x:Key="WarnSoft" Color="#1AE0A100" />
     <SolidColorBrush x:Key="Danger" Color="{StaticResource DangerColor}" />
-    <SolidColorBrush x:Key="DangerSoft" Color="#1AE5484D" />
+    <SolidColorBrush x:Key="DangerSoft" Color="#1AEC5D61" />
 
     <FontFamily x:Key="UiFont">Segoe UI Variable Text, Segoe UI</FontFamily>
     <FontFamily x:Key="DisplayFont">Segoe UI Variable Display, Segoe UI</FontFamily>
@@ -39,6 +41,17 @@
     <FontFamily x:Key="IconFont">Segoe Fluent Icons, Segoe MDL2 Assets</FontFamily>
 
     <BooleanToVisibilityConverter x:Key="BoolToVis" />
+
+    <!-- Keyboard focus ring (only drawn for keyboard focus) -->
+    <Style x:Key="FocusRing">
+        <Setter Property="Control.Template">
+            <Setter.Value>
+                <ControlTemplate>
+                    <Rectangle Margin="-3" Stroke="{StaticResource Text}" StrokeThickness="1.5" RadiusX="4" RadiusY="4" />
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
+    </Style>
 
     <!-- Text -->
     <Style x:Key="H1" TargetType="TextBlock">
@@ -49,7 +62,7 @@
         <Setter Property="TextTrimming" Value="CharacterEllipsis" />
     </Style>
     <Style x:Key="Caps" TargetType="TextBlock">
-        <Setter Property="FontSize" Value="10.5" />
+        <Setter Property="FontSize" Value="11.5" />
         <Setter Property="FontWeight" Value="SemiBold" />
         <Setter Property="Foreground" Value="{StaticResource Muted}" />
     </Style>
@@ -78,7 +91,7 @@
         <Setter Property="VerticalAlignment" Value="Center" />
     </Style>
     <Style x:Key="BadgeText" TargetType="TextBlock">
-        <Setter Property="FontSize" Value="10" />
+        <Setter Property="FontSize" Value="11" />
         <Setter Property="FontWeight" Value="SemiBold" />
         <Setter Property="Foreground" Value="{StaticResource Muted}" />
     </Style>
@@ -93,7 +106,7 @@
         <Setter Property="FontSize" Value="12.5" />
         <Setter Property="FontWeight" Value="SemiBold" />
         <Setter Property="Cursor" Value="Hand" />
-        <Setter Property="FocusVisualStyle" Value="{x:Null}" />
+        <Setter Property="FocusVisualStyle" Value="{StaticResource FocusRing}" />
         <Setter Property="SnapsToDevicePixels" Value="True" />
         <Setter Property="Template">
             <Setter.Value>
@@ -194,7 +207,7 @@
         <Setter Property="Background" Value="Transparent" />
         <Setter Property="FontFamily" Value="{StaticResource IconFont}" />
         <Setter Property="FontSize" Value="10" />
-        <Setter Property="FocusVisualStyle" Value="{x:Null}" />
+        <Setter Property="FocusVisualStyle" Value="{StaticResource FocusRing}" />
         <Setter Property="WindowChrome.IsHitTestVisibleInChrome" Value="True" />
         <Setter Property="Template">
             <Setter.Value>
@@ -236,7 +249,7 @@
         <Setter Property="FontSize" Value="11.5" />
         <Setter Property="FontWeight" Value="SemiBold" />
         <Setter Property="Cursor" Value="Hand" />
-        <Setter Property="FocusVisualStyle" Value="{x:Null}" />
+        <Setter Property="FocusVisualStyle" Value="{StaticResource FocusRing}" />
         <Setter Property="Template">
             <Setter.Value>
                 <ControlTemplate TargetType="RadioButton">
@@ -262,7 +275,7 @@
     <Style TargetType="TextBox">
         <Setter Property="Foreground" Value="{StaticResource Text}" />
         <Setter Property="Background" Value="{StaticResource Bg}" />
-        <Setter Property="BorderBrush" Value="{StaticResource LineStrong}" />
+        <Setter Property="BorderBrush" Value="{StaticResource InputBorder}" />
         <Setter Property="BorderThickness" Value="1" />
         <Setter Property="CaretBrush" Value="{StaticResource Accent}" />
         <Setter Property="SelectionBrush" Value="{StaticResource Accent}" />
@@ -275,7 +288,7 @@
                     <Border x:Name="Bd" Background="{TemplateBinding Background}" BorderBrush="{TemplateBinding BorderBrush}"
                             BorderThickness="{TemplateBinding BorderThickness}" CornerRadius="3">
                         <Grid>
-                            <TextBlock x:Name="Hint" Text="{TemplateBinding Tag}" Foreground="{StaticResource Dim}" Margin="{TemplateBinding Padding}"
+                            <TextBlock x:Name="Hint" Text="{TemplateBinding Tag}" Foreground="{StaticResource Muted}" Margin="{TemplateBinding Padding}"
                                        Padding="2,0,0,0" VerticalAlignment="Center" Visibility="Collapsed" IsHitTestVisible="False" />
                             <ScrollViewer x:Name="PART_ContentHost" Margin="{TemplateBinding Padding}" VerticalAlignment="Center" />
                         </Grid>
@@ -300,7 +313,7 @@
     <Style TargetType="CheckBox">
         <Setter Property="Foreground" Value="{StaticResource Text}" />
         <Setter Property="Cursor" Value="Hand" />
-        <Setter Property="FocusVisualStyle" Value="{x:Null}" />
+        <Setter Property="FocusVisualStyle" Value="{StaticResource FocusRing}" />
         <Setter Property="Template">
             <Setter.Value>
                 <ControlTemplate TargetType="CheckBox">
@@ -310,7 +323,7 @@
                             <ColumnDefinition Width="*" />
                         </Grid.ColumnDefinitions>
                         <Border x:Name="Track" Width="30" Height="16" CornerRadius="8" Background="{StaticResource Surface2}"
-                                BorderBrush="{StaticResource LineStrong}" BorderThickness="1" VerticalAlignment="Center">
+                                BorderBrush="{StaticResource InputBorder}" BorderThickness="1" VerticalAlignment="Center">
                             <Ellipse x:Name="Knob" Width="10" Height="10" Fill="{StaticResource Muted}" HorizontalAlignment="Left" Margin="2,0" />
                         </Border>
                         <ContentPresenter Grid.Column="1" Margin="10,0,0,0" VerticalAlignment="Center" />
@@ -337,7 +350,7 @@
         <Setter Property="Template">
             <Setter.Value>
                 <ControlTemplate TargetType="ToggleButton">
-                    <Border x:Name="Bd" Background="{StaticResource Bg}" BorderBrush="{StaticResource LineStrong}" BorderThickness="1" CornerRadius="3">
+                    <Border x:Name="Bd" Background="{StaticResource Bg}" BorderBrush="{StaticResource InputBorder}" BorderThickness="1" CornerRadius="3">
                         <TextBlock Text="&#xE70D;" Style="{StaticResource Icon}" FontSize="9" Foreground="{StaticResource Muted}"
                                    HorizontalAlignment="Right" Margin="0,0,10,0" />
                     </Border>
@@ -361,12 +374,16 @@
         <Setter Property="Template">
             <Setter.Value>
                 <ControlTemplate TargetType="ComboBoxItem">
-                    <Border x:Name="Bd" Background="Transparent" Padding="{TemplateBinding Padding}">
-                        <ContentPresenter />
-                    </Border>
+                    <Grid>
+                        <Border x:Name="Bd" Background="Transparent" Padding="{TemplateBinding Padding}">
+                            <ContentPresenter />
+                        </Border>
+                        <Border x:Name="Bar" Width="2" HorizontalAlignment="Left" Background="{StaticResource Accent}" Visibility="Hidden" />
+                    </Grid>
                     <ControlTemplate.Triggers>
                         <Trigger Property="IsHighlighted" Value="True">
-                            <Setter TargetName="Bd" Property="Background" Value="{StaticResource Hover}" />
+                            <Setter TargetName="Bd" Property="Background" Value="{StaticResource AccentSoft}" />
+                            <Setter TargetName="Bar" Property="Visibility" Value="Visible" />
                         </Trigger>
                         <Trigger Property="IsSelected" Value="True">
                             <Setter Property="Foreground" Value="{StaticResource Accent}" />
@@ -381,7 +398,7 @@
         <Setter Property="Foreground" Value="{StaticResource Text}" />
         <Setter Property="FontSize" Value="12.5" />
         <Setter Property="MinHeight" Value="31" />
-        <Setter Property="FocusVisualStyle" Value="{x:Null}" />
+        <Setter Property="FocusVisualStyle" Value="{StaticResource FocusRing}" />
         <Setter Property="ScrollViewer.CanContentScroll" Value="True" />
         <Setter Property="Template">
             <Setter.Value>
@@ -541,7 +558,7 @@
     </Style>
     <Style x:Key="GameItem" TargetType="ListBoxItem">
         <Setter Property="Foreground" Value="{StaticResource Text}" />
-        <Setter Property="FocusVisualStyle" Value="{x:Null}" />
+        <Setter Property="FocusVisualStyle" Value="{StaticResource FocusRing}" />
         <Setter Property="Cursor" Value="Hand" />
         <Setter Property="Template">
             <Setter.Value>

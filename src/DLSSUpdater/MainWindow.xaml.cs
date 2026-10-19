@@ -92,8 +92,8 @@ public partial class MainWindow : Window
     private void UpdateMaximized()
     {
         // A chrome-less maximized window overhangs the screen by the resize border.
-        RootGrid.Margin = WindowState == WindowState.Maximized ? new Thickness(7) : new Thickness(0);
-        MaxButton.Content = WindowState == WindowState.Maximized ? "î¤£" : "î¤¢";
+        RootGrid.Margin = WindowState == WindowState.Maximized ? SystemParameters.WindowResizeBorderThickness : new Thickness(0);
+        MaxButton.Content = WindowState == WindowState.Maximized ? "" : "";
     }
 
     private void OnMinimize(object sender, RoutedEventArgs e) => WindowState = WindowState.Minimized;
