@@ -427,9 +427,12 @@ public sealed partial class SettingsViewModel : ObservableObject
     [RelayCommand]
     private async Task RemoveDfc()
     {
-        try { _main.S.Store.RemoveDfcImport(); }
-        catch (IOException ex) { Log.Error("Could not remove the imported Deep Fried Chicken files", ex); }
-        Log.Info($"Removed imported {ComponentStore.DfcFile}");
+        try
+        {
+            _main.S.Store.RemoveDfcImport();
+            Log.Info($"Removed imported {ComponentStore.DfcFile}");
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) { Log.Error("Could not remove the imported Deep Fried Chicken files", ex); }
         await _main.RefreshLocalComponentsAsync();
         ApplyDfcCompat();
         OnPropertyChanged(nameof(DfcInfo));
@@ -451,9 +454,12 @@ public sealed partial class SettingsViewModel : ObservableObject
     [RelayCommand]
     private async Task UseReShadeDownload()
     {
-        try { File.Delete(_main.S.Store.ReShadePath); }
-        catch (IOException ex) { Log.Error("Could not remove the imported ReShade64.dll", ex); }
-        Log.Info("Removed imported ReShade64.dll; installs use the reshade.me download");
+        try
+        {
+            File.Delete(_main.S.Store.ReShadePath);
+            Log.Info("Removed imported ReShade64.dll; installs use the reshade.me download");
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) { Log.Error("Could not remove the imported ReShade64.dll", ex); }
         await RefreshReShadeAsync();
     }
 
