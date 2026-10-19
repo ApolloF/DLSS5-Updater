@@ -17,11 +17,13 @@ public sealed partial class ComponentStore
 {
     private readonly SemaphoreSlim _lecramCheck = new(1, 1);
 
-    public Task CheckLecramAsync(AppSettings settings, CancellationToken ct) => CheckLecramAsync(settings, new MediaFireClient(), ct);
+    /// <param name="force">Check even when automatic checks are off (the Check now button).</param>
+    public Task CheckLecramAsync(AppSettings settings, CancellationToken ct, bool force = false) =>
+        CheckLecramAsync(settings, new MediaFireClient(), ct, force);
 
-    internal async Task CheckLecramAsync(AppSettings settings, MediaFireClient client, CancellationToken ct)
+    internal async Task CheckLecramAsync(AppSettings settings, MediaFireClient client, CancellationToken ct, bool force = false)
     {
-        if (!settings.AutoDownloadLecram || !await _lecramCheck.WaitAsync(0, ct)) return;
+        if (!(settings.AutoDownloadLecram || force) || !await _lecramCheck.WaitAsync(0, ct)) return;
         var temp = Path.Combine(AppPaths.Cache, "lecram-download-" + Guid.NewGuid().ToString("N"));
         try
         {
@@ -56,7 +58,7 @@ public sealed partial class ComponentStore
         catch (Exception ex) when (ex is HttpRequestException or OperationCanceledException or IOException or InvalidDataException
                                       or UnauthorizedAccessException or System.Text.Json.JsonException or KeyNotFoundException or InvalidOperationException or FormatException)
         {
-            settings.LecramLastResult = "Check failed; keeping the Lecram library. " + ex.Message;
+            settings.LecramLastResult = "Check failed; keeping the Lecram library. " + (UserErrors.IsCurated(ex) ? ex.Message : "The details are in the log.");
             Log.Info("Lecram: " + settings.LecramLastResult);
         }
         finally

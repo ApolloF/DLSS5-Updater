@@ -18,10 +18,15 @@ public sealed partial class ReleaseNewsViewModel(Component component, string nam
     [ObservableProperty] private string? _url;
     [ObservableProperty] private ReleaseSummary _summary = ReleaseSummary.Empty;
     /// <summary>Released after the last one the user looked at; shown as a dot on the chip.</summary>
-    [ObservableProperty] private bool _isNew;
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(AutomationName))]
+    private bool _isNew;
     [ObservableProperty] private bool _isOpen;
 
     public bool Available => Tag is not null;
+
+    /// <summary>What a screen reader says for the chip; the accent dot for a new release is colour-only otherwise.</summary>
+    public string AutomationName => $"Release notes for {Name}{(IsNew ? ", new release" : "")}";
 
     public void Load(ReleaseInfo? r)
     {
