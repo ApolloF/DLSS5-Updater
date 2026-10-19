@@ -63,7 +63,7 @@ build) and notices (C). From README, release notes and strings (C/D):
   strings found (D).
 - Finds `dlss5-nr.addon64` / `renodx-dlss5.addon64` "on every drive"; "Update all" updates every game behind, hand-made
   installs included, and `-Action adopt` takes one over (C). A game this app manages would be updated by it too. No
-  ShortFuse (`renodx-dlss.addon64`) or DLSS Updater handling found (D).
+  ShortFuse (`renodx-dlss.addon64`) or DLSS5 Updater handling found (D).
 
 ## ReShade.ini
 
@@ -183,7 +183,7 @@ App behaviour: when installing a Lecram v11 build with an `NRHookPoint` override
 
 ## Update source
 
-DLSS Updater checks the same public MediaFire folder as the author's installer (DLSS5-NR-Setup). Method: static analysis of
+DLSS5 Updater checks the same public MediaFire folder as the author's installer (DLSS5-NR-Setup). Method: static analysis of
 `DLSS5-NR-Setup-v11.0.0-beta.22.exe` (never run, no network used for the analysis); the live listing was then checked once.
 
 - **Listing** (public, no login): `GET https://www.mediafire.com/api/1.5/folder/get_content.php?folder_key=<key>&content_type=files&chunk=<n>&response_format=json`.
@@ -202,7 +202,7 @@ DLSS Updater checks the same public MediaFire folder as the author's installer (
   (schema 1, `version` `v11.0.0-beta.22`, `kind` `v11`). The app finds the end-of-central-directory record, reads the ZIP in
   memory and extracts only the root `dlss5-nr.addon64`; the exe is deleted afterwards.
 - **Live state (2026-10-18):** the folder lists `DLSS5-NR-Setup-v11.0.0-beta.24.exe` (8,981,402 bytes) and `licenses.txt`.
-- **In the app.** The listing is cached under `%LocalAppData%\DLSSUpdater\cache` (ETag/Last-Modified sent when present). One
+- **In the app.** The listing is cached under `%LocalAppData%\DLSS5Updater\cache` (ETag/Last-Modified sent when present). One
   listing per check, requests in sequence. The add-on goes through the normal import (labels, generation, dedupe by SHA-256) and
   becomes the library default only when newer than the current default. Games are never switched. Offline, a broken listing or an
   exe without ZIP is logged once and the library stays as it is. Settings → Local components has "Check for new builds
@@ -211,7 +211,7 @@ DLSS Updater checks the same public MediaFire folder as the author's installer (
 
 ## App support
 
-DLSS Updater imports the add-on (or fetches v11 builds from the author's public channel, see "Update source") and installs it per game in ReShade-only mode, with the same
+DLSS5 Updater imports the add-on (or fetches v11 builds from the author's public channel, see "Update source") and installs it per game in ReShade-only mode, with the same
 prerequisites as ShortFuse's add-on: ReShade 6+, a game with native DLSS and an imported `nvngx_dlssnr.dll`. It excludes
 OptiScaler-NR and Deep Fried Chicken. It is not added to `[ADDON] LoadFromDllMain`, since nothing here shows it needs early load.
 

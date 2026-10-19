@@ -117,7 +117,7 @@ Hidden / no effect: `DLSSQualityMode`, `DLSSPreset*`, `DLSSAutoExposure`, `Pedes
 
 ## App
 
-DLSS Updater installs the x64 add-on, helper and both effects, writes `[Uplift] Enabled=1`, and places the user-supplied
+DLSS5 Updater installs the x64 add-on, helper and both effects, writes `[Uplift] Enabled=1`, and places the user-supplied
 runtime in `GITC-Uplift\nvngx_dlssnr.dll`. It never downloads the runtime. ReShade + add-ons mode is required; other NR
 routes are displaced and restored on uninstall. Releases newer than tested v1.4.2 warn in the log.
 

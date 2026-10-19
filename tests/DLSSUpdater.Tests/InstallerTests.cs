@@ -786,7 +786,7 @@ public class InstallerTests : IDisposable
         await installer.InstallAsync(Game(), _target, o, null, default);
         Assert.Equal("OPTI-1", T("dxgi.dll"));
 
-        // A click in DLSS Updater (no pin) moves to the newest release.
+        // A click in DLSS5 Updater (no pin) moves to the newest release.
         await installer.InstallAsync(Game(), _target, Full, null, default);
         Assert.Equal("OPTI-2", T("dxgi.dll"));
         Assert.Equal("MFG-2", T(ComponentStore.MfgFile));

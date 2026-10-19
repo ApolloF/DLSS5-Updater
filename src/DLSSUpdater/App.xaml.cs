@@ -19,6 +19,8 @@ public partial class App : Application
         {
             // Run by the uninstaller so old add-on links from earlier versions get cleaned up; only removes the link when it points at this exe.
             ShutdownMode = ShutdownMode.OnExplicitShutdown;
+            // Don't move anything here, and don't let the log line create an empty new folder next to the old data.
+            if (!Directory.Exists(AppPaths.Root) && Directory.Exists(AppPaths.LegacyRoot)) AppPaths.Root = AppPaths.LegacyRoot;
             try { Addon.AddonRegistration.UnregisterIfThisExe(); }
             catch (Exception ex) { Log.Error("Remove old add-on link", ex); }
             Shutdown();
@@ -35,15 +37,30 @@ public partial class App : Application
             if (demo)
             {
                 // A screenshot run is unattended: exit with an error code instead of waiting on a dialog.
-                if (Demo.ScreenshotArg(e.Args) is null) Views.Dialog.Show("DLSS Updater", "A DLSS Updater demo is already running.");
+                if (Demo.ScreenshotArg(e.Args) is null) Views.Dialog.Show("DLSS5 Updater", "A DLSS5 Updater demo is already running.");
                 Shutdown(1);
             }
             else
             {
-                if (!SingleInstance.ActivateOther()) Views.Dialog.Show("DLSS Updater", "DLSS Updater is already running.");
+                if (!SingleInstance.ActivateOther()) Views.Dialog.Show("DLSS5 Updater", "DLSS5 Updater is already running.");
                 Shutdown();
             }
             return;
+        }
+        // Before anything logs: Log creates the data folder, which would block the move.
+        if (!demo)
+        {
+            var legacy = AppPaths.LegacyRoot;
+            var target = AppPaths.Root;
+            var pending = !Directory.Exists(target) && Directory.Exists(legacy);
+            AppPaths.Root = AppPaths.Migrate(legacy, target);
+            if (pending)
+            {
+                if (AppPaths.Root == target) Log.Info($"Moved data folder from {legacy} to {target}");
+                else Log.Warn($"Could not move {legacy} to {target}; using the old folder this time.");
+            }
+            else if (Directory.Exists(legacy) && Directory.EnumerateFileSystemEntries(legacy).Any())
+                Log.Warn($"Both {legacy} and {target} exist; using {target}. Settings in the old folder are not read.");
         }
         DispatcherUnhandledException += OnUnhandled;
         TaskScheduler.UnobservedTaskException += (_, args) =>
@@ -67,7 +84,7 @@ public partial class App : Application
     private void OnUnhandled(object sender, DispatcherUnhandledExceptionEventArgs e)
     {
         Log.Error("Unhandled", e.Exception);
-        Views.Dialog.Show("Something went wrong", "DLSS Updater kept running. The details are in the log.");
+        Views.Dialog.Show("Something went wrong", "DLSS5 Updater kept running. The details are in the log.");
         e.Handled = true;
         // Failed before the main window was up: nothing would ever close the process.
         if (MainWindow is not { IsLoaded: true }) Shutdown(1);

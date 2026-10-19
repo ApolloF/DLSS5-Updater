@@ -140,4 +140,82 @@ public sealed class StartupTests : IDisposable
         thread.Start();
         thread.Join();
     }
+
+    private static string TempDir() => Path.Combine(Path.GetTempPath(), "dlssu-mig-" + Guid.NewGuid().ToString("N")[..8]);
+
+    [Fact]
+    public void Migrate_MovesLegacyFolder_WhenOnlyItExists()
+    {
+        var legacy = TempDir();
+        var root = TempDir();
+        try
+        {
+            Directory.CreateDirectory(Path.Combine(legacy, "cache"));
+            File.WriteAllText(Path.Combine(legacy, "settings.json"), "{}");
+            File.WriteAllText(Path.Combine(legacy, "cache", "a.txt"), "x");
+
+            Assert.Equal(root, AppPaths.Migrate(legacy, root));
+
+            Assert.False(Directory.Exists(legacy));
+            Assert.Equal("{}", File.ReadAllText(Path.Combine(root, "settings.json")));
+            Assert.Equal("x", File.ReadAllText(Path.Combine(root, "cache", "a.txt")));
+        }
+        finally { Cleanup(legacy, root); }
+    }
+
+    [Fact]
+    public void Migrate_KeepsBoth_WhenBothExist()
+    {
+        var legacy = TempDir();
+        var root = TempDir();
+        try
+        {
+            Directory.CreateDirectory(legacy);
+            Directory.CreateDirectory(root);
+            File.WriteAllText(Path.Combine(legacy, "old.txt"), "old");
+
+            Assert.Equal(root, AppPaths.Migrate(legacy, root));
+
+            Assert.True(File.Exists(Path.Combine(legacy, "old.txt")));
+            Assert.False(File.Exists(Path.Combine(root, "old.txt")));
+        }
+        finally { Cleanup(legacy, root); }
+    }
+
+    [Fact]
+    public void Migrate_DoesNothing_WhenNeitherExists()
+    {
+        var legacy = TempDir();
+        var root = TempDir();
+
+        Assert.Equal(root, AppPaths.Migrate(legacy, root));
+
+        Assert.False(Directory.Exists(legacy));
+        Assert.False(Directory.Exists(root));
+    }
+
+    [Fact]
+    public void Migrate_ReturnsLegacy_WhenAFileIsLocked()
+    {
+        var legacy = TempDir();
+        var root = TempDir();
+        try
+        {
+            Directory.CreateDirectory(legacy);
+            var file = Path.Combine(legacy, "log.txt");
+            File.WriteAllText(file, "x");
+            using (new FileStream(file, FileMode.Open, FileAccess.Read, FileShare.None))
+                Assert.Equal(legacy, AppPaths.Migrate(legacy, root));
+
+            Assert.True(File.Exists(file));
+            Assert.False(Directory.Exists(root));
+        }
+        finally { Cleanup(legacy, root); }
+    }
+
+    private static void Cleanup(params string[] dirs)
+    {
+        foreach (var d in dirs)
+            try { Directory.Delete(d, true); } catch (IOException) { }
+    }
 }

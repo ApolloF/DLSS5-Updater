@@ -91,7 +91,7 @@ Setting struct (1016, for the next diff): global flag at `+0x338`, type byte at 
 
 ## App support
 
-DLSS Updater imports the add-on (never downloads it: it is not published on any official GitHub) and installs it per game in
+DLSS5 Updater imports the add-on (never downloads it: it is not published on any official GitHub) and installs it per game in
 ReShade-only mode with ReShade 6+, a game with native DLSS and an imported `nvngx_dlssnr.dll`. It adds the add-on to
 `[ADDON] LoadFromDllMain`, replaces OptiScaler-NR and excludes Deep Fried Chicken; Lecram's add-on may stay next to it.
 

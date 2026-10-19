@@ -42,10 +42,10 @@ jobs:
 
       - uses: actions/upload-artifact@v7
         with:
-          name: DLSSUpdater
+          name: DLSS5Updater
           path: |
-            publish/DLSSUpdater.exe
-            publish/DLSSUpdater-Setup-*.exe
+            publish/DLSS5Updater.exe
+            publish/DLSS5Updater-Setup-*.exe
 
       - name: Release notes
         id: notes
@@ -62,5 +62,5 @@ jobs:
         with:
           body_path: ${{ steps.notes.outputs.path }}
           files: |
-            publish/DLSSUpdater.exe
-            publish/DLSSUpdater-Setup-*.exe
+            publish/DLSS5Updater.exe
+            publish/DLSS5Updater-Setup-*.exe

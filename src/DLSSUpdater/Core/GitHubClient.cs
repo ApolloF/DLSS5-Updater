@@ -60,7 +60,7 @@ public sealed class GitHubClient
     private static HttpClient CreateHttp(HttpMessageHandler handler)
     {
         var http = new HttpClient(handler) { Timeout = Timeout.InfiniteTimeSpan };
-        http.DefaultRequestHeaders.UserAgent.Add(new ProductInfoHeaderValue("DLSSUpdater", "1.0"));
+        http.DefaultRequestHeaders.UserAgent.Add(new ProductInfoHeaderValue("DLSS5Updater", "1.0"));
         return http;
     }
 

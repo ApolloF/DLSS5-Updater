@@ -5,14 +5,17 @@ using System.Runtime.InteropServices;
 namespace DLSSUpdater.Core;
 
 /// <summary>
-/// One DLSS Updater per Windows session: two copies would write the same settings, caches and game folders at once.
+/// One DLSS5 Updater per Windows session: two copies would write the same settings, caches and game folders at once.
 /// Held through a named mutex for the life of the process.
 /// </summary>
 public sealed class SingleInstance : IDisposable
 {
+    // The mutex names keep the pre-rename name on purpose: an old and a new copy must never run at once,
+    // because the first start of a new copy moves the old data folder.
     public const string DefaultName = @"Local\DLSSUpdater.SingleInstance";
     /// <summary>The demo (--demo) uses its own temp data folder, so it only excludes other demos.</summary>
     public const string DemoName = @"Local\DLSSUpdater.Demo";
+    private const string LegacyProcessName = "DLSSUpdater";
 
     private readonly Mutex _mutex;
 
@@ -51,7 +54,8 @@ public sealed class SingleInstance : IDisposable
     public static bool ActivateOther()
     {
         using var self = Process.GetCurrentProcess();
-        foreach (var p in Process.GetProcessesByName(self.ProcessName))
+        // The pre-rename DLSSUpdater.exe holds the same mutex, so it may be the copy that is running.
+        foreach (var p in new[] { self.ProcessName, LegacyProcessName }.Distinct(StringComparer.OrdinalIgnoreCase).SelectMany(Process.GetProcessesByName))
         {
             using (p)
             {
