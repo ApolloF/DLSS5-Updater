@@ -54,6 +54,8 @@ public sealed record InstallOptions
     public string? OptiTag { get; init; }
     /// <summary>MFG Unlock release to install from the cache ("local" = the imported file); null = the newest.</summary>
     public string? MfgTag { get; init; }
+    /// <summary>MFG Unlock is off here only because the installed release left the cache: the add-on in the game stays as it is.</summary>
+    public bool KeepMfg { get; init; }
 
     /// <summary>
     /// The same install with OptiScaler-NR and MFG Unlock held at the versions the game already has, for automatic
@@ -65,6 +67,7 @@ public sealed record InstallOptions
         Opti = Opti && m.OptiTag is { } ot && ComponentStore.IsCached(Component.OptiScaler, ot),
         OptiTag = m.OptiTag,
         Mfg = Mfg && m.MfgTag is { } mt && ComponentStore.HasMfg(mt),
+        KeepMfg = Mfg && !(m.MfgTag is { } kt && ComponentStore.HasMfg(kt)),
         MfgTag = m.MfgTag,
         UpliftTag = m.UpliftTag,
         DlssNrId = m.DlssNrId,
@@ -245,6 +248,7 @@ public sealed class Installer(ComponentStore store)
                 if (!o.Lecram && m.Lecram && (o.ReShade || pkg is not null)) RemoveLecram(ctx);
                 if (!o.Dfc && m.Dfc && (o.ReShade || pkg is not null)) RemoveDfc(ctx);
                 if (!o.Uplift && m.Uplift && (o.ReShade || pkg is not null)) RemoveUplift(ctx);
+                if (!o.Mfg && !o.KeepMfg && m.Mfg && (o.ReShade || pkg is not null)) RemoveMfg(ctx);
 
                 if (pkg is not null)
                 {
@@ -588,6 +592,15 @@ public sealed class Installer(ComponentStore store)
         Log.Info("  Lecram's DLSS5 add-on removed");
     }
 
+    /// <summary>The install no longer has MFG Unlock: take the add-on out (restoring what it replaced).</summary>
+    private static void RemoveMfg(Ctx ctx)
+    {
+        RemoveOwned(ctx, Path.Combine(ctx.Target, ComponentStore.MfgFile));
+        ctx.M.Mfg = false;
+        ctx.M.MfgTag = null;
+        Log.Info($"  {ComponentStore.MfgFile} removed");
+    }
+
     private static void RemoveUplift(Ctx ctx)
     {
         foreach (var rel in ComponentStore.UpliftFiles) RemoveOwned(ctx, Path.Combine(ctx.Target, rel));
@@ -770,11 +783,13 @@ public sealed class Installer(ComponentStore store)
 
     /// <summary>
     /// OptiScaler-NR v0.9+ can unlock MFG itself ([DLSSG] AdaMfgUnlock / AmpereMfgUnlock) and says never to combine that
-    /// with an external unlocker, which the MFG Unlock add-on is. Checked before anything is fetched or written.
+    /// with an external unlocker, which the MFG Unlock add-on is. Checked before anything is fetched or written. The add-on
+    /// already in the game counts too while this run leaves it there (<see cref="InstallOptions.KeepMfg"/>).
     /// </summary>
     private static void EnsureNoDoubleMfgUnlock(string targetDir, InstallOptions o)
     {
-        if (!o.Mfg || o.ReShadeOnly) return;
+        var addonStays = o.KeepMfg && o.Opti && InstallManifest.Read(targetDir)?.Mfg == true;
+        if (!(o.Mfg || addonStays) || o.ReShadeOnly) return;
         var iniPath = Path.Combine(targetDir, "OptiScaler.ini");
         // An MFG-only update still runs next to the OptiScaler already in the game.
         if (!o.Opti) { if (!File.Exists(iniPath)) return; o = o with { Overrides = [], CarryOverIni = true }; }

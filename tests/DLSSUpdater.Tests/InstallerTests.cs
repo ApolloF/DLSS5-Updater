@@ -1098,6 +1098,45 @@ public class InstallerTests : IDisposable
     }
 
     [Fact]
+    public async Task MfgUnticked_RemovesTheAddon_SoTheBuiltInUnlockCanTakeOver()
+    {
+        var installer = new Installer(_store);
+        await installer.InstallAsync(Game(), _target, Full, null, default);
+        Assert.Equal("MFG-1", T(ComponentStore.MfgFile));
+
+        var builtIn = Full with { Mfg = false, Overrides = [.. ConfigProfile.Recommended(), new("DLSSG", "AdaMfgUnlock", "true")] };
+        await installer.InstallAsync(Game(), _target, builtIn, null, default);
+        Assert.False(File.Exists(Path.Combine(_target, ComponentStore.MfgFile)));
+        Assert.Equal("true", IniFile.Load(Path.Combine(_target, "OptiScaler.ini")).Get("DLSSG", "AdaMfgUnlock"));
+        var m = InstallManifest.Read(_target)!;
+        Assert.False(m.Mfg);
+        Assert.Null(m.MfgTag);
+        Assert.False(m.Owns(Rel(Path.Combine(_target, ComponentStore.MfgFile))));
+
+        // "Update all" reproduces the record: no add-on, so nothing clashes with the built-in unlock.
+        await installer.InstallAsync(Game(), _target, builtIn with { Mfg = m.Mfg }, null, default);
+        Assert.False(File.Exists(Path.Combine(_target, ComponentStore.MfgFile)));
+    }
+
+    [Fact]
+    public async Task MfgReleaseLeftTheCache_ReinstallKeepsTheAddon_AndStillGuardsTheBuiltInUnlock()
+    {
+        var installer = new Installer(_store);
+        await installer.InstallAsync(Game(), _target, Full, null, default);
+        Directory.Delete(ComponentStore.TagDir(Component.MfgUnlock, "1.0"), true);
+
+        var o = Full.KeepingInstalledVersions(InstallManifest.Read(_target)!);
+        Assert.False(o.Mfg);
+        Assert.True(o.KeepMfg);
+        await installer.InstallAsync(Game(), _target, o, null, default);
+        Assert.Equal("MFG-1", T(ComponentStore.MfgFile));
+        Assert.True(InstallManifest.Read(_target)!.Mfg);
+
+        var withBuiltIn = o with { Overrides = [.. ConfigProfile.Recommended(), new("DLSSG", "AdaMfgUnlock", "true")] };
+        await Assert.ThrowsAsync<InvalidOperationException>(() => installer.InstallAsync(Game(), _target, withBuiltIn, null, default));
+    }
+
+    [Fact]
     public async Task DlssSwap_CopyFails_GameKeepsItsDll_AndRetryWorks()
     {
         var dll = Engine("nvngx_dlss.dll");
