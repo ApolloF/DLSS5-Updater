@@ -128,7 +128,7 @@ public sealed class GitHubClient
             var res = await SendApiAsync(url, token, cached, cts.Token);
             try
             {
-                if (token is not null && IsTokenRejected(res))
+                if (token is not null && await IsTokenRejectedAsync(res, cts.Token))
                 {
                     if (Interlocked.Exchange(ref _rejectedToken, token) != token)
                         Log.Warn($"GitHub rejected the saved access token ({(int)res.StatusCode}); it may be expired or revoked. " +
@@ -167,12 +167,20 @@ public sealed class GitHubClient
         return await _http.SendAsync(req, ct);
     }
 
-    /// <summary>401, or a 403 without the rate-limit signs (no requests left, or a Retry-After for the secondary limit).</summary>
-    internal static bool IsTokenRejected(HttpResponseMessage res) =>
-        res.StatusCode == HttpStatusCode.Unauthorized
-        || res.StatusCode == HttpStatusCode.Forbidden
-           && res.Headers.RetryAfter is null
-           && !(res.Headers.TryGetValues("X-RateLimit-Remaining", out var left) && left.FirstOrDefault() == "0");
+    /// <summary>
+    /// 401, or a 403 that isn't a rate limit. GitHub's rate-limit 403s carry no requests left, a Retry-After, or (the
+    /// secondary limit, which may have neither) a message about the rate limit or abuse detection.
+    /// </summary>
+    internal static async Task<bool> IsTokenRejectedAsync(HttpResponseMessage res, CancellationToken ct)
+    {
+        if (res.StatusCode == HttpStatusCode.Unauthorized) return true;
+        if (res.StatusCode != HttpStatusCode.Forbidden) return false;
+        if (res.Headers.RetryAfter is not null) return false;
+        if (res.Headers.TryGetValues("X-RateLimit-Remaining", out var left) && left.FirstOrDefault() == "0") return false;
+        var body = await res.Content.ReadAsStringAsync(ct);
+        return !body.Contains("rate limit", StringComparison.OrdinalIgnoreCase)
+               && !body.Contains("abuse", StringComparison.OrdinalIgnoreCase);
+    }
 
     public async Task DownloadAsync(string url, string dest, string label, IProgress<TransferProgress>? progress, CancellationToken ct)
     {

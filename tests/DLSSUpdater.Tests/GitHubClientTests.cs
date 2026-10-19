@@ -109,6 +109,43 @@ public sealed class GitHubClientTests : IDisposable
         Assert.DoesNotContain(_log, l => l.Contains("WARNING"));
     }
 
+    [Theory]
+    [InlineData("You have exceeded a secondary rate limit. Please wait a few minutes before you try again.")]
+    [InlineData("You have triggered an abuse detection mechanism.")]
+    public async Task SecondaryRateLimit_WithRequestsLeft_KeepsTheToken(string message)
+    {
+        await SeedCache();
+        var api = new FakeApi(_ =>
+        {
+            var res = new HttpResponseMessage(HttpStatusCode.Forbidden) { Content = new StringContent($$"""{"message":"{{message}}"}""") };
+            res.Headers.Add("X-RateLimit-Remaining", "4999");
+            return res;
+        });
+        var gh = new GitHubClient(api) { Token = "fine" };
+
+        var releases = await gh.GetReleasesAsync(Repo, 10, default);
+
+        Assert.True(Assert.Single(releases).Stale);
+        Assert.Equal(["fine"], api.Auth);
+        Assert.DoesNotContain(_log, l => l.Contains("WARNING"));
+    }
+
+    [Fact]
+    public async Task ForbiddenForTheToken_WithRequestsLeft_CountsAsRefused()
+    {
+        var api = new FakeApi(r =>
+        {
+            if (r.Headers.Authorization is null) return Ok(ReleasesJson);
+            var res = new HttpResponseMessage(HttpStatusCode.Forbidden) { Content = new StringContent("""{"message":"Resource not accessible by personal access token"}""") };
+            res.Headers.Add("X-RateLimit-Remaining", "4999");
+            return res;
+        });
+        var gh = new GitHubClient(api) { Token = "narrow" };
+        Assert.Equal("v2.0", Assert.Single(await gh.GetReleasesAsync(Repo, 10, default)).TagName);
+        Assert.Equal(["narrow", null], api.Auth);
+        Assert.Single(_log, l => l.Contains("WARNING") && l.Contains("token"));
+    }
+
     [Fact]
     public async Task NotModified_IsFresh()
     {
