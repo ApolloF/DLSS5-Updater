@@ -234,10 +234,18 @@ Since the builds went behind the author's Buy Me a Coffee, the public DLSS5 Upda
   beta.48 setup exe and extracts the add-on; its hash equals the raw file's (C). Patch 9 (beta.40) is in neither folder.
 - **In the app (private build only).** The listing is cached under `%LocalAppData%\DLSS5Updater\cache` (ETag/Last-Modified sent when present). One
   listing per check, requests in sequence. The add-on goes through the normal import (labels, generation, dedupe by SHA-256) and
-  becomes the library default only when newer than the current default. Games are never switched. Offline, a broken listing or an
+  never writes the default (see "Default build"). Games are never switched. Offline, a broken listing or an
   exe without ZIP is logged once and the library stays as it is. In the private build Settings → Local components has "Check for new builds
   automatically" (default on) and "Check now"; the public build hides both and makes no request, even when forced. The stored setting is never reset. A new build may have options beyond the last checked one; fetching it does not
   mark its configuration as checked.
+
+### Default build
+
+The default Lecram build (`AppSettings.LecramId`) is unset by default, shown as "Newest (<label>)" in Settings: it follows the newest build in
+the library, so an import or download of a newer build needs no settings write and an older import changes nothing. Picking a concrete build
+pins it; a newer import then takes over the pin, as for ShortFuse's add-on. A pinned build that is removed goes back to Newest. Settings from
+before this reset the pin once (`LecramNewestMigrated`), since pins written by the old automatic logic can't be told from the user's picks.
+Per-game build picks are untouched.
 
 ## App support
 

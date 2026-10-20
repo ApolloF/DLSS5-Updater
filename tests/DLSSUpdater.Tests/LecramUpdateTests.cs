@@ -285,7 +285,8 @@ public sealed class LecramUpdateTests : IDisposable
         var build = Assert.Single(_store.LecramBuilds);
         Assert.Equal("v11.0.0-beta.24", build.DetectedLabel);
         Assert.Equal(LecramGeneration.V11, build.Generation);
-        Assert.Equal(build.Id, settings.LecramId);
+        Assert.Null(settings.LecramId);
+        Assert.Equal(build.Id, _store.LecramBuildFor(null)!.Id);
         Assert.Equal(build.Id, settings.LecramLastBuildId);
         Assert.Equal("v11.0.0-beta.24", settings.LecramLastVersion);
         Assert.Contains("v11.0.0-beta.24", settings.LecramLastResult);
