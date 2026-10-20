@@ -22,6 +22,8 @@ public static class Demo
     public const string LatestStreamline = "v2.14.1";
     // DLSSU_DEMO_OPTI_NR=1 pretends OptiScaler-NR (ShyVortex) is selected instead of the default F5 build, to check its labels.
     private static bool OptiNr => Environment.GetEnvironmentVariable("DLSSU_DEMO_OPTI_NR") == "1";
+    // DLSSU_DEMO_ONBOARDING=1 opens the first-run setup at start, which the demo otherwise leaves out.
+    public static bool ShowOnboarding => Environment.GetEnvironmentVariable("DLSSU_DEMO_ONBOARDING") == "1";
     public static string LatestOpti => OptiNr ? "v0.9.51" : "v0.1.32" + OptiSources.F5.TagSuffix;
     private static string PreviousOpti => OptiNr ? "v0.9.47" : "v0.1.31" + OptiSources.F5.TagSuffix;
     public const string LatestMfg = "v1.4.0";

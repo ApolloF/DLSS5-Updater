@@ -74,6 +74,8 @@ Both versions keep settings and downloads in `%LocalAppData%\DLSS5Updater`, so y
 
 ## First run
 
+On a fresh install a short setup opens over the window: a welcome, the default install mode (OptiScaler F5 or OptiScaler-NR, or ReShade + add-ons with one NR add-on), and update and download choices. **Skip** or Esc on any step keeps the defaults; Enter goes to the next step. Nothing is written until you finish. People upgrading from 1.x don't see it, but **Settings → General → Run setup again** opens it any time.
+
 1. Start the app. It scans your game libraries and lists the games it finds. To add a game it missed, use **Add game** (one game folder) or **Add library** (a folder whose subfolders are games) at the bottom of the list.
 2. Add `nvngx_dlssnr.dll` if you want to use neural rendering. This file belongs to NVIDIA, and its licence does not allow other people to share it, so this app does not include it and never downloads it. You supply your own copy. Put it next to `DLSS5Updater.exe` before the first start, or open **Settings** and import it under **Local components**. The app stores it in `%LocalAppData%\DLSS5Updater\components`. You can keep several versions side by side and pick a default.
 3. You can skip step 2 if you only want newer DLSS files. **DLSS only** does not need it.
@@ -148,7 +150,7 @@ iscc /DAppVersion=2.0.0 installer\DLSSUpdater.iss
 
 Pushing a tag like `v2.0.0` that matches the version in the project file builds both files on GitHub Actions and attaches them to a release. If `docs/releases/v<version>.md` exists, it becomes the release text. Setting `DLSSU_INTEGRATION=1` turns on a test that downloads the real releases and installs them into a temporary folder.
 
-`DLSS5Updater.exe --demo` starts the app on a made-up game library in a temporary folder. It never scans your launchers, downloads anything or touches your games, so it is a safe way to look around. `--demo --screenshots <folder>` saves the screenshots used in this README to that folder and exits.
+`DLSS5Updater.exe --demo` starts the app on a made-up game library in a temporary folder. It never scans your launchers, downloads anything or touches your games, so it is a safe way to look around. `--demo --screenshots <folder>` saves the screenshots used in this README to that folder and exits. Setting `DLSSU_DEMO_ONBOARDING=1` opens the first-run setup in the demo, which it otherwise leaves out.
 
 ## Credits
 

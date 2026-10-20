@@ -53,6 +53,11 @@ public partial class MainWindow
             ("11-settings-advanced", () => ShowSettings("Advanced")),
             ("12-log", () => { ShowGame("Ember Crown", "Install"); _vm.LogOpen = true; }),
             ("13-about", () => _vm.AboutOpen = true),
+            ("14-setup-welcome", () => ShowSetup(OnboardingStep.Welcome)),
+            ("15-setup-mode", () => ShowSetup(OnboardingStep.Mode)),
+            ("16-setup-mode-reshade", () => ShowSetup(OnboardingStep.Mode).Mode = OnboardingViewModel.Modes[1]),
+            ("17-setup-updates", () => ShowSetup(OnboardingStep.Updates)),
+            ("18-setup-done", () => ShowSetup(OnboardingStep.Done)),
         };
         foreach (var (name, show) in steps)
         {
@@ -71,6 +76,7 @@ public partial class MainWindow
         _vm.SettingsOpen = false;
         _vm.AboutOpen = false;
         _vm.LogOpen = false;
+        _vm.SettingsVm.Onboarding = null;
         _vm.Search = "";
         _vm.Filter = "All";
     }
@@ -81,6 +87,15 @@ public partial class MainWindow
         game.DetailTab = tab;
         _vm.SelectedGame = game;
         _vm.ShowGameView();
+    }
+
+    /// <summary>The first-run setup at one step, over the games view; never finished, so nothing is written.</summary>
+    private OnboardingViewModel ShowSetup(OnboardingStep step)
+    {
+        ShowGame("Ember Crown", "Install");
+        var setup = new OnboardingViewModel(_vm.S.Settings) { Step = step };
+        _vm.SettingsVm.Onboarding = setup;
+        return setup;
     }
 
     private void ShowSettings(string tab)

@@ -171,6 +171,8 @@ public sealed class AppSettings
 
     public int KeepBuildsFor(LibraryKind kind) =>
         Math.Clamp(KeepBuilds.GetValueOrDefault(kind.ToString(), BuildCleanup.DefaultKeep), 1, BuildCleanup.MaxKeep);
+    /// <summary>First-run setup: false on a fresh install until it is finished or skipped. Missing (settings from 1.x) counts as done.</summary>
+    public bool? OnboardingDone { get; set; }
 
     public string? AddonId(AddonKind kind) => kind == AddonKind.RenoDx ? RenoDxId : LecramId;
 
@@ -195,6 +197,8 @@ public sealed class AppSettings
 
     public static AppSettings Load()
     {
+        // A fresh install: the first-run setup is due.
+        if (!File.Exists(AppPaths.SettingsFile)) return new AppSettings { OnboardingDone = false };
         try
         {
             if (File.Exists(AppPaths.SettingsFile))
