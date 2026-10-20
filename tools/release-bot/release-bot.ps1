@@ -42,6 +42,7 @@ Import-Module (Join-Path $PSScriptRoot 'ReleaseBot.psm1') -Force
 
 $Repo = 'ApolloF/DLSS5-Updater'
 $Root = Join-Path $env:LOCALAPPDATA 'dlss5updater-releasebot'
+if ($IsolationRoot) { $why = Get-IsolationRootRefusal $IsolationRoot $Root; if ($why) { throw "-IsolationRoot refused: $why (README, Full isolation)" } }
 $LogDir = Join-Path $Root 'logs'
 $WorkRoot = Join-Path $Root 'work'
 # Bare clone only the bot touches. Claude never gets a path into it; each run works in fresh worktrees and clones.
@@ -370,14 +371,24 @@ function Get-BmacText {
 function Check-LecramNotes($state) {
     # Never throws: a logged-out profile, a changed page or a failed fetch is a warning and one notice, not a failure.
     try {
-        $sections = @(Get-PatchSections (Get-BmacText))
+        $text = Get-BmacText
+        $sections = @(Get-PatchSections $text)
+        if (-not $sections.Count -and (Test-NotesPageLoaded $text)) {
+            # The post loaded and nothing asks to log in: the page layout changed, logging in again wouldn't help.
+            $state.Remove('bmacWarned')
+            Log 'lecram-notes: the post loaded but has no "vN Patch N" sections (notes layout not recognised)'
+            if (-not $state.bmacLayoutWarned) {
+                Send-Notice 'DLSS5 Updater bot: notes layout not recognised' "Lecram's post loaded, but the bot found no ""vN Patch N"" sections in it. The page layout probably changed; check the post and the parser in ReleaseBot.psm1 (Get-PatchSections)." $BmacUrl 3 'warning'
+                $state.bmacLayoutWarned = $true
+            }
+            return $null
+        }
         if (-not $sections.Count) { throw 'no "vN Patch N" sections on the page (logged out, or the page changed)' }
-        $state.Remove('bmacWarned')
+        $state.Remove('bmacWarned'); $state.Remove('bmacLayoutWarned')
         $seen = $state.items['lecram-notes'].seen
-        $new = @(Select-NewPatchSections $sections $seen)
-        $refused = @($new | ForEach-Object { $r = Get-PatchSectionRefusal $_ $seen $LecramNotesMajor; if ($r) { "$($_.Key): $r" } })
-        if ($refused.Count) {
-            $why = Format-SafeText ($refused -join '; ') 200
+        $u = Resolve-NotesUpdate $sections $seen $LecramNotesMajor
+        if ($u.Refused.Count) {
+            $why = Format-SafeText ($u.Refused -join '; ') 200
             Log "lecram-notes: refused, not sent to Claude: $why"
             if ($state.bmacRefused -ne $why) {
                 Send-Notice 'DLSS5 Updater bot: odd release-note section' "Lecram's notes page has a section the bot doesn't trust ($why). Check the post; if it is real, raise `$LecramNotesMajor in release-bot.ps1 or set lecram-notes seen in state.json." $BmacUrl 3 'warning'
@@ -386,9 +397,10 @@ function Check-LecramNotes($state) {
             return $null
         }
         $state.Remove('bmacRefused')
-        $last = if ($new.Count) { $new[-1] } else { $sections[-1] }
-        @{ seen = $last.Key; detail = "Lecram's members-only release notes, newest $($last.Key)"; assets = @()
-           notes = @($new | ForEach-Object { "#### $($_.Key)`n$($_.Text)" }) }
+        # First run: the newest section of the tested major is the baseline; nothing new goes to Claude.
+        $key = if ($u.Last) { $u.Last.Key } else { $seen }
+        @{ seen = $key; detail = "Lecram's members-only release notes, newest $key"; assets = @()
+           notes = @($u.New | ForEach-Object { "#### $($_.Key)`n$($_.Text)" }) }
     } catch {
         $why = Format-SafeText $_.Exception.Message 200
         Log "lecram-notes: not read: $why"

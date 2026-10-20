@@ -509,12 +509,13 @@ namespace ReleaseBot {
 '@
 }
 
-function Copy-SandboxBack([string]$from, [string]$to, [string]$isolationRoot, [string]$botRoot, [long]$maxBytes = 200MB, [int]$maxFiles = 20000) {
+function Copy-SandboxBack([string]$from, [string]$to, [string]$isolationRoot, [string]$botRoot, [long]$maxBytes = 200MB, [int]$maxFiles = 20000, [int]$maxFolders = 5000) {
     # The owner side copies the isolated user's sandbox back. That user could plant a link to the owner's files
     # (Notes, ~\.claude, ~\.ssh) for the owner's copy to follow into a public PR. A first walk refuses any link, but the
     # user's processes could still swap a folder for a junction after it, so each file is opened without following a
     # link, its final path must lie inside the sandbox and it must have no other hard link, and the bytes come from
     # that same handle. Any violation or cap aborts and removes what was copied. Build output is left behind.
+    $ErrorActionPreference = 'Stop'
     $links = @(Find-ReparsePoints $from)
     if ($links.Count) { throw "the isolated sandbox has links ($(Format-SafeText ($links -join ', ') 200)); nothing copied back" }
     if (-not $isolationRoot -or -not $botRoot) { throw 'copy-back needs the isolation root and the bot root' }
@@ -528,9 +529,9 @@ function Copy-SandboxBack([string]$from, [string]$to, [string]$isolationRoot, [s
     }
     if (Test-Path -LiteralPath $to) { throw "copy-back target $to already exists" }
     $skip = '^(bin|obj|\.vs|TestResults|publish)$'
-    New-Item -ItemType Directory $to | Out-Null
+    New-Item -ItemType Directory -Path $to -ErrorAction Stop | Out-Null
     try {
-        $left = $maxBytes; $files = 0
+        $left = $maxBytes; $files = 0; $folders = 0
         $stack = [Collections.Generic.Stack[object]]::new(); $stack.Push(@([IO.DirectoryInfo]::new($from), $to))
         while ($stack.Count) {
             $d, $dest = $stack.Pop()
@@ -539,7 +540,8 @@ function Copy-SandboxBack([string]$from, [string]$to, [string]$isolationRoot, [s
                 $target = Join-Path $dest $i.Name
                 if ($i -is [IO.DirectoryInfo]) {
                     if ($i.Name -match $skip) { continue }
-                    New-Item -ItemType Directory $target | Out-Null
+                    if (++$folders -gt $maxFolders) { throw "more than $maxFolders folders" }
+                    New-Item -ItemType Directory -Path $target -ErrorAction Stop | Out-Null
                     $stack.Push(@($i, $target))
                 } else {
                     if (++$files -gt $maxFiles) { throw "more than $maxFiles files" }
@@ -555,8 +557,8 @@ function Copy-SandboxBack([string]$from, [string]$to, [string]$isolationRoot, [s
 
 # ---------- Lecram's members-only release notes (Buy Me a Coffee) ----------
 
-$script:BlockMark = '[[block]]'
 $script:PageChrome = '(?i)^(\d+\s+)?(comments?|replies|likes?)$|^(write|leave|add|post) a (comment|reply)|^(reply|share|like|report)$|^(buy|support)\b.*\bcoffee\b|^(join|become) a (member|supporter)|^(log ?in|sign ?in|sign ?up)$'
+$script:LoginPrompt = '(?i)^(log ?in|sign ?in)\b|\bmembers? only\b|^(join|become) a (member|supporter)|\bto (unlock|read|see) (this|the) post\b'
 
 function Test-ContainsPaidText([string]$text, [string[]]$notes, [int]$words = 8) {
     # True when $text repeats any run of $words words from the members-only notes (case, punctuation and spacing
@@ -573,35 +575,60 @@ function Test-ContainsPaidText([string]$text, [string[]]$notes, [int]$words = 8)
 }
 
 function ConvertFrom-HtmlText([string]$html) {
-    # Visible text of a dumped DOM, one block element per line.
+    # Visible text of a dumped DOM, one block element per line. The first line holds a random token that every mark
+    # for Get-PatchSections carries, so page text can't fake a mark ("[[article]]" in a supporter box); text that
+    # looks like a mark is removed anyway.
+    $tok = [guid]::NewGuid().ToString('N')
     $t = $html -replace '(?is)<(script|style|noscript|svg|template)\b.*?</\1\s*>', ' '
-    # Marks for Get-PatchSections: where the post starts, rules between its parts, and page regions (comments, footer,
-    # sidebar, the post's end). Headings get a level mark, so a section only ends at a heading of its own or a higher
-    # level.
-    $t = $t -replace '(?i)<article\b', "`n[[article]]`n$&" -replace '(?i)<hr\b', "`n[[hr]]`n$&"
-    $t = $t -replace '(?i)<(footer|aside|form|section|nav|header|dialog)\b|</article\s*>', "`n$($script:BlockMark)`n$&"
-    $t = $t -replace '(?i)<h([1-6])\b', "`n[[h`$1]]`n$&"
+    # Marks: where the post starts and ends, rules between its parts, page regions (header, section: a stop only
+    # outside the post), and comment boxes and the page around the post (a stop anywhere). Headings get a level mark,
+    # so a section only ends at a heading of its own or a higher level.
+    $t = $t -replace '(?i)<article\b', "`n[[$tok article]]`n$&" -replace '(?i)</article\s*>', "`n[[$tok /article]]`n$&" -replace '(?i)<hr\b', "`n[[$tok hr]]`n$&"
+    $t = $t -replace '(?i)<[a-z][a-z0-9]*\b[^>]*\b(class|id)\s*=\s*["''][^"'']*(comment|repl(y|ies))', "`n[[$tok block]]`n$&"
+    $t = $t -replace '(?i)<(footer|aside|form|nav|dialog)\b', "`n[[$tok block]]`n$&" -replace '(?i)<(section|header)\b', "`n[[$tok region]]`n$&"
+    $t = $t -replace '(?i)<h([1-6])\b', "`n[[$tok h`$1]]`n$&"
     $t = $t -replace '(?i)<br\s*/?>', "`n" -replace '(?i)</(p|div|li|h[1-6]|tr|section|article|blockquote|pre)\s*>', "`n" -replace '(?i)<li\b[^>]*>', "`n- "
     $t = [Net.WebUtility]::HtmlDecode(($t -replace '(?s)<[^>]*>', ''))
-    (($t -split "`n") | ForEach-Object { ($_ -replace '[\s ]+', ' ').Trim() } | Where-Object { $_ }) -join "`n"
+    $mark = "^\[\[$tok (article|/article|hr|block|region|h[1-6])\]\]$"
+    $lines = foreach ($l in ($t -split "`n")) {
+        $l = ($l -replace '[\s ]+', ' ').Trim()
+        if ($l -cnotmatch $mark) { $l = ($l -replace '\[\[[^\]]*\]\]', ' ' -replace '\s+', ' ').Trim() }
+        if ($l) { $l }
+    }
+    (@("[[$tok text]]") + @($lines)) -join "`n"
+}
+
+function Get-NotesToken([string[]]$lines) {
+    if ($lines.Count -and $lines[0] -cmatch '^\[\[([0-9a-f]{32}) text\]\]$') { $Matches[1] }
 }
 
 function Get-PatchSections([string]$text, [int]$maxChars = 4000) {
     # "v11 Patch 11" headings and the text under each, newest last. A heading is a line that starts with it. Only the
-    # post counts: everything before its start mark is skipped (plain text without one is all post), and the first page
-    # region or line that looks like the comments or the page around the post ends the parsing, so nothing from
-    # members' comments (their text, or a made-up "v99 Patch 1") ever becomes or joins a section. Inside the post a
-    # section ends at the next patch heading, a rule, or a heading of the same or a higher level (any heading when the
-    # patch heading wasn't one).
+    # post counts: everything before its start mark is skipped (plain text without marks is all post), and the post's
+    # end, a comment box, a page region outside the post or a line that looks like the comments or the page around
+    # the post ends the parsing, so nothing from members' comments (their text, or a made-up "v99 Patch 1") ever
+    # becomes or joins a section. Inside the post a section ends at the next patch heading, a rule, or a heading of the
+    # same or a higher level (any heading when the patch heading wasn't one). Marks only count with the token from
+    # ConvertFrom-HtmlText.
     $sections = [Collections.Generic.List[pscustomobject]]::new()
-    $started = $text -notmatch '(?m)^\[\[article\]\]$'
-    $cur = $null; $level = $null
-    foreach ($line in ($text -split "`n")) {
-        if ($line -eq '[[article]]') { $started = $true; $cur = $null; $level = $null; continue }
+    $lines = @($text -split "`n")
+    $tok = Get-NotesToken $lines
+    $m = "[[$tok "
+    if ($tok) { $lines = @($lines | Select-Object -Skip 1) }
+    $started = -not ($tok -and ($lines -ccontains "${m}article]]"))
+    $depth = 0; $cur = $null; $level = $null
+    foreach ($line in $lines) {
+        $mk = if ($tok -and $line.StartsWith($m, [StringComparison]::Ordinal)) { $line.Substring($m.Length).TrimEnd(']') } else { $null }
+        if ($mk -eq 'article') {
+            if (-not $depth) { $started = $true; $cur = $null; $level = $null }
+            $depth++; continue
+        }
         if (-not $started) { continue }
-        if ($line -eq $script:BlockMark -or $line -match $script:PageChrome) { break }
-        if ($line -eq '[[hr]]') { $cur = $null; $level = $null; continue }
-        if ($line -match '^\[\[h([1-6])\]\]$') {
+        if ($mk -eq '/article') { if (--$depth -le 0) { break }; continue }
+        if ($mk -eq 'block' -or ($mk -eq 'region' -and $depth -le 0) -or (-not $mk -and $line -match $script:PageChrome)) { break }
+        if ($mk -eq 'region') { continue }
+        if ($mk -eq 'hr') { $cur = $null; $level = $null; continue }
+        if ($mk -match '^h([1-6])$') {
             $level = [int]$Matches[1]
             if ($cur -and $level -le $cur.Level) { $cur = $null }
             continue
@@ -623,6 +650,48 @@ function Select-NewPatchSections($sections, [string]$seen) {
     if ($seen -notmatch '^v(\d+) Patch (\d+)$') { return @($sections) }
     $m = [int]$Matches[1]; $p = [int]$Matches[2]
     @($sections | Where-Object { $_.Major -gt $m -or ($_.Major -eq $m -and $_.Patch -gt $p) })
+}
+
+function Resolve-NotesUpdate($sections, [string]$seen, [int]$testedMajor) {
+    # New sections, the one to save as seen (null: keep it) and refusals. Without a baseline (first run) other majors
+    # are ignored and the newest section of the tested major becomes the baseline, nothing new; the major and jump
+    # refusals apply only once a baseline exists.
+    if ($seen -notmatch '^v(\d+) Patch (\d+)$') {
+        $own = @($sections | Where-Object Major -EQ $testedMajor)
+        if (-not $own.Count) { return @{ New = @(); Last = $null; Refused = @("no v$testedMajor section to start from") } }
+        return @{ New = @(); Last = $own[-1]; Refused = @() }
+    }
+    $new = @(Select-NewPatchSections $sections $seen)
+    $refused = @($new | ForEach-Object { $r = Get-PatchSectionRefusal $_ $seen $testedMajor; if ($r) { "$($_.Key): $r" } })
+    @{ New = $new; Last = $(if ($new.Count) { $new[-1] } else { $null }); Refused = $refused }
+}
+
+function Test-NotesPageLoaded([string]$text) {
+    # The post is on the page and nothing on it asks to log in or join: no patch sections then means the notes layout
+    # changed, not that the bot's browser profile is logged out.
+    $lines = @($text -split "`n")
+    $tok = Get-NotesToken $lines
+    if (-not $tok) { return $false }
+    ($lines -ccontains "[[$tok article]]") -and -not @($lines | Where-Object { -not $_.StartsWith("[[$tok ") -and $_ -match $script:LoginPrompt }).Count
+}
+
+function Get-IsolationRootRefusal([string]$path, [string]$botRoot, [string]$userProfile = $env:USERPROFILE) {
+    # Why -IsolationRoot can't hold the isolated user's sandboxes, or $null. The copy-back trusts anything inside it,
+    # so it must be a folder of its own: not a drive root, not the owner's profile, above it or in it, and apart from
+    # the bot's folder. Checked on the path as given and, when it exists, on where it really leads.
+    if (-not $path) { return 'it is empty' }
+    $norm = { param($p) $p = "$p" -replace '^\\\\\?\\UNC\\', '\\' -replace '^\\\\\?\\', ''; [IO.Path]::GetFullPath($p).TrimEnd('\') }
+    $under = { param($a, $b) $a.StartsWith("$b\", [StringComparison]::OrdinalIgnoreCase) }
+    $cands = @(& $norm $path)
+    if (Test-Path -LiteralPath $path -PathType Container) { $cands += & $norm ([ReleaseBot.HandleCopy]::DirFinalPath($path, $false)) }
+    $prof = & $norm $userProfile; $bot = & $norm $botRoot
+    foreach ($p in $cands) {
+        if ([IO.Path]::GetPathRoot("$p\").TrimEnd('\') -ieq $p) { return "$p is a drive root" }
+        if ($p -ieq $prof -or (& $under $prof $p)) { return "$p is the user profile or above it" }
+        if (& $under $p $prof) { return "$p is inside the user profile" }
+        if ($p -ieq $bot -or (& $under $p $bot) -or (& $under $bot $p)) { return "$p overlaps the bot folder $bot" }
+    }
+    $null
 }
 
 function Test-OwnTagOnOrigin([string]$lsRemote, [string]$tag, [string]$localId, [string]$localPeeled, [string]$sha) {

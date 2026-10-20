@@ -25,14 +25,17 @@ A source that fails (offline, rate limit) is skipped and checked again next run.
 Edge) with that profile on the post; log in, check the post shows, close the window. Each run then reads the post
 with headless Chrome (`--headless=new --dump-dom`, 90 s timeout) and looks for new `vN Patch N` sections. Logged out,
 a changed page or a failed fetch is a log line and one ntfy note asking to log in again (until it works again),
-never a failure or a parked change. The new sections go only into Claude's facts file on the review path, marked as
+or, when the post loaded fine and nothing asks to log in but no section was found, one "notes layout not recognised"
+note; never a failure or a parked change. The new sections go only into Claude's facts file on the review path, marked as
 paid content to paraphrase; the bot never puts their text in the repo, PRs, notices or release notes, or in its state.
-Only the post (`<article>`) is read, and parsing stops for good at the first page region (comments, footer, sidebar,
-the post's end) or line that looks like the comment box, so members' comments never reach Claude and can't start a
-section of their own. Inside the post a section ends at the next patch heading, a rule, or a heading of the same or a
+Only the post (`<article>`) is read, and parsing stops for good at the post's end, a comment box, footer, sidebar or
+form anywhere, a `<header>`/`<section>` outside the post, or a line that looks like the comment box, so members'
+comments never reach Claude and can't start a section of their own. The structure marks carry a random token per
+run, so page text like `[[article]]` can't fake one. Inside the post a section ends at the next patch heading, a rule, or a heading of the same or a
 higher level than its own (an `<h4>` inside an `<h3>` patch section stays in it). A new section of another major than
 `$LecramNotesMajor` (release-bot.ps1, 11) or more than 5 patches past the last one seen is refused: a log line and
-one ntfy note, no Claude run, and "seen" stays. Before publishing, the bot checks Claude's diff and summary
+one ntfy note, no Claude run, and "seen" stays. The first run only records the newest section of that major as its
+baseline (other majors on the page are ignored then). Before publishing, the bot checks Claude's diff and summary
 for any run of 8 words from the notes: a quoting diff is refused, a quoting summary is left out of the PR.
 
 ## Two paths
@@ -143,7 +146,8 @@ unless you pass `-UnsafeRunClaudeAsOwner`. `install.ps1 -Enable` without `-RunAs
    - **not** copy anything back itself, and return the folder as `Sandbox`.
    The isolation root is a folder of its own for these sandboxes (for example `C:\dlss5bot-iso`), outside
    `%LocalAppData%\dlss5updater-releasebot` and the owner's profile; pass it as `-IsolationRoot` (install.ps1 hands it
-   to the task). The bot copies the sandbox back itself (`Copy-SandboxBack` in `ReleaseBot.psm1`) and refuses a
+   to the task). Both scripts refuse a drive root, the owner's profile, a folder above or inside it, and anything that
+   contains or lies in the bot's folder. The bot copies the sandbox back itself (`Copy-SandboxBack` in `ReleaseBot.psm1`) and refuses a
    sandbox whose resolved path isn't inside the isolation root, or is inside the bot's own folder. The isolated user
    could plant a junction or symlink to the owner's files (`~\Notes`, `~\.claude`, `~\.ssh`) for a plain owner-side
    `Copy-Item -Recurse` to follow into a public PR, and a process of theirs that is still running could swap a folder

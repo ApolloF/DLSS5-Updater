@@ -18,6 +18,11 @@ if ($Enable -and -not $RunAs) { throw '-Enable needs -RunAs <isolated user>: wit
 if ($Enable -and -not $IsolationRoot) { throw '-Enable needs -IsolationRoot <folder>: the bot copies back only sandboxes inside it. See README, "Full isolation".' }
 if ($IsolationRoot -match '["\r\n]') { throw '-IsolationRoot must not contain quotes or line breaks' }
 if ($RunAs -match '["\r\n]') { throw '-RunAs must not contain quotes or line breaks' }
+if ($IsolationRoot) {
+    Import-Module (Join-Path $PSScriptRoot 'ReleaseBot.psm1') -Force
+    $why = Get-IsolationRootRefusal $IsolationRoot (Join-Path $env:LOCALAPPDATA 'dlss5updater-releasebot')
+    if ($why) { throw "-IsolationRoot refused: $why. See README, `"Full isolation`"." }
+}
 
 if ($Remove) {
     Unregister-ScheduledTask -TaskName $TaskName -Confirm:$false -ErrorAction SilentlyContinue
