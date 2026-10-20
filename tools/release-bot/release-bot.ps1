@@ -35,7 +35,7 @@ $PSNativeCommandUseErrorActionPreference = $false
 if (-not $DryRun -and ($SkipClaude -or $FakeClaude -or $Simulate.Count)) { throw '-SkipClaude, -FakeClaude and -Simulate only work with -DryRun' }
 Import-Module (Join-Path $PSScriptRoot 'ReleaseBot.psm1') -Force
 
-$Repo = 'ApolloF/dlss5updater'
+$Repo = 'ApolloF/DLSS5-Updater'
 $Root = Join-Path $env:LOCALAPPDATA 'dlss5updater-releasebot'
 $LogDir = Join-Path $Root 'logs'
 $WorkRoot = Join-Path $Root 'work'

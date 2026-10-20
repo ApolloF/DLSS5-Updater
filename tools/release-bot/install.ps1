@@ -39,7 +39,7 @@ $settings = New-ScheduledTaskSettingsSet -StartWhenAvailable -MultipleInstances 
     -DontStopIfGoingOnBatteries -ExecutionTimeLimit (New-TimeSpan -Hours 2)
 $principal = New-ScheduledTaskPrincipal -UserId "$env:USERDOMAIN\$env:USERNAME" -LogonType Interactive -RunLevel Limited
 Register-ScheduledTask -TaskName $TaskName -Action $action -Trigger $trigger -Settings $settings -Principal $principal `
-    -Description "DLSS5 Updater release bot (tools/release-bot in ApolloF/dlss5updater)$(if ($DryRun) { ' - DRY RUN' })" -Force | Out-Null
+    -Description "DLSS5 Updater release bot (tools/release-bot in ApolloF/DLSS5-Updater)$(if ($DryRun) { ' - DRY RUN' })" -Force | Out-Null
 # Until the isolation hook is set up, headless Claude runs as the owner, so the task stays off unless asked for.
 if ($Enable -and -not $RunAs -and -not $DryRun) { Write-Warning 'Enabling without -RunAs: Claude runs as you. See README, "Full isolation".' }
 if (-not $Enable) { Disable-ScheduledTask -TaskName $TaskName | Out-Null }
