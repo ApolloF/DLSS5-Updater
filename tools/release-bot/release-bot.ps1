@@ -870,30 +870,36 @@ function Get-PrivateListing {
     $m
 }
 
-function Send-PrivateBuild([string]$exe, [string]$name, [string]$hash) {
+function Send-PrivateBuild($files) {
+    # $files: @{ Path; Name; Hash } for the portable exe and, when built, the installer; each goes up with its .sha256.
     if ($null -eq (Get-PrivateListing)) {
         # copyparty: a multipart POST with act=mkdir creates the folder.
         $resp = Invoke-WebRequest -Method Post -Uri $DropUrl -Form @{ act = 'mkdir'; name = $PrivateDir } -Headers @{ PW = (Get-DropPw); 'User-Agent' = $Ua } -SkipHttpErrorCheck -TimeoutSec 30
         if ([int]$resp.StatusCode -ge 400) { throw "creating $PrivateDir/ on copyparty failed: HTTP $($resp.StatusCode)" }
     }
-    $sumFile = "$exe.sha256"
-    [IO.File]::WriteAllText($sumFile, "$hash  $name`n", [Text.UTF8Encoding]::new($false))
-    foreach ($f in @(@($exe, $name), @($sumFile, "$name.sha256"))) {
-        # copyparty: PUT uploads into the file at the URL; Replace: 1 overwrites what an unrecorded earlier upload left.
-        $resp = Invoke-WebRequest -Method Put -Uri "$DropUrl$PrivateDir/$([uri]::EscapeDataString($f[1]))" -InFile $f[0] -ContentType 'application/octet-stream' `
-            -Headers @{ PW = (Get-DropPw); 'User-Agent' = $Ua; Replace = '1' } -SkipHttpErrorCheck -TimeoutSec 900
-        if ([int]$resp.StatusCode -ge 300) { throw "uploading $($f[1]) to copyparty failed: HTTP $($resp.StatusCode)" }
+    foreach ($file in $files) {
+        $sumFile = "$($file.Path).sha256"
+        [IO.File]::WriteAllText($sumFile, "$($file.Hash)  $($file.Name)`n", [Text.UTF8Encoding]::new($false))
+        foreach ($f in @(@($file.Path, $file.Name), @($sumFile, "$($file.Name).sha256"))) {
+            # copyparty: PUT uploads into the file at the URL; Replace: 1 overwrites what an unrecorded earlier upload left.
+            $resp = Invoke-WebRequest -Method Put -Uri "$DropUrl$PrivateDir/$([uri]::EscapeDataString($f[1]))" -InFile $f[0] -ContentType 'application/octet-stream' `
+                -Headers @{ PW = (Get-DropPw); 'User-Agent' = $Ua; Replace = '1' } -SkipHttpErrorCheck -TimeoutSec 900
+            if ([int]$resp.StatusCode -ge 300) { throw "uploading $($f[1]) to copyparty failed: HTTP $($resp.StatusCode)" }
+        }
     }
     $list = Get-PrivateListing
-    if (-not $list -or [long]$list[$name] -ne (Get-Item -LiteralPath $exe).Length) { throw "$name is not on copyparty with its size after the upload" }
+    foreach ($file in $files) {
+        if (-not $list -or [long]$list[$file.Name] -ne (Get-Item -LiteralPath $file.Path).Length) { throw "$($file.Name) is not on copyparty with its size after the upload" }
+    }
 }
 
 function Remove-OldPrivateBuilds($state) {
     # Only builds the bot uploaded itself (state) beyond the newest $PrivateKeep; a failed delete is retried next time.
     foreach ($t in Select-PrivateBuildsToDelete $state.privateBuilds $PrivateKeep) {
-        $name = Get-PrivateBuildName $t.Substring(1)
         $ok = $true
-        foreach ($n in $name, "$name.sha256") {
+        # The installer may not exist for that build; a 404 counts as deleted.
+        $exe = Get-PrivateBuildName $t.Substring(1); $setup = Get-PrivateSetupName $t.Substring(1)
+        foreach ($n in $exe, "$exe.sha256", $setup, "$setup.sha256") {
             $resp = Invoke-WebRequest -Method Post -Uri "$DropUrl$PrivateDir/$([uri]::EscapeDataString($n))?delete" -Headers @{ PW = (Get-DropPw); 'User-Agent' = $Ua } -SkipHttpErrorCheck -TimeoutSec 30
             if ([int]$resp.StatusCode -ge 300 -and [int]$resp.StatusCode -ne 404) { $ok = $false; Log "deleting $PrivateDir/$n failed: HTTP $($resp.StatusCode)" }
         }
@@ -939,16 +945,60 @@ function Update-PrivateBuild($state) {
     $sbRepo = Join-Path $sandbox 'repo'; $sbOut = Join-Path $sandbox 'out'
     New-Item -ItemType Directory -Force $sbOut | Out-Null
     Git @('clone', '--quiet', '--no-local', '--no-hardlinks', $wt, $sbRepo) $Work -Check | Out-Null
-    # Claude's reduced environment without the Claude token; no build server or node outlives the build.
+    # Each step runs in Claude's reduced environment without the Claude token; no build server or node outlives it.
+    $argv = @('publish', 'src/DLSSUpdater', '-c', 'Release', '-p:LecramChannel=true', '-o', $sbOut, '--nologo')
+    $name = Get-PrivateBuildName $version
+    $local = Join-Path $Work $name
+    Invoke-PrivateStep $dotnet $argv $sandbox $sbRepo 'out\DLSS5Updater.exe' $local "private-build-$RunId.log" "dotnet publish of $tag"
+    $size = (Get-Item -LiteralPath $local).Length
+    $vi = [Diagnostics.FileVersionInfo]::GetVersionInfo($local)
+    $bad = @(Test-PrivateExe $vi.FileVersion $vi.ProductVersion $size $version $PrivateMaxBytes)
+    if ($bad.Count) { throw "the private build of $tag is not what was asked for: $($bad -join '; ')" }
+    $hash = (Get-FileHash -Algorithm SHA256 -LiteralPath $local).Hash.ToLower()
+    $uploads = @(@{ Path = $local; Name = $name; Hash = $hash })
+
+    # The installer: Inno Setup on the checked exe, also isolated (the script's preprocessor can run programs). It needs
+    # an all-users Inno Setup 6, since the isolated user can't read the owner's per-user one; without it, exe only.
+    $setupName = Get-PrivateSetupName $version
+    $iss = (MGit @('show', "$($commit):installer/DLSSUpdater.iss") -Raw).Out
+    $iscc = Join-Path ${env:ProgramFiles(x86)} 'Inno Setup 6\ISCC.exe'
+    if (-not (Test-PrivateInstallerSwitch $iss)) { Log "private build: $tag's installer script predates /DPrivate; exe only" }
+    elseif (-not (Test-Path -LiteralPath $iscc)) { Log "private build: Inno Setup 6 isn't installed for all users ($iscc); exe only" }
+    else {
+        $pp = Join-Path $sbRepo 'publish-private'
+        New-Item -ItemType Directory -Force $pp | Out-Null
+        [IO.File]::Copy($local, (Join-Path $pp 'DLSS5Updater.exe'), $true)
+        $setup = Join-Path $Work $setupName
+        Invoke-PrivateStep $iscc @('/Q', '/DPrivate', "/DAppVersion=$version", "/O$sbOut", 'installer\DLSSUpdater.iss') $sandbox $sbRepo "out\$setupName" $setup "private-setup-$RunId.log" "the installer of $tag"
+        $sv = [Diagnostics.FileVersionInfo]::GetVersionInfo($setup)
+        $bad = @(Test-PrivateSetup $sv.ProductVersion (Get-Item -LiteralPath $setup).Length $version $PrivateMaxBytes)
+        if ($bad.Count) { throw "the private installer of $tag is not what was asked for: $($bad -join '; ')" }
+        $uploads += @{ Path = $setup; Name = $setupName; Hash = (Get-FileHash -Algorithm SHA256 -LiteralPath $setup).Hash.ToLower() }
+    }
+    if ($DryRun) { Log "private build: would upload $(($uploads | ForEach-Object { $_.Name }) -join ' and ') (sha256 $hash for the exe), each with its .sha256, to $PrivateDir/, keep the newest $PrivateKeep and notify"; return }
+    Send-PrivateBuild $uploads
+    $state.privateBuilds[$tag] = @{ name = $name; sha256 = $hash; size = $size; time = (Get-Date).ToString('o') }
+    if ($uploads.Count -gt 1) { $state.privateBuilds[$tag].setup = $setupName; $state.privateBuilds[$tag].setupSha256 = $uploads[1].Hash }
+    $state.failures.Remove("private|$tag")
+    Save-State $state
+    Log "private build: $(($uploads | ForEach-Object { $_.Name }) -join ' and ') on copyparty ($PrivateDir/, exe sha256 $hash)"
+    Remove-OldPrivateBuilds $state
+    Save-State $state
+    $what = if ($uploads.Count -gt 1) { 'installer and portable exe' } else { 'portable exe' }
+    Send-Notice "DLSS5 Updater private build v$version" "Private build v$version ($what) is on copyparty: dlss5updater-drop/$PrivateDir/" "$DropUrl$PrivateDir/" 3 'package'
+}
+
+function Invoke-PrivateStep([string]$exe, [string[]]$argv, [string]$sandbox, [string]$sbRepo, [string]$rel, [string]$to, [string]$logName, [string]$what) {
+    # Runs one build step of the private build in $sbRepo (isolated with -RunAs) and brings back the one file $rel of
+    # the sandbox, through the same handle checks as Claude's copy-back.
     $envMap = Get-ClaudeEnv $sandbox ''
     $envMap.Remove('CLAUDE_CODE_OAUTH_TOKEN')
     $envMap.MSBUILDDISABLENODEREUSE = '1'; $envMap.DOTNET_CLI_USE_MSBUILD_SERVER = '0'; $envMap.UseSharedCompilation = 'false'
-    $argv = @('publish', 'src/DLSSUpdater', '-c', 'Release', '-p:LecramChannel=true', '-o', $sbOut, '--nologo')
     if ($RunAs) {
-        $r = & (Get-IsolationHook) -User $RunAs -Exe $dotnet -ArgumentList $argv -WorkingDirectory $sbRepo -Environment $envMap -Stdin '' -TimeoutMinutes $PrivateBuildTimeoutMinutes -Sandbox $sandbox
+        $r = & (Get-IsolationHook) -User $RunAs -Exe $exe -ArgumentList $argv -WorkingDirectory $sbRepo -Environment $envMap -Stdin '' -TimeoutMinutes $PrivateBuildTimeoutMinutes -Sandbox $sandbox
         $code = $r.ExitCode; $stdout = "$($r.Stdout)"
     } else {
-        $psi = [Diagnostics.ProcessStartInfo]::new($dotnet)
+        $psi = [Diagnostics.ProcessStartInfo]::new($exe)
         foreach ($a in $argv) { $psi.ArgumentList.Add($a) }
         $psi.WorkingDirectory = $sbRepo
         $psi.Environment.Clear(); foreach ($k in $envMap.Keys) { $psi.Environment[$k] = $envMap[$k] }
@@ -956,36 +1006,19 @@ function Update-PrivateBuild($state) {
         $psi.StandardOutputEncoding = [Text.UTF8Encoding]::new($false)
         $p = [Diagnostics.Process]::Start($psi)
         $out = $p.StandardOutput.ReadToEndAsync(); $null = $p.StandardError.ReadToEndAsync()
-        if (-not $p.WaitForExit($PrivateBuildTimeoutMinutes * 60 * 1000)) { Log 'private build timed out; killing it'; $p.Kill($true); $p.WaitForExit() }
+        if (-not $p.WaitForExit($PrivateBuildTimeoutMinutes * 60 * 1000)) { Log "$what timed out; killing it"; $p.Kill($true); $p.WaitForExit() }
         $code = $p.ExitCode; $stdout = $out.Result
     }
-    Write-Atomic (Join-Path $LogDir "private-build-$RunId.log") $stdout
-    if ($code -ne 0) { throw "dotnet publish of $tag failed (exit $code), see private-build-$RunId.log" }
-    $name = Get-PrivateBuildName $version
-    $local = Join-Path $Work $name
+    Write-Atomic (Join-Path $LogDir $logName) $stdout
+    if ($code -ne 0) { throw "$what failed (exit $code), see $logName" }
     if ($RunAs) {
         if (-not $r.Sandbox -or -not (Test-Path -LiteralPath $r.Sandbox -PathType Container)) { Fail-Global 'isolation.ps1 returned no sandbox folder' }
-        # Only the one exe comes back, through the same handle checks as Claude's copy-back.
-        Copy-SandboxFile $r.Sandbox 'out\DLSS5Updater.exe' $local $IsolationRoot $Root $PrivateMaxBytes
+        Copy-SandboxFile $r.Sandbox $rel $to $IsolationRoot $Root $PrivateMaxBytes
     } else {
-        $built = Join-Path $sbOut 'DLSS5Updater.exe'
-        if ((Get-Item -LiteralPath $built).Length -gt $PrivateMaxBytes) { throw "the private build of $tag is over $PrivateMaxBytes bytes" }
-        [IO.File]::Copy($built, $local)
+        $built = Join-Path $sandbox $rel
+        if ((Get-Item -LiteralPath $built).Length -gt $PrivateMaxBytes) { throw "$what made a file over $PrivateMaxBytes bytes" }
+        [IO.File]::Copy($built, $to)
     }
-    $size = (Get-Item -LiteralPath $local).Length
-    $vi = [Diagnostics.FileVersionInfo]::GetVersionInfo($local)
-    $bad = @(Test-PrivateExe $vi.FileVersion $vi.ProductVersion $size $version $PrivateMaxBytes)
-    if ($bad.Count) { throw "the private build of $tag is not what was asked for: $($bad -join '; ')" }
-    $hash = (Get-FileHash -Algorithm SHA256 -LiteralPath $local).Hash.ToLower()
-    if ($DryRun) { Log "private build: would upload $name ($size bytes, sha256 $hash) and $name.sha256 to $PrivateDir/, keep the newest $PrivateKeep and notify"; return }
-    Send-PrivateBuild $local $name $hash
-    $state.privateBuilds[$tag] = @{ name = $name; sha256 = $hash; size = $size; time = (Get-Date).ToString('o') }
-    $state.failures.Remove("private|$tag")
-    Save-State $state
-    Log "private build: $name is on copyparty ($PrivateDir/, sha256 $hash)"
-    Remove-OldPrivateBuilds $state
-    Save-State $state
-    Send-Notice "DLSS5 Updater private build v$version" "Private build v$version is on copyparty: dlss5updater-drop/$PrivateDir/" "$DropUrl$PrivateDir/" 3 'package'
 }
 
 # ---------- main ----------

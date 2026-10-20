@@ -14,7 +14,7 @@ Windows desktop app that pulls the latest OptiScaler-NR, DLSS, MFG Unlock, Strea
 - Test: `dotnet test` (needs the .NET 8 runtime and Windows Desktop runtime installed, not just a newer SDK)
 - Integration test (downloads real releases, off by default): `$env:DLSSU_INTEGRATION=1; dotnet test`. `DLSSU_COMPONENTS` can point at a folder that holds `nvngx_dlssnr.dll`.
 - Publish the portable single-file exe: `dotnet publish src/DLSSUpdater -c Release -o publish` → `publish\DLSS5Updater.exe`
-- Private build (owner only, Lecram channel on): `toolsuild-private.ps1` → `publish-private\DLSS5Updater.exe` (`dotnet publish ... -p:LecramChannel=true`). CI also builds this variant.
+- Private build (owner only, Lecram channel on): `tools\build-private.ps1` → `publish-private\DLSS5Updater.exe` (`dotnet publish ... -p:LecramChannel=true`) and the installer `publish-private\DLSS5Updater-Setup-<version>-private.exe` (`iscc /DPrivate`; `-NoInstaller` skips it). CI also builds this variant.
 - Installer (after publish): `iscc /DAppVersion=<version> installer\DLSSUpdater.iss` → `publish\DLSS5Updater-Setup-<version>.exe`
 
 ## Release flow

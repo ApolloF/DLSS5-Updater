@@ -120,15 +120,23 @@ doesn't self-update from GitHub, so the bot builds it and puts it on copyparty.
 - Copy-back: only `out\DLSS5Updater.exe`, through `Copy-SandboxFile` (`Copy-SandboxBack`'s checks for one file: no
   link on the way or in `out\`, final path inside the sandbox, one hard link, 150 MB). Its FileVersion and
   ProductVersion must be the tag's X.Y.Z.
-- Upload: `dlss5updater-drop/private-build/DLSS5Updater-<version>-private.exe` and `.exe.sha256` (sha256sum format),
-  PUT with the drop account (`DLSS5_DROP_PW`), then the listing must show the exe with its size. State:
-  `privateBuilds[<tag>]` with name, sha256, size, time. The bot keeps its own newest 3 there and deletes older ones it
-  uploaded (`?delete`, marked `deleted`). One ntfy note: "Private build v<version> is on copyparty".
+- Installer: when the tag's `installer/DLSSUpdater.iss` knows `/DPrivate` (after v2.2.0), the checked exe goes into
+  the sandbox's `publish-private\` and a second isolated step runs `ISCC /DPrivate /DAppVersion=<version>`
+  (log `private-setup-<run>.log`); only `out\DLSS5Updater-Setup-<version>-private.exe` comes back the same way, and
+  its ProductVersion must be the tag's. ISCC must be an all-users Inno Setup 6 in `%ProgramFiles(x86)%\Inno Setup 6`
+  (the isolated user can't read a per-user install: `gsudo winget install --id JRSoftware.InnoSetup --scope machine`).
+  Without it, or for older tags, one log line and the exe goes up alone.
+- Upload: `dlss5updater-drop/private-build/DLSS5Updater-<version>-private.exe`, the installer
+  `DLSS5Updater-Setup-<version>-private.exe` when built, each with its `.sha256` (sha256sum format), PUT with the drop
+  account (`DLSS5_DROP_PW`), then the listing must show each with its size. State: `privateBuilds[<tag>]` with name,
+  sha256, size, time (and setup, setupSha256). The bot keeps its own newest 3 there and deletes older ones it uploaded,
+  installer included (`?delete`, a 404 counts as gone, marked `deleted`). One ntfy note: "Private build v<version>
+  (installer and portable exe) is on copyparty".
 - Drop processing only takes files at the top of the share: `private-build/`, `processed/` and `failed/` are never
   drops.
 - Failures: its own try/catch, so it never stops the rest of the run. A failed build counts under
   `private|<tag>`: three strikes park it until the next release. Machine failures (gh, dotnet missing, isolation hook
-  missing) aren't counted. The build log goes to `logs\private-build-<run>.log`.
+  missing) aren't counted. The build logs go to `logs\private-build-<run>.log` and `private-setup-<run>.log`.
 - `-DryRun`: builds only with `-RunAs` (into the run's temp folder), then logs "would upload"; never uploads,
   deletes, notifies, or records the build. The skip mark is saved only to a `-StateFile`.
 
@@ -224,7 +232,7 @@ modify on new top-level folders, so `C:\dev` with the owner's repos is one); and
 - State: `...\state.json` (last seen value per source, ETags, processed and seen drops, failure counts, bot PRs with
   mode / head / patch-id / needs-review, the pending auto release, prereleases waiting for promotion, cached proof
   hashes per OptiScaler release asset, private builds per tag).
-- Logs: `...\logs\release-bot-<date>.log`, `claude-<run>.json` and `private-build-<run>.log`, deleted after 30 days.
+- Logs: `...\logs\release-bot-<date>.log`, `claude-<run>.json`, `private-build-<run>.log` and `private-setup-<run>.log`, deleted after 30 days.
 - `...\mirror.git`: bare clone only the bot touches; every run makes its worktrees from it and removes them.
   `...\claude-home`: Claude's config, AppData and NuGet folders. `...\browser-profile`: the bot's Buy Me a Coffee
   login (`-LoginBuyMeACoffee`). `...\nohooks`: the empty hooks folder in Claude's sandbox git config.

@@ -753,6 +753,25 @@ function Get-PrivateBuildName([string]$version) {
     "DLSS5Updater-$version-private.exe"
 }
 
+function Get-PrivateSetupName([string]$version) {
+    if ($version -notmatch '^\d+\.\d+\.\d+$') { throw "not a release version: $(Format-SafeText $version 40)" }
+    "DLSS5Updater-Setup-$version-private.exe"
+}
+
+function Test-PrivateInstallerSwitch([string]$iss) {
+    # installer/DLSSUpdater.iss packages the private exe with /DPrivate; tags up to v2.2.0 only know the public one.
+    [bool]@(@("$iss" -split '\r?\n') -match '^\s*#ifdef\s+Private\b').Count
+}
+
+function Test-PrivateSetup([string]$productVersion, [long]$size, [string]$version, [long]$maxBytes = 150MB) {
+    # The installer Inno Setup made: ProductVersion (its AppVersion) X.Y.Z equals the tag's, and a plausible size.
+    $v = [Collections.Generic.List[string]]::new()
+    if ($size -le 0 -or $size -gt $maxBytes) { $v.Add("size $size bytes is outside 1..$maxBytes") }
+    $pv = ConvertTo-BotVersion $productVersion
+    if (-not $pv -or "$($pv.Major).$($pv.Minor).$($pv.Build)" -ne $version) { $v.Add("ProductVersion $(Format-SafeText $productVersion 40) is not $version") }
+    @($v)
+}
+
 function Test-PrivateExe([string]$fileVersion, [string]$productVersion, [long]$size, [string]$version, [long]$maxBytes = 150MB) {
     # What the build produced must be the app at that tag: FileVersion and ProductVersion X.Y.Z equal the tag's, and a
     # plausible size. Returns the violations (empty = fine).

@@ -867,6 +867,20 @@ Describe 'private build (LecramChannel=true on copyparty)' {
         Get-PrivateBuildName '2.2.0' | Should -Be 'DLSS5Updater-2.2.0-private.exe'
         { Get-PrivateBuildName '2.2.0/../x' } | Should -Throw
         { Get-PrivateBuildName 'v2.2.0' } | Should -Throw
+        Get-PrivateSetupName '2.2.0' | Should -Be 'DLSS5Updater-Setup-2.2.0-private.exe'
+        { Get-PrivateSetupName '2.2.0/../x' } | Should -Throw
+    }
+    It 'builds the installer only from an installer script that knows /DPrivate' {
+        Test-PrivateInstallerSwitch "#define AppExe `"x`"`r`n#ifdef Private`r`n  #define SourceDir `"..\publish-private`"`r`n#endif" | Should -BeTrue
+        Test-PrivateInstallerSwitch "; add /DPrivate`n; #ifdef Private`nSource: `"..\publish\x.exe`"" | Should -BeFalse
+        Test-PrivateInstallerSwitch '' | Should -BeFalse
+        Test-PrivateInstallerSwitch (Get-Content -Raw (Join-Path $PSScriptRoot '..\..\installer\DLSSUpdater.iss')) | Should -BeTrue
+    }
+    It 'checks the version resource and the size of the installer' {
+        Test-PrivateSetup '2.2.0' 60MB '2.2.0' | Should -BeNullOrEmpty
+        Test-PrivateSetup '2.1.0' 60MB '2.2.0' | Should -Match 'ProductVersion'
+        Test-PrivateSetup $null 60MB '2.2.0' | Should -Match 'ProductVersion'
+        Test-PrivateSetup '2.2.0' 0 '2.2.0' | Should -Match 'size'
     }
     It 'checks the version resource and the size of the built exe' {
         Test-PrivateExe '2.2.0.0' '2.2.0+0123abcd' 80MB '2.2.0' | Should -BeNullOrEmpty
@@ -907,13 +921,17 @@ Describe 'private build (LecramChannel=true on copyparty)' {
         $fn = [regex]::Match($s, '(?s)function Update-PrivateBuild\b.*?\n}\r?\n').Value
         $fn | Should -Match 'Get-ClaudeLaunchRefusal \$RunAs \$UnsafeRunClaudeAsOwner'
         $fn | Should -Match "if \(\`$DryRun -and -not \`$RunAs\)"
-        $fn | Should -Match "\`$envMap\.Remove\('CLAUDE_CODE_OAUTH_TOKEN'\)"
         $fn | Should -Match "'-p:LecramChannel=true'"
-        $fn | Should -Match 'Copy-SandboxFile \$r\.Sandbox'
         $fn | Should -Match 'Sync-ReleaseTag \$Mirror'
-        # A dry run returns before it uploads, deletes, notifies or records the build.
+        # Both steps (publish, installer) go through Invoke-PrivateStep, before the dry-run return.
         $dry = $fn.IndexOf('if ($DryRun) {'); $dry | Should -BeGreaterThan 0
-        foreach ($call in 'Send-PrivateBuild $local', 'Remove-OldPrivateBuilds $state', 'Send-Notice', '$state.privateBuilds[$tag] = @{ name') { $fn.IndexOf($call) | Should -BeGreaterThan $dry }
+        ([regex]::Matches($fn.Substring(0, $dry), 'Invoke-PrivateStep \$')).Count | Should -Be 2
+        $step = [regex]::Match($s, '(?s)function Invoke-PrivateStep\b.*?\n}\r?\n').Value
+        $step | Should -Match "\`$envMap\.Remove\('CLAUDE_CODE_OAUTH_TOKEN'\)"
+        $step | Should -Match 'Copy-SandboxFile \$r\.Sandbox \$rel'
+        $step | Should -Match '& \(Get-IsolationHook\) -User \$RunAs'
+        # A dry run returns before it uploads, deletes, notifies or records the build.
+        foreach ($call in 'Send-PrivateBuild $uploads','Remove-OldPrivateBuilds $state', 'Send-Notice', '$state.privateBuilds[$tag] = @{ name') { $fn.IndexOf($call) | Should -BeGreaterThan $dry }
     }
 }
 
