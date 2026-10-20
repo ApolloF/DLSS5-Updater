@@ -17,6 +17,10 @@ public sealed class GameOverride
     public string? RenoDxId { get; set; }
     /// <summary>Lecram add-on build (library id) pinned for this game; null follows the global choice.</summary>
     public string? LecramId { get; set; }
+    /// <summary>OptiScaler build (app tag, either source) chosen for this game; null follows the default.</summary>
+    public string? OptiTag { get; set; }
+    /// <summary>GITC Uplift build (release tag) chosen for this game; null follows the default.</summary>
+    public string? UpliftTag { get; set; }
     /// <summary>Deep Fried Chicken in a game without its own DLSS: also place nvngx_dlssg.dll for its DLSS-G frame generation.</summary>
     public bool? DfcFrameGen { get; set; }
     /// <summary>Config preset used for this game; null uses the current settings.</summary>
@@ -156,6 +160,17 @@ public sealed class AppSettings
     /// <summary>Default Lecram add-on build (library id).</summary>
     public string? LecramId { get; set; }
     public List<AddonPairTest> AddonPairTests { get; set; } = [];
+    /// <summary>Default OptiScaler build (app tag, either source); null follows the newest release of the selected source.</summary>
+    public string? OptiTag { get; set; }
+    /// <summary>Default GITC Uplift build (release tag); null follows the newest release.</summary>
+    public string? UpliftTag { get; set; }
+    /// <summary>Library name (<see cref="LibraryKind"/>) -> how many of its newest builds the cleanup keeps; missing = 2.</summary>
+    public Dictionary<string, int> KeepBuilds { get; set; } = [];
+    /// <summary>Delete old builds after each download or import (off by default).</summary>
+    public bool AutoCleanBuilds { get; set; }
+
+    public int KeepBuildsFor(LibraryKind kind) =>
+        Math.Clamp(KeepBuilds.GetValueOrDefault(kind.ToString(), BuildCleanup.DefaultKeep), 1, BuildCleanup.MaxKeep);
     /// <summary>First-run setup: false on a fresh install until it is finished or skipped. Missing (settings from 1.x) counts as done.</summary>
     public bool? OnboardingDone { get; set; }
 
@@ -263,6 +278,7 @@ public sealed class AppSettings
         ReShadeOverrides = ReShadeOverrides is null ? defaults.ReShadeOverrides : Overrides(ReShadeOverrides);
         Presets = PresetList(Presets);
         SeenReleases ??= [];
+        KeepBuilds ??= [];
         AnnouncedReleases ??= [];
         AddonPairTests = (AddonPairTests ?? []).Where(t => t is not null).ToList();
         DefaultProxy ??= defaults.DefaultProxy;
@@ -330,4 +346,5 @@ public sealed class AppSettings
 [JsonSerializable(typeof(NrVersion))]
 [JsonSerializable(typeof(AddonBuild))]
 [JsonSerializable(typeof(AddonPairTest))]
+[JsonSerializable(typeof(Dictionary<string, InstallRefs>))]
 internal partial class JsonCtx : JsonSerializerContext;

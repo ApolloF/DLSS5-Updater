@@ -130,6 +130,7 @@ public sealed partial class AddonLibraryViewModel : ObservableObject
             if (Store.AdoptImportedAddon(Settings, _kind, build)) Settings.Save();
             else Log.Info($"Imported {Title} {build.Name}; the default stays on the newer {SelectedBuild?.Name}");
             await _changed();
+            await _main.AutoCleanUpAfterImportAsync();
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or InvalidDataException)
         { Log.Error($"Import of {Title} failed", ex); Views.Dialog.Show("Import failed", UserErrors.Message(ex)); }

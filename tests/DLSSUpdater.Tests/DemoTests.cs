@@ -91,7 +91,8 @@ public class DemoTests : IDisposable
     {
         Assert.Equal(2, _store.DlssNrVersions.Count);
         Assert.Single(_store.RenoDxBuilds);
-        Assert.Equal(LecramGeneration.V11, Assert.Single(_store.LecramBuilds).Generation);
+        Assert.Equal(["v11.0.1", "v11.0.0-beta.48", "v11.0.0-beta.45", "v8.5.0-rc10-model-sdr1"], _store.LecramBuilds.Select(b => b.DetectedLabel));
+        Assert.Equal(LecramGeneration.V11, _store.LecramBuilds[0].Generation);
         Assert.True(_store.DfcImported);
         Assert.Equal("4.0.0", _store.DfcVersion);
         Assert.Equal(DfcCompatTag(), Demo.ManifestAt(Demo.Games.First(g => g.Name == "Hollow Tide").Installs[0])!.DfcTag);

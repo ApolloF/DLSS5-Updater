@@ -44,7 +44,7 @@ public sealed partial class ComponentStore
                 catch (Exception ex) when (ex is IOException or JsonException)
                 { Log.Error($"Could not read NR library entry {file}", ex); }
             }
-            return versions.OrderByDescending(v => FileUtil.ParseTag(v.Version)).ThenBy(v => v.Id).ToList();
+            return BuildOrder.NewestFirst(versions, v => v.Version, _ => null, v => v.Id);
         }
     }
 
@@ -132,19 +132,8 @@ public sealed partial class ComponentStore
         return release;
     }
 
-    public static IReadOnlyList<ReleaseInfo> CachedReleases(Component c)
-    {
-        var root = ComponentDir(c);
-        if (!Directory.Exists(root)) return [];
-        return Directory.EnumerateFiles(root, CompleteMarker, SearchOption.AllDirectories).Select(f =>
-        {
-            try
-            {
-                var m = JsonSerializer.Deserialize(File.ReadAllText(f), JsonCtx.Default.CachedComponent);
-                return m is null ? null : new ReleaseInfo { Tag = m.Tag, FromCache = true, Published = m.Published, Prerelease = m.Prerelease };
-            }
-            catch (Exception ex) when (ex is IOException or JsonException)
-            { Log.Error($"Could not read cached component {f}", ex); return null; }
-        }).OfType<ReleaseInfo>().OrderByDescending(r => r.Version).ToList();
-    }
+    public static IReadOnlyList<ReleaseInfo> CachedReleases(Component c) =>
+        CompleteBuilds(c)
+            .Select(b => new ReleaseInfo { Tag = b.Meta.Tag, FromCache = true, Published = b.Meta.Published, Prerelease = b.Meta.Prerelease })
+            .OrderByDescending(r => r.Version).ToList();
 }

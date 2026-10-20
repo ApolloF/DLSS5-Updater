@@ -99,6 +99,19 @@ public static class Demo
         PlaceNr(NrOriginalId, NrOriginalVersion);
         PlaceAddon("renodx-dlss", "renodx-dlss", ComponentStore.RenoDxFile, "0.2026.928.0", "0.2026.928", null);
         PlaceAddon("lecram-dlss5", "lecram-dlss5-v11", ComponentStore.Lecram11File, "", "v11.0.1", LecramGeneration.V11);
+        PlaceAddon("lecram-dlss5", "lecram-dlss5-beta48", ComponentStore.Lecram11File, "", "v11.0.0-beta.48", LecramGeneration.V11);
+        PlaceAddon("lecram-dlss5", "lecram-dlss5-beta45", ComponentStore.Lecram11File, "", "v11.0.0-beta.45", LecramGeneration.V11);
+        PlaceAddon("lecram-dlss5", "lecram-dlss5-v10", ComponentStore.Lecram10File, "8.5.0.0", "v8.5.0-rc10-model-sdr1", LecramGeneration.V10);
+        // Downloaded builds in the OptiScaler and GITC Uplift libraries; one more than the cleanup keeps.
+        PlaceRelease(Component.OptiScaler, LatestOpti, new DateTime(2026, 10, 18));
+        PlaceRelease(Component.OptiScaler, "v0.9.49", new DateTime(2026, 9, 30));
+        PlaceRelease(Component.OptiScaler, "v0.9.47", new DateTime(2026, 9, 12));
+        PlaceRelease(Component.OptiScaler, "v0.9.45", new DateTime(2026, 8, 20));
+        PlaceRelease(Component.OptiScaler, "v0.1.32" + OptiSources.F5.TagSuffix, new DateTime(2026, 10, 16));
+        PlaceRelease(Component.OptiScaler, "v0.1.30" + OptiSources.F5.TagSuffix, new DateTime(2026, 10, 2));
+        PlaceRelease(Component.Uplift, LatestUplift, new DateTime(2026, 10, 8));
+        PlaceRelease(Component.Uplift, "v1.3.0", new DateTime(2026, 9, 1));
+        PlaceRelease(Component.Uplift, "v1.2.0", new DateTime(2026, 7, 14));
 
         var dfc = Path.Combine(AppPaths.Components, "dfc");
         Directory.CreateDirectory(dfc);
@@ -117,6 +130,13 @@ public static class Demo
             FileUtil.AtomicWriteText(path, Placeholder(id));
             FileUtil.AtomicWriteText(Path.Combine(Path.GetDirectoryName(path)!, "version.json"), JsonSerializer.Serialize(record, JsonCtx.Default.NrVersion));
             Fakes[path] = (version, id);
+        }
+
+        void PlaceRelease(Component c, string tag, DateTime published)
+        {
+            var file = c == Component.OptiScaler ? "OptiScaler.dll" : ComponentStore.UpliftFile;
+            FileUtil.AtomicWriteText(Path.Combine(ComponentStore.TagDir(c, tag), "pkg", file), Placeholder($"{c} {tag}"));
+            ComponentStore.MarkComplete(c, Release(tag, DateTime.SpecifyKind(published, DateTimeKind.Utc)));
         }
 
         void PlaceAddon(string dir, string seed, string file, string fileVersion, string label, LecramGeneration? generation)
