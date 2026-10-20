@@ -667,7 +667,7 @@ public sealed partial class MainViewModel : ObservableObject
     {
         var g = SelectedGame;
         if (g?.SelectedTarget is null) return;
-        if (!Dialog.Confirm("Uninstall", $"Remove everything DLSS Updater installed in {g.Name} and restore the original files?", "Uninstall", danger: true))
+        if (!Dialog.Confirm("Uninstall", $"Remove everything DLSS5 Updater installed in {g.Name} and restore the original files?", "Uninstall", danger: true))
             return;
         await Run($"Uninstalling from {g.Name}", async ct =>
         {
@@ -764,7 +764,7 @@ public sealed partial class MainViewModel : ObservableObject
     {
         var g = SelectedGame;
         if (g is null) return;
-        if (g.IsInstalled && !Dialog.Confirm("Remove from list", $"{g.Name} still has DLSS Updater files installed. Remove it from the list anyway?", "Remove"))
+        if (g.IsInstalled && !Dialog.Confirm("Remove from list", $"{g.Name} still has DLSS5 Updater files installed. Remove it from the list anyway?", "Remove"))
             return;
         if (S.Settings.ManualGames.RemoveAll(p => GameInfo.MakeId(p) == g.Id) == 0)
             S.Settings.HiddenGames.Add(g.Id);

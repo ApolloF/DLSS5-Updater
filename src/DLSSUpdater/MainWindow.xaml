@@ -5,7 +5,7 @@
         xmlns:core="clr-namespace:DLSSUpdater.Core"
         xmlns:v="clr-namespace:DLSSUpdater.Views"
         xmlns:sys="clr-namespace:System;assembly=mscorlib"
-        Title="DLSS Updater" Width="1240" Height="800" MinWidth="980" MinHeight="680"
+        Title="DLSS5 Updater" Width="1240" Height="800" MinWidth="980" MinHeight="680"
         WindowStartupLocation="CenterScreen" Icon="Assets/icon.ico"
         Background="{StaticResource Bg}" Foreground="{StaticResource Text}"
         FontFamily="{StaticResource UiFont}" FontSize="13"
@@ -325,7 +325,7 @@
         <Grid Grid.Row="0" Background="{StaticResource Bg}">
             <StackPanel Orientation="Horizontal" VerticalAlignment="Center" Margin="18,0,0,0">
                 <Border Width="4" Height="18" Background="{StaticResource Accent}" Margin="0,0,10,0" />
-                <TextBlock Text="DLSS" FontFamily="{StaticResource DisplayFont}" FontWeight="Bold" FontSize="14" />
+                <TextBlock Text="DLSS5" FontFamily="{StaticResource DisplayFont}" FontWeight="Bold" FontSize="14" />
                 <TextBlock Text="UPDATER" FontFamily="{StaticResource DisplayFont}" FontWeight="SemiBold" FontSize="14"
                            Foreground="{StaticResource Muted}" Margin="6,0,0,0" />
             </StackPanel>
@@ -946,7 +946,7 @@
                         <StackPanel Grid.Column="2" Orientation="Horizontal">
                             <Button Content="Restore DLSS" Style="{StaticResource BtnGhost}" Margin="0,0,8,0" ToolTip="Put back the game's original DLSS and Streamline files"
                                     Command="{Binding DataContext.RestoreDlssCommand, RelativeSource={RelativeSource AncestorType=Window}}" />
-                            <Button Content="Uninstall" Style="{StaticResource BtnDanger}" Padding="16,9" ToolTip="Remove everything DLSS Updater added and restore the original files"
+                            <Button Content="Uninstall" Style="{StaticResource BtnDanger}" Padding="16,9" ToolTip="Remove everything DLSS5 Updater added and restore the original files"
                                     Command="{Binding DataContext.UninstallCommand, RelativeSource={RelativeSource AncestorType=Window}}" />
                         </StackPanel>
                     </Grid>
@@ -1476,7 +1476,7 @@
                                 <StackPanel Margin="36,28,36,36" MaxWidth="760" HorizontalAlignment="Left">
                                     <Grid>
                                         <StackPanel Orientation="Horizontal">
-                                            <TextBlock Text="DLSS Updater" Style="{StaticResource H1}" />
+                                            <TextBlock Text="DLSS5 Updater" Style="{StaticResource H1}" />
                                             <TextBlock Text="{Binding AppVersion}" Style="{StaticResource MutedText}" VerticalAlignment="Bottom" Margin="10,0,0,3" />
                                         </StackPanel>
                                         <Button Style="{StaticResource BtnIcon}" Content="&#xE8BB;" HorizontalAlignment="Right" ToolTip="Close" AutomationProperties.Name="Close" Command="{Binding ToggleAboutCommand}" />
@@ -1582,13 +1582,13 @@
                                             <Button Tag="https://github.com/clshortfuse/openNR">
                                                 <x:Array Type="sys:String"><sys:String>ShortFuse NR compat</sys:String><sys:String>openNR · user-supplied RTX 20/30/40 runtime</sys:String></x:Array>
                                             </Button>
-                                            <Button Tag="https://github.com/ApolloF/dlssupdater">
-                                                <x:Array Type="sys:String"><sys:String>DLSS Updater</sys:String><sys:String>This app · source and releases</sys:String></x:Array>
+                                            <Button Tag="https://github.com/ApolloF/dlss5updater">
+                                                <x:Array Type="sys:String"><sys:String>DLSS5 Updater</sys:String><sys:String>This app · source and releases</sys:String></x:Array>
                                             </Button>
                                         </ItemsControl>
                                     </Border>
 
-                                    <TextBlock Text="Data, cache and log: %LocalAppData%\DLSSUpdater" Style="{StaticResource MutedText}" FontSize="11.5" Margin="0,16,0,0" />
+                                    <TextBlock Text="Data, cache and log: %LocalAppData%\DLSS5Updater" Style="{StaticResource MutedText}" FontSize="11.5" Margin="0,16,0,0" />
                                     <TextBlock Text="Not affiliated with or endorsed by NVIDIA. NVIDIA and DLSS are trademarks of NVIDIA Corporation, used here only to describe compatibility." Style="{StaticResource MutedText}" FontSize="11.5" TextWrapping="Wrap" Margin="0,6,0,0" />
                                 </StackPanel>
                             </ScrollViewer>

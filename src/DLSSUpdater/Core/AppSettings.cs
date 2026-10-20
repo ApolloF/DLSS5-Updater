@@ -59,7 +59,7 @@ public sealed class AppSettings
     public static readonly string[] ReShadeProxyNames =
         ["dxgi.dll", "d3d12.dll", "d3d11.dll", "d3d9.dll", "dinput8.dll", "opengl32.dll"];
 
-    /// <summary>A proxy name DLSS Updater would ever install under (OptiScaler or ReShade-only).</summary>
+    /// <summary>A proxy name DLSS5 Updater would ever install under (OptiScaler or ReShade-only).</summary>
     public static bool IsKnownProxy(string? name) =>
         name is not null && (ProxyNames.Contains(name, StringComparer.OrdinalIgnoreCase) || ReShadeProxyNames.Contains(name, StringComparer.OrdinalIgnoreCase));
 

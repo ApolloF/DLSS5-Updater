@@ -78,7 +78,7 @@ public sealed record InstallOptions
 
 public sealed class NeedsAdminException(string path)
     : Exception($"Windows blocked access to {path}. Close the game and any program using its files (overlays, antivirus scans), then try again. " +
-                "If the game is in a protected folder, restart DLSS Updater as administrator.");
+                "If the game is in a protected folder, restart DLSS5 Updater as administrator.");
 
 public sealed class GameFileInUseException(string gameName, Exception inner)
     : IOException($"A game file is in use. Close {gameName} and retry.", inner);
@@ -149,7 +149,7 @@ public sealed class Installer(ComponentStore store)
             }
         }
         if (o.ReShadeOnly && !o.ReShade) throw new InvalidOperationException("ReShade + add-ons mode installs ReShade as the proxy; ReShade can't be left out.");
-        if (!AppSettings.IsKnownProxy(o.Proxy)) throw new InvalidOperationException($"\"{o.Proxy}\" is not a proxy name DLSS Updater installs under.");
+        if (!AppSettings.IsKnownProxy(o.Proxy)) throw new InvalidOperationException($"\"{o.Proxy}\" is not a proxy name DLSS5 Updater installs under.");
         EnsureNoDoubleMfgUnlock(targetDir, o);
         // Fetch everything first so a network failure never leaves a half-installed game.
         var pkg = o.Opti && !o.ReShadeOnly ? await store.EnsureOptiAsync(o.OptiTag, progress, ct) : null;
@@ -1204,7 +1204,7 @@ public sealed class Installer(ComponentStore store)
     {
         targetDir = FileUtil.Normalize(targetDir);
         EnsureNotRunning(game.Root);
-        var m = InstallManifest.Read(targetDir) ?? throw new InvalidOperationException("No DLSS Updater install found here.");
+        var m = InstallManifest.Read(targetDir) ?? throw new InvalidOperationException("No DLSS5 Updater install found here.");
         m.Contain(targetDir, game.Root);
         var ctx = new Ctx(FileUtil.Normalize(game.Root), targetDir, m);
         try
@@ -1245,7 +1245,7 @@ public sealed class Installer(ComponentStore store)
     {
         targetDir = FileUtil.Normalize(targetDir);
         EnsureNotRunning(game.Root);
-        var m = InstallManifest.Read(targetDir) ?? throw new InvalidOperationException("No DLSS Updater install found here.");
+        var m = InstallManifest.Read(targetDir) ?? throw new InvalidOperationException("No DLSS5 Updater install found here.");
         m.Contain(targetDir, game.Root);
         var ctx = new Ctx(FileUtil.Normalize(game.Root), targetDir, m);
         try

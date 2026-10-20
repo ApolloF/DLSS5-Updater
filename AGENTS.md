@@ -1,11 +1,11 @@
-# DLSS Updater
+# DLSS5 Updater
 
 Windows desktop app that pulls the latest OptiScaler-NR, DLSS, MFG Unlock, Streamline and ReShade releases and installs them into the user's games.
 
 ## Stack
 - Language/runtime: C# 12, .NET 8 (`net8.0-windows`, `win-x64`)
 - UI: WPF with CommunityToolkit.Mvvm (`[ObservableProperty]`, `[RelayCommand]`). Theme tokens (colors, fonts, styles) are in `src/DLSSUpdater/Theme/Nvidia.xaml`. Reuse them, don't hard-code colors.
-- Data: JSON files under `%LocalAppData%\DLSSUpdater` (`AppPaths`), serialized through the source-generated `JsonCtx` in `Core/AppSettings.cs`. Register new serialized types there.
+- Data: JSON files under `%LocalAppData%\DLSS5Updater` (`AppPaths`), serialized through the source-generated `JsonCtx` in `Core/AppSettings.cs`. Register new serialized types there.
 - Tests: xUnit (`tests/DLSSUpdater.Tests`)
 - Installer: Inno Setup 6 (`installer/DLSSUpdater.iss`)
 
@@ -13,8 +13,8 @@ Windows desktop app that pulls the latest OptiScaler-NR, DLSS, MFG Unlock, Strea
 - Build (warnings are errors): `dotnet build -warnaserror`
 - Test: `dotnet test` (needs the .NET 8 runtime and Windows Desktop runtime installed, not just a newer SDK)
 - Integration test (downloads real releases, off by default): `$env:DLSSU_INTEGRATION=1; dotnet test`. `DLSSU_COMPONENTS` can point at a folder that holds `nvngx_dlssnr.dll`.
-- Publish the portable single-file exe: `dotnet publish src/DLSSUpdater -c Release -o publish` → `publish\DLSSUpdater.exe`
-- Installer (after publish): `iscc /DAppVersion=<version> installer\DLSSUpdater.iss` → `publish\DLSSUpdater-Setup-<version>.exe`
+- Publish the portable single-file exe: `dotnet publish src/DLSSUpdater -c Release -o publish` → `publish\DLSS5Updater.exe`
+- Installer (after publish): `iscc /DAppVersion=<version> installer\DLSSUpdater.iss` → `publish\DLSS5Updater-Setup-<version>.exe`
 
 ## Release flow
 1. Bump `<Version>` in `src/DLSSUpdater/DLSSUpdater.csproj`, and the version in the `iscc` example lines of `installer/DLSSUpdater.iss` and `README.md`. All three must say the same thing. Write the release text in `docs/releases/v<version>.md`; `release.yml` uses it as the GitHub release body.
@@ -40,7 +40,7 @@ Windows desktop app that pulls the latest OptiScaler-NR, DLSS, MFG Unlock, Strea
 - Use `FileUtil.AtomicWriteText` for every file the app writes.
 
 ## Hard rules
-- **`nvngx_dlssnr.dll` must never be committed, bundled, uploaded or redistributed** (NVIDIA's terms don't allow it). The user supplies it, and it stays in `%LocalAppData%\DLSSUpdater\components`. `.gitignore` blocks `*.dll`, `*.exe`, `*.addon64` and `*.zip`. Don't force-add binaries.
+- **`nvngx_dlssnr.dll` must never be committed, bundled, uploaded or redistributed** (NVIDIA's terms don't allow it). The user supplies it, and it stays in `%LocalAppData%\DLSS5Updater\components`. `.gitignore` blocks `*.dll`, `*.exe`, `*.addon64` and `*.zip`. Don't force-add binaries.
 - Tests and agents must not write NVIDIA driver profiles (`NvDrs` / NvAPI `Save`), launch real games or install into real game folders. Use temp directories.
 
 ## Check command
@@ -53,10 +53,10 @@ Takes about 40 seconds. `.github/workflows/ci.yml` (job `build-test`, windows-la
 - UI changes are checked in the running app.
 
 ## Git workflow
-- Remote: GitHub ApolloF/dlssupdater.
+- Remote: GitHub ApolloF/dlss5updater.
 - Branch, PR, CI (`build-test`), then merge only when the user says "ship it" (auto-merge, squash).
 - Releases: tag `v<version>` as described in "Release flow"; `release.yml` publishes.
 
 ## Secrets
-- No config or secrets in the repo; the app keeps its data in `%LocalAppData%\DLSSUpdater`. If a key is ever needed it comes from env vars, and `.env.example` lists the keys with no values.
+- No config or secrets in the repo; the app keeps its data in `%LocalAppData%\DLSS5Updater`. If a key is ever needed it comes from env vars, and `.env.example` lists the keys with no values.
 - Never commit real values. gitleaks runs on every commit.
