@@ -66,6 +66,8 @@ public sealed class InstallManifest
     public string? DlssNrFile { get; set; }
     public bool Dfc { get; set; }
     public string? DfcTag { get; set; }
+    /// <summary>Library id of the Deep Fried Chicken build placed; null in records from before the library.</summary>
+    public string? DfcId { get; set; }
     /// <summary>
     /// Files of DFC's 64-bit set we placed (not the cfg), entries as in <see cref="Files"/>. Older records lack it; their
     /// files are found by <see cref="ComponentStore.IsDfcPackagePath"/>.

@@ -33,12 +33,16 @@ public sealed partial class GameOptionViewModel : ObservableObject
     private readonly AppSettings _s;
     private readonly string _gameId;
     private readonly Func<AddonBuild?>? _lecram;
+    private readonly Func<string, bool>? _available;
     private OptionChoice _inherit = null!;
 
     /// <param name="lecram">For Lecram's options: the build this game uses, whose generation and label decide availability, hint and choices.</param>
-    public GameOptionViewModel(IniOptionViewModel definition, bool reShade, AppSettings settings, string gameId, Func<AddonBuild?>? lecram = null)
+    /// <param name="available">Whether the build this game uses has the key (Deep Fried Chicken: its default cfg), instead of the Settings' default build.</param>
+    public GameOptionViewModel(IniOptionViewModel definition, bool reShade, AppSettings settings, string gameId, Func<AddonBuild?>? lecram = null,
+        Func<string, bool>? available = null)
     {
         _lecram = lecram;
+        _available = available;
         _def = definition;
         _reShade = reShade;
         _s = settings;
@@ -46,14 +50,14 @@ public sealed partial class GameOptionViewModel : ObservableObject
         _def.PropertyChanged += (_, e) =>
         {
             if (_lecram is not null) return;
-            if (e.PropertyName == nameof(IniOptionViewModel.IsAvailable)) OnPropertyChanged(nameof(IsAvailable));
+            if (e.PropertyName == nameof(IniOptionViewModel.IsAvailable)) { if (_available is null) OnPropertyChanged(nameof(IsAvailable)); }
             else if (e.PropertyName == nameof(IniOptionViewModel.Hint)) OnPropertyChanged(nameof(Hint));
             else if (e.PropertyName == nameof(IniOptionViewModel.Choices)) Refresh();
         };
         Rebuild();
     }
 
-    public bool IsAvailable => _lecram is null ? _def.IsAvailable : LecramView.IsAvailable;
+    public bool IsAvailable => _available is not null ? _available(_def.Key) : _lecram is null ? _def.IsAvailable : LecramView.IsAvailable;
 
     public string Label => _def.Label;
     public string Hint => _lecram is null ? _def.Hint : LecramView.Hint;

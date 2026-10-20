@@ -31,6 +31,8 @@ public sealed record InstallOptions
     public string? UpliftTag { get; init; }
     /// <summary>Deep Fried Chicken, an imported ReShade add-on; excludes <see cref="RenoDx"/> (two NR injectors).</summary>
     public bool Dfc { get; init; }
+    /// <summary>Deep Fried Chicken build from the library (it decides the set, the default cfg and non-DLSS support); null = the default build.</summary>
+    public string? DfcId { get; init; }
     public bool Dlss { get; init; }
     /// <summary>Put nvngx_dlss.dll next to OptiScaler when the game has none (independent of <see cref="Dlss"/>).</summary>
     public bool AddMissingDlss { get; init; }
@@ -73,6 +75,7 @@ public sealed record InstallOptions
         DlssNrId = m.DlssNrId,
         RenoDxId = m.RenoDxId ?? RenoDxId,
         LecramId = m.LecramId ?? LecramId,
+        DfcId = m.DfcId ?? DfcId,
     };
 }
 
@@ -179,9 +182,9 @@ public sealed class Installer(ComponentStore store)
             throw new InvalidOperationException("Deep Fried Chicken needs ReShade with add-on support and an imported NR runtime.");
         var renoDx = o.RenoDx ? store.RequireAddon(AddonKind.RenoDx, o.RenoDxId) : null;
         var lecram = o.Lecram ? store.RequireAddon(AddonKind.Lecram, o.LecramId) : null;
-        var dfc = o.Dfc ? store.RequireDfc() : null;
-        if (dfc is not null && !nativeDlss && !store.DfcSupportsNonDlssGames)
-            throw new InvalidOperationException(DfcNeedsNativeDlss(store.DfcVersion));
+        var dfc = o.Dfc ? store.RequireAddon(AddonKind.Dfc, o.DfcId).Build : null;
+        if (dfc is not null && !nativeDlss && !ComponentStore.DfcSupportsNonDlssGames(dfc))
+            throw new InvalidOperationException(DfcNeedsNativeDlss(dfc.FileVersion));
         // INSTALL.txt: add your own nvngx_dlss.dll beside the game exe; DFC does not ship it. The game has none of its own here.
         var dfcRuntimes = dfc is not null && !nativeDlss;
         var uplift = o.Uplift ? await store.EnsureUpliftAsync(o.UpliftTag, progress, ct) : null;
@@ -263,7 +266,7 @@ public sealed class Installer(ComponentStore store)
                 }
                 if (reshade is not null)
                 {
-                    WriteReShadeIni(ctx, o, addonEffects: uplift is not null || (dfc is not null && store.DfcInstallFiles().Any(f => f.StartsWith(ComponentStore.DfcShaderDir + "\\", StringComparison.OrdinalIgnoreCase))),
+                    WriteReShadeIni(ctx, o, addonEffects: uplift is not null || (dfc is not null && ComponentStore.DfcInstallFiles(dfc).Any(f => f.StartsWith(ComponentStore.DfcShaderDir + "\\", StringComparison.OrdinalIgnoreCase))),
                         lecram: lecram?.Build);
                     // ReShade-only: ReShade itself is the proxy the game loads; otherwise OptiScaler loads ReShade64.dll.
                     Place(ctx, reshade, Path.Combine(targetDir, o.ReShadeOnly ? o.Proxy : ComponentStore.ReShadeFile));
@@ -315,11 +318,12 @@ public sealed class Installer(ComponentStore store)
                 if (dfc is not null)
                 {
                     DisplaceForeignNrAddons(ctx, [.. ComponentStore.RenoDxFamily, .. ComponentStore.DfcForeignFiles, .. ComponentStore.UpliftFiles, .. ComponentStore.LegacyUpliftFiles]);
-                    PlaceDfc(ctx);
+                    PlaceDfc(ctx, dfc);
                     PlaceDfcRuntimes(ctx, dfcRuntimes ? dlss : null, o.DfcFrameGen);
-                    WriteDfcConfig(ctx, o);
+                    WriteDfcConfig(ctx, o, dfc);
                     m.Dfc = true;
-                    m.DfcTag = store.DfcTag;
+                    m.DfcTag = dfc.Tag;
+                    m.DfcId = dfc.Id;
                 }
                 if (uplift is not null)
                 {
@@ -643,21 +647,22 @@ public sealed class Installer(ComponentStore store)
     }
 
     /// <summary>
-    /// deep-fried-chicken.cfg: fresh mode starts from the imported default, otherwise the game's cfg is kept.
+    /// deep-fried-chicken.cfg: fresh mode starts from the default cfg of <paramref name="build"/>, otherwise the game's cfg is kept.
     /// The app's DFC options are merged in, preserving overlay edits unless overwrite is selected.
     /// A cfg that was already there is backed up once, before the first change.
     /// </summary>
-    private void WriteDfcConfig(Ctx ctx, InstallOptions o)
+    private static void WriteDfcConfig(Ctx ctx, InstallOptions o, AddonBuild build)
     {
         var m = ctx.M;
         var path = Path.Combine(ctx.Target, ComponentStore.DfcConfigFile);
         var rel = ctx.Rel(path);
         var exists = File.Exists(path);
         var profile = o.ReShadeOverrides.Where(DfcConfig.IsDfc).ToList();
-        var defaults = File.Exists(store.DfcConfigPath) ? File.ReadAllText(store.DfcConfigPath) : null;
+        var defaultsPath = ComponentStore.DfcConfigOf(build);
+        var defaults = File.Exists(defaultsPath) ? File.ReadAllText(defaultsPath) : null;
         if (!exists && profile.Count == 0 && m.DfcCfg.Count == 0)
         {
-            if (defaults is not null) Place(ctx, store.DfcConfigPath, path);
+            if (defaults is not null) Place(ctx, defaultsPath, path);
             return;
         }
         if (o.CarryOverIni && exists && profile.Count == 0 && m.DfcCfg.Count == 0) return;
@@ -698,23 +703,23 @@ public sealed class Installer(ComponentStore store)
     private const string PreviousDir = "previous";
 
     /// <summary>
-    /// Copies the imported 64-bit set into the game with the package's layout (the whole 64-bit folder but the cfg, file by
-    /// file), then takes out files an earlier set of ours had and this one lacks. Each file is recorded as DFC's before it
-    /// is placed, so a run that stops part-way still knows it.
+    /// Copies the 64-bit set of <paramref name="build"/> into the game with the package's layout (the whole 64-bit folder but
+    /// the cfg, file by file), then takes out files an earlier set of ours had and this one lacks (another build, or the same
+    /// build imported again). Each file is recorded as DFC's before it is placed, so a run that stops part-way still knows it.
     /// </summary>
-    private void PlaceDfc(Ctx ctx)
+    private static void PlaceDfc(Ctx ctx, AddonBuild build)
     {
-        var files = store.DfcInstallFiles();
+        var files = ComponentStore.DfcInstallFiles(build);
         foreach (var rel in files)
         {
             var dest = Path.Combine(ctx.Target, rel);
             if (!ctx.M.DfcFiles.Contains(ctx.Rel(dest), StringComparer.OrdinalIgnoreCase)) ctx.M.DfcFiles.Add(ctx.Rel(dest));
-            Place(ctx, Path.Combine(ComponentStore.DfcDir, rel), dest);
+            Place(ctx, Path.Combine(ComponentStore.DfcBuildDir(build), rel), dest);
         }
         foreach (var full in OwnedDfcFiles(ctx).Where(f => !files.Contains(Path.GetRelativePath(ctx.Target, f), StringComparer.OrdinalIgnoreCase)))
         {
             RemoveOwned(ctx, full);
-            Log.Info($"  removed {ctx.Rel(full)} (not in the imported Deep Fried Chicken set)");
+            Log.Info($"  removed {ctx.Rel(full)} (not in the Deep Fried Chicken {build.Name} set)");
         }
         ctx.M.DfcFiles.RemoveAll(e => !ctx.M.Owns(e));
     }
@@ -742,6 +747,7 @@ public sealed class Installer(ComponentStore store)
         ctx.M.DfcFiles.Clear();
         ctx.M.Dfc = false;
         ctx.M.DfcTag = null;
+        ctx.M.DfcId = null;
         Log.Info($"  {ComponentStore.DfcFile} removed");
     }
 
@@ -796,7 +802,7 @@ public sealed class Installer(ComponentStore store)
         }
     }
 
-    /// <summary>The refusal for an imported DFC older than 4.x in a game without its own DLSS.</summary>
+    /// <summary>The refusal for a DFC build older than 4.x in a game without its own DLSS.</summary>
     internal static string DfcNeedsNativeDlss(string? version) =>
         $"Deep Fried Chicken {version} needs a game with native DLSS. Import Deep Fried Chicken {ComponentStore.DfcNonDlssMajor}.x, which also supports games without their own DLSS.";
 

@@ -29,7 +29,7 @@ public sealed partial class MainViewModel : ObservableObject
         Log.TrimFile();
         var settings = AppSettings.Load();
         var gh = new GitHubClient { Token = settings.GitHubToken };
-        var store = new ComponentStore(gh, () => settings.IncludePrereleases) { AutoReShade = () => settings.AutoDownloadReShade, SelectedDlssNr = () => settings.DlssNrId, SelectedRenoDx = () => settings.RenoDxId, SelectedLecram = () => settings.LecramId, PairTests = () => settings.AddonPairTests, OptiSourceRepo = () => settings.OptiSource };
+        var store = new ComponentStore(gh, () => settings.IncludePrereleases) { AutoReShade = () => settings.AutoDownloadReShade, SelectedDlssNr = () => settings.DlssNrId, SelectedRenoDx = () => settings.RenoDxId, SelectedLecram = () => settings.LecramId, SelectedDfc = () => settings.DfcId, PairTests = () => settings.AddonPairTests, OptiSourceRepo = () => settings.OptiSource };
         S = new Services { Settings = settings, Store = store, Installer = new Installer(store) };
         Gh = gh;
         _busy.Changed += () => IsBusy = _busy.IsBusy;
