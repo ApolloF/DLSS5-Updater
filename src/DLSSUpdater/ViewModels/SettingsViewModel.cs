@@ -374,13 +374,11 @@ public sealed partial class SettingsViewModel : ObservableObject
 
     public string? LecramMessage => _main.S.Store.SfLecramMessage(_main.S.Store.RenoDxImported, _main.S.Store.LecramImported, Settings.RenoDxId, Settings.LecramId);
     public bool HasLecramMessage => LecramMessage is not null;
-    public bool IsPairCrashed => _main.S.Store.PairTestFor(Settings.RenoDxId, Settings.LecramId)?.Status == AddonPairStatus.Crashed;
 
     public void RefreshAddonPairStatus()
     {
         OnPropertyChanged(nameof(LecramMessage));
         OnPropertyChanged(nameof(HasLecramMessage));
-        OnPropertyChanged(nameof(IsPairCrashed));
     }
 
     /// <summary>Hides the options the default Lecram build's generation doesn't have and switches the rest to its values.</summary>

@@ -578,18 +578,17 @@ public sealed class LecramTests : IDisposable
 
     [Theory]
     [InlineData(AddonPairStatus.Works, true, true, null)]
-    [InlineData(AddonPairStatus.Untested, true, true, "This ShortFuse + Lecram pair hasn't been tested together yet. Known working: none recorded.")]
+    [InlineData(AddonPairStatus.Untested, true, true, null)]
     [InlineData(AddonPairStatus.Crashed, true, true, "crashed before (marked 2026-10-18)")]
     [InlineData(AddonPairStatus.Crashed, true, false, null)]
     [InlineData(AddonPairStatus.Crashed, false, true, null)]
     public void PairMessage_UsesRecordedStatus_OnlyWhileBothAddonsAreSelected(AddonPairStatus status, bool renoDx, bool lecram, string? expected)
     {
         var pair = new AddonPairTest("sf", "lec", status, new DateTime(2026, 10, 18, 12, 0, 0, DateTimeKind.Local));
-        var message = LecramCompat.Message(renoDx, lecram, pair, "");
+        var message = LecramCompat.Message(renoDx, lecram, pair);
         if (expected is null) Assert.Null(message);
         else Assert.Contains(expected, message);
-        Assert.Contains("none recorded", LecramCompat.Message(true, true, null, ""));
-        Assert.Contains("Known working: SF A + Lecram B.", LecramCompat.Message(true, true, null, "SF A + Lecram B"));
+        Assert.Null(LecramCompat.Message(true, true, null));
     }
 
     [Theory]
@@ -615,12 +614,12 @@ public sealed class LecramTests : IDisposable
         finally { Log.Line -= Capture; }
 
         var messages = lines.Where(l => l.Contains("This ShortFuse + Lecram pair")).ToList();
-        if (status == AddonPairStatus.Works) Assert.Empty(messages);
+        if (status != AddonPairStatus.Crashed) Assert.Empty(messages);
         else
         {
             var message = Assert.Single(messages);
-            Assert.Equal(status == AddonPairStatus.Crashed, message.Contains("WARNING"));
-            Assert.Contains(status == AddonPairStatus.Crashed ? "crashed before" : "hasn't been tested", message);
+            Assert.Contains("WARNING", message);
+            Assert.Contains("crashed before", message);
         }
         Assert.True(File.Exists(G(ComponentStore.RenoDxFile)));
         Assert.True(File.Exists(G(V10File)));

@@ -842,16 +842,8 @@
                                     <Button Content="Mark as working" Style="{StaticResource BtnGhost}" Command="{Binding MarkPairWorkingCommand}" Margin="0,0,8,0" />
                                     <Button Content="Mark as crashed" Style="{StaticResource BtnGhost}" Command="{Binding MarkPairCrashedCommand}" />
                                 </WrapPanel>
-                                <TextBlock Text="{Binding SfLecramMessage}" TextWrapping="Wrap" FontSize="12" Margin="18,8,0,0"
-                                           Visibility="{Binding HasSfLecramMessage, Converter={StaticResource BoolToVis}}">
-                                    <TextBlock.Style>
-                                        <Style TargetType="TextBlock" BasedOn="{StaticResource MutedText}">
-                                            <Style.Triggers>
-                                                <DataTrigger Binding="{Binding IsPairCrashed}" Value="True"><Setter Property="Foreground" Value="{StaticResource Warn}" /></DataTrigger>
-                                            </Style.Triggers>
-                                        </Style>
-                                    </TextBlock.Style>
-                                </TextBlock>
+                                <TextBlock Text="{Binding SfLecramMessage}" Style="{StaticResource MutedText}" TextWrapping="Wrap" FontSize="12" Margin="18,8,0,0" Foreground="{StaticResource Warn}"
+                                           Visibility="{Binding HasSfLecramMessage, Converter={StaticResource BoolToVis}}" />
                             </StackPanel>
                             <!-- Deep Fried Chicken in a game without its own DLSS: what changes, and the DLSS-G runtime for its frame generation. -->
                             <TextBlock Text="{Binding DfcNoDlssWarning}" Foreground="{StaticResource Warn}" TextWrapping="Wrap" FontSize="12" Margin="34,4,16,12"
@@ -1095,16 +1087,8 @@
                                                     <ContentControl Content="{Binding RenoDx}" ContentTemplate="{StaticResource AddonLibraryRow}" Margin="0,10" />
                                                     <Border Style="{StaticResource Divider}" />
                                                     <ContentControl Content="{Binding Lecram}" ContentTemplate="{StaticResource AddonLibraryRow}" Margin="0,10" />
-                                                    <TextBlock Text="{Binding LecramMessage}" TextWrapping="Wrap" FontSize="12" Margin="0,0,0,10"
-                                                               Visibility="{Binding HasLecramMessage, Converter={StaticResource BoolToVis}}">
-                                                        <TextBlock.Style>
-                                                            <Style TargetType="TextBlock" BasedOn="{StaticResource MutedText}">
-                                                                <Style.Triggers>
-                                                                    <DataTrigger Binding="{Binding IsPairCrashed}" Value="True"><Setter Property="Foreground" Value="{StaticResource Warn}" /></DataTrigger>
-                                                                </Style.Triggers>
-                                                            </Style>
-                                                        </TextBlock.Style>
-                                                    </TextBlock>
+                                                    <TextBlock Text="{Binding LecramMessage}" Style="{StaticResource MutedText}" TextWrapping="Wrap" FontSize="12" Margin="0,0,0,10" Foreground="{StaticResource Warn}"
+                                                               Visibility="{Binding HasLecramMessage, Converter={StaticResource BoolToVis}}" />
                                                     <Grid Margin="0,10">
                                                         <Grid.ColumnDefinitions>
                                                             <ColumnDefinition Width="*" />

@@ -468,7 +468,7 @@ public sealed class AddonLibraryTests : IDisposable
         vm.Components.First(c => c.Key == "renodx").Enabled = true;
         vm.Components.First(c => c.Key == "lecram").Enabled = true;
         Assert.Equal(AddonPairStatus.Untested, vm.PairStatus);
-        Assert.Contains("none recorded", vm.SfLecramMessage);
+        Assert.Null(vm.SfLecramMessage);
         Assert.False(vm.IsPairCrashed);
         Assert.True(vm.MarkPairWorkingCommand.CanExecute(null));
         var changed = new List<string?>();
@@ -483,8 +483,7 @@ public sealed class AddonLibraryTests : IDisposable
         Assert.NotNull(saved.Marked);
 
         vm.RenoDxChoice = vm.RenoDxChoices.Single(c => c.Tag == newer.Id);
-        Assert.Contains("hasn't been tested", vm.SfLecramMessage);
-        Assert.Contains(sf.Label, vm.SfLecramMessage);
+        Assert.Null(vm.SfLecramMessage);
         vm.MarkPairCrashedCommand.Execute(null);
         Assert.True(vm.IsPairCrashed);
         Assert.Contains("crashed before (marked ", vm.SfLecramMessage);
