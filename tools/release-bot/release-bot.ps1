@@ -22,6 +22,9 @@ param(
     [string]$StateFile,
     # Isolation hook (not active yet): run Claude as this local user through %LocalAppData%\dlss5updater-releasebot\isolation.ps1.
     [string]$RunAs,
+    # With -RunAs: the folder the isolated user's sandboxes live in (README, Full isolation). The bot only copies back a
+    # sandbox inside it.
+    [string]$IsolationRoot,
     # Without -RunAs the bot refuses to start the real Claude (also in a dry run) unless this is given.
     [switch]$UnsafeRunClaudeAsOwner,
     [int]$ClaudeTimeoutMinutes = 60,
@@ -62,6 +65,8 @@ $Ua = 'dlss5updater-releasebot'
 # normal browser profile). The text is paid content and untrusted: it only goes to Claude on the review path.
 $BmacUrl = 'https://buymeacoffee.com/lecram/dlss-generic-v10-1'
 $BrowserProfile = Join-Path $Root 'browser-profile'
+# The Lecram major the app is tested with: patch notes of any other major are refused, not sent to Claude.
+$LecramNotesMajor = 11
 
 # The mods the app pins a tested version for. Asset: the release asset the app installs (null = any release).
 # Pin: the bot can prove a bump config-neutral by itself (OptiScaler.ini and zip file list identical) and write it.
@@ -368,8 +373,20 @@ function Check-LecramNotes($state) {
         $sections = @(Get-PatchSections (Get-BmacText))
         if (-not $sections.Count) { throw 'no "vN Patch N" sections on the page (logged out, or the page changed)' }
         $state.Remove('bmacWarned')
-        $last = $sections[-1]
-        $new = @(Select-NewPatchSections $sections $state.items['lecram-notes'].seen)
+        $seen = $state.items['lecram-notes'].seen
+        $new = @(Select-NewPatchSections $sections $seen)
+        $refused = @($new | ForEach-Object { $r = Get-PatchSectionRefusal $_ $seen $LecramNotesMajor; if ($r) { "$($_.Key): $r" } })
+        if ($refused.Count) {
+            $why = Format-SafeText ($refused -join '; ') 200
+            Log "lecram-notes: refused, not sent to Claude: $why"
+            if ($state.bmacRefused -ne $why) {
+                Send-Notice 'DLSS5 Updater bot: odd release-note section' "Lecram's notes page has a section the bot doesn't trust ($why). Check the post; if it is real, raise `$LecramNotesMajor in release-bot.ps1 or set lecram-notes seen in state.json." $BmacUrl 3 'warning'
+                $state.bmacRefused = $why
+            }
+            return $null
+        }
+        $state.Remove('bmacRefused')
+        $last = if ($new.Count) { $new[-1] } else { $sections[-1] }
         @{ seen = $last.Key; detail = "Lecram's members-only release notes, newest $($last.Key)"; assets = @()
            notes = @($new | ForEach-Object { "#### $($_.Key)`n$($_.Text)" }) }
     } catch {
@@ -599,11 +616,12 @@ function Invoke-Claude([string]$sandbox, [string]$prompt, [string]$outFile) {
         # Claude in its own copy of the sandbox and returns that folder; the bot copies it back itself, refusing links.
         $hook = Join-Path $Root 'isolation.ps1'
         if (-not (Test-Path $hook)) { Fail-Global "-RunAs $RunAs needs $hook (README, Full isolation)" }
+        if (-not $IsolationRoot -or -not (Test-Path -LiteralPath $IsolationRoot -PathType Container)) { Fail-Global "-RunAs $RunAs needs -IsolationRoot <existing folder> (README, Full isolation)" }
         $r = & $hook -User $RunAs -Exe $ClaudeExe -ArgumentList $argv -WorkingDirectory $repoDir -Environment $envMap -Stdin $prompt -TimeoutMinutes $ClaudeTimeoutMinutes -Sandbox $sandbox
         $code = $r.ExitCode; $stdout = "$($r.Stdout)"
         if (-not $r.Sandbox -or -not (Test-Path -LiteralPath $r.Sandbox -PathType Container)) { Fail-Global 'isolation.ps1 returned no sandbox folder' }
         $resultDir = Join-Path $Work 'sandbox-back'
-        Copy-SandboxBack $r.Sandbox $resultDir
+        Copy-SandboxBack $r.Sandbox $resultDir $IsolationRoot $Root
     } else {
         $psi = [Diagnostics.ProcessStartInfo]::new($ClaudeExe)
         foreach ($a in $argv) { $psi.ArgumentList.Add($a) }
@@ -712,6 +730,15 @@ function Remove-ClosedBotBranches($state, [string]$login) {
 
 # ---------- release of a merged auto PR, and promotion of its prerelease ----------
 
+function Test-OriginHasOurTag([string]$tag, [string]$sha) {
+    # True when origin's tag is the annotated tag object the bot made in the mirror, on $sha. Unknown is false.
+    $remote = MGit @('ls-remote', '--tags', 'origin', "refs/tags/$tag") -Quiet
+    $id = MGit @('rev-parse', '--verify', '--quiet', "refs/tags/$tag") -Quiet
+    $peeled = MGit @('rev-parse', '--verify', '--quiet', "refs/tags/$tag^{commit}") -Quiet
+    if ($remote.Code -ne 0 -or $id.Code -ne 0 -or $peeled.Code -ne 0) { return $false }
+    Test-OwnTagOnOrigin $remote.Out $tag $id.Out $peeled.Out $sha
+}
+
 function Complete-PendingRelease($state) {
     $pending = $state.pending
     if (-not $pending) { return }
@@ -740,7 +767,15 @@ function Complete-PendingRelease($state) {
     }
     $remote = MGit @('ls-remote', '--tags', 'origin', "refs/tags/$tag")
     if ($remote.Code -ne 0) { Fail-Global 'cannot list the tags on origin' }
-    if ($remote.Out) { Log "$tag already exists on origin"; $state.Remove('pending'); return }
+    if ($remote.Out) {
+        if (-not (Test-OriginHasOurTag $tag $sha)) { Log "$tag already exists on origin"; $state.Remove('pending'); return }
+        # Our own tag from a push that reported failure last run: record it as pushed.
+        Log "$tag on origin is the bot's own tag on $sha"
+        $state.prereleases[$tag] = @{ tagged = (Get-Date).ToString('o'); pr = $pending.pr; notesHash = $pending.notesHash }
+        $state.Remove('pending')
+        Save-State $state
+        return
+    }
     # The squash commit's parent must still be the released state the bot checked: nothing unreleased rides along.
     $unreleased = if ($pending.baseVersion -and $pending.notesHash) { Get-ReleasedGate $pending.baseVersion "$sha^1" } else { 'pending record from an older bot version' }
     if ($unreleased) {
@@ -756,8 +791,9 @@ function Complete-PendingRelease($state) {
         Assert-PushSafe $null
         MGit @('push', '--quiet', 'origin', "refs/tags/$tag") -Check | Out-Null
     } catch {
-        # Never leave an unpushed tag behind for a later gate to mistake for origin's.
-        MGit @('tag', '-d', $tag) -Quiet | Out-Null
+        # A push can report failure after origin took the tag. Then the local tag is origin's and pending stays, so the
+        # next run records the prerelease; otherwise never leave an unpushed tag behind for a later gate to mistake.
+        if (-not (Test-OriginHasOurTag $tag $sha)) { MGit @('tag', '-d', $tag) -Quiet | Out-Null }
         throw
     }
     $state.prereleases[$tag] = @{ tagged = (Get-Date).ToString('o'); pr = $pending.pr; notesHash = $pending.notesHash }

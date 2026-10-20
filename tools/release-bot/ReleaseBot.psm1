@@ -429,27 +429,127 @@ function Find-ReparsePoints([string]$root) {
     @($found)
 }
 
-function Copy-SandboxBack([string]$from, [string]$to) {
+if (-not ('ReleaseBot.HandleCopy' -as [type])) {
+    Add-Type -TypeDefinition @'
+using System; using System.IO; using System.Text; using System.ComponentModel; using System.Runtime.InteropServices;
+using Microsoft.Win32.SafeHandles;
+namespace ReleaseBot {
+  // Copies a file out of a folder another user controls. Paths can change under us (a folder swapped for a junction
+  // after it was listed), so every check is made on the open handle and the bytes come from that same handle.
+  public static class HandleCopy {
+    [StructLayout(LayoutKind.Sequential)]
+    struct Info { public uint Attributes, C1, C2, A1, A2, W1, W2, Volume, SizeHigh, SizeLow, Links, IndexHigh, IndexLow; }
+    [DllImport("kernel32.dll", CharSet = CharSet.Unicode, SetLastError = true)]
+    static extern SafeFileHandle CreateFileW(string name, uint access, uint share, IntPtr sa, uint disposition, uint flags, IntPtr template);
+    [DllImport("kernel32.dll", CharSet = CharSet.Unicode, SetLastError = true)]
+    static extern uint GetFinalPathNameByHandleW(SafeFileHandle h, StringBuilder buf, uint len, uint flags);
+    [DllImport("kernel32.dll", SetLastError = true)]
+    static extern bool GetFileInformationByHandle(SafeFileHandle h, out Info info);
+    const uint GenericRead = 0x80000000, ReadAttributes = 0x80, ShareRead = 1, ShareAll = 7, OpenExisting = 3;
+    const uint OpenReparsePoint = 0x00200000, BackupSemantics = 0x02000000;
+    const uint AttrDirectory = 0x10, AttrReparse = 0x400;
+
+    static SafeFileHandle Open(string path, uint access, uint share, uint flags) {
+      var h = CreateFileW(path, access, share, IntPtr.Zero, OpenExisting, flags, IntPtr.Zero);
+      if (h.IsInvalid) throw new IOException(path + ": " + new Win32Exception(Marshal.GetLastWin32Error()).Message);
+      return h;
+    }
+    static string FinalPath(SafeFileHandle h) {
+      var sb = new StringBuilder(1024);
+      uint n = GetFinalPathNameByHandleW(h, sb, (uint)sb.Capacity, 0);
+      if (n >= sb.Capacity) { sb = new StringBuilder((int)n + 1); n = GetFinalPathNameByHandleW(h, sb, (uint)sb.Capacity, 0); }
+      if (n == 0 || n >= sb.Capacity) throw new IOException("no final path: " + new Win32Exception(Marshal.GetLastWin32Error()).Message);
+      return sb.ToString();
+    }
+    static Info Query(SafeFileHandle h) {
+      Info i;
+      if (!GetFileInformationByHandle(h, out i)) throw new IOException(new Win32Exception(Marshal.GetLastWin32Error()).Message);
+      return i;
+    }
+
+    // True when path lies strictly inside root (case-insensitive; "C:\sb2" is not inside "C:\sb").
+    public static bool Under(string path, string root) {
+      return path.StartsWith(root.TrimEnd('\\') + "\\", StringComparison.OrdinalIgnoreCase);
+    }
+
+    // Final path of a folder. With noFollow the folder itself must not be a link.
+    public static string DirFinalPath(string path, bool noFollow) {
+      using (var h = Open(path, ReadAttributes, ShareAll, BackupSemantics | (noFollow ? OpenReparsePoint : 0))) {
+        var i = Query(h);
+        if ((i.Attributes & AttrDirectory) == 0) throw new IOException(path + " is not a folder");
+        if (noFollow && (i.Attributes & AttrReparse) != 0) throw new IOException(path + " is a link");
+        return FinalPath(h);
+      }
+    }
+
+    // Copies src to the new file dst if the handle shows a plain file with one name, inside root. Returns the bytes
+    // copied; throws (dst not created) on any violation, or when the file holds more than maxBytes.
+    public static long CopyChecked(string src, string dst, string root, long maxBytes) {
+      using (var h = Open(src, GenericRead, ShareRead, OpenReparsePoint)) {
+        var i = Query(h);
+        if ((i.Attributes & (AttrReparse | AttrDirectory)) != 0) throw new InvalidOperationException(src + " is a link or a folder now");
+        string final = FinalPath(h);
+        if (!Under(final, root)) throw new InvalidOperationException(src + " resolves outside the sandbox (" + final + ")");
+        if (i.Links != 1) throw new InvalidOperationException(src + " has " + i.Links + " hard links");
+        if ((((long)i.SizeHigh << 32) | i.SizeLow) > maxBytes) throw new InvalidOperationException("size cap reached at " + src);
+        using (var input = new FileStream(h, FileAccess.Read))
+        using (var output = new FileStream(dst, FileMode.CreateNew, FileAccess.Write)) {
+          var buf = new byte[81920]; long total = 0; int n;
+          while ((n = input.Read(buf, 0, buf.Length)) > 0) {
+            total += n;
+            if (total > maxBytes) throw new InvalidOperationException("size cap reached at " + src);
+            output.Write(buf, 0, n);
+          }
+          return total;
+        }
+      }
+    }
+  }
+}
+'@
+}
+
+function Copy-SandboxBack([string]$from, [string]$to, [string]$isolationRoot, [string]$botRoot, [long]$maxBytes = 200MB, [int]$maxFiles = 20000) {
     # The owner side copies the isolated user's sandbox back. That user could plant a link to the owner's files
-    # (Notes, ~\.claude, ~\.ssh) for the owner's copy to follow into a public PR, so any link anywhere aborts the copy
-    # before a byte is copied, and every item is checked again as it is copied. Build output is left behind.
+    # (Notes, ~\.claude, ~\.ssh) for the owner's copy to follow into a public PR. A first walk refuses any link, but the
+    # user's processes could still swap a folder for a junction after it, so each file is opened without following a
+    # link, its final path must lie inside the sandbox and it must have no other hard link, and the bytes come from
+    # that same handle. Any violation or cap aborts and removes what was copied. Build output is left behind.
     $links = @(Find-ReparsePoints $from)
     if ($links.Count) { throw "the isolated sandbox has links ($(Format-SafeText ($links -join ', ') 200)); nothing copied back" }
+    if (-not $isolationRoot -or -not $botRoot) { throw 'copy-back needs the isolation root and the bot root' }
+    $root = [ReleaseBot.HandleCopy]::DirFinalPath($from, $true)
+    if (-not [ReleaseBot.HandleCopy]::Under($root, [ReleaseBot.HandleCopy]::DirFinalPath($isolationRoot, $false))) {
+        throw "the isolated sandbox $root is not inside the isolation root $isolationRoot; nothing copied back"
+    }
+    if (Test-Path -LiteralPath $botRoot) {
+        $bot = [ReleaseBot.HandleCopy]::DirFinalPath($botRoot, $false)
+        if ($root -ieq $bot -or [ReleaseBot.HandleCopy]::Under($root, $bot)) { throw "the isolated sandbox $root is inside the bot's own folder; nothing copied back" }
+    }
     if (Test-Path -LiteralPath $to) { throw "copy-back target $to already exists" }
     $skip = '^(bin|obj|\.vs|TestResults|publish)$'
     New-Item -ItemType Directory $to | Out-Null
-    $stack = [Collections.Generic.Stack[object]]::new(); $stack.Push(@([IO.DirectoryInfo]::new($from), $to))
-    while ($stack.Count) {
-        $d, $dest = $stack.Pop()
-        foreach ($i in $d.EnumerateFileSystemInfos()) {
-            if ($i.Attributes -band [IO.FileAttributes]::ReparsePoint) { throw "$($i.FullName) turned into a link during the copy-back; stopping" }
-            $target = Join-Path $dest $i.Name
-            if ($i -is [IO.DirectoryInfo]) {
-                if ($i.Name -match $skip) { continue }
-                New-Item -ItemType Directory $target | Out-Null
-                $stack.Push(@($i, $target))
-            } else { [IO.File]::Copy($i.FullName, $target, $false) }
+    try {
+        $left = $maxBytes; $files = 0
+        $stack = [Collections.Generic.Stack[object]]::new(); $stack.Push(@([IO.DirectoryInfo]::new($from), $to))
+        while ($stack.Count) {
+            $d, $dest = $stack.Pop()
+            foreach ($i in $d.EnumerateFileSystemInfos()) {
+                if ($i.Attributes -band [IO.FileAttributes]::ReparsePoint) { throw "$($i.FullName) turned into a link during the copy-back" }
+                $target = Join-Path $dest $i.Name
+                if ($i -is [IO.DirectoryInfo]) {
+                    if ($i.Name -match $skip) { continue }
+                    New-Item -ItemType Directory $target | Out-Null
+                    $stack.Push(@($i, $target))
+                } else {
+                    if (++$files -gt $maxFiles) { throw "more than $maxFiles files" }
+                    $left -= [ReleaseBot.HandleCopy]::CopyChecked($i.FullName, $target, $root, $left)
+                }
+            }
         }
+    } catch {
+        Remove-Item -LiteralPath $to -Recurse -Force -ErrorAction SilentlyContinue
+        throw "copy-back aborted, nothing copied back: $($_.Exception.GetBaseException().Message)"
     }
 }
 
@@ -475,9 +575,11 @@ function Test-ContainsPaidText([string]$text, [string[]]$notes, [int]$words = 8)
 function ConvertFrom-HtmlText([string]$html) {
     # Visible text of a dumped DOM, one block element per line.
     $t = $html -replace '(?is)<(script|style|noscript|svg|template)\b.*?</\1\s*>', ' '
-    # Page regions (comments, footer, sidebar) start a new block: a patch section never runs past one. Headings get a
-    # level mark, so a section only ends at a heading of its own or a higher level.
-    $t = $t -replace '(?i)<(footer|aside|form|section|nav|header|hr|dialog)\b|</article\s*>', "`n$($script:BlockMark)`n$&"
+    # Marks for Get-PatchSections: where the post starts, rules between its parts, and page regions (comments, footer,
+    # sidebar, the post's end). Headings get a level mark, so a section only ends at a heading of its own or a higher
+    # level.
+    $t = $t -replace '(?i)<article\b', "`n[[article]]`n$&" -replace '(?i)<hr\b', "`n[[hr]]`n$&"
+    $t = $t -replace '(?i)<(footer|aside|form|section|nav|header|dialog)\b|</article\s*>', "`n$($script:BlockMark)`n$&"
     $t = $t -replace '(?i)<h([1-6])\b', "`n[[h`$1]]`n$&"
     $t = $t -replace '(?i)<br\s*/?>', "`n" -replace '(?i)</(p|div|li|h[1-6]|tr|section|article|blockquote|pre)\s*>', "`n" -replace '(?i)<li\b[^>]*>', "`n- "
     $t = [Net.WebUtility]::HtmlDecode(($t -replace '(?s)<[^>]*>', ''))
@@ -485,14 +587,20 @@ function ConvertFrom-HtmlText([string]$html) {
 }
 
 function Get-PatchSections([string]$text, [int]$maxChars = 4000) {
-    # "v11 Patch 11" headings and the text under each, newest last. A heading is a line that starts with it. A section
-    # ends at the next patch heading, a heading of the same or a higher level (any heading when the patch heading wasn't
-    # one), a page region, or a line that looks like the comments or the page around the post, so members' comments
-    # under the post never end up in a section.
+    # "v11 Patch 11" headings and the text under each, newest last. A heading is a line that starts with it. Only the
+    # post counts: everything before its start mark is skipped (plain text without one is all post), and the first page
+    # region or line that looks like the comments or the page around the post ends the parsing, so nothing from
+    # members' comments (their text, or a made-up "v99 Patch 1") ever becomes or joins a section. Inside the post a
+    # section ends at the next patch heading, a rule, or a heading of the same or a higher level (any heading when the
+    # patch heading wasn't one).
     $sections = [Collections.Generic.List[pscustomobject]]::new()
+    $started = $text -notmatch '(?m)^\[\[article\]\]$'
     $cur = $null; $level = $null
     foreach ($line in ($text -split "`n")) {
-        if ($line -eq $script:BlockMark -or $line -match $script:PageChrome) { $cur = $null; $level = $null; continue }
+        if ($line -eq '[[article]]') { $started = $true; $cur = $null; $level = $null; continue }
+        if (-not $started) { continue }
+        if ($line -eq $script:BlockMark -or $line -match $script:PageChrome) { break }
+        if ($line -eq '[[hr]]') { $cur = $null; $level = $null; continue }
         if ($line -match '^\[\[h([1-6])\]\]$') {
             $level = [int]$Matches[1]
             if ($cur -and $level -le $cur.Level) { $cur = $null }
@@ -515,6 +623,22 @@ function Select-NewPatchSections($sections, [string]$seen) {
     if ($seen -notmatch '^v(\d+) Patch (\d+)$') { return @($sections) }
     $m = [int]$Matches[1]; $p = [int]$Matches[2]
     @($sections | Where-Object { $_.Major -gt $m -or ($_.Major -eq $m -and $_.Patch -gt $p) })
+}
+
+function Test-OwnTagOnOrigin([string]$lsRemote, [string]$tag, [string]$localId, [string]$localPeeled, [string]$sha) {
+    # The bot's annotated tag object (unique: it holds the tagger time) is what origin has, and it points at $sha.
+    $ids = @("$lsRemote" -split '\r?\n' | Where-Object { $_.Trim() -match "^([0-9a-f]{40,64})\s+refs/tags/$([regex]::Escape($tag))$" } | ForEach-Object { $Matches[1] })
+    $ids.Count -eq 1 -and $localId.Trim() -match '^[0-9a-f]{40,64}$' -and $ids[0] -eq $localId.Trim() -and $localPeeled.Trim() -eq $sha
+}
+
+function Get-PatchSectionRefusal($section, [string]$seen, [int]$testedMajor, [int]$maxJump = 5) {
+    # Why a new section isn't trusted, or $null: another major than the one the app is tested with, or a patch number
+    # far past the last one seen. A refused section never reaches Claude and doesn't move "seen".
+    if ($section.Major -ne $testedMajor) { return "v$($section.Major) is not the tested major v$testedMajor" }
+    if ($seen -match '^v(\d+) Patch (\d+)$' -and [int]$Matches[1] -eq $section.Major -and $section.Patch -gt [int]$Matches[2] + $maxJump) {
+        return "jumps from Patch $([int]$Matches[2]) to Patch $($section.Patch)"
+    }
+    $null
 }
 
 Export-ModuleMember -Function *

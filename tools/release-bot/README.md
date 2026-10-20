@@ -27,9 +27,12 @@ with headless Chrome (`--headless=new --dump-dom`, 90 s timeout) and looks for n
 a changed page or a failed fetch is a log line and one ntfy note asking to log in again (until it works again),
 never a failure or a parked change. The new sections go only into Claude's facts file on the review path, marked as
 paid content to paraphrase; the bot never puts their text in the repo, PRs, notices or release notes, or in its state.
-A section ends at the next patch heading, a heading of the same or a higher level than its own (an `<h4>` inside an
-`<h3>` patch section stays in it), a page region (comments, footer, sidebar) or a line that looks like the comment
-box, so members' comments under the post never reach Claude. Before publishing, the bot checks Claude's diff and summary
+Only the post (`<article>`) is read, and parsing stops for good at the first page region (comments, footer, sidebar,
+the post's end) or line that looks like the comment box, so members' comments never reach Claude and can't start a
+section of their own. Inside the post a section ends at the next patch heading, a rule, or a heading of the same or a
+higher level than its own (an `<h4>` inside an `<h3>` patch section stays in it). A new section of another major than
+`$LecramNotesMajor` (release-bot.ps1, 11) or more than 5 patches past the last one seen is refused: a log line and
+one ntfy note, no Claude run, and "seen" stays. Before publishing, the bot checks Claude's diff and summary
 for any run of 8 words from the notes: a quoting diff is refused, a quoting summary is left out of the PR.
 
 ## Two paths
@@ -129,33 +132,43 @@ unless you pass `-UnsafeRunClaudeAsOwner`. `install.ps1 -Enable` without `-RunAs
    `& isolation.ps1 -User <name> -Exe <claude.exe> -ArgumentList <argv> -WorkingDirectory <sandbox\repo>
    -Environment <hashtable> -Stdin <prompt> -TimeoutMinutes <n> -Sandbox <sandbox>` and expects
    `@{ ExitCode = <int>; Stdout = <string>; Sandbox = <the isolated copy> }`. It should:
-   - copy the `-Sandbox` folder (repo clone, `in\`, `out\`) to a fresh folder only that user and the owner can write,
-     and replace the `-Sandbox` path with that folder in `-ArgumentList`, `-Environment` values, `-Stdin` and
-     `-WorkingDirectory`;
+   - copy the `-Sandbox` folder (repo clone, `in\`, `out\`) to a fresh folder inside the isolation root (below) that
+     only that user and the owner can write, and replace the `-Sandbox` path with that folder in `-ArgumentList`,
+     `-Environment` values, `-Stdin` and `-WorkingDirectory`;
    - start Claude there as that user (for example a scheduled task with that user's stored credentials, or
      `Start-Process -Credential` with a secret from Credential Manager) and wait;
-   - before it returns, stop every process still running as that user (`taskkill /F /FI "USERNAME eq <user>"`; dotnet
-     build servers linger), so nothing can change the folder while the bot reads it;
+   - before it returns, try to stop every process still running as that user (`taskkill /F /FI "USERNAME eq <user>"`;
+     dotnet build servers linger). Still recommended, but the bot doesn't rely on it: a task running with a Limited
+     token likely can't see or kill another user's processes;
    - **not** copy anything back itself, and return the folder as `Sandbox`.
-   The bot copies it back itself (`Copy-SandboxBack` in `ReleaseBot.psm1`). The isolated user could plant a junction
-   or symlink to the owner's files (`~\Notes`, `~\.claude`, `~\.ssh`) for a plain owner-side `Copy-Item -Recurse` to
-   follow into a public PR, so the bot first walks the whole tree without following links and aborts, copying nothing,
-   if any item (the folder itself included) has the `ReparsePoint` attribute; it checks each item again while
-   copying and leaves build output (`bin`, `obj`, ...) behind. Then, as before, it only reads files from the copy:
-   it never runs git or anything else from Claude's folder, rejects links again in the tree compare, and only commits
-   the checked files into its own clean worktree of the bare mirror. The user having no access to the owner's files
-   (step 1) also keeps it from hard-linking them.
+   The isolation root is a folder of its own for these sandboxes (for example `C:\dlss5bot-iso`), outside
+   `%LocalAppData%\dlss5updater-releasebot` and the owner's profile; pass it as `-IsolationRoot` (install.ps1 hands it
+   to the task). The bot copies the sandbox back itself (`Copy-SandboxBack` in `ReleaseBot.psm1`) and refuses a
+   sandbox whose resolved path isn't inside the isolation root, or is inside the bot's own folder. The isolated user
+   could plant a junction or symlink to the owner's files (`~\Notes`, `~\.claude`, `~\.ssh`) for a plain owner-side
+   `Copy-Item -Recurse` to follow into a public PR, and a process of theirs that is still running could swap a folder
+   for a junction after any check by path. So the bot first walks the tree without following links and aborts on any
+   link (the folder itself included), then opens every file by handle without following a link, asks Windows for the
+   handle's real path (`GetFinalPathNameByHandle`), requires it inside the sandbox, refuses a file with more than one
+   hard link, and copies the bytes from that same handle. Any violation, more than 20,000 files or more than 200 MB
+   aborts and removes everything copied so far. Build output (`bin`, `obj`, ...) is left behind. Then, as before, it
+   only reads files from the copy: it never runs git or anything else from Claude's folder, rejects links again in the
+   tree compare, and only commits the checked files into its own clean worktree of the bare mirror.
 4. Point `Get-ClaudeEnv` paths (TEMP, APPDATA, `CLAUDE_CONFIG_DIR`, NUGET_PACKAGES) at that user's profile in the hook.
    It must not be able to read the bot's browser profile (`browser-profile\`, the owner's Buy Me a Coffee session).
    That user must not be able to write anything the owner side runs or trusts: `%LocalAppData%\dlss5updater-releasebot`
    (`bin\` is what the task runs, `mirror.git\hooks` must stay free of repo hooks, `state.json` holds the auto/review
    marks, `mirror.git` is what gets pushed), the repo checkouts, and the owner's NuGet cache.
-5. Dry-run it: `pwsh ...\release-bot.ps1 -DryRun -RunAs dlss5bot -StateFile $env:TEMP\s.json -Simulate 'optiscaler-nr=v0.9.51>v0.9.70'`.
+5. Re-run `pwsh tools/release-bot/install.ps1` (still without `-Enable`) so the installed `bin\` has the current
+   `release-bot.ps1` and `ReleaseBot.psm1` (an older install has no `ReleaseBot.psm1` at all), then dry-run the
+   installed copy: `pwsh $env:LOCALAPPDATA\dlss5updater-releasebot\bin\release-bot.ps1 -DryRun -RunAs dlss5bot
+   -IsolationRoot C:\dlss5bot-iso -StateFile $env:TEMP\s.json -Simulate 'optiscaler-nr=v0.9.51>v0.9.70'`.
 6. Limit what a hijacked run can do with the network: give the bot a low-value Claude token (its own account or a
    spending-capped one, revoked if it leaks), and/or block that user's outbound traffic except api.anthropic.com and
    GitHub (Windows Firewall rule per user, or a proxy). WebFetch to GitHub is allowed, so data could still leave
    that way; the user must simply not have anything worth sending.
-7. Enable: `pwsh tools/release-bot/install.ps1 -RunAs dlss5bot -Enable` (`-Enable` without `-RunAs` throws).
+7. Enable: `pwsh tools/release-bot/install.ps1 -RunAs dlss5bot -IsolationRoot C:\dlss5bot-iso -Enable` (`-Enable`
+   without `-RunAs` or `-IsolationRoot` throws).
 
 ## Files and secrets
 - Installed copy: `%LocalAppData%\dlss5updater-releasebot\bin` (`release-bot.ps1`, `ReleaseBot.psm1`, `prompt.md`;

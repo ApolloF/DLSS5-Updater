@@ -5,16 +5,18 @@
 .EXAMPLE
   pwsh tools/release-bot/install.ps1                         # copy the bot, register the task disabled
   pwsh tools/release-bot/install.ps1 -DryRun                 # task runs the bot with -DryRun
-  pwsh tools/release-bot/install.ps1 -RunAs dlss5bot -Enable # the real schedule, every 6 hours (README, Full isolation)
+  pwsh tools/release-bot/install.ps1 -RunAs dlss5bot -IsolationRoot C:\dlss5bot-iso -Enable  # the real schedule (README, Full isolation)
   pwsh tools/release-bot/install.ps1 -Remove                 # unregister the task (state, logs and mirror stay)
 #>
 [CmdletBinding()]
-param([switch]$DryRun, [int]$Hours = 6, [switch]$Remove, [switch]$Enable, [string]$RunAs)
+param([switch]$DryRun, [int]$Hours = 6, [switch]$Remove, [switch]$Enable, [string]$RunAs, [string]$IsolationRoot)
 
 $ErrorActionPreference = 'Stop'
 $TaskName = 'DLSS5UpdaterReleaseBot'
 # The schedule starts the real Claude (a dry run does too): only as the isolated user. Checked before anything changes.
 if ($Enable -and -not $RunAs) { throw '-Enable needs -RunAs <isolated user>: without it headless Claude would run as you. See README, "Full isolation".' }
+if ($Enable -and -not $IsolationRoot) { throw '-Enable needs -IsolationRoot <folder>: the bot copies back only sandboxes inside it. See README, "Full isolation".' }
+if ($IsolationRoot -match '["\r\n]') { throw '-IsolationRoot must not contain quotes or line breaks' }
 if ($RunAs -match '["\r\n]') { throw '-RunAs must not contain quotes or line breaks' }
 
 if ($Remove) {
@@ -34,7 +36,8 @@ $script = Join-Path $bin 'release-bot.ps1'
 
 $pwsh = (Get-Command pwsh).Source
 $runAsArg = if ($RunAs) { ' -RunAs "' + $RunAs + '"' } else { '' }
-$botArgs = "-NoProfile -ExecutionPolicy Bypass -File `"$script`"$(if ($DryRun) { ' -DryRun' })$runAsArg"
+$isoArg = if ($IsolationRoot) { ' -IsolationRoot "' + $IsolationRoot.TrimEnd('\') + '"' } else { '' }
+$botArgs = "-NoProfile -ExecutionPolicy Bypass -File `"$script`"$(if ($DryRun) { ' -DryRun' })$runAsArg$isoArg"
 # conhost --headless keeps the console window from flashing up every run.
 $action = New-ScheduledTaskAction -Execute 'conhost.exe' -Argument "--headless `"$pwsh`" $botArgs"
 $start = (Get-Date).Date.AddHours([math]::Ceiling((Get-Date).TimeOfDay.TotalHours / $Hours) * $Hours)

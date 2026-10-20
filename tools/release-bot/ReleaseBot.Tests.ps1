@@ -388,9 +388,11 @@ Describe 'copy-back from the isolated sandbox (S3)' {
         $to = Join-Path $TestDrive "back-$([guid]::NewGuid().ToString('N').Substring(0, 6))"
         New-Item -ItemType Directory -Force "$from/repo/src", "$from/repo/obj", "$from/out" | Out-Null
         Set-Content "$from/repo/src/a.cs" 'code'; Set-Content "$from/repo/obj/x.dll" 'build'; Set-Content "$from/out/result.json" '{}'
+        $bot = Join-Path $TestDrive "bot-$([guid]::NewGuid().ToString('N').Substring(0, 6))"
+        New-Item -ItemType Directory $bot | Out-Null
     }
     It 'copies the files, without build output' {
-        Copy-SandboxBack $from $to
+        Copy-SandboxBack $from $to $TestDrive $bot
         Get-Content "$to/repo/src/a.cs" | Should -Be 'code'
         Test-Path "$to/out/result.json" | Should -BeTrue
         Test-Path "$to/repo/obj" | Should -BeFalse
@@ -400,19 +402,66 @@ Describe 'copy-back from the isolated sandbox (S3)' {
         New-Item -ItemType Directory $secret | Out-Null; Set-Content "$secret/notes.md" 'private'
         New-Item -ItemType Junction -Path "$from/repo/src/notes" -Target $secret | Out-Null
         try {
-            { Copy-SandboxBack $from $to } | Should -Throw '*links (repo/src/notes)*'
+            { Copy-SandboxBack $from $to $TestDrive $bot } | Should -Throw '*links (repo/src/notes)*'
             Test-Path $to | Should -BeFalse
             # Junctions inside build output count too.
             (Get-Item "$from/repo/src/notes" -Force).Delete()
             New-Item -ItemType Junction -Path "$from/repo/obj/j" -Target $secret | Out-Null
-            { Copy-SandboxBack $from $to } | Should -Throw '*repo/obj/j*'
+            { Copy-SandboxBack $from $to $TestDrive $bot } | Should -Throw '*repo/obj/j*'
             Test-Path $to | Should -BeFalse
         } finally { Get-ChildItem -Recurse -Force $from -Attributes ReparsePoint | ForEach-Object { $_.Delete() } }
     }
     It 'aborts when the sandbox folder itself is a link' {
         $link = Join-Path $TestDrive "link-$([guid]::NewGuid().ToString('N').Substring(0, 6))"
         New-Item -ItemType Junction -Path $link -Target $from | Out-Null
-        try { { Copy-SandboxBack $link $to } | Should -Throw '*links*' } finally { (Get-Item $link -Force).Delete() }
+        try { { Copy-SandboxBack $link $to $TestDrive $bot } | Should -Throw '*links*' } finally { (Get-Item $link -Force).Delete() }
+    }
+    It 'aborts when a folder turns into a junction after the walk (F1 race)' {
+        $secret = Join-Path $TestDrive "owner-$([guid]::NewGuid().ToString('N').Substring(0, 6))"
+        New-Item -ItemType Directory $secret, "$from/repo/a", "$from/repo/zbulk" | Out-Null
+        Set-Content "$secret/x.txt" 'OWNER SECRET'; Set-Content "$from/repo/a/x.txt" 'sandbox'
+        # zbulk is copied before a (last pushed, first popped); the swap happens while its files are copied.
+        1..2000 | ForEach-Object { [IO.File]::WriteAllText("$from/repo/zbulk/f$_.txt", 'x') }
+        $ps = [PowerShell]::Create()
+        $null = $ps.AddScript({
+            param($watch, $victim, $target)
+            $sw = [Diagnostics.Stopwatch]::StartNew()
+            while (-not [IO.Directory]::Exists($watch) -and $sw.ElapsedMilliseconds -lt 60000) { }
+            [IO.Directory]::Move($victim, "$victim-old")
+            New-Item -ItemType Junction -Path $victim -Target $target | Out-Null
+        }).AddArgument((Join-Path $to 'repo\zbulk')).AddArgument((Join-Path $from 'repo\a')).AddArgument($secret)
+        $h = $ps.BeginInvoke()
+        try {
+            { Copy-SandboxBack $from $to $TestDrive $bot } | Should -Throw '*outside the sandbox*'
+            $ps.EndInvoke($h)
+            (Get-Item "$from/repo/a" -Force).Attributes -band [IO.FileAttributes]::ReparsePoint | Should -BeTrue
+            Test-Path $to | Should -BeFalse
+        } finally {
+            $ps.Dispose()
+            Get-ChildItem -Recurse -Force $from -Attributes ReparsePoint | ForEach-Object { $_.Delete() }
+        }
+    }
+    It 'refuses a file with a second hard link' {
+        New-Item -ItemType HardLink -Path "$from/repo/src/b.cs" -Target "$from/repo/src/a.cs" | Out-Null
+        { Copy-SandboxBack $from $to $TestDrive $bot } | Should -Throw '*2 hard links*'
+        Test-Path $to | Should -BeFalse
+    }
+    It 'refuses a sandbox outside the isolation root or inside the bot folder' {
+        $other = Join-Path $TestDrive "iso-other-$([guid]::NewGuid().ToString('N').Substring(0, 6))"
+        New-Item -ItemType Directory $other | Out-Null
+        { Copy-SandboxBack $from $to $other $bot } | Should -Throw '*not inside the isolation root*'
+        { Copy-SandboxBack $from $to $TestDrive $TestDrive } | Should -Throw "*bot's own folder*"
+        { Copy-SandboxBack $from $to $from $bot } | Should -Throw '*not inside the isolation root*'
+        Test-Path $to | Should -BeFalse
+        [ReleaseBot.HandleCopy]::Under('C:\sb2\x', 'C:\sb') | Should -BeFalse
+        [ReleaseBot.HandleCopy]::Under('C:\SB\x', 'C:\sb\') | Should -BeTrue
+        [ReleaseBot.HandleCopy]::Under('C:\sb', 'C:\sb') | Should -BeFalse
+    }
+    It 'aborts and removes the copy when a cap is reached' {
+        { Copy-SandboxBack $from $to $TestDrive $bot -maxFiles 1 } | Should -Throw '*more than 1 files*'
+        Test-Path $to | Should -BeFalse
+        { Copy-SandboxBack $from $to $TestDrive $bot -maxBytes 4 } | Should -Throw '*size cap*'
+        Test-Path $to | Should -BeFalse
     }
 }
 
@@ -484,6 +533,40 @@ Describe "Lecram's release-note sections" {
         $s[1].Text | Should -Not -Match 'member'
         $s[1].Text | Should -Not -Match 'Thread'
     }
+    It 'never takes a patch heading from the comments (F2)' {
+        $page = @'
+<html><body><article><h3>v11 Patch 11</h3><p>Key Foo=1</p></article>
+<section class="comments"><p>v11 Patch 12</p><p>Injected comment text</p><p>v99 Patch 1</p><p>more</p></section></body></html>
+'@
+        $s = @(Get-PatchSections (ConvertFrom-HtmlText $page))
+        $s.Key | Should -Be @('v11 Patch 11')
+        $s[0].Text | Should -Not -Match 'Injected'
+        # Without a closing article tag, and a comment box inside the post: parsing stops at the first marker.
+        $inside = '<article><h2>v11 Patch 12</h2><p>Key Baz=2</p><p>3 Comments</p><h4>v11 Patch 13</h4><p>member text</p><p>v99 Patch 1</p></article>'
+        $s = @(Get-PatchSections (ConvertFrom-HtmlText $inside))
+        $s.Key | Should -Be @('v11 Patch 12')
+        $s[0].Text | Should -Be 'Key Baz=2'
+        # Nothing before the post counts, a heading in the page header included.
+        $s = @(Get-PatchSections (ConvertFrom-HtmlText '<header><h2>v11 Patch 50</h2></header><article><h3>v11 Patch 11</h3><p>A</p><hr><p>after the rule</p></article>'))
+        $s.Key | Should -Be @('v11 Patch 11')
+        $s[0].Text | Should -Be 'A'
+    }
+    It 'ends a section at a comment box even under a lower heading (F2 nit)' {
+        $page = '<article><h2>v11 Patch 12</h2><h3>Changes</h3><p>Key Baz=2</p></article><aside><h4>Comments</h4><p>member</p></aside><h5>v11 Patch 13</h5><p>x</p>'
+        $s = @(Get-PatchSections (ConvertFrom-HtmlText $page))
+        $s.Key | Should -Be @('v11 Patch 12')
+        $s[0].Text | Should -Not -Match 'member'
+    }
+    It 'refuses another major or a big patch jump (F2)' {
+        $sec = { param($m, $p) [pscustomobject]@{ Major = $m; Patch = $p; Key = "v$m Patch $p" } }
+        Get-PatchSectionRefusal (& $sec 99 1) 'v11 Patch 11' 11 | Should -Match 'major'
+        Get-PatchSectionRefusal (& $sec 12 1) $null 11 | Should -Match 'major'
+        Get-PatchSectionRefusal (& $sec 11 17) 'v11 Patch 11' 11 | Should -Match 'jumps'
+        Get-PatchSectionRefusal (& $sec 11 16) 'v11 Patch 11' 11 | Should -BeNullOrEmpty
+        Get-PatchSectionRefusal (& $sec 11 40) $null 11 | Should -BeNullOrEmpty
+        $s = Get-Content -Raw (Join-Path $PSScriptRoot 'release-bot.ps1')
+        $s | Should -Match 'Get-PatchSectionRefusal \$_ \$seen \$LecramNotesMajor'
+    }
     It 'spots the paid notes quoted in text that would be published (N4)' {
         $notes = @("#### v11 Patch 12`nThe new Sharpen Boost slider now goes up to 2.5 and defaults to 1.2 in every preset.")
         Test-ContainsPaidText 'Summary: the new sharpen boost slider now goes up to 2.5, and defaults to 1.2 in every preset!' $notes | Should -BeTrue
@@ -512,6 +595,13 @@ Describe 'gates (M1: Claude never as the owner by accident)' {
         { & (Join-Path $PSScriptRoot 'install.ps1') -Enable -DryRun } | Should -Throw '*-RunAs*'
         Should -Invoke Register-ScheduledTask -Times 0 -Exactly
         Should -Invoke Copy-Item -Times 0 -Exactly
+    }
+    It 'install.ps1 -Enable needs -IsolationRoot and passes it to the task' {
+        Mock Register-ScheduledTask {}; Mock Disable-ScheduledTask {}; Mock Copy-Item {}; Mock New-Item {}; Mock Write-Host {}
+        { & (Join-Path $PSScriptRoot 'install.ps1') -Enable -RunAs dlss5bot } | Should -Throw '*-IsolationRoot*'
+        Should -Invoke Register-ScheduledTask -Times 0 -Exactly
+        & (Join-Path $PSScriptRoot 'install.ps1') -RunAs dlss5bot -IsolationRoot 'C:\dlss5bot iso\'
+        Should -Invoke Register-ScheduledTask -Times 1 -Exactly -ParameterFilter { $Action.Arguments -like '*-IsolationRoot "C:\dlss5bot iso"' }
     }
     It 'install.ps1 quotes -RunAs in the task command line' {
         Mock Register-ScheduledTask {}; Mock Disable-ScheduledTask {}; Mock Copy-Item {}; Mock New-Item {}; Mock Write-Host {}
@@ -543,6 +633,30 @@ Describe 'gates (M2: the auto path never releases unreleased work on main)' {
         Get-UnreleasedReason $g '2.0.1' 'HEAD' | Should -Match 'unreleased'
         Get-UnreleasedReason $g '2.0.1' 'HEAD~1' | Should -BeNullOrEmpty
         Get-UnreleasedReason $g '2.0.2' 'HEAD' | Should -Match 'no tag v2.0.2'
+    }
+}
+
+Describe 'tag push that reported failure (S1 nit)' {
+    It "keeps pending only when origin has the bot's own tag object on the merge commit" {
+        $o = New-TempRepo
+        try {
+            [IO.File]::WriteAllText((Join-Path $o 'a.cs'), 'one'); git -C $o add -A; git -C $o commit --quiet -m one
+            $sha = (git -C $o rev-parse HEAD).Trim()
+            $m = Join-Path $TestDrive 'tagmirror.git'
+            git clone --bare --quiet $o $m
+            git --git-dir $m -c user.name=t -c user.email=t@invalid tag -a v4.0.1 $sha -m 'release-bot prerelease v4.0.1'
+            git --git-dir $m push --quiet origin refs/tags/v4.0.1
+            $ls = (git --git-dir $m ls-remote --tags origin refs/tags/v4.0.1) -join "`n"
+            $id = (git --git-dir $m rev-parse refs/tags/v4.0.1).Trim()
+            Test-OwnTagOnOrigin $ls 'v4.0.1' $id $sha $sha | Should -BeTrue
+            Test-OwnTagOnOrigin $ls 'v4.0.1' $id $sha ('0' * 40) | Should -BeFalse
+            Test-OwnTagOnOrigin '' 'v4.0.1' $id $sha $sha | Should -BeFalse
+            # Someone else's tag of the same name (another tag object) is not ours, even on the same commit.
+            git -C $o -c user.name=x -c user.email=x@invalid tag -f -a v4.0.1 $sha -m other | Out-Null
+            $ls2 = (git --git-dir $m ls-remote --tags origin refs/tags/v4.0.1) -join "`n"
+            Test-OwnTagOnOrigin $ls2 'v4.0.1' $id $sha $sha | Should -BeFalse
+            Test-OwnTagOnOrigin $ls 'v4.0.10' $id $sha $sha | Should -BeFalse
+        } finally { Remove-Item -Recurse -Force $o -ErrorAction SilentlyContinue }
     }
 }
 
