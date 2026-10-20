@@ -63,6 +63,11 @@ public sealed class InstallManifest
     public string? DlssNrFile { get; set; }
     public bool Dfc { get; set; }
     public string? DfcTag { get; set; }
+    /// <summary>
+    /// Files of DFC's 64-bit set we placed (not the cfg), entries as in <see cref="Files"/>. Older records lack it; their
+    /// files are found by <see cref="ComponentStore.IsDfcPackagePath"/>.
+    /// </summary>
+    public List<string> DfcFiles { get; set; } = [];
     /// <summary>Values we wrote into deep-fried-chicken.cfg last time, keyed "DFC/key".</summary>
     public Dictionary<string, string> DfcCfg { get; set; } = new(StringComparer.OrdinalIgnoreCase);
     /// <summary>

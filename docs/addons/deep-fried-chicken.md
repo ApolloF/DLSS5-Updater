@@ -2,19 +2,60 @@
 
 Closed-source ReShade add-on that runs DLSS 5 neural rendering. Its licence allows personal use only and forbids
 reverse engineering, redistribution and modification. So this file is built **only** from what the author ships as
-documentation: INSTALL.txt, the cfg files (keys, defaults, comments), file names and version resources. No
-disassembly, no string dumps of its binaries and no probe runs. The app never downloads DFC; the user imports their
-own copy, and the files are copied into games byte for byte.
+documentation: INSTALL.txt / README.txt, the cfg files (keys, defaults, comments), file names and version resources.
+No disassembly, no string dumps of its binaries and no probe runs. The app never downloads DFC; the user imports their
+own copy, and the files are copied into games byte for byte. Copying the user's own files into their games is the
+install the licence allows; it forbids copying, rehosting or repacking the Software for others.
 
 ## Checked builds
 
-| Release (INSTALL.txt) | Add-on version resource | config_schema | Checked | Notes |
+| Release (INSTALL.txt / README.txt) | Add-on version resource | config_schema | Checked | Notes |
 |---|---|---|---|---|
 | 2.0 | 2.0.0 | 13 | 2026-09 (files dated 2026-09-14) | add-on, NGX bridge and cfg only |
 | 4.0.6 preview | 4.0.0-preview (numeric 4.0.0.0) | 13 | 2026-10-18 | adds the present-support dll, the neural folder, a ReShade effect and a 32-bit route |
+| 5.0.0 essentials | 5.0.0 (numeric 5.0.0.0) | 13 | 2026-10-20 | same 64-bit file names as 4.0.6 plus THIRD-PARTY-NOTICES.txt in the neural folder; README.txt replaces INSTALL.txt; LICENSE-Deep-Fried-Chicken.md added |
 
-`DfcConfig.TestedVersion` compares against the numeric version resource, so it is `4.0.0`: the hotfix number of the
-preview (4.0.6) is only in INSTALL.txt. The bridge, present-support dll and the neural helper exe have no version resource.
+`DfcConfig.TestedVersion` compares against the numeric version resource, so it is `5.0.0`. (For 4.0.6 it was
+`4.0.0`: the preview's hotfix number was only in INSTALL.txt.) The bridge, present-support dll and the neural helper exe
+have no version resource.
+
+## 5.0.0 essentials package
+
+Distributed as `Deep-Fried-Chicken-v5.0.0-essentials.7z` (encrypted with the password from the release post, headers
+too). The app can't open .7z; the user extracts it and imports the folder.
+
+```
+README.txt, LICENSE-Deep-Fried-Chicken.md
+64-bit\  deep-fried-chicken.addon64, deep-fried-chicken.cfg, deep-fried-chicken-nvngx.dll,
+         deep-fried-chicken-present-support.dll,
+         deep-fried-chicken-neural\  dfc-neural-helper64.exe, dfc-neural-motion.onnx, deep-fried-chicken-ort.dll,
+                                     DirectML.dll, onnxruntime_providers_shared.dll, THIRD-PARTY-NOTICES.txt
+         reshade-shaders\Shaders\DFC_OutputState.addonfx
+32-bit\  deep-fried-chicken.addon32, deep-fried-chicken-bridge.cfg, reshade-shaders\Shaders\DFC_Universal_Feed.fx + ReShade.fxh,
+         host64\  the same 64-bit add-on, cfg, bridge and neural folder, plus dfc-universal-host64.exe
+```
+
+Against 4.0.6 the add-on, bridge, present-support dll, neural helper exe and notices changed; the ONNX runtime,
+DirectML, the motion model and the effect are byte-identical.
+
+README.txt, 64-bit games: "Copy the CONTENTS of the 64-bit folder next to the game's exe (where ReShade's dxgi.dll /
+d3d11.dll / opengl32.dll is). Keep the deep-fried-chicken-neural and reshade-shaders folders as folders." Then put your
+own `nvngx_dlssnr.dll` and `nvngx_dlss.dll` next to the exe. It names 310.8.0 and 310.9.16 as working NR builds; NVIDIA's
+own builds run NR only on RTX 50, RTX 20/30/40 need a community build. Updating: "Replace DFC's files with this
+release's ... Keep your .cfg files to keep your settings. Remove other DLSS feeder or neural add-ons from the same
+folder." The app does all three (whole set replaced, game cfg kept and merged, other NR add-ons displaced).
+
+What's new in 5.0 per README.txt that touches the app: NR presets (Game, Preset A, Preset B; Preset B is the FP8 model
+in 310.9.16+), Texture Boost, game DLSS tuning, frame-generation awareness, a status card, menu languages, a
+"Faster DX9" startup option (D3D9Ex, off by default), and `deep-fried-chicken-hooks.log`. All are set in the overlay.
+Removed since 4.0: DFC's own upscaler (Universal SR), scene jitter and the virtual display (as in 4.0.6).
+
+### cfg diff: 4.0.6 preview → 5.0.0 (64-bit `deep-fried-chicken.cfg`)
+
+`config_schema` stays 13 and no key was added or removed. One default changed, for all 30 passes:
+`layer_N_nr_preset` 1 → 0. The cfg has no comment on these keys and README.txt names the choices only by label (Game,
+Preset A, Preset B), not by number, so the value mapping is undocumented. The app doesn't write `layer_N_nr_preset`;
+the preset is picked in the overlay. The 32-bit `host64\deep-fried-chicken.cfg` is identical to the 64-bit one.
 
 ## 4.0.6 preview package
 
@@ -56,8 +97,10 @@ Other 4.0.6 notes from INSTALL.txt that matter here:
 ### 32-bit route: not supported
 
 It needs a 32-bit ReShade (`ReShade32.dll`), the addon32, a bridge cfg and a 64-bit companion host folder with its own
-exe. The app only handles 64-bit ReShade and games, so this route is left out. The import refuses the `host64`
-add-on with a message pointing at the 64-bit folder.
+exe. 5.0's README.txt spells it out: copy the 32-bit folder's contents next to the game exe, put a 64-bit ReShade
+(with add-on support) into `host64` as `dxgi.dll`, and `nvngx_dlssnr.dll` / `nvngx_dlss.dll` into `host64` too. The
+app only handles 64-bit ReShade and games, so this route is still left out. The import refuses the `host64` add-on
+with a message pointing at the 64-bit folder, and an archive's `host64` copy is skipped when looking for the add-on.
 
 ## cfg diff: 2.0.0 → 4.0.6 preview (64-bit `deep-fried-chicken.cfg`)
 
@@ -83,21 +126,28 @@ The 32-bit `deep-fried-chicken-bridge.cfg` (mode, work_resolution, cast_*, sr_*,
 
 ## What the app does
 
-- **Import** (`Core/DfcSource.cs`): the add-on, the folder holding it, or the package folder (its `64-bit` subfolder
-  is used). Taken: the add-on (OriginalFilename must be `deep-fried-chicken.addon64`), the bridge (required), the cfg
-  (optional default), `deep-fried-chicken-present-support.dll`, everything in `deep-fried-chicken-neural\` and
-  `reshade-shaders\Shaders\DFC_*`. Nothing else in the folder is copied. For add-on version 4+ the present-support
-  dll and the neural folder are required. The set is staged and replaces the previous import as a whole, so files
-  of an older set never stay behind. A 2.0 import (flat add-on/bridge/cfg) keeps working without migration.
+- **Import** (`Core/DfcSource.cs`, Settings → Local components: **Folder…** or **Import…**): the extracted release
+  folder (its `64-bit` subfolder is used), the 64-bit folder itself, the add-on in it, or a `.zip` of any of these
+  (unpacked to a temp folder beside the import; the `host64` copy is skipped). `.7z`/`.rar` are refused with "extract
+  it first". The add-on's OriginalFilename must be `deep-fried-chicken.addon64` and the bridge must sit beside it.
+  - **4.x and newer: the whole 64-bit folder** is taken, as the package says ("copy the contents of the 64-bit
+    folder"), subfolders included (`ComponentStore.IsDfcSetFile`). Left out: the cfg (kept as the default, see below),
+    `*.log`, and at the folder root NVIDIA's `nvngx_*` files, `ReShade*` files and proxy dll names (the user may have
+    dropped them there per step 3; the app places those itself). The present-support dll and the neural folder are
+    required. A folder with more than 64 files or 1 GiB is refused as not DFC's folder (5.0: 11 files, 75 MB), and a
+    `.zip` with more than 256 entries or 2 GiB unpacked is refused before unpacking.
+  - **2.x**: only the add-on and the bridge (the folder may be Downloads).
+  - The set is staged and replaces the previous import as a whole, so files of an older set never stay behind.
 - **Install** (`Installer.PlaceDfc`): every file of the set goes to the same relative path beside the game exe, each
-  one recorded in the manifest, with anything already there backed up. Files an earlier set of ours had and the new
-  one lacks are taken out. If ReShade.ini's `[GENERAL] EffectSearchPaths` doesn't cover `reshade-shaders\Shaders`
+  one recorded in the manifest (`Files`, and `DfcFiles` for which of them are DFC's; recorded before the copy), with
+  anything already there backed up. Files an earlier set of ours had and the new one lacks are taken out. Records
+  from before `DfcFiles` are matched by the old file list (`IsDfcPackagePath`), which covered every file 4.0.6 had. If ReShade.ini's `[GENERAL] EffectSearchPaths` doesn't cover `reshade-shaders\Shaders`
   (ReShade's default without the key is `.\`, not recursive), `.\reshade-shaders\Shaders\**` is appended; that
   entry stays when DFC goes (it is ReShade's standard folder).
 - **cfg**: the imported default is placed when the game has none; the app's options are merged in (only the keys
   set in Settings). Options whose key the imported cfg lacks are hidden.
 - **Remove / switch** (RenoDX, Lecram or OptiScaler-NR): all DFC files of ours go, originals come back and empty
-  folders (`deep-fried-chicken-neural`, `reshade-shaders\Shaders`) are deleted. Foreign copies of the add-on, bridge
+  folders (`deep-fried-chicken-neural`, `reshade-shaders\Shaders`, any other folder of the set) are deleted. Foreign copies of the add-on, bridge
   and present-support dll are moved to the backup; a foreign neural folder or effect file is left, since it does
   nothing without the add-on.
 
