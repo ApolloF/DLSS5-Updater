@@ -346,6 +346,38 @@ public sealed class LecramTests : IDisposable
         Assert.False(File.Exists(G("ReShade.ini")) && Ini().Get(LecramIni.Section, "NRGpuCrashWitness") is not null);
     }
 
+    [Theory]
+    [InlineData("v11.0.0-beta.48", true)]
+    [InlineData("v11.0.0-beta.45", false)]
+    [InlineData("v11.0.0-beta.29", false)]
+    public async Task PresentFgPath_IsWrittenOnlyForBuildsThatReadIt(string label, bool written)
+    {
+        var build = _store.ImportLecram(FakeV11(label));
+        var installer = new Installer(_store);
+
+        await installer.InstallAsync(_game, _root,
+            Lec(lecramId: build.Id, overrides: [Key("NRHookPoint", "2"), Key("NRPresentFgPath", "1")]), null, default);
+        Assert.Equal("2", Value("NRHookPoint"));
+        Assert.Equal(written ? "1" : null, Value("NRPresentFgPath"));
+
+        await installer.UninstallAsync(_game, _root, default);
+        Assert.Null(Value("NRPresentFgPath"));
+    }
+
+    [Fact]
+    public async Task SwitchingToAnOlderBuild_DropsTheKeyTheAppWroteForTheNewerOne()
+    {
+        var beta48 = _store.ImportLecram(FakeV11("v11.0.0-beta.48"));
+        var beta45 = _store.ImportLecram(FakeV11("v11.0.0-beta.45"));
+        var installer = new Installer(_store);
+        IniOverride[] overrides = [Key("NRPresentFgPath", "1")];
+
+        await installer.InstallAsync(_game, _root, Lec(lecramId: beta48.Id, overrides: overrides), null, default);
+        Assert.Equal("1", Value("NRPresentFgPath"));
+        await installer.InstallAsync(_game, _root, Lec(lecramId: beta45.Id, overrides: overrides), null, default);
+        Assert.Null(Value("NRPresentFgPath"));
+    }
+
     [Fact]
     public async Task ForeignCopiesOfEitherGeneration_AreDisplaced_AndRestoredOnUninstall()
     {
@@ -649,7 +681,7 @@ public sealed class LecramTests : IDisposable
     public void Options_HideKeysTheImportedGenerationLacks_AndSwitchChoicesPerGeneration()
     {
         var options = SettingsOptions.Lecram([]);
-        string[] v11Only = ["NeuralUplift", "NRPreset", "NRPass2Preset", "NRPass3Preset", "NRPass4Preset", "NRVramBuffering", "NRGpuCrashWitness"];
+        string[] v11Only = ["NeuralUplift", "NRPreset", "NRPass2Preset", "NRPass3Preset", "NRPass4Preset", "NRVramBuffering", "NRGpuCrashWitness", "NRPresentFgPath"];
         string[] values(string key) => Option(options, key).Choices.Select(c => c.Value ?? "").ToArray();
 
         foreach (var o in options) o.ApplyGeneration(null);
@@ -716,6 +748,8 @@ public sealed class LecramTests : IDisposable
         // NRPass2..4Preset (beta.29): 0 same as pass 1, 1 and 2 the two models of DLL 310.9.16; 3 is accepted but names no model.
         Assert.All(new[] { "NRPass2Preset", "NRPass3Preset", "NRPass4Preset" }, k => Assert.Equal([0.0, 1, 2], Numbers(Option(options, k))));
         Assert.Equal([0.0, 1], Numbers(Option(options, "NRGpuCrashWitness")));
+        // NRPresentFgPath (beta.48): only 1 switches to the new path; 2, -1 and text read as 0.
+        Assert.Equal([0.0, 1], Numbers(Option(options, "NRPresentFgPath")));
         Assert.All(Numbers(Option(options, "NRVramBuffering")), v => Assert.InRange(v, 0, 2));
         Assert.All(Numbers(Option(options, "EnableHooks")), v => Assert.InRange(v, 0, 2));
         // NRPresentGuides 0 is Always on in v11 beta.18+ but DLSS frames in beta.6: only 1 and 2 mean the same in every v11 build.
@@ -755,6 +789,55 @@ public sealed class LecramTests : IDisposable
         Assert.True(LecramIni.IsAvailable("NeuralUplift", null));
         Assert.False(LecramIni.IsAvailable("NeuralUplift", LecramGeneration.V10));
         Assert.False(LecramIni.IsAvailable("NRAutoMask", LecramGeneration.V11));
+    }
+
+    [Theory]
+    [InlineData("NRPresentFgPath", "v11.0.0-beta.48", true)]
+    [InlineData("NRPresentFgPath", "v11.0.0-beta.49", true)]
+    [InlineData("NRPresentFgPath", "v11.0.1", true)]
+    [InlineData("NRPresentFgPath", "v11", true)]
+    [InlineData("NRPresentFgPath", null, true)]
+    [InlineData("NRPresentFgPath", "v11.0.0-beta.45", false)]
+    [InlineData("NRPresentFgPath", "v11.0.0-beta.40", false)]
+    [InlineData("nrpresentfgpath", "v11.0.0-beta.29", false)]
+    [InlineData("NRPass2Preset", "v11.0.0-beta.29", true)]
+    [InlineData("NRPass4Preset", "v11.0.0-beta.22", false)]
+    [InlineData("NRGpuCrashWitness", "v11.0.0-beta.22", true)]
+    [InlineData("NRGpuCrashWitness", "v11.0.0-beta.18", false)]
+    [InlineData("NRPreset", "v11.0.0-beta.6", true)]
+    public void LecramIni_HidesV11KeysFromBuildsOlderThanTheFirstThatReadsThem(string key, string? build, bool available)
+    {
+        Assert.Equal(available, LecramIni.IsAvailable(key, LecramGeneration.V11, build));
+        Assert.False(LecramIni.IsAvailable(key, LecramGeneration.V10, build));
+        Assert.True(LecramIni.IsAvailable(key, null, build));
+    }
+
+    [Fact]
+    public void Options_FollowTheBuild_NotJustTheGeneration()
+    {
+        var options = SettingsOptions.Lecram([]);
+        var fgPath = Option(options, "NRPresentFgPath");
+        var passPreset = Option(options, "NRPass2Preset");
+
+        fgPath.ApplyGeneration(LecramGeneration.V11, "v11.0.0-beta.48");
+        passPreset.ApplyGeneration(LecramGeneration.V11, "v11.0.0-beta.48");
+        Assert.True(fgPath.IsAvailable);
+        Assert.True(passPreset.IsAvailable);
+
+        fgPath.ApplyGeneration(LecramGeneration.V11, "v11.0.0-beta.45");
+        passPreset.ApplyGeneration(LecramGeneration.V11, "v11.0.0-beta.45");
+        Assert.False(fgPath.IsAvailable);
+        Assert.True(passPreset.IsAvailable);
+        Assert.False(fgPath.ViewFor(LecramGeneration.V11, "v11.0.0-beta.29").IsAvailable);
+        Assert.False(passPreset.ViewFor(LecramGeneration.V11, "v11.0.0-beta.22").IsAvailable);
+
+        fgPath.ApplyGeneration(LecramGeneration.V11);
+        Assert.True(fgPath.IsAvailable);
+        Assert.Equal(["Add-on default", "Usual path", "Real frames only (test)"], fgPath.Choices.Select(c => c.Label));
+        Assert.Contains("ROUTE-02", HelpTopics.Get("lc-fg-path")!.Body);
+        // beta.45 renamed the preset control Model version: 1 Old, 2 New; the key and its values stayed.
+        Assert.Equal(["", "0", "1", "2"], Option(options, "NRPreset").Choices.Select(c => c.Value ?? ""));
+        Assert.Equal(["Add-on default", "Default", "Old (preset 1)", "New (preset 2)"], Option(options, "NRPreset").Choices.Select(c => c.Label));
     }
 
     [Fact]

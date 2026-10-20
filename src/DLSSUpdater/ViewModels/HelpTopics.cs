@@ -176,17 +176,22 @@ public static class HelpTopics
         new("lc-preset", "Lecram DLSS5", "Preset",
             "NRPreset, v11 and newer. 0 is the DLL's shipping default (documented); the value is sent as the DLSSNR render preset hint and changing it recreates the NR feature. " +
             "It only matters when the DLL ships several models (otherwise the add-on sends 0 and hides the control). The add-on documents the ids for DLL 310.9.16, which ships two: 1 honest_tench (the model the model lab edits), 2 the small FP8 model. " +
+            "From beta.45 (v11 Patch 10) its panel calls the control Model version, with 1 as Old (the first model) and 2 as New (newer, faster and NVIDIA's default); the key and its values did not change. " +
             "It accepts 0 to 3; 3 names no model in 310.9.16, so the app does not offer it, and other DLL versions may number their models differently."),
         new("lc-pass-preset", "Lecram DLSS5", "Pass preset",
             "NRPass2Preset, NRPass3Preset and NRPass4Preset, v11 beta.29 and newer (mixed models): the model one extra pass runs. 0 (default) runs the model pass 1 runs (Preset's choice); 1 to 3 is the DLL's preset id for that pass alone, as for Preset (310.9.16: 1 honest_tench, 2 small FP8 model). " +
             "It only takes effect when Passes reaches that pass and the DLL ships several models; otherwise the add-on sends 0. Other values read as 0. Changing it recreates NR. " +
-            "Older v11 builds ignore the keys. The pass's own look (\"Same as pass 1\" off in the overlay) is a separate setting."),
+            "Older v11 builds ignore the keys, so the app hides them and does not write them there. From beta.45 the panel lists the values as As pass 1, Old, New and Preset 3. The pass's own look (\"Same as pass 1\" off in the overlay) is a separate setting."),
         new("lc-vram", "Lecram DLSS5", "VRAM buffering",
             "NRVramBuffering, v11 and newer: 0 Full (default), 1 Reduced, 2 Minimal."),
         new("lc-present", "Lecram DLSS5", "Present runs on",
             "NRPresentGuides: which frames get the model at Present (and Auto). v11: 1 only the game's DLSS frames, 2 Always on (also menus, loading and pause screens, with flat depth and no motion where the game gives none). " +
             "0 is the stock value and flipped meaning: Always on in beta.18+, DLSS frames in beta.6, so the app does not offer it for v11. " +
             "v10.7: 0 Optional (default: the game's guides on DLSS frames, neutral guides on the frames drawn without DLSS), 1 Required (undocumented beyond its name), 2 Never (neutral guides on every frame)."),
+        new("lc-fg-path", "Lecram DLSS5", "Present with frame generation",
+            "NRPresentFgPath, v11 beta.48 (Patch 11) and newer, a test option the author added for players who see NR blink (diagnostic ROUTE-02, a real frame without NR) at Present with frame generation. " +
+            "1 runs NR once per real frame at frame generation's own call and never again on the final frame; 0 (default) keeps the usual path. Only 1 switches: the add-on reads other values as the usual path. " +
+            "It only matters when NR runs at Present (or Auto) and frame generation is on. The add-on reads the key when it loads, so restart the game after changing it. Older builds ignore it, so the app hides it and does not write it there."),
         new("lc-feed", "Lecram DLSS5", "HDR brightness source",
             "NRFeedMode: 0 Auto (default), 1 NR's own frame meter, 2 the game's exposure. v10.7 labels them Auto, v1 frame meter and v2 game exposure. " +
             "v11 beta.18+ reads it again: at After upscaling in a Direct3D 12 HDR game it takes the brightness from the game's exposure texture when the game hands one to DLSS (Vulkan keeps the meter); the author offers 1 and 2 to compare. " +
@@ -479,6 +484,7 @@ public static class HelpTopics
         ["lc-enable"] = "Add-on default. Off only to compare with the game's native image.",
         ["lc-hook"] = "Add-on default (After upscaling in v11 beta.18+, Auto in beta.6, Present in v10.7). Try Present if the HUD should be processed too, or Before upscaling if After upscaling looks wrong.",
         ["lc-present"] = "Add-on default. DLSS frames only if menus or loading screens look wrong under the model.",
+        ["lc-fg-path"] = "Add-on default. Real frames only just to test, when NR blinks at Present with frame generation.",
         ["lc-feed"] = "Add-on default. Frame meter or Game exposure only to compare when an HDR game looks too dark or washed out.",
         ["lc-strengths"] = "Add-on default first. Lower Strength in steps if the image looks over-processed.",
         ["lc-style"] = "Add-on default; compare the three per game.",
@@ -487,7 +493,7 @@ public static class HelpTopics
         ["lc-passes"] = "1. Add passes only with headroom to spare.",
         ["lc-scale"] = "1.0; lower it to save FPS if you accept a softer image.",
         ["lc-preset"] = "Add-on default. Changing it recreates NR, which causes a short hitch in-game.",
-        ["lc-pass-preset"] = "Add-on default. Try Preset 2 on an extra pass to compare a mixed-model stack; it recreates NR.",
+        ["lc-pass-preset"] = "Add-on default. Try New (preset 2) on an extra pass to compare a mixed-model stack; it recreates NR.",
         ["lc-crash"] = "Add-on default. Off only if you never want the crash files; On only while chasing a repeat crash.",
         ["lc-vram"] = "Full. Reduced or Minimal only if video memory runs out.",
         ["lc-foreign"] = "Add-on default alone; the app sets observe for you next to ShortFuse's add-on.",

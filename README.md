@@ -145,7 +145,7 @@ dotnet publish src/DLSSUpdater -c Release -o publish
 The last command makes the portable `publish\DLSS5Updater.exe`. The installer needs [Inno Setup 6](https://jrsoftware.org/isinfo.php):
 
 ```
-iscc /DAppVersion=2.0.0 installer\DLSSUpdater.iss
+iscc /DAppVersion=2.0.1 installer\DLSSUpdater.iss
 ```
 
 Pushing a tag like `v2.0.0` that matches the version in the project file builds both files on GitHub Actions and attaches them to a release. If `docs/releases/v<version>.md` exists, it becomes the release text. Setting `DLSSU_INTEGRATION=1` turns on a test that downloads the real releases and installs them into a temporary folder.

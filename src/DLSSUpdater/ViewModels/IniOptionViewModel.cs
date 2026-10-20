@@ -80,21 +80,22 @@ public sealed partial class IniOptionViewModel : ObservableObject
     }
 
     /// <summary>
-    /// Switches to the values of the default Lecram build's generation and hides the row when that generation lacks the key.
+    /// Switches to the values of the default Lecram build's generation and hides the row when that build lacks the key.
     /// No build (null) shows every option with the choices that fit both.
     /// </summary>
-    public void ApplyGeneration(LecramGeneration? generation)
+    /// <param name="build">The build's detected label: v11 keys newer than it are hidden.</param>
+    public void ApplyGeneration(LecramGeneration? generation, string? build = null)
     {
-        var view = ViewFor(generation);
+        var view = ViewFor(generation, build);
         IsAvailable = view.IsAvailable;
         Show(view.Hint, view.Choices);
     }
 
     /// <summary>What this option offers for <paramref name="generation"/>, without touching the shared state: a game uses the generation of its own build.</summary>
-    public (bool IsAvailable, string Hint, OptionChoice[] Choices) ViewFor(LecramGeneration? generation)
+    public (bool IsAvailable, string Hint, OptionChoice[] Choices) ViewFor(LecramGeneration? generation, string? build = null)
     {
         var v = generation is { } g ? _generationVariants.GetValueOrDefault(g) : default;
-        return (LecramIni.IsAvailable(Key, generation), v.Hint ?? _baseHint, v.Choices ?? _baseChoices);
+        return (LecramIni.IsAvailable(Key, generation, build), v.Hint ?? _baseHint, v.Choices ?? _baseChoices);
     }
 
     private void Show(string? hint, OptionChoice[]? variantChoices)

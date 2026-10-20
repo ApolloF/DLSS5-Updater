@@ -438,16 +438,16 @@ public sealed partial class GameViewModel : ObservableObject
         Fill(ReShadeRows, GameOptionViewModel.Definitions.ReShade, true);
         Fill(MfgRows, GameOptionViewModel.Definitions.Mfg, true);
         Fill(RenoDxRows, GameOptionViewModel.Definitions.RenoDx, true);
-        Fill(LecramRows, GameOptionViewModel.Definitions.Lecram, true, () => EffectiveLecramGeneration);
+        Fill(LecramRows, GameOptionViewModel.Definitions.Lecram, true, () => _s.Store.LecramBuildFor(EffectiveLecramId));
         Fill(UpliftRows, GameOptionViewModel.Definitions.Uplift, true);
         Fill(DfcRows, GameOptionViewModel.Definitions.Dfc, true);
         Fill(NrRows, GameOptionViewModel.Definitions.Nr, false);
         Fill(TonemapRows, GameOptionViewModel.Definitions.Tonemap, false);
         Fill(HdrRows, GameOptionViewModel.Definitions.HdrOutput, false);
 
-        void Fill(ObservableCollection<GameOptionViewModel> rows, IEnumerable<IniOptionViewModel> defs, bool reShade, Func<LecramGeneration?>? generation = null)
+        void Fill(ObservableCollection<GameOptionViewModel> rows, IEnumerable<IniOptionViewModel> defs, bool reShade, Func<AddonBuild?>? lecram = null)
         {
-            foreach (var d in defs) rows.Add(new GameOptionViewModel(d, reShade, _s.Settings, Id, generation));
+            foreach (var d in defs) rows.Add(new GameOptionViewModel(d, reShade, _s.Settings, Id, lecram));
         }
     }
 
