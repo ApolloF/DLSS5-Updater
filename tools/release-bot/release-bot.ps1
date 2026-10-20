@@ -30,6 +30,8 @@ param(
     [int]$ClaudeTimeoutMinutes = 60,
     [double]$ClaudeBudgetUsd = 15,
     [int]$ClaudeMaxTurns = 200,
+    # The private build (dotnet publish -p:LecramChannel=true of the newest full release) as the isolated user.
+    [int]$PrivateBuildTimeoutMinutes = 30,
     [int]$MergeWaitMinutes = 20,
     [int]$StuckAutoHours = 2,
     [int]$PromoteAfterHours = 24
@@ -55,6 +57,10 @@ $SaveInDryRun = [bool]$StateFile -and $StateFile -ne (Join-Path $Root 'state.jso
 if (-not $StateFile) { $StateFile = Join-Path $Root 'state.json' }
 $PromptFile = Join-Path $PSScriptRoot 'prompt.md'
 $DropUrl = 'https://copyparty.home.apollof.nl/dlss5updater-drop/'
+# The owner's private build (Lecram channel on) goes into this subfolder of the drop share; the newest 3 stay there.
+$PrivateDir = 'private-build'
+$PrivateKeep = 3
+$PrivateMaxBytes = 150MB
 $NtfyUrl = 'https://ntfy.apollof.nl/claude-work'
 $BranchPrefix = 'release-bot/'
 $ReviewLabel = 'needs-review'
@@ -175,7 +181,7 @@ function Send-Notice([string]$title, [string]$body, [string]$click = $null, [int
 function Read-State {
     if (-not (Test-Path $StateFile)) { return $null }
     $s = Get-Content -Raw $StateFile | ConvertFrom-Json -AsHashtable
-    foreach ($k in 'items', 'etags', 'failures', 'dropHashes', 'dropSeen', 'prs', 'prereleases', 'proofs') { if (-not $s[$k]) { $s[$k] = @{} } }
+    foreach ($k in 'items', 'etags', 'failures', 'dropHashes', 'dropSeen', 'prs', 'prereleases', 'proofs', 'privateBuilds') { if (-not $s[$k]) { $s[$k] = @{} } }
     $s
 }
 
@@ -423,8 +429,7 @@ function Get-DropPw {
 function Get-DropFiles {
     $resp = Invoke-WebRequest -Uri "$($DropUrl)?ls" -Headers @{ PW = (Get-DropPw); 'User-Agent' = $Ua } -SkipHttpErrorCheck -TimeoutSec 30
     if ([int]$resp.StatusCode -ne 200) { throw "drop folder HTTP $($resp.StatusCode)" }
-    @(($resp.Content | ConvertFrom-Json).files) | ForEach-Object { @{ Name = [uri]::UnescapeDataString($_.href); Size = [long]$_.sz } } |
-        Where-Object { $_.Name -and $_.Name -notmatch '[\\/]' }
+    Select-DropFiles ($resp.Content | ConvertFrom-Json)
 }
 
 function Describe-DropFile([string]$path) {
@@ -611,6 +616,13 @@ function Get-ClaudeArgs([string]$sandbox) {
         '--allowedTools') + $allowed + @('--disallowedTools') + $denied
 }
 
+function Get-IsolationHook {
+    $hook = Join-Path $Root 'isolation.ps1'
+    if (-not (Test-Path $hook)) { Fail-Global "-RunAs $RunAs needs $hook (README, Full isolation)" }
+    if (-not $IsolationRoot -or -not (Test-Path -LiteralPath $IsolationRoot -PathType Container)) { Fail-Global "-RunAs $RunAs needs -IsolationRoot <existing folder> (README, Full isolation)" }
+    $hook
+}
+
 function Invoke-Claude([string]$sandbox, [string]$prompt, [string]$outFile) {
     $refusal = Get-ClaudeLaunchRefusal $RunAs $UnsafeRunClaudeAsOwner.IsPresent
     if ($refusal) { Fail-Global "$refusal; Claude not started" }
@@ -626,9 +638,7 @@ function Invoke-Claude([string]$sandbox, [string]$prompt, [string]$outFile) {
     if ($RunAs) {
         # Isolation hook: a script the owner sets up with the low-privilege user (README, "Full isolation"). It runs
         # Claude in its own copy of the sandbox and returns that folder; the bot copies it back itself, refusing links.
-        $hook = Join-Path $Root 'isolation.ps1'
-        if (-not (Test-Path $hook)) { Fail-Global "-RunAs $RunAs needs $hook (README, Full isolation)" }
-        if (-not $IsolationRoot -or -not (Test-Path -LiteralPath $IsolationRoot -PathType Container)) { Fail-Global "-RunAs $RunAs needs -IsolationRoot <existing folder> (README, Full isolation)" }
+        $hook = Get-IsolationHook
         $r = & $hook -User $RunAs -Exe $ClaudeExe -ArgumentList $argv -WorkingDirectory $repoDir -Environment $envMap -Stdin $prompt -TimeoutMinutes $ClaudeTimeoutMinutes -Sandbox $sandbox
         $code = $r.ExitCode; $stdout = "$($r.Stdout)"
         if (-not $r.Sandbox -or -not (Test-Path -LiteralPath $r.Sandbox -PathType Container)) { Fail-Global 'isolation.ps1 returned no sandbox folder' }
@@ -846,6 +856,138 @@ function Update-Prereleases($state) {
     }
 }
 
+# ---------- private build (LecramChannel=true), dropped on copyparty for the owner ----------
+
+$script:PrivateTag = $null
+
+function Get-PrivateListing {
+    # Files in private-build/ on the drop share (name -> size); $null when the folder isn't there yet.
+    $resp = Invoke-WebRequest -Uri "$DropUrl$PrivateDir/?ls" -Headers @{ PW = (Get-DropPw); 'User-Agent' = $Ua } -SkipHttpErrorCheck -TimeoutSec 30
+    if ([int]$resp.StatusCode -eq 404) { return $null }
+    if ([int]$resp.StatusCode -ne 200) { throw "$PrivateDir/ listing HTTP $($resp.StatusCode)" }
+    $m = @{}
+    foreach ($f in Select-DropFiles ($resp.Content | ConvertFrom-Json)) { $m[$f.Name] = $f.Size }
+    $m
+}
+
+function Send-PrivateBuild([string]$exe, [string]$name, [string]$hash) {
+    if ($null -eq (Get-PrivateListing)) {
+        # copyparty: a multipart POST with act=mkdir creates the folder.
+        $resp = Invoke-WebRequest -Method Post -Uri $DropUrl -Form @{ act = 'mkdir'; name = $PrivateDir } -Headers @{ PW = (Get-DropPw); 'User-Agent' = $Ua } -SkipHttpErrorCheck -TimeoutSec 30
+        if ([int]$resp.StatusCode -ge 400) { throw "creating $PrivateDir/ on copyparty failed: HTTP $($resp.StatusCode)" }
+    }
+    $sumFile = "$exe.sha256"
+    [IO.File]::WriteAllText($sumFile, "$hash  $name`n", [Text.UTF8Encoding]::new($false))
+    foreach ($f in @(@($exe, $name), @($sumFile, "$name.sha256"))) {
+        # copyparty: PUT uploads into the file at the URL; Replace: 1 overwrites what an unrecorded earlier upload left.
+        $resp = Invoke-WebRequest -Method Put -Uri "$DropUrl$PrivateDir/$([uri]::EscapeDataString($f[1]))" -InFile $f[0] -ContentType 'application/octet-stream' `
+            -Headers @{ PW = (Get-DropPw); 'User-Agent' = $Ua; Replace = '1' } -SkipHttpErrorCheck -TimeoutSec 900
+        if ([int]$resp.StatusCode -ge 300) { throw "uploading $($f[1]) to copyparty failed: HTTP $($resp.StatusCode)" }
+    }
+    $list = Get-PrivateListing
+    if (-not $list -or [long]$list[$name] -ne (Get-Item -LiteralPath $exe).Length) { throw "$name is not on copyparty with its size after the upload" }
+}
+
+function Remove-OldPrivateBuilds($state) {
+    # Only builds the bot uploaded itself (state) beyond the newest $PrivateKeep; a failed delete is retried next time.
+    foreach ($t in Select-PrivateBuildsToDelete $state.privateBuilds $PrivateKeep) {
+        $name = Get-PrivateBuildName $t.Substring(1)
+        $ok = $true
+        foreach ($n in $name, "$name.sha256") {
+            $resp = Invoke-WebRequest -Method Post -Uri "$DropUrl$PrivateDir/$([uri]::EscapeDataString($n))?delete" -Headers @{ PW = (Get-DropPw); 'User-Agent' = $Ua } -SkipHttpErrorCheck -TimeoutSec 30
+            if ([int]$resp.StatusCode -ge 300 -and [int]$resp.StatusCode -ne 404) { $ok = $false; Log "deleting $PrivateDir/$n failed: HTTP $($resp.StatusCode)" }
+        }
+        if ($ok) { $state.privateBuilds[$t].deleted = (Get-Date).ToString('o'); Log "deleted the private build of $t from copyparty" }
+    }
+}
+
+function Update-PrivateBuild($state) {
+    # Once a version is a full release, the bot builds that tag again with the Lecram channel on (the owner's private
+    # variant) as the isolated user, and puts the exe on copyparty. Public releases are built without it (release.yml).
+    $list = Gh @('release', 'list', '--repo', $Repo, '--exclude-drafts', '--exclude-pre-releases', '--limit', '20', '--json', 'tagName,isDraft,isPrerelease') -Quiet
+    if ($list.Code -ne 0) { Fail-Global "cannot list releases: $(Format-SafeText $list.Err 200)" }
+    $pick = Select-PrivateBuildTag ($list.Out | ConvertFrom-Json) $state.privateBuilds $state.failures
+    if (-not $pick.Tag) { Log "private build: nothing to build ($(Format-SafeText $pick.Note))"; return }
+    $tag = $pick.Tag; $version = $tag.Substring(1); $script:PrivateTag = $tag
+    # The auto path's check: gh shows a published full release, and the tag is fetched fresh from origin.
+    $v = Gh @('release', 'view', $tag, '--repo', $Repo, '--json', 'tagName,isDraft,isPrerelease') -Quiet
+    if ($v.Code -ne 0) { Fail-Global "cannot read release ${tag}: $(Format-SafeText $v.Err 200)" }
+    $why = Get-ReleaseStateReason ($v.Out | ConvertFrom-Json) $version
+    if (-not $why) { $why = Sync-ReleaseTag $Mirror $version $SafeGit }
+    if ($why) { throw "private build ${tag}: $why" }
+    $commit = (MGit @('rev-parse', '--verify', "refs/tags/$tag^{commit}") -Check).Out
+    $csproj = (MGit @('show', "$($commit):src/DLSSUpdater/DLSSUpdater.csproj") -Check -Raw).Out
+    if ($csproj -notmatch "<Version>$([regex]::Escape($version))</Version>") { throw "private build: the csproj at $tag is not version $version" }
+    if (-not (Test-LecramChannelSwitch $csproj)) {
+        Log "private build: $tag predates the LecramChannel switch; skipped, no private build for it"
+        $state.privateBuilds[$tag] = @{ skipped = 'predates LecramChannel'; time = (Get-Date).ToString('o') }
+        Save-State $state
+        return
+    }
+    if ($DryRun -and -not $RunAs) { Log "private build: would build $tag, but a dry run builds only with -RunAs"; return }
+    # The build runs repository code (MSBuild), so the same rule as for Claude.
+    $refusal = Get-ClaudeLaunchRefusal $RunAs $UnsafeRunClaudeAsOwner.IsPresent
+    if ($refusal) { Fail-Global "private build runs repository code: $refusal; not built" }
+    if (-not $RunAs) { Log 'WARNING: -UnsafeRunClaudeAsOwner: the private build runs as the owner, not isolated' }
+    $dotnet = (Get-Command dotnet -CommandType Application -ErrorAction SilentlyContinue | Select-Object -First 1).Source
+    if (-not $dotnet) { Fail-Global 'dotnet not on PATH' }
+
+    Log "private build: building $tag ($commit) with LecramChannel=true, timeout $PrivateBuildTimeoutMinutes min"
+    $wt = Join-Path $Work 'private-wt'
+    New-BotWorktree $wt "private-build-$RunId" $commit
+    $sandbox = Join-Path $Work 'private'
+    $sbRepo = Join-Path $sandbox 'repo'; $sbOut = Join-Path $sandbox 'out'
+    New-Item -ItemType Directory -Force $sbOut | Out-Null
+    Git @('clone', '--quiet', '--no-local', '--no-hardlinks', $wt, $sbRepo) $Work -Check | Out-Null
+    # Claude's reduced environment without the Claude token; no build server or node outlives the build.
+    $envMap = Get-ClaudeEnv $sandbox ''
+    $envMap.Remove('CLAUDE_CODE_OAUTH_TOKEN')
+    $envMap.MSBUILDDISABLENODEREUSE = '1'; $envMap.DOTNET_CLI_USE_MSBUILD_SERVER = '0'; $envMap.UseSharedCompilation = 'false'
+    $argv = @('publish', 'src/DLSSUpdater', '-c', 'Release', '-p:LecramChannel=true', '-o', $sbOut, '--nologo')
+    if ($RunAs) {
+        $r = & (Get-IsolationHook) -User $RunAs -Exe $dotnet -ArgumentList $argv -WorkingDirectory $sbRepo -Environment $envMap -Stdin '' -TimeoutMinutes $PrivateBuildTimeoutMinutes -Sandbox $sandbox
+        $code = $r.ExitCode; $stdout = "$($r.Stdout)"
+    } else {
+        $psi = [Diagnostics.ProcessStartInfo]::new($dotnet)
+        foreach ($a in $argv) { $psi.ArgumentList.Add($a) }
+        $psi.WorkingDirectory = $sbRepo
+        $psi.Environment.Clear(); foreach ($k in $envMap.Keys) { $psi.Environment[$k] = $envMap[$k] }
+        $psi.RedirectStandardOutput = $true; $psi.RedirectStandardError = $true; $psi.UseShellExecute = $false
+        $psi.StandardOutputEncoding = [Text.UTF8Encoding]::new($false)
+        $p = [Diagnostics.Process]::Start($psi)
+        $out = $p.StandardOutput.ReadToEndAsync(); $null = $p.StandardError.ReadToEndAsync()
+        if (-not $p.WaitForExit($PrivateBuildTimeoutMinutes * 60 * 1000)) { Log 'private build timed out; killing it'; $p.Kill($true); $p.WaitForExit() }
+        $code = $p.ExitCode; $stdout = $out.Result
+    }
+    Write-Atomic (Join-Path $LogDir "private-build-$RunId.log") $stdout
+    if ($code -ne 0) { throw "dotnet publish of $tag failed (exit $code), see private-build-$RunId.log" }
+    $name = Get-PrivateBuildName $version
+    $local = Join-Path $Work $name
+    if ($RunAs) {
+        if (-not $r.Sandbox -or -not (Test-Path -LiteralPath $r.Sandbox -PathType Container)) { Fail-Global 'isolation.ps1 returned no sandbox folder' }
+        # Only the one exe comes back, through the same handle checks as Claude's copy-back.
+        Copy-SandboxFile $r.Sandbox 'out\DLSS5Updater.exe' $local $IsolationRoot $Root $PrivateMaxBytes
+    } else {
+        $built = Join-Path $sbOut 'DLSS5Updater.exe'
+        if ((Get-Item -LiteralPath $built).Length -gt $PrivateMaxBytes) { throw "the private build of $tag is over $PrivateMaxBytes bytes" }
+        [IO.File]::Copy($built, $local)
+    }
+    $size = (Get-Item -LiteralPath $local).Length
+    $vi = [Diagnostics.FileVersionInfo]::GetVersionInfo($local)
+    $bad = @(Test-PrivateExe $vi.FileVersion $vi.ProductVersion $size $version $PrivateMaxBytes)
+    if ($bad.Count) { throw "the private build of $tag is not what was asked for: $($bad -join '; ')" }
+    $hash = (Get-FileHash -Algorithm SHA256 -LiteralPath $local).Hash.ToLower()
+    if ($DryRun) { Log "private build: would upload $name ($size bytes, sha256 $hash) and $name.sha256 to $PrivateDir/, keep the newest $PrivateKeep and notify"; return }
+    Send-PrivateBuild $local $name $hash
+    $state.privateBuilds[$tag] = @{ name = $name; sha256 = $hash; size = $size; time = (Get-Date).ToString('o') }
+    $state.failures.Remove("private|$tag")
+    Save-State $state
+    Log "private build: $name is on copyparty ($PrivateDir/, sha256 $hash)"
+    Remove-OldPrivateBuilds $state
+    Save-State $state
+    Send-Notice "DLSS5 Updater private build v$version" "Private build v$version is on copyparty: dlss5updater-drop/$PrivateDir/" "$DropUrl$PrivateDir/" 3 'package'
+}
+
 # ---------- main ----------
 
 if ($LoginBuyMeACoffee) {
@@ -885,10 +1027,26 @@ try {
 
     $state = Read-State
     $seeding = $null -eq $state
-    if ($seeding) { $state = @{ items = @{}; etags = @{}; failures = @{}; dropHashes = @{}; dropSeen = @{}; prs = @{}; prereleases = @{}; proofs = @{} } }
+    if ($seeding) { $state = @{ items = @{}; etags = @{}; failures = @{}; dropHashes = @{}; dropSeen = @{}; prs = @{}; prereleases = @{}; proofs = @{}; privateBuilds = @{} } }
 
     Complete-PendingRelease $state
     Update-Prereleases $state
+    # The private build has its own failure handling: it never stops the rest of the run.
+    if ($seeding) { Log 'private build: first run, checked from the next run on' }
+    else {
+        try { Update-PrivateBuild $state }
+        catch {
+            $machine = $script:GlobalFailure; $script:GlobalFailure = $false
+            $msg = Format-SafeText $_.Exception.Message 300
+            Log "private build FAILED$(if ($machine) { ' (machine, not counted)' }): $msg"
+            if (-not $machine -and $script:PrivateTag) {
+                $k = "private|$($script:PrivateTag)"; $state.failures[$k] = [int]$state.failures[$k] + 1
+                if ($state.failures[$k] -ge 3) { Log "private build of $($script:PrivateTag) failed three times; parked until the next release" }
+            }
+            Save-State $state
+            Send-Notice 'DLSS5 Updater bot: private build failed' "$msg`nLog: $LogFile" $null 4 'warning'
+        }
+    }
     Remove-ClosedBotBranches $state $login
     $openPr = Update-OpenBotPrs $state $login
 
