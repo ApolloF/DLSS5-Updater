@@ -28,6 +28,7 @@ public partial class MainWindow : Window
 
         Loaded += async (_, _) =>
         {
+            if (Demo.ScreenshotDir is null) _vm.SettingsVm.ShowOnboardingIfDue();
             await _vm.InitializeAsync();
             if (Demo.Active && Demo.ScreenshotDir is { } shots) await RunScreenshotExport(shots);
             else if (Environment.GetEnvironmentVariable("DLSSU_SNAPSHOT") is { Length: > 0 } shot) await Snapshot(shot);
