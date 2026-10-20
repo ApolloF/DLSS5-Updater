@@ -20,6 +20,7 @@ Windows desktop app that pulls the latest OptiScaler-NR, DLSS, MFG Unlock, Strea
 1. Bump `<Version>` in `src/DLSSUpdater/DLSSUpdater.csproj`, and the version in the `iscc` example lines of `installer/DLSSUpdater.iss` and `README.md`. All three must say the same thing. Write the release text in `docs/releases/v<version>.md`; `release.yml` uses it as the GitHub release body.
 2. Commit, then tag `v<version>` (for example `v1.5.1`) and push the tag.
 3. `.github/workflows/release.yml` (runs on `v*` tags only; PRs and pushes are covered by `ci.yml`) checks that the tag equals `v` + the csproj version and fails the build if it doesn't. It then runs the tests, publishes, builds the installer and attaches both exes to the GitHub release.
+4. The release bot (`tools/release-bot/`, scheduled task on claude-dev every 6 hours) watches the mods the app pins and the copyparty drop folder. On something new it runs headless Claude with `tools/release-bot/prompt.md`, opens or updates one PR from a `release-bot/*` branch with a patch bump, auto-merges and tags config-neutral bumps, and leaves config changes for a "ship it". See its README.
 
 ## Layout
 - `src/DLSSUpdater/Core`: business logic with no UI: GitHub client (ETag cache), component store, installer, ini merging, NVIDIA driver profiles (`NvDrs`), settings
