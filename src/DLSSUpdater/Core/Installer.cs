@@ -698,25 +698,32 @@ public sealed class Installer(ComponentStore store)
     private const string PreviousDir = "previous";
 
     /// <summary>
-    /// Copies the imported 64-bit set into the game with the package's layout (add-on, bridge, present-support dll, the
-    /// neural folder file by file and DFC's ReShade effects), then takes out files an earlier set of ours had and this one lacks.
+    /// Copies the imported 64-bit set into the game with the package's layout (the whole 64-bit folder but the cfg, file by
+    /// file), then takes out files an earlier set of ours had and this one lacks. Each file is recorded as DFC's before it
+    /// is placed, so a run that stops part-way still knows it.
     /// </summary>
     private void PlaceDfc(Ctx ctx)
     {
         var files = store.DfcInstallFiles();
         foreach (var rel in files)
-            Place(ctx, Path.Combine(ComponentStore.DfcDir, rel), Path.Combine(ctx.Target, rel));
+        {
+            var dest = Path.Combine(ctx.Target, rel);
+            if (!ctx.M.DfcFiles.Contains(ctx.Rel(dest), StringComparer.OrdinalIgnoreCase)) ctx.M.DfcFiles.Add(ctx.Rel(dest));
+            Place(ctx, Path.Combine(ComponentStore.DfcDir, rel), dest);
+        }
         foreach (var full in OwnedDfcFiles(ctx).Where(f => !files.Contains(Path.GetRelativePath(ctx.Target, f), StringComparer.OrdinalIgnoreCase)))
         {
             RemoveOwned(ctx, full);
             Log.Info($"  removed {ctx.Rel(full)} (not in the imported Deep Fried Chicken set)");
         }
+        ctx.M.DfcFiles.RemoveAll(e => !ctx.M.Owns(e));
     }
 
-    /// <summary>Files of the DFC set (not the cfg) this install placed, as full paths.</summary>
+    /// <summary>Files of the DFC set (not the cfg) this install placed, as full paths; records older than DfcFiles by name.</summary>
     private static List<string> OwnedDfcFiles(Ctx ctx) =>
-        ctx.M.Files.Select(ctx.Full)
-            .Where(f => FileUtil.IsUnder(f, ctx.Target) && ComponentStore.IsDfcPackagePath(Path.GetRelativePath(ctx.Target, f)))
+        ctx.M.Files.Where(e => ctx.M.DfcFiles.Contains(e, StringComparer.OrdinalIgnoreCase)
+                               || (FileUtil.IsUnder(ctx.Full(e), ctx.Target) && ComponentStore.IsDfcPackagePath(Path.GetRelativePath(ctx.Target, ctx.Full(e)))))
+            .Select(ctx.Full)
             .ToList();
 
     /// <summary>Takes out Deep Fried Chicken's files we placed (restoring what they replaced).</summary>
@@ -732,6 +739,7 @@ public sealed class Installer(ComponentStore store)
             ctx.M.Backups.Remove(b);
         }
         ctx.M.DfcCfg.Clear();
+        ctx.M.DfcFiles.Clear();
         ctx.M.Dfc = false;
         ctx.M.DfcTag = null;
         Log.Info($"  {ComponentStore.DfcFile} removed");
