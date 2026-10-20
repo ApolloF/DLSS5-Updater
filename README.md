@@ -63,7 +63,7 @@ You do not need to install .NET. The app brings what it needs.
 
 ## Download and install
 
-Get the latest version from the [releases page](https://github.com/ApolloF/dlss5updater/releases/latest). Each release has two programs, plus `SHA256SUMS` with their checksums:
+Get the latest version from the [releases page](https://github.com/ApolloF/DLSS5-Updater/releases/latest). Each release has two programs, plus `SHA256SUMS` with their checksums:
 
 - `DLSS5Updater-Setup-<version>.exe` is the installer. It installs for your user without administrator rights (or for all users if you choose), adds a Start menu entry, can add a desktop icon and has an uninstaller. To update the app, run a newer setup.
 - `DLSS5Updater.exe` is the portable version. It is a single file. Put it anywhere and run it.
@@ -170,4 +170,4 @@ DLSS5 Updater is an unofficial tool. It is not affiliated with or endorsed by NV
 
 ## Support
 
-DLSS5 Updater is free. If it is useful to you, you can leave a tip on [Ko-fi](https://ko-fi.com/apollof). Bug reports and ideas are welcome on the [issues page](https://github.com/ApolloF/dlss5updater/issues).
+DLSS5 Updater is free. If it is useful to you, you can leave a tip on [Ko-fi](https://ko-fi.com/apollof). Bug reports and ideas are welcome on the [issues page](https://github.com/ApolloF/DLSS5-Updater/issues).

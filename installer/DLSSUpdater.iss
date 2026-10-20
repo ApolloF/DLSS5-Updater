@@ -14,9 +14,9 @@ AppName={#AppName}
 AppVersion={#AppVersion}
 AppVerName={#AppName} {#AppVersion}
 AppPublisher=ApolloF
-AppPublisherURL=https://github.com/ApolloF/dlss5updater
-AppSupportURL=https://github.com/ApolloF/dlss5updater/issues
-AppUpdatesURL=https://github.com/ApolloF/dlss5updater/releases
+AppPublisherURL=https://github.com/ApolloF/DLSS5-Updater
+AppSupportURL=https://github.com/ApolloF/DLSS5-Updater/issues
+AppUpdatesURL=https://github.com/ApolloF/DLSS5-Updater/releases
 ; Per-user by default (no admin prompt); the dialog offers an all-users install.
 PrivilegesRequired=lowest
 PrivilegesRequiredOverridesAllowed=dialog
