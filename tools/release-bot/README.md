@@ -126,23 +126,33 @@ needs full isolation first, and the bot refuses to start the real Claude without
 unless you pass `-UnsafeRunClaudeAsOwner`. `install.ps1 -Enable` without `-RunAs` throws.
 
 ## Full isolation (required before enabling the schedule)
+`setup-isolation.ps1` does steps 1, 3 and 4: run `gsudo pwsh -NoProfile -File tools/release-bot/setup-isolation.ps1`
+as the owner (again after changing `isolation.ps1` or updating Claude; it keeps the user and its password). It creates
+the standard user `dlss5bot` with a random password stored with DPAPI for the owner (`dlss5bot.cred.xml` next to
+the state), hidden from the sign-in screen; the isolation root `C:\dlss5bot-iso` (owner full, bot modify, `home\`
+for its caches) and `C:\dlss5bot-tools` (bot read and execute) with a copy of the owner's `claude.exe`; denies the
+bot every access to the top-level folders and PATH folders all users may write to (C:\ gives Authenticated Users
+modify on new top-level folders, so `C:\dev` with the owner's repos is one); and installs `isolation.ps1`.
+
 1. Create a dedicated local Windows user (for example `dlss5bot`), a standard user, not an administrator: no gh
    login, no SSH keys, no env secrets, no access to the owner's profile (check the ACLs of `C:\Users\<owner>` and the
    repos), and no network shares mounted.
 2. Give it .NET 8, git (for read-only use) and the Claude CLI, and Claude auth through a scoped token:
-   `claude setup-token` as that user (or as the owner, then store the token for the bot as `DLSS5_BOT_CLAUDE_TOKEN`).
-3. Write `%LocalAppData%\dlss5updater-releasebot\isolation.ps1` (owner side). The bot calls it as
+   `claude setup-token` as the owner, stored for the bot as the owner's user env var `DLSS5_BOT_CLAUDE_TOKEN`. It is a
+   subscription token (Claude Code plan usage, not API billing); a hijacked build runs as the bot user with the token
+   in its environment, so revoke it if a run ever looks wrong.
+3. `isolation.ps1` (installed as `%LocalAppData%\dlss5updater-releasebot\isolation.ps1`, owner side). The bot calls it as
    `& isolation.ps1 -User <name> -Exe <claude.exe> -ArgumentList <argv> -WorkingDirectory <sandbox\repo>
    -Environment <hashtable> -Stdin <prompt> -TimeoutMinutes <n> -Sandbox <sandbox>` and expects
    `@{ ExitCode = <int>; Stdout = <string>; Sandbox = <the isolated copy> }`. It should:
    - copy the `-Sandbox` folder (repo clone, `in\`, `out\`) to a fresh folder inside the isolation root (below) that
      only that user and the owner can write, and replace the `-Sandbox` path with that folder in `-ArgumentList`,
      `-Environment` values, `-Stdin` and `-WorkingDirectory`;
-   - start Claude there as that user (for example a scheduled task with that user's stored credentials, or
-     `Start-Process -Credential` with a secret from Credential Manager) and wait;
-   - before it returns, try to stop every process still running as that user (`taskkill /F /FI "USERNAME eq <user>"`;
-     dotnet build servers linger). Still recommended, but the bot doesn't rely on it: a task running with a Limited
-     token likely can't see or kill another user's processes;
+   - start Claude there as that user (the shipped script starts it with the stored credential, the user's own profile,
+     `home\` for AppData, Claude config and NuGet, and the tools folder's `claude.exe`) and wait;
+   - before it returns, stop everything the run started: the shipped script runs it in a job object it kills when
+     Claude exits or times out, and turns off MSBuild node reuse and the compiler server. The bot doesn't rely on it
+     (its copy-back is safe against a process still running), but nothing should outlive a run;
    - **not** copy anything back itself, and return the folder as `Sandbox`.
    The isolation root is a folder of its own for these sandboxes (for example `C:\dlss5bot-iso`), outside
    `%LocalAppData%\dlss5updater-releasebot` and the owner's profile; pass it as `-IsolationRoot` (install.ps1 hands it
@@ -158,7 +168,7 @@ unless you pass `-UnsafeRunClaudeAsOwner`. `install.ps1 -Enable` without `-RunAs
    aborts and removes everything copied so far. Build output (`bin`, `obj`, ...) is left behind. Then, as before, it
    only reads files from the copy: it never runs git or anything else from Claude's folder, rejects links again in the
    tree compare, and only commits the checked files into its own clean worktree of the bare mirror.
-4. Point `Get-ClaudeEnv` paths (TEMP, APPDATA, `CLAUDE_CONFIG_DIR`, NUGET_PACKAGES) at that user's profile in the hook.
+4. Point `Get-ClaudeEnv` paths (TEMP, APPDATA, `CLAUDE_CONFIG_DIR`, NUGET_PACKAGES) at that user's own folders in the hook.
    It must not be able to read the bot's browser profile (`browser-profile\`, the owner's Buy Me a Coffee session).
    That user must not be able to write anything the owner side runs or trusts: `%LocalAppData%\dlss5updater-releasebot`
    (`bin\` is what the task runs, `mirror.git\hooks` must stay free of repo hooks, `state.json` holds the auto/review
