@@ -62,10 +62,12 @@ You do not need to install .NET. The app brings what it needs.
 
 ## Download and install
 
-Get the latest version from the [releases page](https://github.com/ApolloF/dlss5updater/releases/latest). Each release has two files:
+Get the latest version from the [releases page](https://github.com/ApolloF/dlss5updater/releases/latest). Each release has two programs, plus `SHA256SUMS` with their checksums:
 
 - `DLSS5Updater-Setup-<version>.exe` is the installer. It installs for your user without administrator rights (or for all users if you choose), adds a Start menu entry, can add a desktop icon and has an uninstaller. To update the app, run a newer setup.
 - `DLSS5Updater.exe` is the portable version. It is a single file. Put it anywhere and run it.
+
+The app checks GitHub for a newer version of itself (at most every 6 hours, or with **Check now** in Settings) and shows **Update to vX.Y.Z** in the title bar. Updating downloads the setup or the portable exe, whichever you use, checks it against the release's `SHA256SUMS` and restarts the app. **Install updates automatically** (off by default) downloads in the background and installs when you close the app. It never updates while a task is running.
 
 Both versions keep settings and downloads in `%LocalAppData%\DLSS5Updater`, so you can switch between them without losing anything.
 

@@ -68,6 +68,7 @@ public partial class App : Application
             Log.Error("Background task failed", args.Exception);
             args.SetObserved();
         };
+        if (!demo && StartPendingUpdate()) return;
         // Inside the handler's reach: a locked demo folder shows a message instead of crashing the process.
         if (demo) Demo.Enable(screenshotDir: Demo.ScreenshotArg(e.Args));
         base.OnStartup(e);
@@ -77,8 +78,33 @@ public partial class App : Application
 
     protected override void OnExit(ExitEventArgs e)
     {
-        _instance?.Dispose();
+        // Before base.OnExit raises Exit: a self-update started from there needs the lock gone (setup checks AppMutex).
+        ReleaseInstance();
         base.OnExit(e);
+    }
+
+    private void ReleaseInstance()
+    {
+        _instance?.Dispose();
+        _instance = null;
+    }
+
+    /// <summary>
+    /// Automatic updates: an update downloaded and verified last session that didn't get to install on exit installs
+    /// now, before the window opens; setup or the new portable exe starts the app again. True when this process should end.
+    /// </summary>
+    private bool StartPendingUpdate()
+    {
+        if (Environment.ProcessPath is not { } exe) return false;
+        if (!AppUpdater.ApplyPending(AppSettings.Load(), exe, relaunch: true, ReleaseInstance))
+        {
+            // Released just before a start that then failed: take the lock back, or leave if another copy got it.
+            _instance ??= SingleInstance.TryAcquire(SingleInstance.DefaultName, TimeSpan.Zero);
+            if (_instance is not null) return false;
+        }
+        ShutdownMode = ShutdownMode.OnExplicitShutdown;
+        Shutdown();
+        return true;
     }
 
     private void OnUnhandled(object sender, DispatcherUnhandledExceptionEventArgs e)
