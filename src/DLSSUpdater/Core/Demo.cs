@@ -44,7 +44,7 @@ public static class Demo
     /// </summary>
     public static void Enable(string? root = null, string? screenshotDir = null)
     {
-        root ??= Path.Combine(Path.GetTempPath(), "DLSSUpdater-demo");
+        root ??= Path.Combine(Path.GetTempPath(), "DLSS5Updater-demo");
         if (!FileUtil.IsUnder(root, Path.GetTempPath())) throw new ArgumentException("The demo data folder must be under the temp folder.", nameof(root));
         try { FileUtil.DeleteDirectory(root); }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
@@ -124,7 +124,7 @@ public static class Demo
         }
     }
 
-    private static string Placeholder(string what) => $"DLSS Updater demo placeholder ({what}); not a real file.\n";
+    private static string Placeholder(string what) => $"DLSS5 Updater demo placeholder ({what}); not a real file.\n";
     private static string Sha(string what) => Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(what))).ToLowerInvariant();
 
     private static string RenoDxId => Sha("renodx-dlss");
@@ -366,7 +366,7 @@ public static class Demo
     public static async Task RestoreDlssAsync(GameInfo game, string targetDir, CancellationToken ct)
     {
         await Task.Delay(400, ct);
-        var m = ManifestAt(targetDir) ?? throw new InvalidOperationException("No DLSS Updater install found here.");
+        var m = ManifestAt(targetDir) ?? throw new InvalidOperationException("No DLSS5 Updater install found here.");
         RestoreOriginals(game);
         m.Dlss = m.Streamline = m.DlssPinned = false;
         m.DlssTag = m.StreamlineTag = null;

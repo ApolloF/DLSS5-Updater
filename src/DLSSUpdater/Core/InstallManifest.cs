@@ -4,7 +4,7 @@ using System.Text.Json.Serialization;
 namespace DLSSUpdater.Core;
 
 public sealed class UnsafeManifestException(string targetDir, string detail)
-    : Exception($"DLSS Updater's install record in {targetDir} points outside the game and install folders ({detail}). Nothing was changed.");
+    : Exception($"DLSS5 Updater's install record in {targetDir} points outside the game and install folders ({detail}). Nothing was changed.");
 
 public sealed class BackupEntry
 {
@@ -24,6 +24,7 @@ public sealed class BackupEntry
 /// <summary>Lives in &lt;target&gt;\.dlssupdater\manifest.json and travels with the game folder.</summary>
 public sealed class InstallManifest
 {
+    // Keeps the pre-rename name on purpose: every existing game install keeps its backups under this folder.
     public const string DirName = ".dlssupdater";
 
     public int Schema { get; set; } = 1;
@@ -134,7 +135,7 @@ public sealed class InstallManifest
         catch (Exception ex) when (ex is JsonException or IOException)
         {
             throw new InvalidDataException(
-                $"DLSS Updater's install record {path} can't be read ({ex.Message}). Nothing was changed; retry, or restore that file.", ex);
+                $"DLSS5 Updater's install record {path} can't be read ({ex.Message}). Nothing was changed; retry, or restore that file.", ex);
         }
     }
 
@@ -157,7 +158,7 @@ public sealed class InstallManifest
     /// Where an entry points; <paramref name="gameRoot"/> is the root it was recorded against. Says nothing about whether
     /// that is a safe place: see <see cref="Contain"/>.
     /// </summary>
-    /// <exception cref="UnsafeManifestException">The entry is not a path DLSS Updater writes.</exception>
+    /// <exception cref="UnsafeManifestException">The entry is not a path DLSS5 Updater writes.</exception>
     public static string Resolve(string entry, string targetDir, string gameRoot)
     {
         if (entry.StartsWith(InstallTag, StringComparison.Ordinal))
@@ -214,7 +215,7 @@ public sealed class InstallManifest
         var files = Files.Select(f => Check(f, inTargetOnly: false)).ToList();
         var dirs = Dirs.Select(d => Check(d, inTargetOnly: true)).ToList();
         if (dirs.Any(d => FileUtil.IsUnder(d, DirFor(target))))
-            throw new UnsafeManifestException(target, "an owned folder is DLSS Updater's own folder");
+            throw new UnsafeManifestException(target, "an owned folder is DLSS5 Updater's own folder");
         var originals = Backups.Select(b => Check(b.Original, inTargetOnly: false)).ToList();
         for (var i = 0; i < Backups.Count; i++)
         {

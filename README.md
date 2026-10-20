@@ -1,14 +1,16 @@
-# DLSS Updater
+# DLSS5 Updater
 
-DLSS Updater is a free Windows app that finds the PC games on your computer and installs or updates graphics mods in them: OptiScaler, NVIDIA DLSS, NVIDIA Streamline, MFG Unlock, ReShade and a few add-ons. It downloads the files from their official sources, puts them in the right game folder and keeps a backup of everything it replaces. One click puts your original files back.
+DLSS5 Updater is a free Windows app that finds the PC games on your computer and installs or updates graphics mods in them: OptiScaler, NVIDIA DLSS, NVIDIA Streamline, MFG Unlock, ReShade and a few add-ons. It downloads the files from their official sources, puts them in the right game folder and keeps a backup of everything it replaces. One click puts your original files back.
 
 It is for people with an NVIDIA RTX card who play single-player games and want newer DLSS versions or the extra graphics options these mods offer, without copying DLL files around by hand.
 
 It is an unofficial tool, not affiliated with or endorsed by NVIDIA or the mod authors (see [Credits](#credits)).
 
+Formerly called DLSS Updater. Updating keeps your settings: the app moves `%LocalAppData%\DLSSUpdater` to `%LocalAppData%\DLSS5Updater` on first start.
+
 ## Screenshots
 
-![DLSS Updater with the game list on the left and one game selected. The top bar shows the latest version of each component next to Check for updates and Update all. The selected game lists its components with installed and latest versions and a switch for each.](docs/images/games.png)
+![DLSS5 Updater with the game list on the left and one game selected. The top bar shows the latest version of each component next to Check for updates and Update all. The selected game lists its components with installed and latest versions and a switch for each.](docs/images/games.png)
 
 The game list and one game's components. Badges show what each game has installed, and an arrow marks an outdated DLSS version.
 
@@ -60,17 +62,17 @@ You do not need to install .NET. The app brings what it needs.
 
 ## Download and install
 
-Get the latest version from the [releases page](https://github.com/ApolloF/dlssupdater/releases/latest). Each release has two files:
+Get the latest version from the [releases page](https://github.com/ApolloF/dlss5updater/releases/latest). Each release has two files:
 
-- `DLSSUpdater-Setup-<version>.exe` is the installer. It installs for your user without administrator rights (or for all users if you choose), adds a Start menu entry, can add a desktop icon and has an uninstaller. To update the app, run a newer setup.
-- `DLSSUpdater.exe` is the portable version. It is a single file. Put it anywhere and run it.
+- `DLSS5Updater-Setup-<version>.exe` is the installer. It installs for your user without administrator rights (or for all users if you choose), adds a Start menu entry, can add a desktop icon and has an uninstaller. To update the app, run a newer setup.
+- `DLSS5Updater.exe` is the portable version. It is a single file. Put it anywhere and run it.
 
-Both versions keep settings and downloads in `%LocalAppData%\DLSSUpdater`, so you can switch between them without losing anything.
+Both versions keep settings and downloads in `%LocalAppData%\DLSS5Updater`, so you can switch between them without losing anything.
 
 ## First run
 
 1. Start the app. It scans your game libraries and lists the games it finds. To add a game it missed, use **Add game** (one game folder) or **Add library** (a folder whose subfolders are games) at the bottom of the list.
-2. Add `nvngx_dlssnr.dll` if you want to use neural rendering. This file belongs to NVIDIA, and its licence does not allow other people to share it, so this app does not include it and never downloads it. You supply your own copy. Put it next to `DLSSUpdater.exe` before the first start, or open **Settings** and import it under **Local components**. The app stores it in `%LocalAppData%\DLSSUpdater\components`. You can keep several versions side by side and pick a default.
+2. Add `nvngx_dlssnr.dll` if you want to use neural rendering. This file belongs to NVIDIA, and its licence does not allow other people to share it, so this app does not include it and never downloads it. You supply your own copy. Put it next to `DLSS5Updater.exe` before the first start, or open **Settings** and import it under **Local components**. The app stores it in `%LocalAppData%\DLSS5Updater\components`. You can keep several versions side by side and pick a default.
 3. You can skip step 2 if you only want newer DLSS files. **DLSS only** does not need it.
 4. ReShade is downloaded the first time an install needs it. If you prefer your own `ReShade64.dll`, import it under **Local components**. **Use download** switches back.
 
@@ -119,11 +121,11 @@ The OptiScaler-NR fork publishes pre-releases only. Keep **Include pre-releases*
 It uses what it already downloaded and shows an **OFFLINE** label. Try again later with **Check for updates**.
 
 **Where are the logs?**
-Open the log panel in the app. Data, cache and the log file are in `%LocalAppData%\DLSSUpdater`.
+Open the log panel in the app. Data, cache and the log file are in `%LocalAppData%\DLSS5Updater`.
 
 ## Uninstall
 
-Use **Uninstall** on each game first if you want the original game files back. Then remove the app through Windows Settings, Apps (installer version) or delete `DLSSUpdater.exe` (portable version). The uninstaller keeps `%LocalAppData%\DLSSUpdater`. Delete that folder yourself if you want the settings and downloads gone as well.
+Use **Uninstall** on each game first if you want the original game files back. Then remove the app through Windows Settings, Apps (installer version) or delete `DLSS5Updater.exe` (portable version). The uninstaller keeps `%LocalAppData%\DLSS5Updater`. Delete that folder yourself if you want the settings and downloads gone as well.
 
 ## Build from source
 
@@ -135,19 +137,19 @@ dotnet test
 dotnet publish src/DLSSUpdater -c Release -o publish
 ```
 
-The last command makes the portable `publish\DLSSUpdater.exe`. The installer needs [Inno Setup 6](https://jrsoftware.org/isinfo.php):
+The last command makes the portable `publish\DLSS5Updater.exe`. The installer needs [Inno Setup 6](https://jrsoftware.org/isinfo.php):
 
 ```
-iscc /DAppVersion=1.11.0 installer\DLSSUpdater.iss
+iscc /DAppVersion=2.0.0 installer\DLSSUpdater.iss
 ```
 
-Pushing a tag like `v1.11.0` that matches the version in the project file builds both files on GitHub Actions and attaches them to a release. If `docs/releases/v<version>.md` exists, it becomes the release text. Setting `DLSSU_INTEGRATION=1` turns on a test that downloads the real releases and installs them into a temporary folder.
+Pushing a tag like `v2.0.0` that matches the version in the project file builds both files on GitHub Actions and attaches them to a release. If `docs/releases/v<version>.md` exists, it becomes the release text. Setting `DLSSU_INTEGRATION=1` turns on a test that downloads the real releases and installs them into a temporary folder.
 
-`DLSSUpdater.exe --demo` starts the app on a made-up game library in a temporary folder. It never scans your launchers, downloads anything or touches your games, so it is a safe way to look around. `--demo --screenshots <folder>` saves the screenshots used in this README to that folder and exits.
+`DLSS5Updater.exe --demo` starts the app on a made-up game library in a temporary folder. It never scans your launchers, downloads anything or touches your games, so it is a safe way to look around. `--demo --screenshots <folder>` saves the screenshots used in this README to that folder and exits.
 
 ## Credits
 
-DLSS Updater installs the work of these projects and their authors. It downloads their files as released and does not change them.
+DLSS5 Updater installs the work of these projects and their authors. It downloads their files as released and does not change them.
 
 - [OptiScaler](https://github.com/optiscaler/OptiScaler) and the [OptiScaler-NR fork](https://github.com/ShyVortex/OptiScaler-DLSSNR-PreSR-Multipass) by ShyVortex.
 - [MFG Unlock](https://github.com/mavismmg/MFGAdaUnlock-RenoDx) by mavismmg.
@@ -157,10 +159,10 @@ DLSS Updater installs the work of these projects and their authors. It downloads
 - The DLSS5 add-on by Lecram and Deep Fried Chicken by its author.
 - [NVIDIA DLSS](https://github.com/NVIDIA/DLSS) and [NVIDIA Streamline](https://github.com/NVIDIA-RTX/Streamline) by NVIDIA.
 
-DLSS Updater is released under the [MIT License](LICENSE). The files it downloads and installs, and your own `nvngx_dlssnr.dll`, keep their own licences.
+DLSS5 Updater is released under the [MIT License](LICENSE). The files it downloads and installs, and your own `nvngx_dlssnr.dll`, keep their own licences.
 
-DLSS Updater is an unofficial tool. It is not affiliated with or endorsed by NVIDIA or by the authors of the projects above. NVIDIA, DLSS and Streamline belong to NVIDIA Corporation. OptiScaler, ReShade and the other projects belong to their authors. Their names are used here only to say what the app works with.
+DLSS5 Updater is an unofficial tool. It is not affiliated with or endorsed by NVIDIA or by the authors of the projects above. NVIDIA, DLSS and Streamline belong to NVIDIA Corporation. OptiScaler, ReShade and the other projects belong to their authors. Their names are used here only to say what the app works with.
 
 ## Support
 
-DLSS Updater is free. If it is useful to you, you can leave a tip on [Ko-fi](https://ko-fi.com/apollof). Bug reports and ideas are welcome on the [issues page](https://github.com/ApolloF/dlssupdater/issues).
+DLSS5 Updater is free. If it is useful to you, you can leave a tip on [Ko-fi](https://ko-fi.com/apollof). Bug reports and ideas are welcome on the [issues page](https://github.com/ApolloF/dlss5updater/issues).
