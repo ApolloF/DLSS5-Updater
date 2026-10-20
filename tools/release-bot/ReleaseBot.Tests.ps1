@@ -475,6 +475,11 @@ Describe 'copy-back from the isolated sandbox (S3)' {
         Get-IsolationRootRefusal 'D:\bot\iso' 'D:\bot' $prof | Should -Match 'overlaps'
         Get-IsolationRootRefusal 'D:\stuff' 'D:\stuff\bot' $prof | Should -Match 'overlaps'
         Get-IsolationRootRefusal '' $botRoot $prof | Should -Match 'empty'
+        Get-IsolationRootRefusal '\\localhost\C$\iso' $botRoot $prof | Should -Match 'not a local drive path'
+        Get-IsolationRootRefusal '\\?\UNC\localhost\C$\iso' $botRoot $prof | Should -Match 'not a local drive path'
+        Get-IsolationRootRefusal '\\?\GLOBALROOT\Device\HarddiskVolume3\iso' $botRoot $prof | Should -Match 'not a local drive path'
+        Get-IsolationRootRefusal 'iso' $botRoot $prof | Should -Match 'not a local drive path'
+        Get-IsolationRootRefusal '\\?\D:\iso' $botRoot $prof | Should -BeNullOrEmpty
         Get-IsolationRootRefusal 'C:\dlss5bot-iso' $botRoot $prof | Should -BeNullOrEmpty
         Get-IsolationRootRefusal 'C:\Users\owner2' $botRoot $prof | Should -BeNullOrEmpty
         # A junction is checked where it leads.

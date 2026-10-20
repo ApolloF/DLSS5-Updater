@@ -680,10 +680,17 @@ function Get-IsolationRootRefusal([string]$path, [string]$botRoot, [string]$user
     # so it must be a folder of its own: not a drive root, not the owner's profile, above it or in it, and apart from
     # the bot's folder. Checked on the path as given and, when it exists, on where it really leads.
     if (-not $path) { return 'it is empty' }
-    $norm = { param($p) $p = "$p" -replace '^\\\\\?\\UNC\\', '\\' -replace '^\\\\\?\\', ''; [IO.Path]::GetFullPath($p).TrimEnd('\') }
+    # Local drive paths only: UNC (\\localhost\C$\...), device and volume forms would dodge the profile comparison.
+    $local = '^(\\\\\?\\)?[A-Za-z]:\\'
+    if ($path -notmatch $local) { return "$path is not a local drive path" }
+    $norm = { param($p) $p = "$p" -replace '^\\\\\?\\', ''; [IO.Path]::GetFullPath($p).TrimEnd('\') }
     $under = { param($a, $b) $a.StartsWith("$b\", [StringComparison]::OrdinalIgnoreCase) }
     $cands = @(& $norm $path)
-    if (Test-Path -LiteralPath $path -PathType Container) { $cands += & $norm ([ReleaseBot.HandleCopy]::DirFinalPath($path, $false)) }
+    if (Test-Path -LiteralPath $path -PathType Container) {
+        $final = [ReleaseBot.HandleCopy]::DirFinalPath($path, $false)
+        if ($final -notmatch $local) { return "$path leads to $final, not a local drive path" }
+        $cands += & $norm $final
+    }
     $prof = & $norm $userProfile; $bot = & $norm $botRoot
     foreach ($p in $cands) {
         if ([IO.Path]::GetPathRoot("$p\").TrimEnd('\') -ieq $p) { return "$p is a drive root" }
