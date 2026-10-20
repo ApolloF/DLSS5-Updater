@@ -127,6 +127,11 @@ public sealed partial class MainViewModel : ObservableObject
     private List<GuideEntry>? _guide;
 
     public string AppVersion => "v" + (typeof(MainViewModel).Assembly.GetName().Version?.ToString(3) ?? "1.0.0");
+    public bool IsPrivateBuild => BuildFlags.LecramChannel;
+    public string PrivateBuildText => "Private build (Lecram channel on)";
+    public string LecramStripTip => BuildFlags.LecramChannel
+        ? "Lecram v11 update channel; builds are added to the library. Games keep their installed build."
+        : "Lecram's DLSS5 add-on, imported by you. Games keep their installed build.";
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(HasUpdates), nameof(UpdateAllName))]
     private int _updateCount;

@@ -31,6 +31,26 @@ public sealed class AppUpdateTests : IDisposable
 
     private static string Sha(byte[] data) => Convert.ToHexString(SHA256.HashData(data)).ToLowerInvariant();
 
+    // ---------- private build ----------
+
+    [Fact]
+    public void CanSelfInstall_OnlyInThePublicBuild()
+    {
+        Assert.True(AppUpdate.CanSelfInstall(privateBuild: false));
+        Assert.False(AppUpdate.CanSelfInstall(privateBuild: true));
+    }
+
+    [Fact]
+    public void PrivateBuildNotice_NamesTheVersionAndWhereThePrivateBuildIs()
+    {
+        var r = AppUpdate.Newest([Release("v2.2.0")], new Version(2, 1, 0))!;
+        var text = AppUpdate.PrivateBuildNotice(r);
+        Assert.StartsWith("Private build: v2.2.0 is out.", text);
+        Assert.Contains("private-build/", text);
+        Assert.EndsWith("tools/build-private.ps1).", text);
+        Assert.Equal("dlss5updater-drop/private-build/", AppUpdate.PrivateBuildFolder);
+    }
+
     // ---------- versions ----------
 
     [Fact]

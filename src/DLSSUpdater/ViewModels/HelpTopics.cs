@@ -1,3 +1,5 @@
+using DLSSUpdater.Core;
+
 namespace DLSSUpdater.ViewModels;
 
 public sealed record HelpTopic(string Id, string Group, string Title, string Body);
@@ -12,6 +14,21 @@ public sealed record GuideEntry(HelpTopic Topic, IReadOnlyList<OptionChoice> Cho
 /// <summary>Text behind the ⓘ buttons; the About page lists all of them as the guide.</summary>
 public static class HelpTopics
 {
+    internal static string LecramSourceIntro(bool channelEnabled) => channelEnabled
+        ? "Lecram v11 builds are fetched from the author's public MediaFire channel during update checks. In Local components, turn automatic checks on or off, use Check now and see the last result. Older builds can still be imported. "
+        : "This app doesn't fetch Lecram's builds: you import the add-on (dlss5-nr.addon64 or renodx-dlss5.addon64) in Local components. The builds are available to supporters on the author's Buy Me a Coffee. ";
+
+    internal static string LecramUpdates(bool channelEnabled) => channelEnabled
+        ? "The public MediaFire folder is the same source used by the author's DLSS5-NR-Setup installer. " +
+          "The newest upload wins; ties prefer the raw add-on, then ZIP, then setup EXE. Each download is checked against the listing's SHA-256. " +
+          "Only dlss5-nr.addon64 is extracted; downloaded installers are never run and are removed afterwards. Channel moves are followed once. " +
+          "Builds enter the existing library and only a newer build becomes its default. Games keep their installed build until you choose to change it. " +
+          "Offline or failed checks keep the library. New builds can have options this app does not list; tune those in the ReShade overlay. No nvngx_dlssnr.dll is downloaded."
+        : "Lecram's builds are available to supporters on the author's Buy Me a Coffee, so this app no longer checks for or downloads them. " +
+          "Import a new build in Local components (the add-on file itself; extract archives first). " +
+          "Builds enter the existing library and only a newer build becomes its default. Games keep their installed build until you choose to change it. " +
+          "Builds already in the library keep working. New builds can have options this app does not list; tune those in the ReShade overlay. No nvngx_dlssnr.dll is downloaded.";
+
     public static readonly HelpTopic[] All =
     [
         new("uplift", "GITC Uplift", "GITC Uplift",
@@ -90,7 +107,7 @@ public static class HelpTopics
             "The cfg has frame_generation_coexistence, experimental_fg2x_enabled and nr_interpolation_enabled, but no comment or note says what they do or which value picks DLSS-G or FSR 3.1, so the app does not set them."),
 
         new("lecram", "General", "Lecram DLSS5 add-on",
-            "Lecram v11 builds are fetched from the author's public MediaFire channel during update checks. In Local components, turn automatic checks on or off, use Check now and see the last result. Older builds can still be imported. " +
+            LecramSourceIntro(BuildFlags.LecramChannel) +
             "There are two generations: v10 and older (renodx-dlss5.addon64, recognised by its version resource) and v11 and newer (dlss5-nr.addon64, recognised by strings in the file because it has no version resource). " +
             "Every import is kept as its own build, named by the highest vX.Y.Z string in the file or by you; a game only ever gets one file, because v11 goes inert when a renodx-dlss5.addon64 file sits next to it (from v11 beta.22 not when ReShade has that add-on disabled). Settings picks the default build and each game can pick its own, whose generation decides the options shown. " +
             "It needs ReShade + add-ons mode, ReShade 6+ with add-on support, a game with native DLSS and an imported nvngx_dlssnr.dll, and it replaces OptiScaler-NR and Deep Fried Chicken. " +
@@ -99,12 +116,7 @@ public static class HelpTopics
             "From v11 Patch 4 (beta.18) the author also ships its own installer (DLSS5 NR Setup). It finds the add-on in every game on every drive and its Update all replaces it there, games this app manages included, so manage a game with one of the two. " +
             "It keeps a shared nvngx_dlssnr.dll in %LOCALAPPDATA%\\DLSS5-NR\\runtime, which v11 also finds by itself."),
 
-        new("lecram-updates", "General", "Lecram update source",
-            "The public MediaFire folder is the same source used by the author's DLSS5-NR-Setup installer. " +
-            "The newest upload wins; ties prefer the raw add-on, then ZIP, then setup EXE. Each download is checked against the listing's SHA-256. " +
-            "Only dlss5-nr.addon64 is extracted; downloaded installers are never run and are removed afterwards. Channel moves are followed once. " +
-            "Builds enter the existing library and only a newer build becomes its default. Games keep their installed build until you choose to change it. " +
-            "Offline or failed checks keep the library. New builds can have options this app does not list; tune those in the ReShade overlay. No nvngx_dlssnr.dll is downloaded."),
+        new("lecram-updates", "General", "Lecram update source", LecramUpdates(BuildFlags.LecramChannel)),
 
         // ---------- Keybinds ----------
         new("keybinds", "Keybinds", "Keybinds",

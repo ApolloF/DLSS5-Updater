@@ -208,7 +208,8 @@ App behaviour: when installing a Lecram v11 build with an `NRHookPoint` override
 
 ## Update source
 
-DLSS5 Updater checks the same public MediaFire folder as the author's installer (DLSS5-NR-Setup). Method: static analysis of
+Since the builds went behind the author's Buy Me a Coffee, the public DLSS5 Updater no longer contacts this channel: Lecram's add-on is imported by the user. Only the owner's private build
+(`-p:LecramChannel=true`, `tools/build-private.ps1`, define `LECRAM_CHANNEL`, `BuildFlags.LecramChannel`) still checks the same public MediaFire folder as the author's installer (DLSS5-NR-Setup). Method: static analysis of
 `DLSS5-NR-Setup-v11.0.0-beta.22.exe` (never run, no network used for the analysis); the live listing was then checked once.
 
 - **Listing** (public, no login): `GET https://www.mediafire.com/api/1.5/folder/get_content.php?folder_key=<key>&content_type=files&chunk=<n>&response_format=json`.
@@ -231,16 +232,16 @@ DLSS5 Updater checks the same public MediaFire folder as the author's installer 
   `licenses.txt`. Two subfolders appeared: `addon` (the raw beta.48 `dlss5-nr.addon64`) and `archive` (older setups beta.18..beta.45,
   their changelogs and raw add-ons as `dlss5-nr(N).addon64`). The app reads only the root (as the installer does), so it takes the
   beta.48 setup exe and extracts the add-on; its hash equals the raw file's (C). Patch 9 (beta.40) is in neither folder.
-- **In the app.** The listing is cached under `%LocalAppData%\DLSS5Updater\cache` (ETag/Last-Modified sent when present). One
+- **In the app (private build only).** The listing is cached under `%LocalAppData%\DLSS5Updater\cache` (ETag/Last-Modified sent when present). One
   listing per check, requests in sequence. The add-on goes through the normal import (labels, generation, dedupe by SHA-256) and
   becomes the library default only when newer than the current default. Games are never switched. Offline, a broken listing or an
-  exe without ZIP is logged once and the library stays as it is. Settings → Local components has "Check for new builds
-  automatically" (default on) and "Check now". A new build may have options beyond the last checked one; fetching it does not
+  exe without ZIP is logged once and the library stays as it is. In the private build Settings → Local components has "Check for new builds
+  automatically" (default on) and "Check now"; the public build hides both and makes no request, even when forced. The stored setting is never reset. A new build may have options beyond the last checked one; fetching it does not
   mark its configuration as checked.
 
 ## App support
 
-DLSS5 Updater imports the add-on (or fetches v11 builds from the author's public channel, see "Update source") and installs it per game in ReShade-only mode, with the same
+DLSS5 Updater imports the add-on (the private build can also fetch v11 builds from the author's channel, see "Update source") and installs it per game in ReShade-only mode, with the same
 prerequisites as ShortFuse's add-on: ReShade 6+, a game with native DLSS and an imported `nvngx_dlssnr.dll`. It excludes
 OptiScaler-NR and Deep Fried Chicken. It is not added to `[ADDON] LoadFromDllMain`, since nothing here shows it needs early load.
 

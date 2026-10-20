@@ -145,7 +145,8 @@
                                     <TextBlock Text="Gets the add-on build from reshade.me when you haven't imported your own ReShade64.dll." Style="{StaticResource MutedText}" FontSize="12" TextWrapping="Wrap" Margin="0,2,0,0" />
                                 </StackPanel>
                             </CheckBox>
-                            <CheckBox IsChecked="{Binding AutoDownloadLecram}" Margin="0,6" AutomationProperties.Name="Check for new Lecram builds automatically">
+                            <CheckBox IsChecked="{Binding AutoDownloadLecram}" Margin="0,6" AutomationProperties.Name="Check for new Lecram builds automatically"
+                                      Visibility="{Binding ShowLecramChannel, Converter={StaticResource BoolToVis}}">
                                 <StackPanel>
                                     <TextBlock Text="Check for new Lecram builds automatically" />
                                     <TextBlock Text="Looks at Lecram's public MediaFire channel during update checks and adds new v11 builds to the library." Style="{StaticResource MutedText}" FontSize="12" TextWrapping="Wrap" Margin="0,2,0,0" />

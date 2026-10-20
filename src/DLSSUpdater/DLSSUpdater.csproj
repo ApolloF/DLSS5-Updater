@@ -19,6 +19,17 @@
     <TieredPGO>true</TieredPGO>
   </PropertyGroup>
 
+  <!-- Lecram's builds are paid now, so the public release must not fetch them from his MediaFire channel. The owner's private
+       build turns that back on: dotnet publish -p:LecramChannel=true (tools/build-private.ps1). Public releases keep it false. -->
+  <PropertyGroup>
+    <LecramChannel Condition="'$(LecramChannel)' == ''">false</LecramChannel>
+  </PropertyGroup>
+
+  <PropertyGroup Condition="'$(LecramChannel)' == 'true'">
+    <DefineConstants>$(DefineConstants);LECRAM_CHANNEL</DefineConstants>
+    <InformationalVersion>$(Version)+private</InformationalVersion>
+  </PropertyGroup>
+
   <PropertyGroup Condition="'$(Configuration)' == 'Release'">
     <SelfContained>true</SelfContained>
     <PublishSingleFile>true</PublishSingleFile>

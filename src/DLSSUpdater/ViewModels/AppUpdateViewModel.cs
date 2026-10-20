@@ -40,7 +40,7 @@ public sealed partial class AppUpdateViewModel : ObservableObject
         : "Portable copy: updates replace the exe in its folder.";
 
     [ObservableProperty]
-    [NotifyPropertyChangedFor(nameof(HasUpdate), nameof(UpdateText), nameof(UpdateName))]
+    [NotifyPropertyChangedFor(nameof(HasUpdate), nameof(CanInstallUpdate), nameof(ShowPrivateNotice), nameof(PrivateNotice), nameof(UpdateText), nameof(UpdateName))]
     [NotifyCanExecuteChangedFor(nameof(UpdateNowCommand), nameof(ShowNotesCommand))]
     private AppRelease? _available;
 
@@ -54,6 +54,11 @@ public sealed partial class AppUpdateViewModel : ObservableObject
     private bool _working;
 
     public bool HasUpdate => Available is not null;
+    /// <summary>False in the private build: it must not replace itself with the public release.</summary>
+    public bool CanInstall { get; } = AppUpdate.CanSelfInstall(BuildFlags.LecramChannel);
+    public bool CanInstallUpdate => HasUpdate && CanInstall;
+    public bool ShowPrivateNotice => HasUpdate && !CanInstall;
+    public string PrivateNotice => Available is { } r ? AppUpdate.PrivateBuildNotice(r) : "";
     public string UpdateText => Available is null ? "" : Ready ? $"Restart to update to {Available.Label}" : $"Update to {Available.Label}";
     public string UpdateName => $"DLSS5 Updater {Available?.Label} is available. {UpdateText}";
 
@@ -149,7 +154,7 @@ public sealed partial class AppUpdateViewModel : ObservableObject
     /// <summary>Automatic mode: download and verify quietly; it installs when the app closes or on the next start.</summary>
     private void StartBackgroundDownload()
     {
-        if (_background is not null || Working || Ready || Available is not { } r || _exe is null) return;
+        if (!CanInstall || _background is not null || Working || Ready || Available is not { } r || _exe is null) return;
         _background = DownloadInBackground(r, _exe);
     }
 
@@ -185,7 +190,7 @@ public sealed partial class AppUpdateViewModel : ObservableObject
         Ready = true;
     }
 
-    private bool CanUpdateNow() => Available is not null && !Working && !_main.IsBusy;
+    private bool CanUpdateNow() => CanInstall && Available is not null && !Working && !_main.IsBusy;
 
     /// <summary>Downloads (unless already staged) and verifies inside the busy gate, then closes the app to install and restart.</summary>
     [RelayCommand(CanExecute = nameof(CanUpdateNow))]
@@ -222,6 +227,11 @@ public sealed partial class AppUpdateViewModel : ObservableObject
     {
         if (Available is not { } r) return;
         var published = r.Published is { } p ? $"Released {p.ToLocalTime():d MMM yyyy}\n\n" : "";
+        if (!CanInstall)
+        {
+            Dialog.Show($"What's new in DLSS5 Updater {r.Label}", published + AppUpdate.PlainNotes(r.Notes) + "\n\n" + AppUpdate.PrivateBuildNotice(r));
+            return;
+        }
         if (Dialog.Confirm($"What's new in DLSS5 Updater {r.Label}", published + AppUpdate.PlainNotes(r.Notes),
                 Ready ? "Restart and update" : "Update now")
             && UpdateNowCommand.CanExecute(null))
@@ -238,7 +248,7 @@ public sealed partial class AppUpdateViewModel : ObservableObject
             Settings.Save();
             AppUpdater.Apply(now.Kind, _exe, now.Path, now.Sha, relaunch: true);
         }
-        else if (!_main.IsBusy && _background is null) AppUpdater.ApplyPending(Settings, _exe, relaunch: false);
+        else if (CanInstall && !_main.IsBusy && _background is null) AppUpdater.ApplyPending(Settings, _exe, relaunch: false);
     }
 
     private static AppRelease DemoRelease()

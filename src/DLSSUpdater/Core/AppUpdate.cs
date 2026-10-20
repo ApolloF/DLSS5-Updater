@@ -37,6 +37,16 @@ public static partial class AppUpdate
 
     public static Version Current => Normalize(typeof(AppUpdate).Assembly.GetName().Version) ?? new Version(0, 0, 0);
 
+    /// <summary>Where the release bot drops the private build, inside the copyparty drop folder.</summary>
+    public const string PrivateBuildSubfolder = "private-build/";
+    public const string PrivateBuildFolder = "dlss5updater-drop/" + PrivateBuildSubfolder;
+
+    /// <summary>The public release assets would replace a private build with a public one, so a private build only shows that an update exists.</summary>
+    public static bool CanSelfInstall(bool privateBuild) => !privateBuild;
+
+    public static string PrivateBuildNotice(AppRelease r) =>
+        $"Private build: v{r.Version.ToString(3)} is out. The release bot puts the private build in the copyparty drop folder under {PrivateBuildSubfolder} (or build it yourself with tools/build-private.ps1).";
+
     public static string SetupAsset(Version v) => $"DLSS5Updater-Setup-{v.ToString(3)}.exe";
 
     /// <summary>Due when never checked, the interval has passed, or the clock went backwards since.</summary>

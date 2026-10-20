@@ -14,6 +14,7 @@ Windows desktop app that pulls the latest OptiScaler-NR, DLSS, MFG Unlock, Strea
 - Test: `dotnet test` (needs the .NET 8 runtime and Windows Desktop runtime installed, not just a newer SDK)
 - Integration test (downloads real releases, off by default): `$env:DLSSU_INTEGRATION=1; dotnet test`. `DLSSU_COMPONENTS` can point at a folder that holds `nvngx_dlssnr.dll`.
 - Publish the portable single-file exe: `dotnet publish src/DLSSUpdater -c Release -o publish` → `publish\DLSS5Updater.exe`
+- Private build (owner only, Lecram channel on): `toolsuild-private.ps1` → `publish-private\DLSS5Updater.exe` (`dotnet publish ... -p:LecramChannel=true`). CI also builds this variant.
 - Installer (after publish): `iscc /DAppVersion=<version> installer\DLSSUpdater.iss` → `publish\DLSS5Updater-Setup-<version>.exe`
 
 ## Release flow
@@ -39,6 +40,7 @@ Windows desktop app that pulls the latest OptiScaler-NR, DLSS, MFG Unlock, Strea
 - Never do work inside a `CollectionChanged` handler that makes a bound `ItemsControl` re-read its items (scrolling, for example). Defer it with `Dispatcher.BeginInvoke` (see `Views/ListAutoScroll.cs` and the startup crash fixed in ccb456f).
 - GitHub API calls go through `GitHubClient.GetApiAsync` so they share the ETag cache. When GitHub is unreachable or rate-limited, fall back to cached data and never throw at the user.
 - Use `FileUtil.AtomicWriteText` for every file the app writes.
+- Fetching Lecram's builds from MediaFire is private-build only (`BuildFlags.LecramChannel`, MSBuild `LecramChannel`). The default must stay off in public releases (`release.yml` passes `-p:LecramChannel=false`); a private build never self-installs the public release.
 
 ## Hard rules
 - **`nvngx_dlssnr.dll` must never be committed, bundled, uploaded or redistributed** (NVIDIA's terms don't allow it). The user supplies it, and it stays in `%LocalAppData%\DLSS5Updater\components`. `.gitignore` blocks `*.dll`, `*.exe`, `*.addon64` and `*.zip`. Don't force-add binaries.

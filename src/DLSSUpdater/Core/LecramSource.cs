@@ -8,7 +8,7 @@ namespace DLSSUpdater.Core;
 public enum LecramGeneration { V10, V11 }
 
 /// <summary>
-/// Lecram's DLSS5 Neural Rendering add-on supports local imports and the author's public v11 update channel.
+/// Lecram's DLSS5 Neural Rendering add-on supports local imports and, in the private build only (BuildFlags.LecramChannel), the author's v11 update channel.
 /// v10 and older (renodx-dlss5.addon64) name themselves in the version resource; v11+
 /// (dlss5-nr.addon64) has no version resource and is recognised by strings in the binary. Every imported build stays in the
 /// library; a game gets the one chosen for it, under its generation's file name.
@@ -19,11 +19,12 @@ public sealed partial class ComponentStore
 
     /// <param name="force">Check even when automatic checks are off (the Check now button).</param>
     public Task CheckLecramAsync(AppSettings settings, CancellationToken ct, bool force = false) =>
-        CheckLecramAsync(settings, new MediaFireClient(), ct, force);
+        CheckLecramAsync(settings, new MediaFireClient(), ct, force, BuildFlags.LecramChannel);
 
-    internal async Task CheckLecramAsync(AppSettings settings, MediaFireClient client, CancellationToken ct, bool force = false)
+    /// <param name="channelEnabled">False in the public build: the paid channel is never contacted, not even when forced.</param>
+    internal async Task CheckLecramAsync(AppSettings settings, MediaFireClient client, CancellationToken ct, bool force = false, bool channelEnabled = true)
     {
-        if (!(settings.AutoDownloadLecram || force) || !await _lecramCheck.WaitAsync(0, ct)) return;
+        if (!channelEnabled || !(settings.AutoDownloadLecram || force) || !await _lecramCheck.WaitAsync(0, ct)) return;
         var temp = Path.Combine(AppPaths.Cache, "lecram-download-" + Guid.NewGuid().ToString("N"));
         try
         {
