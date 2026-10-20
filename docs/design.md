@@ -82,11 +82,11 @@ A new component, or a new version of one, ships in one PR with:
 
 ## 7. Known gaps (2026-10-20)
 
-Measured against this guideline on main (dd469ed). Each is fixed when its component is next touched, or in its own PR.
+Measured against this guideline on main (after #63, #66 and #67). Each is fixed when its component is next touched, or in its own PR.
 
-- **Deep Fried Chicken** has a single import slot, no library, no default/per-game pick, no cleanup. (Planned: DFC library.)
 - **Defaults pin themselves**: RenoDX via `EnsureAddonDefaults`/`AdoptImportedAddon`; the NR runtime has its own
-  legacy-first adoption rule (`NrLibrary`). Lecram moves to "Newest" with the build-switch change.
+  legacy-first adoption rule (`NrLibrary`). Lecram and DFC follow "Newest", but a default the user pinned still moves
+  to a newer import (`AdoptImportedAddon`); by section 2 a pin should stay until the user changes it.
 - **Cache-only components**: DLSS, Streamline, MFG Unlock and ReShade live in the download cache or as a single
   imported file in the components root, not in libraries; MFG Unlock and ReShade imports replace each other.
 - **Two library implementations** scan builds the same way (`BuildLibrary` for downloads, `AddonLibrary`/`NrLibrary`
@@ -95,4 +95,3 @@ Measured against this guideline on main (dd469ed). Each is fixed when its compon
   Target: one verifier per source kind, and no install without a digest.
 - **Compat checks differ** per component (`OptiCompat`, `UpliftConfig`, `DfcConfig`, `LecramIni`, ...). Target: one
   `ComponentCompat` shape (tested version, schema, missing keys, summary) that each config class fills.
-- **Cleanup reasons** are not shown yet. (Planned: cleanup reason line.)
