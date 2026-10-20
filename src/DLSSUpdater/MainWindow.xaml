@@ -335,7 +335,11 @@
                             Visibility="{Binding HasUpdate, Converter={StaticResource BoolToVis}}">
                     <Button Content="What's new" Command="{Binding ShowNotesCommand}" Style="{StaticResource BtnGhost}" Margin="0,0,6,0"
                             WindowChrome.IsHitTestVisibleInChrome="True" ToolTip="Release notes of the new DLSS5 Updater version" />
+                    <TextBlock Text="{Binding PrivateNotice}" Style="{StaticResource MutedText}" VerticalAlignment="Center" Margin="0,0,6,0"
+                               Visibility="{Binding ShowPrivateNotice, Converter={StaticResource BoolToVis}}" MaxWidth="360" TextTrimming="CharacterEllipsis"
+                               ToolTip="{Binding PrivateNotice}" />
                     <Button Command="{Binding UpdateNowCommand}" Style="{StaticResource BtnPrimary}" WindowChrome.IsHitTestVisibleInChrome="True"
+                            Visibility="{Binding CanInstall, Converter={StaticResource BoolToVis}}"
                             AutomationProperties.Name="{Binding UpdateName}" ToolTip="Downloads and checks the new version, then DLSS5 Updater restarts">
                         <StackPanel Orientation="Horizontal">
                             <TextBlock Text="&#xE896;" Style="{StaticResource Icon}" Margin="0,0,8,0" />
@@ -413,7 +417,7 @@
                             </TextBlock>
                         </StackPanel>
                     </Border>
-                    <Border Style="{StaticResource StripCell}" ToolTip="Lecram v11 update channel; builds are added to the library. Games keep their installed build.">
+                    <Border Style="{StaticResource StripCell}" ToolTip="{Binding LecramStripTip}">
                         <StackPanel>
                             <TextBlock Text="LECRAM DLSS5" Style="{StaticResource Caps}" />
                             <TextBlock Text="{Binding LecramVersion}" Style="{StaticResource ChipValue}" ToolTip="{Binding LecramVersion}" />
@@ -1378,7 +1382,7 @@
                                                     DataContext="{Binding DataContext.SelfUpdate, RelativeSource={RelativeSource AncestorType=Window}}">
                                                 <StackPanel>
                                                     <CheckBox Content="Check for updates" IsChecked="{Binding CheckAppUpdates}" Margin="0,8" />
-                                                    <CheckBox IsChecked="{Binding AutoInstall}" Margin="0,8" AutomationProperties.Name="Install updates automatically">
+                                                    <CheckBox IsChecked="{Binding AutoInstall}" Margin="0,8" AutomationProperties.Name="Install updates automatically" Visibility="{Binding CanInstall, Converter={StaticResource BoolToVis}}">
                                                         <StackPanel>
                                                             <TextBlock Text="Install updates automatically" />
                                                             <TextBlock Text="Downloads in the background, checks it against the release's SHA256SUMS and installs when DLSS5 Updater closes. Never during a running task."
@@ -1387,10 +1391,12 @@
                                                     </CheckBox>
                                                     <TextBlock Text="{Binding LastResult}" Style="{StaticResource MutedText}" TextWrapping="Wrap" FontSize="12" Margin="0,6,0,0" />
                                                     <TextBlock Text="{Binding KindText}" Style="{StaticResource MutedText}" TextWrapping="Wrap" FontSize="12" Margin="0,2,0,0" />
+                                                    <TextBlock Text="{Binding PrivateNotice}" Style="{StaticResource MutedText}" TextWrapping="Wrap" FontSize="12" Margin="0,2,0,0"
+                                                               Visibility="{Binding ShowPrivateNotice, Converter={StaticResource BoolToVis}}" />
                                                     <WrapPanel Margin="0,10,0,6">
                                                         <Button Content="Check now" Command="{Binding CheckNowCommand}" Margin="0,0,8,0" />
                                                         <Button Content="{Binding UpdateText}" Command="{Binding UpdateNowCommand}" Style="{StaticResource BtnPrimary}" Margin="0,0,8,0"
-                                                                Visibility="{Binding HasUpdate, Converter={StaticResource BoolToVis}}" />
+                                                                Visibility="{Binding CanInstallUpdate, Converter={StaticResource BoolToVis}}" />
                                                         <Button Content="What's new" Command="{Binding ShowNotesCommand}" Style="{StaticResource BtnGhost}"
                                                                 Visibility="{Binding HasUpdate, Converter={StaticResource BoolToVis}}" />
                                                     </WrapPanel>
@@ -1592,6 +1598,8 @@
                                         <StackPanel Orientation="Horizontal">
                                             <TextBlock Text="DLSS5 Updater" Style="{StaticResource H1}" />
                                             <TextBlock Text="{Binding AppVersion}" Style="{StaticResource MutedText}" VerticalAlignment="Bottom" Margin="10,0,0,3" />
+                                            <TextBlock Text="{Binding PrivateBuildText}" Style="{StaticResource MutedText}" VerticalAlignment="Bottom" Margin="10,0,0,3"
+                                                       Visibility="{Binding IsPrivateBuild, Converter={StaticResource BoolToVis}}" />
                                         </StackPanel>
                                         <Button Style="{StaticResource BtnIcon}" Content="&#xE8BB;" HorizontalAlignment="Right" ToolTip="Close" AutomationProperties.Name="Close" Command="{Binding ToggleAboutCommand}" />
                                     </Grid>

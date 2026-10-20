@@ -102,10 +102,17 @@ public sealed partial class OnboardingViewModel : ObservableObject
     public static IReadOnlyList<OnboardingChoice<NrAddon?>> Addons { get; } =
     [
         new(NrAddon.RenoDx, "ShortFuse RenoDX", "ShortFuse's RenoDX DLSS add-on. You import renodx-dlss.addon64 yourself; needs a game with native DLSS."),
-        new(NrAddon.Lecram, "Lecram DLSS5", "Lecram's DLSS5 add-on. New v11 builds are fetched automatically."),
+        new(NrAddon.Lecram, "Lecram DLSS5", LecramHint(BuildFlags.LecramChannel)),
         new(NrAddon.Uplift, "GITC Uplift", "Open-source add-on, downloaded from GitHub. Single-player games only: injection can trigger anti-cheat."),
         new(null, "None", "ReShade, MFG Unlock and the DLSS updates only. Each game can still pick an add-on later."),
     ];
+
+    internal static string LecramHint(bool channelEnabled) => channelEnabled
+        ? "Lecram's DLSS5 add-on. New v11 builds are fetched automatically."
+        : "Lecram's DLSS5 add-on. You import it yourself; the builds are available to supporters on his Buy Me a Coffee.";
+
+    /// <summary>The automatic Lecram check only exists in the private build; the stored choice is left alone elsewhere.</summary>
+    public bool ShowLecramChannel => BuildFlags.LecramChannel;
 
     [ObservableProperty] private OnboardingChoice<NrAddon?> _addon;
 

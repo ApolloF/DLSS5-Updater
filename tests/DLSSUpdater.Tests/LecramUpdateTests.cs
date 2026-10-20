@@ -285,7 +285,8 @@ public sealed class LecramUpdateTests : IDisposable
         var build = Assert.Single(_store.LecramBuilds);
         Assert.Equal("v11.0.0-beta.24", build.DetectedLabel);
         Assert.Equal(LecramGeneration.V11, build.Generation);
-        Assert.Equal(build.Id, settings.LecramId);
+        Assert.Null(settings.LecramId);
+        Assert.Equal(build.Id, _store.LecramBuildFor(null)!.Id);
         Assert.Equal(build.Id, settings.LecramLastBuildId);
         Assert.Equal("v11.0.0-beta.24", settings.LecramLastVersion);
         Assert.Contains("v11.0.0-beta.24", settings.LecramLastResult);
@@ -425,6 +426,33 @@ public sealed class LecramUpdateTests : IDisposable
         var server = Server(Channel(SetupRemote("v11.0.0-beta.24", "2026-10-18T18:51:16Z")));
 
         await _store.CheckLecramAsync(settings, new MediaFireClient(server), CancellationToken.None, force: true);
+
+        Assert.NotEmpty(server.Requests);
+        Assert.Single(_store.LecramBuilds);
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task Update_ChannelOff_SendsNoRequestAndAddsNothing_EvenWhenForced(bool force)
+    {
+        var settings = new AppSettings { AutoDownloadLecram = true };
+        var server = Server(Channel(SetupRemote("v11.0.0-beta.24", "2026-10-18T18:51:16Z")));
+
+        await _store.CheckLecramAsync(settings, new MediaFireClient(server), CancellationToken.None, force, channelEnabled: false);
+
+        Assert.Empty(server.Requests);
+        Assert.Empty(_store.LecramBuilds);
+        Assert.True(settings.AutoDownloadLecram);
+    }
+
+    [Fact]
+    public async Task Update_ChannelOn_BehavesAsBefore()
+    {
+        var settings = new AppSettings();
+        var server = Server(Channel(SetupRemote("v11.0.0-beta.24", "2026-10-18T18:51:16Z")));
+
+        await _store.CheckLecramAsync(settings, new MediaFireClient(server), CancellationToken.None, force: true, channelEnabled: true);
 
         Assert.NotEmpty(server.Requests);
         Assert.Single(_store.LecramBuilds);

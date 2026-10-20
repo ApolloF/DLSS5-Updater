@@ -59,6 +59,37 @@ public sealed class OnboardingTests : IDisposable
     }
 
     [Fact]
+    public void LecramChannel_FollowsTheBuildFlag_AndTheStoredChoiceIsKept()
+    {
+        var s = AppSettings.Load();
+        s.AutoDownloadLecram = true;
+        var setup = new OnboardingViewModel(s);
+        Assert.Equal(BuildFlags.LecramChannel, setup.ShowLecramChannel);
+        Assert.True(setup.AutoDownloadLecram);
+    }
+
+    [Fact]
+    public void LecramTexts_SayWhereTheBuildsComeFrom()
+    {
+        Assert.Contains("fetched automatically", OnboardingViewModel.LecramHint(true));
+        Assert.Contains("Buy Me a Coffee", OnboardingViewModel.LecramHint(false));
+        Assert.DoesNotContain("fetch", OnboardingViewModel.LecramHint(false));
+        Assert.Contains("MediaFire", HelpTopics.LecramUpdates(true));
+        Assert.DoesNotContain("MediaFire", HelpTopics.LecramUpdates(false));
+        Assert.DoesNotContain("MediaFire", HelpTopics.LecramSourceIntro(false));
+        Assert.Contains("Buy Me a Coffee", HelpTopics.LecramSourceIntro(false));
+        Assert.DoesNotContain("Check now", AddonLibraryViewModel.NoLecramBuilds(false));
+        Assert.Contains("Check now", AddonLibraryViewModel.NoLecramBuilds(true));
+    }
+
+    [Theory]
+    [InlineData(AddonKind.Lecram, true, true)]
+    [InlineData(AddonKind.Lecram, false, false)]
+    [InlineData(AddonKind.RenoDx, true, false)]
+    public void AddonChecks_OnlyForLecramInThePrivateBuild(AddonKind kind, bool channel, bool expected) =>
+        Assert.Equal(expected, AddonLibraryViewModel.CanCheck(kind, channel));
+
+    [Fact]
     public void Demo_ShowsItOnlyWithTheSwitch()
     {
         var s = AppSettings.Load();

@@ -157,8 +157,10 @@ public sealed class AppSettings
     public string? NewestDlssNrSeen { get; set; }
     /// <summary>Default ShortFuse add-on build (library id); games without their own choice install it.</summary>
     public string? RenoDxId { get; set; }
-    /// <summary>Default Lecram add-on build (library id).</summary>
+    /// <summary>Default Lecram add-on build (library id); null follows the newest build in the library.</summary>
     public string? LecramId { get; set; }
+    /// <summary>Set once <see cref="LecramId"/> was reset to "Newest": older settings pinned the build automatically, which can't be told from a user's pick.</summary>
+    public bool LecramNewestMigrated { get; set; }
     public List<AddonPairTest> AddonPairTests { get; set; } = [];
     /// <summary>Default OptiScaler build (app tag, either source); null follows the newest release of the selected source.</summary>
     public string? OptiTag { get; set; }
@@ -198,7 +200,7 @@ public sealed class AppSettings
     public static AppSettings Load()
     {
         // A fresh install: the first-run setup is due.
-        if (!File.Exists(AppPaths.SettingsFile)) return new AppSettings { OnboardingDone = false };
+        if (!File.Exists(AppPaths.SettingsFile)) return new AppSettings { OnboardingDone = false, LecramNewestMigrated = true };
         try
         {
             if (File.Exists(AppPaths.SettingsFile))
@@ -214,7 +216,8 @@ public sealed class AppSettings
                     s.Presets.RemoveAll(p => p.Name.Equals(ConfigProfile.RecommendedName, StringComparison.OrdinalIgnoreCase));
                     var renoDxMigrated = RenoDxIni.Migrate(s);
                     var addonsMigrated = NrAddons.Migrate(s);
-                    if (s._legacyTokenRead || sourceMigrated || renoDxMigrated || addonsMigrated) s.Save();
+                    var lecramMigrated = s.MigrateLecramNewest();
+                    if (s._legacyTokenRead || sourceMigrated || renoDxMigrated || addonsMigrated || lecramMigrated) s.Save();
                     return s;
                 }
             }
@@ -224,7 +227,16 @@ public sealed class AppSettings
             Log.Error("settings.json unreadable, using defaults", ex);
             KeepUnreadable();
         }
-        return new AppSettings();
+        return new AppSettings { LecramNewestMigrated = true };
+    }
+
+    /// <summary>One time: the Lecram default goes back to "Newest". Returns true when the settings changed.</summary>
+    internal bool MigrateLecramNewest()
+    {
+        if (LecramNewestMigrated) return false;
+        LecramNewestMigrated = true;
+        LecramId = null;
+        return true;
     }
 
     internal static string BadSettingsFile => AppPaths.SettingsFile + ".bad";

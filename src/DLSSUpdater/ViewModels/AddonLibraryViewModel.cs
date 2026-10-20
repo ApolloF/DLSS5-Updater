@@ -34,7 +34,11 @@ public sealed partial class AddonLibraryViewModel : ObservableObject
     private AppSettings Settings => _main.S.Settings;
     private ComponentStore Store => _main.S.Store;
     private bool IsRenoDx => _kind == AddonKind.RenoDx;
-    public bool CanCheckUpdates => !IsRenoDx;
+    public bool CanCheckUpdates => CanCheck(_kind, BuildFlags.LecramChannel);
+
+    /// <summary>Only Lecram has a channel, and only the private build is allowed to use it.</summary>
+    internal static bool CanCheck(AddonKind kind, bool channelEnabled) => kind != AddonKind.RenoDx && channelEnabled;
+
     public bool AutoDownload
     {
         get => Settings.AutoDownloadLecram;
@@ -64,20 +68,32 @@ public sealed partial class AddonLibraryViewModel : ObservableObject
 
     public ObservableCollection<DlssChoice> Choices { get; } = [];
 
-    public bool HasBuilds => Choices.Count > 0;
+    private int _buildCount;
+    public bool HasBuilds => _buildCount > 0;
+
+    /// <summary>Lecram's first choice: no pinned build, the default follows the newest one in the library.</summary>
+    private bool HasNewestChoice => !IsRenoDx;
 
     /// <summary>The default build; games without their own pick install it.</summary>
     public DlssChoice? Selected
     {
-        get => Choices.FirstOrDefault(c => c.Tag == SelectedBuild?.Id);
+        get => HasNewestChoice && Settings.AddonId(_kind) is null
+            ? Choices.FirstOrDefault()
+            : Choices.FirstOrDefault(c => c.Tag is not null && c.Tag == SelectedBuild?.Id);
         set
         {
-            if (_reloading || value?.Tag is not { } id || id == Settings.AddonId(_kind)) return;
-            Settings.SetAddonId(_kind, id);
+            if (_reloading || value is null || (value.Tag is null && !HasNewestChoice) || value.Tag == Settings.AddonId(_kind)) return;
+            Settings.SetAddonId(_kind, value.Tag);
             Settings.Save();
             _ = _changed();
         }
     }
+
+    internal static string NewestLabel(string newestBuild) => $"Newest ({newestBuild})";
+
+    internal static string NoLecramBuilds(bool channelEnabled) => channelEnabled
+        ? $"No builds yet. Use Check now to fetch the latest v11 build, or import your own copy ({ComponentStore.Lecram10File} for v10 and older, {ComponentStore.Lecram11File} for v11 and newer)."
+        : $"No builds yet. Import the add-on ({ComponentStore.Lecram10File} for v10 and older, {ComponentStore.Lecram11File} for v11 and newer). Builds are available to supporters on the author's Buy Me a Coffee.";
 
     private AddonBuild? SelectedBuild => Store.AddonBuildFor(_kind, null);
 
@@ -91,11 +107,11 @@ public sealed partial class AddonLibraryViewModel : ObservableObject
             if (SelectedBuild is not { } build)
                 return IsRenoDx
                     ? $"Not imported. ShortFuse's {ComponentStore.RenoDxFile} isn't published on GitHub; get it from ShortFuse's RenoDX Discord and import it here."
-                    : $"No builds yet. Use Check now to fetch the latest v11 build, or import your own copy ({ComponentStore.Lecram10File} for v10 and older, {ComponentStore.Lecram11File} for v11 and newer).";
+                    : NoLecramBuilds(BuildFlags.LecramChannel);
             var path = ComponentStore.AddonPathOf(_kind, build);
             var generation = build.Generation switch { LecramGeneration.V11 => "v11 and newer  ·  ", LecramGeneration.V10 => "v10 and older  ·  ", _ => "" };
             var size = File.Exists(path) ? $"{new FileInfo(path).Length / 1048576.0:0.0} MB  ·  " : "";
-            var count = Choices.Count > 1 ? $"  ·  {Choices.Count} builds in the library" : "";
+            var count = _buildCount > 1 ? $"  ·  {_buildCount} builds in the library" : "";
             return $"{generation}{size}SHA-256 {build.Id[..12]}…{count}";
         }
     }
@@ -105,7 +121,10 @@ public sealed partial class AddonLibraryViewModel : ObservableObject
     {
         _reloading = true;
         Choices.Clear();
-        foreach (var b in Store.AddonBuilds(_kind)) Choices.Add(new DlssChoice(b.Id, b.Label));
+        var builds = Store.AddonBuilds(_kind);
+        _buildCount = builds.Count;
+        if (HasNewestChoice && builds.Count > 0) Choices.Add(new DlssChoice(null, NewestLabel(builds[0].Label)));
+        foreach (var b in builds) Choices.Add(new DlssChoice(b.Id, b.Label));
         LabelText = SelectedBuild?.UserLabel ?? "";
         _reloading = false;
         OnPropertyChanged(nameof(Selected));

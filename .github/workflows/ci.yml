@@ -25,6 +25,9 @@ jobs:
       - name: Test
         run: dotnet test
 
+      - name: Build private variant
+        run: dotnet build src/DLSSUpdater -warnaserror -p:LecramChannel=true
+
       - name: Release bot tests
         shell: pwsh
         run: |

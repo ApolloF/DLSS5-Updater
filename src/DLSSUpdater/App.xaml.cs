@@ -95,7 +95,7 @@ public partial class App : Application
     /// </summary>
     private bool StartPendingUpdate()
     {
-        if (Environment.ProcessPath is not { } exe) return false;
+        if (!AppUpdate.CanSelfInstall(BuildFlags.LecramChannel) || Environment.ProcessPath is not { } exe) return false;
         if (!AppUpdater.ApplyPending(AppSettings.Load(), exe, relaunch: true, ReleaseInstance))
         {
             // Released just before a start that then failed: take the lock back, or leave if another copy got it.

@@ -272,6 +272,7 @@ public sealed partial class ComponentStore
 
     /// <summary>
     /// A default that is unset or points at a removed build follows the newest build (after a migration that is the migrated file).
+    /// ShortFuse's default is written down as an id; Lecram's stays unset ("Newest"), a removed pin goes back to unset.
     /// Returns true when the settings changed.
     /// </summary>
     public bool EnsureAddonDefaults(AppSettings s)
@@ -281,6 +282,13 @@ public sealed partial class ComponentStore
         {
             var builds = AddonBuilds(kind);
             var chosen = s.AddonId(kind);
+            if (kind == AddonKind.Lecram)
+            {
+                if (chosen is null || builds.Any(b => b.Id == chosen)) continue;
+                s.SetAddonId(kind, null);
+                changed = true;
+                continue;
+            }
             if (builds.Count == 0 || (chosen is not null && builds.Any(b => b.Id == chosen))) continue;
             s.SetAddonId(kind, builds[0].Id);
             changed = true;
@@ -290,10 +298,12 @@ public sealed partial class ComponentStore
 
     /// <summary>
     /// An imported build becomes the default only when it is newer than the current default, so importing an older build
-    /// to keep it around doesn't silently downgrade every game. Returns true when the default changed.
+    /// to keep it around doesn't silently downgrade every game. Lecram on "Newest" (no pinned id) follows the library by itself.
+    /// Returns true when the default changed.
     /// </summary>
     public bool AdoptImportedAddon(AppSettings s, AddonKind kind, AddonBuild imported)
     {
+        if (kind == AddonKind.Lecram && s.LecramId is null) return false;
         var current = AddonBuilds(kind).FirstOrDefault(b => b.Id == s.AddonId(kind));
         if (current is not null && imported.Order.CompareTo(current.Order) <= 0) return false;
         s.SetAddonId(kind, imported.Id);

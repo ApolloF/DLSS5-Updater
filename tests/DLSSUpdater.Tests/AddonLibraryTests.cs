@@ -304,6 +304,78 @@ public sealed class AddonLibraryTests : IDisposable
         Assert.Equal(newer.Id, _settings.RenoDxId);
     }
 
+    [Fact]
+    public void LecramDefault_FollowsTheNewestBuild_WithoutAnySettingsWrite()
+    {
+        Assert.False(_store.EnsureAddonDefaults(_settings));
+        var old = LecramV11("v11.0.0-beta.6");
+        Assert.False(_store.EnsureAddonDefaults(_settings));
+        Assert.False(_store.AdoptImportedAddon(_settings, AddonKind.Lecram, old));
+        Assert.Null(_settings.LecramId);
+        Assert.Equal(old.Id, _store.LecramBuildFor(null)!.Id);
+
+        var newer = LecramV11("v11.0.0-beta.22");
+        Assert.False(_store.AdoptImportedAddon(_settings, AddonKind.Lecram, newer));
+        Assert.Null(_settings.LecramId);
+        Assert.Equal(newer.Id, _store.LecramBuildFor(null)!.Id);
+
+        var older = LecramV11("v11.0.0-beta.3");
+        Assert.False(_store.AdoptImportedAddon(_settings, AddonKind.Lecram, older));
+        Assert.Equal(newer.Id, _store.LecramBuildFor(null)!.Id);
+    }
+
+    [Fact]
+    public void LecramDefault_APinStaysPinned_ANewerImportTakesItOver_ARemovedPinGoesBackToNewest()
+    {
+        var pinned = LecramV11("v11.0.0-beta.22");
+        _settings.LecramId = pinned.Id;
+        Assert.False(_store.EnsureAddonDefaults(_settings));
+        Assert.False(_store.AdoptImportedAddon(_settings, AddonKind.Lecram, LecramV11("v11.0.0-beta.6")));
+        Assert.Equal(pinned.Id, _settings.LecramId);
+
+        var newer = LecramV11("v11.0.0-beta.45");
+        Assert.True(_store.AdoptImportedAddon(_settings, AddonKind.Lecram, newer));
+        Assert.Equal(newer.Id, _settings.LecramId);
+
+        _store.RemoveAddon(AddonKind.Lecram, newer.Id);
+        Assert.True(_store.EnsureAddonDefaults(_settings));
+        Assert.Null(_settings.LecramId);
+        Assert.Equal(pinned.Id, _store.LecramBuildFor(null)!.Id);
+    }
+
+    [Fact]
+    public void LecramNewestMigration_ResetsThePinOnce_AndLeavesGamePicksAndRenoDxAlone()
+    {
+        File.WriteAllText(AppPaths.SettingsFile, """{"LecramId":"old-auto-pin","RenoDxId":"sf","Games":{"game":{"LecramId":"lec-game"}}}""");
+        var first = AppSettings.Load();
+        Assert.Null(first.LecramId);
+        Assert.True(first.LecramNewestMigrated);
+        Assert.Equal("sf", first.RenoDxId);
+        Assert.Equal("lec-game", first.Games["game"].LecramId);
+
+        first.LecramId = "user-pick";
+        first.Save();
+        Assert.Equal("user-pick", AppSettings.Load().LecramId);
+    }
+
+    [Fact]
+    public void LecramNewestMigration_FreshInstallsAreAlreadyMigrated()
+    {
+        Assert.True(AppSettings.Load().LecramNewestMigrated);
+        var s = AppSettings.Load();
+        s.LecramId = "pick";
+        s.Save();
+        Assert.Equal("pick", AppSettings.Load().LecramId);
+    }
+
+    [Fact]
+    public void RenoDxDefault_IsStillPinnedById()
+    {
+        var sf = Sf(new Version(0, 2026, 928, 306));
+        Assert.True(_store.EnsureAddonDefaults(_settings));
+        Assert.Equal(sf.Id, _settings.RenoDxId);
+    }
+
     // ---------- migration ----------
 
     [Fact]
@@ -330,7 +402,8 @@ public sealed class AddonLibraryTests : IDisposable
 
         Assert.True(_store.EnsureAddonDefaults(_settings));
         Assert.Equal(sfBuild.Id, _settings.RenoDxId);
-        Assert.Equal(lecramBuild.Id, _settings.LecramId);
+        Assert.Null(_settings.LecramId);
+        Assert.Equal(lecramBuild.Id, _store.LecramBuildFor(null)!.Id);
 
         _store.MigrateAddons();
         Assert.Single(_store.RenoDxBuilds);
