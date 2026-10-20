@@ -10,6 +10,7 @@ public enum AddonKind { RenoDx, Lecram }
 /// <summary>
 /// One imported build of ShortFuse's or Lecram's add-on, stored under components\&lt;add-on dir&gt;\&lt;sha256&gt;\&lt;FileName&gt;
 /// with this record next to it as version.json. <see cref="FileName"/> is the name the add-on is installed under.
+/// <see cref="Downloaded"/>: the app fetched it from Lecram's channel; false for every import and for builds from before the flag.
 /// </summary>
 public sealed record AddonBuild(
     string Id,
@@ -18,7 +19,8 @@ public sealed record AddonBuild(
     LecramGeneration? Generation,
     string DetectedLabel,
     string? UserLabel,
-    DateTime Imported)
+    DateTime Imported,
+    bool Downloaded = false)
 {
     /// <summary>The name this build goes by: the user's own label, else what was detected in the file.</summary>
     [JsonIgnore]
@@ -200,17 +202,25 @@ public sealed partial class ComponentStore
 
     /// <summary>
     /// Stores <paramref name="source"/> as a library build. A file that is already there changes nothing (the user's label and
-    /// import date stay); other builds are never touched.
+    /// import date stay), except that importing a downloaded build by hand makes it an import; other builds are never touched.
     /// </summary>
-    private AddonBuild RetainAddon(AddonKind kind, string source, string fileName, string fileVersion, LecramGeneration? generation, string detectedLabel)
+    private AddonBuild RetainAddon(AddonKind kind, string source, string fileName, string fileVersion, LecramGeneration? generation, string detectedLabel,
+        bool downloaded = false)
     {
         var sha = FileUtil.Sha256(source);
         var dest = Path.Combine(AddonRoot(kind), sha, fileName);
         var meta = Path.Combine(AddonRoot(kind), sha, "version.json");
-        NoteAdded(sha);
+        if (downloaded) NoteAdded(sha);
         var existing = AddonBuilds(kind).FirstOrDefault(b => b.Id == sha && b.FileName == fileName);
-        if (existing is not null) return existing;
-        var build = new AddonBuild(sha, fileName, fileVersion, generation, detectedLabel, null, DateTime.UtcNow);
+        if (existing is not null)
+        {
+            if (downloaded || !existing.Downloaded) return existing;
+            existing = existing with { Downloaded = false };
+            FileUtil.AtomicWriteText(meta, JsonSerializer.Serialize(existing, JsonCtx.Default.AddonBuild));
+            ForgetAddons(kind);
+            return existing;
+        }
+        var build = new AddonBuild(sha, fileName, fileVersion, generation, detectedLabel, null, DateTime.UtcNow, downloaded);
         if (!File.Exists(dest) || !FileUtil.SameFile(source, dest)) FileUtil.AtomicCopy(source, dest);
         FileUtil.AtomicWriteText(meta, JsonSerializer.Serialize(build, JsonCtx.Default.AddonBuild));
         ForgetAddons(kind);

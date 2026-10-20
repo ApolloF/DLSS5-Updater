@@ -45,15 +45,31 @@ public sealed record InstallRefs
 
 /// <summary>
 /// What the cleanup protects: the install records it read, plus the remembered references of installs it can't read now.
-/// <see cref="Unsure"/> are the libraries such an install points into, which the automatic cleanup leaves alone.
-/// <see cref="Unknown"/>: a record can't be read and nothing is remembered for it, so no cleanup may run.
+/// <see cref="Unsure"/> are the libraries such an install points into, which the automatic cleanup leaves alone;
+/// <see cref="Unreachable"/> and <see cref="Unreadable"/> count the installs behind it.
+/// <see cref="Unknown"/>: a record or install-refs.json can't be read and nothing is remembered for it, so no cleanup may run.
 /// </summary>
-public sealed record CleanupRecords(List<InstallManifest> Records, HashSet<LibraryKind> Unsure, bool Unknown);
+public sealed record CleanupRecords(List<InstallManifest> Records, HashSet<LibraryKind> Unsure, bool Unknown, int Unreachable = 0, int Unreadable = 0)
+{
+    /// <summary>One short line for Settings: which libraries the automatic cleanup skips and why; null when it skips none.</summary>
+    public string? AutoSkipNote()
+    {
+        if (Unsure.Count == 0) return null;
+        var why = new List<string>();
+        if (Unreachable > 0) why.Add($"{Unreachable} game folder{(Unreachable == 1 ? "" : "s")} with installs can't be reached (drive not connected?)");
+        if (Unreadable > 0) why.Add($"{Unreadable} install record{(Unreadable == 1 ? "" : "s")} can't be read");
+        var libraries = string.Join(", ", Enum.GetValues<LibraryKind>().Where(Unsure.Contains).Select(ComponentStore.LibraryTitle));
+        return $"Automatic cleanup skips {libraries}: {string.Join(" and ", why)}.";
+    }
+}
+
+/// <summary>Where an install folder stands: readable, on a drive that isn't there now, or deleted.</summary>
+public enum FolderState { Here, Unplugged, Gone }
 
 /// <summary>
 /// Remembers, per install folder, the builds its record names (install-refs.json). Games on an unplugged drive or hidden
-/// from the list still keep their builds: an entry stays until the folder is reachable with no record in it (uninstalled),
-/// or the app uninstalls the game or the user removes it from the app.
+/// from the list still keep their builds: an entry stays until the folder is reachable with no record in it or deleted
+/// while its drive is there (uninstalled), or the app uninstalls the game or the user removes it from the app.
 /// </summary>
 public static class KnownInstalls
 {
@@ -61,33 +77,46 @@ public static class KnownInstalls
 
     public static string FilePath => Path.Combine(AppPaths.Root, "install-refs.json");
 
-    public static Dictionary<string, InstallRefs> Load()
+    /// <summary>A missing folder whose drive (or share) is there was deleted; one whose drive is missing is unplugged.</summary>
+    public static FolderState Probe(string dir)
     {
-        var known = new Dictionary<string, InstallRefs>(StringComparer.OrdinalIgnoreCase);
-        lock (Gate)
-        {
-            try
-            {
-                if (!File.Exists(FilePath)) return known;
-                var saved = JsonSerializer.Deserialize(File.ReadAllText(FilePath), JsonCtx.Default.DictionaryStringInstallRefs) ?? [];
-                foreach (var (dir, refs) in saved)
-                    if (!string.IsNullOrWhiteSpace(dir) && refs is not null) known[FileUtil.Normalize(dir)] = refs;
-            }
-            catch (Exception ex) when (ex is IOException or JsonException or UnauthorizedAccessException or ArgumentException)
-            { Log.Error($"Could not read {FilePath}", ex); }
-        }
-        return known;
+        if (Directory.Exists(dir)) return FolderState.Here;
+        var root = Path.GetPathRoot(dir);
+        return !string.IsNullOrEmpty(root) && Directory.Exists(root) ? FolderState.Gone : FolderState.Unplugged;
     }
 
-    private static void Save(Dictionary<string, InstallRefs> known) =>
-        FileUtil.AtomicWriteText(FilePath, JsonSerializer.Serialize(known, JsonCtx.Default.DictionaryStringInstallRefs));
+    /// <summary>The remembered references; false when install-refs.json exists but can't be read (nothing may overwrite it then).</summary>
+    private static bool TryLoad(out Dictionary<string, InstallRefs> known)
+    {
+        known = new Dictionary<string, InstallRefs>(StringComparer.OrdinalIgnoreCase);
+        try
+        {
+            if (!File.Exists(FilePath)) return true;
+            var saved = JsonSerializer.Deserialize(File.ReadAllText(FilePath), JsonCtx.Default.DictionaryStringInstallRefs) ?? [];
+            foreach (var (dir, refs) in saved)
+                if (!string.IsNullOrWhiteSpace(dir) && refs is not null) known[FileUtil.Normalize(dir)] = refs;
+            return true;
+        }
+        catch (Exception ex) when (ex is IOException or JsonException or UnauthorizedAccessException or ArgumentException or NotSupportedException)
+        {
+            Log.Error($"Could not read {FilePath}; no cleanup runs until it can be read", ex);
+            return false;
+        }
+    }
 
-    /// <summary>The app uninstalled these folders, or the user removed their game from the app.</summary>
+    private static void Save(Dictionary<string, InstallRefs> known)
+    {
+        try { FileUtil.AtomicWriteText(FilePath, JsonSerializer.Serialize(known, JsonCtx.Default.DictionaryStringInstallRefs)); }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        { Log.Error($"Could not save {FilePath}", ex); }
+    }
+
+    /// <summary>The app uninstalled these folders, or the user removed their game from the app. Never throws; a file it can't read stays as it is.</summary>
     public static void Forget(IEnumerable<string> dirs)
     {
         lock (Gate)
         {
-            var known = Load();
+            if (!TryLoad(out var known)) return;
             var removed = dirs.Count(d => known.Remove(FileUtil.Normalize(d)));
             if (removed > 0) Save(known);
         }
@@ -95,19 +124,32 @@ public static class KnownInstalls
 
     /// <summary>
     /// Reads the records in <paramref name="dirs"/> (the scanned games' install folders) and in every remembered folder,
-    /// remembers what each one names, and falls back to the remembered references for a folder that is not
-    /// <paramref name="reachable"/> or whose record can't be read.
+    /// remembers what each one names, and falls back to the remembered references for a folder that is
+    /// <see cref="FolderState.Unplugged"/> or whose record can't be read. A <see cref="FolderState.Gone"/> folder is forgotten.
+    /// Before install-refs.json exists, <paramref name="firstRun"/> adds the folders the scan doesn't list (hidden games).
     /// </summary>
-    public static CleanupRecords Gather(IEnumerable<string> dirs, Func<string, InstallManifest?> read, Func<string, bool> reachable)
+    public static CleanupRecords Gather(IEnumerable<string> dirs, Func<string, InstallManifest?> read, Func<string, FolderState> probe,
+        Func<IEnumerable<string>>? firstRun = null)
     {
         lock (Gate)
         {
-            var known = Load();
+            if (!TryLoad(out var known)) return new CleanupRecords([], [], true);
             var records = new List<InstallManifest>();
             var unsure = new HashSet<LibraryKind>();
-            var unknown = false;
-            var changed = false;
-            foreach (var dir in dirs.Select(FileUtil.Normalize).Concat(known.Keys.ToList()).Distinct(StringComparer.OrdinalIgnoreCase))
+            var (unknown, unreachable, unreadable) = (false, 0, 0);
+            var fresh = !File.Exists(FilePath);
+            var changed = fresh;
+            var all = dirs.Select(FileUtil.Normalize).Concat(known.Keys.ToList());
+            if (fresh && firstRun is not null)
+            {
+                try { all = all.Concat(firstRun().Select(FileUtil.Normalize).ToList()); }
+                catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+                {
+                    Log.Error("Could not look up the install folders of hidden games; no cleanup runs this time", ex);
+                    return new CleanupRecords([], [], true);
+                }
+            }
+            foreach (var dir in all.Distinct(StringComparer.OrdinalIgnoreCase).ToList())
             {
                 known.TryGetValue(dir, out var refs);
                 void Remembered()
@@ -116,10 +158,15 @@ public static class KnownInstalls
                     records.Add(refs.ToManifest());
                     unsure.UnionWith(refs.Libraries());
                 }
-                if (!reachable(dir))
+                switch (probe(dir))
                 {
-                    Remembered();
-                    continue;
+                    case FolderState.Gone:
+                        changed |= known.Remove(dir);
+                        continue;
+                    case FolderState.Unplugged:
+                        if (refs is not null) unreachable++;
+                        Remembered();
+                        continue;
                 }
                 InstallManifest? m;
                 try { m = read(dir); }
@@ -127,6 +174,7 @@ public static class KnownInstalls
                 {
                     Log.Error($"The install record in {dir} can't be read{(refs is null ? "" : "; the builds it named last time stay")}", ex);
                     if (refs is null) unknown = true;
+                    else unreadable++;
                     Remembered();
                     continue;
                 }
@@ -143,13 +191,9 @@ public static class KnownInstalls
                     changed = true;
                 }
             }
-            if (changed)
-            {
-                try { Save(known); }
-                catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
-                { Log.Error($"Could not save {FilePath}", ex); }
-            }
-            return new CleanupRecords(records, unsure, unknown);
+            // A first run with an unknown record saves nothing, so the lookup of hidden games runs again next time.
+            if (changed && !(fresh && unknown)) Save(known);
+            return new CleanupRecords(records, unsure, unknown, unreachable, unreadable);
         }
     }
 }

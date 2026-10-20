@@ -11,9 +11,10 @@ public enum LibraryKind { OptiScaler, Uplift, Lecram, RenoDx, DlssNr }
 /// <summary>
 /// One kept build as the lists and the cleanup see it. <see cref="Id"/> is what settings, game picks and install records name
 /// it by: the SHA-256 for imports and the NR runtime, the app-internal tag for downloads. <see cref="Dir"/> holds the whole build.
-/// Builds of one <see cref="Group"/> (an OptiScaler source) compete for "newest".
+/// Builds of one <see cref="Group"/> (an OptiScaler source) compete for "newest". <see cref="Downloaded"/>: the app downloaded
+/// it itself (OptiScaler, GITC Uplift, Lecram's channel); only those may go in an automatic cleanup, imports never do.
 /// </summary>
-public sealed record LibraryBuild(LibraryKind Kind, string Id, string Label, string Version, DateTime? Date, string Dir, string Group = "")
+public sealed record LibraryBuild(LibraryKind Kind, string Id, string Label, string Version, DateTime? Date, string Dir, string Group = "", bool Downloaded = false)
 {
     public override string ToString() => Label;
 }
@@ -118,7 +119,7 @@ public sealed partial class ComponentStore
         LibraryKind.OptiScaler => ReleaseBuilds(Component.OptiScaler),
         LibraryKind.Uplift => ReleaseBuilds(Component.Uplift),
         LibraryKind.RenoDx or LibraryKind.Lecram => AddonBuilds(kind == LibraryKind.RenoDx ? AddonKind.RenoDx : AddonKind.Lecram)
-            .Select(b => new LibraryBuild(kind, b.Id, b.Label, b.DetectedLabel, b.Imported, Path.Combine(AddonRoot(kind == LibraryKind.RenoDx ? AddonKind.RenoDx : AddonKind.Lecram), b.Id)))
+            .Select(b => new LibraryBuild(kind, b.Id, b.Label, b.DetectedLabel, b.Imported, Path.Combine(AddonRoot(kind == LibraryKind.RenoDx ? AddonKind.RenoDx : AddonKind.Lecram), b.Id), Downloaded: b.Downloaded))
             .ToList(),
         _ => DlssNrVersions.Select(v => new LibraryBuild(kind, v.Id, v.Label, v.Version, null, Path.Combine(NrRoot, v.Id))).ToList(),
     };
@@ -152,9 +153,9 @@ public sealed partial class ComponentStore
             {
                 var source = OptiSources.OfTag(meta.Tag);
                 var raw = OptiSources.RawTag(meta.Tag);
-                found.Add((new LibraryBuild(kind, meta.Tag, $"{source.Name} {raw}{pre}", raw, meta.Published ?? meta.Fetched, dir, source.Repo), raw));
+                found.Add((new LibraryBuild(kind, meta.Tag, $"{source.Name} {raw}{pre}", raw, meta.Published ?? meta.Fetched, dir, source.Repo, Downloaded: true), raw));
             }
-            else found.Add((new LibraryBuild(kind, meta.Tag, meta.Tag + pre, meta.Tag, meta.Published ?? meta.Fetched, dir), meta.Tag));
+            else found.Add((new LibraryBuild(kind, meta.Tag, meta.Tag + pre, meta.Tag, meta.Published ?? meta.Fetched, dir, Downloaded: true), meta.Tag));
         }
         // OptiScaler's sources number their releases differently, so each source is its own newest-first run.
         return found.GroupBy(f => f.Build.Group)
@@ -221,7 +222,7 @@ public sealed partial class ComponentStore
 
     private readonly HashSet<string> _added = new(StringComparer.OrdinalIgnoreCase);
 
-    /// <summary>A build just entered a library (downloaded or imported): the next automatic cleanup keeps it.</summary>
+    /// <summary>A build was just downloaded into a library: the next automatic cleanup keeps it.</summary>
     private void NoteAdded(string id)
     {
         lock (_added) _added.Add(id);
@@ -294,24 +295,30 @@ public sealed partial class ComponentStore
         return ids;
     }
 
-    /// <summary>What the cleanup deletes in one library, under the keep count of the settings, keeping <paramref name="keep"/> too.</summary>
-    public List<LibraryBuild> CleanupCandidates(LibraryKind kind, AppSettings s, IEnumerable<InstallManifest> manifests, IEnumerable<string>? keep = null)
+    /// <summary>
+    /// What the cleanup deletes in one library, under the keep count of the settings, keeping <paramref name="keep"/> too.
+    /// Imports count toward the keep count either way; <paramref name="downloadsOnly"/> (the automatic cleanup) never deletes one.
+    /// </summary>
+    public List<LibraryBuild> CleanupCandidates(LibraryKind kind, AppSettings s, IEnumerable<InstallManifest> manifests,
+        IEnumerable<string>? keep = null, bool downloadsOnly = false)
     {
         var ids = ProtectedBuilds(kind, s, manifests);
         if (keep is not null) ids.UnionWith(keep);
-        return BuildCleanup.Select(Library(kind), s.KeepBuildsFor(kind), ids);
+        var delete = BuildCleanup.Select(Library(kind), s.KeepBuildsFor(kind), ids);
+        return downloadsOnly ? delete.Where(b => b.Downloaded).ToList() : delete;
     }
 
     /// <summary>
     /// Everything the cleanup would delete now: old builds of every library and stale download leftovers, with sizes.
-    /// <paramref name="keep"/> are ids that stay as well (the builds just added); libraries in <paramref name="skip"/> are left alone.
+    /// <paramref name="keep"/> are ids that stay as well (the builds just downloaded); libraries in <paramref name="skip"/> are left alone.
+    /// <paramref name="downloadsOnly"/>: the automatic cleanup, which leaves every imported build alone.
     /// </summary>
     public List<CleanupItem> PlanCleanup(AppSettings s, IReadOnlyCollection<InstallManifest> manifests,
-        IReadOnlySet<string>? keep = null, IReadOnlySet<LibraryKind>? skip = null)
+        IReadOnlySet<string>? keep = null, IReadOnlySet<LibraryKind>? skip = null, bool downloadsOnly = false)
     {
         var items = new List<CleanupItem>();
         foreach (var kind in Enum.GetValues<LibraryKind>().Where(k => skip?.Contains(k) != true))
-            foreach (var b in CleanupCandidates(kind, s, manifests, keep))
+            foreach (var b in CleanupCandidates(kind, s, manifests, keep, downloadsOnly))
                 items.Add(new CleanupItem($"{LibraryTitle(kind)} {b.Label}", b.Dir, BuildCleanup.SizeOf(b.Dir)));
         items.AddRange(StaleDownloads(s, manifests));
         return items;

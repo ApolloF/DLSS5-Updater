@@ -44,7 +44,7 @@ public sealed partial class ComponentStore
                 else MediaFireClient.ExtractAddon(package, addon);
                 if (!LooksLikeLecramV11(addon)) throw new InvalidDataException("Downloaded add-on is not a recognised Lecram v11 build.");
                 var before = LecramBuilds.Select(b => b.Id).ToHashSet(StringComparer.OrdinalIgnoreCase);
-                var build = ImportLecram(addon);
+                var build = ImportLecram(addon, downloaded: true);
                 if (build.Generation != Generation.V11) throw new InvalidDataException("Downloaded add-on is not Lecram v11.");
                 if (!before.Contains(build.Id)) AdoptImportedAddon(settings, AddonKind.Lecram, build);
                 settings.LecramLastAssetHash = latest.Hash;
@@ -87,7 +87,10 @@ public sealed partial class ComponentStore
     /// Imports renodx-dlss5.addon64 (v10 and older) or dlss5-nr.addon64 (v11+) into the library; the file itself decides the generation.
     /// ShortFuse's add-on and Deep Fried Chicken are named in the error instead.
     /// </summary>
-    public AddonBuild ImportLecram(string source)
+    public AddonBuild ImportLecram(string source) => ImportLecram(source, downloaded: false);
+
+    /// <param name="downloaded">Fetched from Lecram's channel by the app, so the automatic cleanup may remove it later.</param>
+    internal AddonBuild ImportLecram(string source, bool downloaded)
     {
         if (!File.Exists(source)) throw new FileNotFoundException("The add-on file doesn't exist.", source);
         var original = FileUtil.OriginalFilename(source);
@@ -115,8 +118,8 @@ public sealed partial class ComponentStore
         var fileVersion = FileUtil.ReadVersion(source) is { } v ? FileUtil.Format(v) : "";
         // The build names itself in a string of its binary; without one the file version (v10) or the generation (v11) stands in.
         var label = FindBuildLabel(File.ReadAllBytes(source)) ?? (fileVersion.Length > 0 ? fileVersion : "v11");
-        var build = RetainAddon(AddonKind.Lecram, source, file, fileVersion, generation, label);
-        Log.Info($"Imported {file} {build.Label} from {source}");
+        var build = RetainAddon(AddonKind.Lecram, source, file, fileVersion, generation, label, downloaded);
+        Log.Info($"{(downloaded ? "Downloaded" : "Imported")} {file} {build.Label} from {source}");
         return build;
     }
 }

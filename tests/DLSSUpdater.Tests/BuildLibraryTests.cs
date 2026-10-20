@@ -375,13 +375,16 @@ public sealed class BuildLibraryTests : IDisposable
         var first = MainViewModel.ReadRecords([game]);
         Assert.False(first.Unknown);
         Assert.Empty(first.Records.Single().Files);
+        Assert.Null(first.AutoSkipNote());
 
         // The drive is unplugged: the next scan doesn't list the game at all.
         Directory.Move(game, game + "-unplugged");
-        var later = MainViewModel.ReadRecords([]);
+        var later = KnownInstalls.Gather([], InstallManifest.Read, _ => FolderState.Unplugged);
 
         Assert.False(later.Unknown);
         Assert.Contains(LibraryKind.DlssNr, later.Unsure);
+        Assert.Equal(1, later.Unreachable);
+        Assert.Equal("Automatic cleanup skips NR runtime: 1 game folder with installs can't be reached (drive not connected?).", later.AutoSkipNote());
         var manual = NrCandidates(later);
         Assert.Equal([ids[2]], manual);
         Assert.DoesNotContain(_store.PlanCleanup(_settings, later.Records, skip: later.Unsure), i => i.Path.Contains("dlssnr"));
@@ -389,6 +392,76 @@ public sealed class BuildLibraryTests : IDisposable
         Directory.Move(game + "-unplugged", game);
         Assert.Empty(MainViewModel.ReadRecords([]).Unsure);
         Assert.Single(MainViewModel.ReadRecords([]).Records);
+    }
+
+    [Fact]
+    public void Folder_deleted_while_its_drive_is_there_is_forgotten_and_a_missing_drive_is_unplugged()
+    {
+        var ids = NrBuilds(5);
+        _settings.DlssNrId = ids[0];
+        var game = GameWithRecord("steam-uninstalled", new InstallManifest { DlssNr = true, DlssNrId = ids[4], PreviousDlssNrId = ids[3] });
+        MainViewModel.ReadRecords([game]);
+
+        Assert.Equal(FolderState.Here, KnownInstalls.Probe(game));
+        Directory.Delete(game, true);
+        Assert.Equal(FolderState.Gone, KnownInstalls.Probe(game));
+        var free = Enumerable.Range('D', 23).Select(c => $"{(char)c}:\\").FirstOrDefault(d => !Directory.Exists(d));
+        if (free is not null) Assert.Equal(FolderState.Unplugged, KnownInstalls.Probe(Path.Combine(free, "Games", "X")));
+
+        // Deleted outside the app (a Steam uninstall): its builds no longer hold up the automatic cleanup.
+        var records = MainViewModel.ReadRecords([]);
+        Assert.Empty(records.Records);
+        Assert.Empty(records.Unsure);
+        Assert.Equal([ids[2], ids[3], ids[4]], NrCandidates(records));
+        Assert.DoesNotContain("steam-uninstalled", File.ReadAllText(KnownInstalls.FilePath));
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void Unreadable_install_refs_stop_every_cleanup_and_are_never_overwritten(bool locked)
+    {
+        var ids = NrBuilds(4);
+        _settings.DlssNrId = ids[0];
+        var game = GameWithRecord("refs", new InstallManifest { DlssNr = true, DlssNrId = ids[3] });
+        MainViewModel.ReadRecords([game]);
+        if (!locked) File.WriteAllText(KnownInstalls.FilePath, "{ broken");
+        var before = File.ReadAllBytes(KnownInstalls.FilePath);
+
+        using (locked ? new FileStream(KnownInstalls.FilePath, FileMode.Open, FileAccess.Read, FileShare.None) : null)
+        {
+            var records = MainViewModel.ReadRecords([game]);
+            Assert.True(records.Unknown);
+            Assert.Empty(records.Records);
+            KnownInstalls.Forget([game]);
+        }
+
+        Assert.Equal(before, File.ReadAllBytes(KnownInstalls.FilePath));
+    }
+
+    [Fact]
+    public void First_run_without_install_refs_also_reads_the_hidden_games()
+    {
+        var ids = NrBuilds(4);
+        _settings.DlssNrId = ids[0];
+        var hidden = GameWithRecord("hidden-before-upgrade", new InstallManifest { DlssNr = true, DlssNrId = ids[3] });
+        Assert.Equal([hidden], GameScanner.InstallDirs([new GameEntry("Hidden", hidden, "Library")]));
+        var lookups = 0;
+        IEnumerable<string> Hidden()
+        {
+            lookups++;
+            return [hidden];
+        }
+
+        Assert.False(File.Exists(KnownInstalls.FilePath));
+        var first = KnownInstalls.Gather([], InstallManifest.Read, KnownInstalls.Probe, Hidden);
+        Assert.Equal([ids[2]], NrCandidates(first));
+        Assert.True(File.Exists(KnownInstalls.FilePath));
+
+        // Remembered from now on; the lookup runs only once.
+        var later = KnownInstalls.Gather([], InstallManifest.Read, KnownInstalls.Probe, Hidden);
+        Assert.Equal([ids[2]], NrCandidates(later));
+        Assert.Equal(1, lookups);
     }
 
     [Fact]
@@ -428,6 +501,8 @@ public sealed class BuildLibraryTests : IDisposable
         var records = MainViewModel.ReadRecords([known]);
         Assert.False(records.Unknown);
         Assert.Contains(LibraryKind.DlssNr, records.Unsure);
+        Assert.Equal(1, records.Unreadable);
+        Assert.Equal("Automatic cleanup skips NR runtime: 1 install record can't be read.", records.AutoSkipNote());
         Assert.Equal([ids[2]], NrCandidates(records));
 
         var stranger = GameWithRecord("stranger", new InstallManifest());
@@ -436,7 +511,7 @@ public sealed class BuildLibraryTests : IDisposable
     }
 
     [Fact]
-    public void Automatic_cleanup_keeps_the_build_just_imported_even_when_it_is_older()
+    public void Automatic_cleanup_never_deletes_an_import_only_the_manual_one_does()
     {
         var ids = NrBuilds(3);
         _settings.DlssNrId = ids[0];
@@ -446,14 +521,46 @@ public sealed class BuildLibraryTests : IDisposable
         Write(source, "an old NR without a version resource");
 
         var imported = _store.RetainDlssNr(source);
-        var added = _store.TakeAdded();
+        Assert.Empty(_store.TakeAdded());
 
-        Assert.Contains(imported.Id, added);
-        var plan = _store.PlanCleanup(_settings, [], added).Select(i => Path.GetFileName(i.Path)).ToList();
-        Assert.DoesNotContain(imported.Id, plan);
-        Assert.Contains(ids[1], plan);
-        // The pass after that treats it like any other build.
-        Assert.Contains(imported.Id, _store.PlanCleanup(_settings, [], _store.TakeAdded()).Select(i => Path.GetFileName(i.Path)));
+        // Every later automatic pass leaves the NR runtime alone; the confirmed manual cleanup may still remove old ones.
+        for (var pass = 0; pass < 2; pass++)
+            Assert.DoesNotContain(_store.PlanCleanup(_settings, [], _store.TakeAdded(), downloadsOnly: true), i => i.Path.Contains("dlssnr"));
+        var manual = _store.PlanCleanup(_settings, []).Select(i => Path.GetFileName(i.Path)).ToList();
+        Assert.Contains(imported.Id, manual);
+        Assert.Contains(ids[1], manual);
+    }
+
+    [Fact]
+    public void Automatic_cleanup_deletes_old_downloads_and_counts_imports_toward_the_keep_count()
+    {
+        // Lecram: two builds from the channel, two imports (one from before the origin was recorded).
+        string[] ids = [new('1', 64), new('2', 64), new('3', 64), new('4', 64)];
+        bool?[] downloaded = [true, false, true, null];
+        for (var i = 0; i < ids.Length; i++)
+        {
+            var build = new AddonBuild(ids[i], ComponentStore.Lecram11File, "", LecramGeneration.V11, $"v11.0.{9 - i}", null, DateTime.UtcNow, downloaded[i] == true);
+            var json = JsonSerializer.Serialize(build, JsonCtx.Default.AddonBuild);
+            if (downloaded[i] is null) json = System.Text.RegularExpressions.Regex.Replace(json, @",\s*""Downloaded"":\s*false", "");
+            Write(Path.Combine(AppPaths.Components, "lecram-dlss5", ids[i], ComponentStore.Lecram11File), ids[i]);
+            Write(Path.Combine(AppPaths.Components, "lecram-dlss5", ids[i], "version.json"), json);
+        }
+        Assert.DoesNotContain("Downloaded", File.ReadAllText(Path.Combine(AppPaths.Components, "lecram-dlss5", ids[3], "version.json")));
+        _settings.LecramId = ids[0];
+        _settings.KeepBuilds[nameof(LibraryKind.Lecram)] = 1;
+        Release(Component.OptiScaler, "v0.7.9", "new");
+        Release(Component.OptiScaler, "v0.7.8", "mid");
+        Release(Component.OptiScaler, "v0.7.7", "old");
+        _settings.KeepBuilds[nameof(LibraryKind.OptiScaler)] = 1;
+
+        Assert.Equal([ids[1], ids[2], ids[3]], _store.CleanupCandidates(LibraryKind.Lecram, _settings, []).Select(b => b.Id));
+        Assert.Equal([ids[2]], _store.CleanupCandidates(LibraryKind.Lecram, _settings, [], downloadsOnly: true).Select(b => b.Id));
+        Assert.All(_store.Library(LibraryKind.OptiScaler), b => Assert.True(b.Downloaded));
+        Assert.Equal(2, _store.CleanupCandidates(LibraryKind.OptiScaler, _settings, [], downloadsOnly: true).Count);
+        // A download that just arrived stays through the pass that follows it.
+        var auto = _store.PlanCleanup(_settings, [], new HashSet<string>(["v0.7.8"]), downloadsOnly: true).Select(i => Path.GetFileName(i.Path)).ToList();
+        Assert.Contains("v0.7.7", auto);
+        Assert.DoesNotContain("v0.7.8", auto);
     }
 
     [Fact]

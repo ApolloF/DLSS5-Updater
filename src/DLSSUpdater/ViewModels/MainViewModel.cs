@@ -711,16 +711,18 @@ public sealed partial class MainViewModel : ObservableObject
 
     /// <summary>
     /// The install records the cleanup protects: those of the listed games and the remembered ones of games that are
-    /// hidden or can't be reached now (see <see cref="KnownInstalls"/>). Reads disk, so call it off the UI thread.
+    /// hidden or can't be reached now (see <see cref="KnownInstalls"/>). With <paramref name="settings"/>, the first run
+    /// also reads the hidden games' records. Reads disk, so call it off the UI thread.
     /// </summary>
-    internal static CleanupRecords ReadRecords(IEnumerable<string> dirs) =>
+    internal static CleanupRecords ReadRecords(IEnumerable<string> dirs, AppSettings? settings = null) =>
         Demo.Active
-            ? KnownInstalls.Gather(dirs, Demo.ManifestAt, _ => true)
-            : KnownInstalls.Gather(dirs, InstallManifest.Read, Directory.Exists);
+            ? KnownInstalls.Gather(dirs, Demo.ManifestAt, _ => FolderState.Here)
+            : KnownInstalls.Gather(dirs, InstallManifest.Read, KnownInstalls.Probe,
+                settings is null ? null : () => GameScanner.HiddenInstallDirs(settings));
 
     /// <summary>The manual cleanup's plan; null when an install record can't be read and nothing about it is remembered.</summary>
     private static List<CleanupItem>? PlanManual(ComponentStore store, AppSettings settings, IEnumerable<string> dirs) =>
-        ReadRecords(dirs) is { Unknown: false } r ? store.PlanCleanup(settings, r.Records) : null;
+        ReadRecords(dirs, settings) is { Unknown: false } r ? store.PlanCleanup(settings, r.Records) : null;
 
     /// <summary>Settings' Clean up: says what goes and how much it frees, deletes after a yes.</summary>
     internal async Task CleanUpBuildsAsync()
@@ -762,8 +764,8 @@ public sealed partial class MainViewModel : ObservableObject
         S.Settings.AutoCleanBuilds && !IsBusy ? Run("Deleting old builds", _ => AutoCleanUpAsync()) : Task.CompletedTask;
 
     /// <summary>
-    /// Inside a run, after downloads or imports: deletes old builds when automatic cleanup is on. The builds just added
-    /// always stay, and a library that a game's unreadable or unreachable install points into is left alone.
+    /// Inside a run, after downloads or imports: deletes old downloads when automatic cleanup is on. Imported builds and
+    /// the builds just downloaded always stay, and a library that a game's unreadable or unreachable install points into is left alone.
     /// </summary>
     private async Task AutoCleanUpAsync()
     {
@@ -774,11 +776,11 @@ public sealed partial class MainViewModel : ObservableObject
         var settings = S.Settings;
         var freed = await Task.Run(() =>
         {
-            var r = ReadRecords(dirs);
+            var r = ReadRecords(dirs, settings);
             if (r.Unknown) return false;
-            var plan = store.PlanCleanup(settings, r.Records, added, r.Unsure);
+            var plan = store.PlanCleanup(settings, r.Records, added, r.Unsure, downloadsOnly: true);
             if (plan.Count == 0) return false;
-            Log.Info("Deleting old builds (automatic cleanup is on)");
+            Log.Info("Deleting old downloads (automatic cleanup is on)");
             store.RunCleanup(plan);
             return true;
         });

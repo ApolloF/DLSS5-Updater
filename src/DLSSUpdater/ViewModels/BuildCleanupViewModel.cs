@@ -73,6 +73,9 @@ public sealed partial class BuildCleanupViewModel : ObservableObject
 
     [ObservableProperty] private string _freeable = "";
 
+    /// <summary>Which libraries the automatic cleanup skips now and why; empty when it skips none.</summary>
+    [ObservableProperty] private string _autoSkipped = "";
+
     private bool CanClean() => !_main.IsBusy;
 
     [RelayCommand(CanExecute = nameof(CanClean))]
@@ -87,20 +90,21 @@ public sealed partial class BuildCleanupViewModel : ObservableObject
         var dirs = _main.InstallDirs();
         try
         {
-            var (summaries, plan) = await Task.Run(() =>
+            var (summaries, plan, skipped) = await Task.Run(() =>
             {
-                var records = MainViewModel.ReadRecords(dirs);
+                var records = MainViewModel.ReadRecords(dirs, settings);
                 var summaries = Rows.Select(r =>
                 {
                     var builds = store.Library(r.Kind);
                     var size = builds.Sum(b => BuildCleanup.SizeOf(b.Dir));
                     return builds.Count == 0 ? "none kept" : $"{builds.Count} build{(builds.Count == 1 ? "" : "s")}  ·  {BuildCleanup.FormatBytes(size)}";
                 }).ToList();
-                return (summaries, records.Unknown ? null : store.PlanCleanup(settings, records.Records));
+                return (summaries, records.Unknown ? null : store.PlanCleanup(settings, records.Records), records.AutoSkipNote());
             });
             if (run != _refresh) return;
             for (var i = 0; i < Rows.Count; i++) Rows[i].Summary = summaries[i];
-            Freeable = plan is null ? "An install record can't be read, so nothing is cleaned up. The details are in the log."
+            AutoSkipped = skipped ?? "";
+            Freeable = plan is null ? "An install record or the list of known installs can't be read, so nothing is cleaned up. The details are in the log."
                 : plan.Count == 0 ? "Nothing to clean up."
                 : $"Clean up frees {BuildCleanup.FormatBytes(plan.Sum(p => p.Bytes))} ({plan.Count} item{(plan.Count == 1 ? "" : "s")}).";
         }

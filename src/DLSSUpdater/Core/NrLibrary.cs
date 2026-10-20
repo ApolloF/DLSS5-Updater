@@ -86,7 +86,6 @@ public sealed partial class ComponentStore
         var dest = DlssNrFor(sha);
         if (!FileUtil.SameFile(source, dest)) FileUtil.AtomicCopy(source, dest);
         FileUtil.AtomicWriteText(Path.Combine(NrRoot, sha, "version.json"), JsonSerializer.Serialize(v, JsonCtx.Default.NrVersion));
-        NoteAdded(sha);
         return v;
     }
 

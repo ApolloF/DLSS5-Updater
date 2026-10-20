@@ -299,6 +299,24 @@ public sealed class LecramUpdateTests : IDisposable
     }
 
     [Fact]
+    public async Task Update_RecordsTheBuildAsDownloaded_UntilTheUserImportsTheSameFile()
+    {
+        var settings = new AppSettings();
+        var server = Server(Channel(SetupRemote("v11.0.0-beta.24", "2026-10-18T18:51:16Z")));
+
+        await _store.CheckLecramAsync(settings, new MediaFireClient(server), CancellationToken.None);
+
+        var build = Assert.Single(_store.LecramBuilds);
+        Assert.True(build.Downloaded);
+        Assert.Contains(build.Id, _store.TakeAdded());
+        // Imported by hand: from now on it is the user's build, which no automatic cleanup removes.
+        var imported = _store.ImportLecram(ComponentStore.AddonPathOf(AddonKind.Lecram, build));
+        Assert.False(imported.Downloaded);
+        Assert.False(Assert.Single(_store.LecramBuilds).Downloaded);
+        Assert.Empty(_store.TakeAdded());
+    }
+
+    [Fact]
     public async Task Update_OnlyBecomesTheDefaultWhenNewer()
     {
         var settings = new AppSettings();
