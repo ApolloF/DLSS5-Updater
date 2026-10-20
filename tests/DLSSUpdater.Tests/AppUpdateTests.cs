@@ -76,7 +76,18 @@ public sealed class AppUpdateTests : IDisposable
     }
 
     [Theory]
+    [InlineData("https://github.com/ApolloF/DLSS5-Updater/releases/download/v2.1.0/DLSS5Updater.exe")]
+    [InlineData("https://github.com/ApolloF/dlss5updater/releases/download/v2.1.0/DLSS5Updater.exe")]
+    public void PackageAsset_AcceptsTheRepoUnderItsCurrentAndFormerName(string url)
+    {
+        var rel = Release("v2.1.0", false, false, new GhAsset { Name = "DLSS5Updater.exe", Url = url });
+        var r = AppUpdate.Newest([rel], new Version(2, 0, 0))!;
+        Assert.NotNull(AppUpdate.PackageAsset(r, AppInstallKind.Portable));
+    }
+
+    [Theory]
     [InlineData("http://github.com/" + AppUpdate.Repo + "/releases/download/v2.1.0/DLSS5Updater.exe")]
+    [InlineData("https://github.com/ApolloF/dlssupdater/releases/download/v2.1.0/DLSS5Updater.exe")]
     [InlineData("https://github.com/someone/fork/releases/download/v2.1.0/DLSS5Updater.exe")]
     [InlineData("https://evil.example/" + AppUpdate.Repo + "/releases/download/v2.1.0/DLSS5Updater.exe")]
     [InlineData("https://github.com/" + AppUpdate.Repo + "/releases/download/v2.0.0/DLSS5Updater.exe")]

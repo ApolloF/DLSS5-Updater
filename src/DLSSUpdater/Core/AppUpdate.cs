@@ -24,7 +24,9 @@ public sealed class AppUpdateException(string message) : InvalidOperationExcepti
 /// </summary>
 public static partial class AppUpdate
 {
-    public const string Repo = "ApolloF/dlss5updater";
+    public const string Repo = "ApolloF/DLSS5-Updater";
+    /// <summary>Earlier names of <see cref="Repo"/>: GitHub redirects them, and asset URLs may still carry one.</summary>
+    private static readonly string[] RepoNames = [Repo, "ApolloF/dlss5updater"];
     public const string PortableAsset = "DLSS5Updater.exe";
     public const string SumsAsset = "SHA256SUMS";
     /// <summary>AppId in installer/DLSSUpdater.iss; Inno Setup keeps the uninstall entry under "&lt;AppId&gt;_is1".</summary>
@@ -67,7 +69,7 @@ public static partial class AppUpdate
 
     internal static bool IsOwnAssetUrl(string url, string tag, string name) =>
         Uri.TryCreate(url, UriKind.Absolute, out var u) && u.Scheme == Uri.UriSchemeHttps
-        && url.Equals($"https://github.com/{Repo}/releases/download/{Uri.EscapeDataString(tag)}/{Uri.EscapeDataString(name)}", StringComparison.OrdinalIgnoreCase);
+        && RepoNames.Any(repo => url.Equals($"https://github.com/{repo}/releases/download/{Uri.EscapeDataString(tag)}/{Uri.EscapeDataString(name)}", StringComparison.OrdinalIgnoreCase));
 
     /// <summary>"&lt;sha256&gt;  &lt;file&gt;" lines (sha256sum format, text or binary marker) → file name to lower-case hash.</summary>
     public static Dictionary<string, string> ParseSums(string text)
