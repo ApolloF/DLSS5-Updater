@@ -583,6 +583,41 @@ public sealed partial class SettingsViewModel : ObservableObject
 
     private void Save() => Settings.Save();
 
+    // ---------- first-run setup ----------
+
+    /// <summary>The open first-run setup; null while it is closed.</summary>
+    [ObservableProperty] private OnboardingViewModel? _onboarding;
+
+    /// <summary>Opens the setup on a fresh install (once the window is up).</summary>
+    public void ShowOnboardingIfDue()
+    {
+        if (OnboardingViewModel.ShouldShow(Settings, Demo.Active, Demo.ShowOnboarding)) RunSetup();
+    }
+
+    /// <summary>"Run setup again": the same steps, starting at the current settings.</summary>
+    [RelayCommand]
+    private void RunSetup()
+    {
+        if (Onboarding is not null) return;
+        var setup = new OnboardingViewModel(Settings);
+        setup.Closed += OnboardingClosed;
+        Onboarding = setup;
+    }
+
+    private void OnboardingClosed(OnboardingResult result)
+    {
+        Onboarding = null;
+        if (!result.Applied) return;
+        if (result.Build is { } build) OptiBuild = build;
+        OnPropertyChanged(nameof(DefaultMode));
+        NotifyNrAddons();
+        NotifyModShown();
+        Lecram.Reload();
+        _ = RefreshReShadeAsync();
+        _main.SelfUpdate.SettingsChanged();
+        Cleanup.SettingsChanged();
+    }
+
     /// <summary>Writes the override lists back to settings (called when the panel closes).</summary>
     public void Commit()
     {

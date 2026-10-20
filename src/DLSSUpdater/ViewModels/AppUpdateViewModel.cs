@@ -80,6 +80,14 @@ public sealed partial class AppUpdateViewModel : ObservableObject
         }
     }
 
+    /// <summary>The first-run setup changed these settings: show them, and start the automatic download if one is due.</summary>
+    public void SettingsChanged()
+    {
+        OnPropertyChanged(nameof(CheckAppUpdates));
+        OnPropertyChanged(nameof(AutoInstall));
+        if (AutoInstall && Available is not null) StartBackgroundDownload();
+    }
+
     /// <summary>After the startup run: tidy up, then check if due (otherwise show what the last check cached).</summary>
     public async Task StartupAsync()
     {
