@@ -63,6 +63,17 @@ downloaded the dropped files; read them from the paths given. Nobody answers que
   outside `src/`, `tests/`, `docs/` and `README.md`. Only `.cs`, `.xaml`, `.md`, `.txt`, `.ini` and `.cfg` files there
   (and `.json` under `tests/` and `docs/`).
 
+## Lecram channel build switch
+- The Lecram channel code (the MediaFire fetch, `Core/LecramSource.cs`, and the UI around it) is compiled into both
+  variants of the app, but only switched on in the owner's private build: the MSBuild property `LecramChannel` in
+  `src/DLSSUpdater/DLSSUpdater.csproj` defaults to false, public releases are built with it off, and the private build
+  passes `-p:LecramChannel=true`. Never change its default and never turn it on for public releases (the bot refuses
+  any csproj change but the version line anyway).
+- Keep both variants compiling: run `dotnet build -warnaserror -p:LecramChannel=true` as well as the normal
+  `dotnet build -warnaserror` and `dotnet test`.
+- A new Lecram build still gets its options, config and docs work as usual: the private build fetches it
+  automatically, the public build imports it.
+
 ## Hard rules
 - Never add to the repo, upload or redistribute any binary: dropped builds, add-ons, `nvngx_dlssnr.dll`,
   zips, exes. Work on the copies in the sandbox's `in/drop` folder only.
