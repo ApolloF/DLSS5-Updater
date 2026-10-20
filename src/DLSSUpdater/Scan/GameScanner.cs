@@ -7,8 +7,11 @@ public static class GameScanner
 {
     private static readonly string[] SourcePriority = ["Steam", "Epic", "GOG", "EA", "Ubisoft", "Xbox", "Manual", "Library"];
 
-    /// <summary>All known game folders, deduplicated by path; launcher names win over manual entries.</summary>
-    public static List<GameEntry> Discover(AppSettings settings)
+    /// <summary>
+    /// All known game folders, deduplicated by path; launcher names win over manual entries. Hidden games are left out,
+    /// or with <paramref name="hiddenOnly"/> they are all it returns.
+    /// </summary>
+    public static List<GameEntry> Discover(AppSettings settings, bool hiddenOnly = false)
     {
         var entries = Launchers.All().ToList();
 
@@ -34,11 +37,17 @@ public static class GameScanner
 
         var hidden = new HashSet<string>(settings.HiddenGames, StringComparer.OrdinalIgnoreCase);
         return entries
-            .Where(e => !hidden.Contains(GameInfo.MakeId(e.Root)))
+            .Where(e => hidden.Contains(GameInfo.MakeId(e.Root)) == hiddenOnly)
             .GroupBy(e => GameInfo.MakeId(e.Root))
             .Select(g => g.OrderBy(e => Array.IndexOf(SourcePriority, e.Source)).First())
             .ToList();
     }
+
+    /// <summary>The install folders of hidden games, which the list doesn't show; the cleanup's first run reads their records too.</summary>
+    public static List<string> HiddenInstallDirs(AppSettings settings) =>
+        settings.HiddenGames.Count == 0 ? [] : InstallDirs(Discover(settings, hiddenOnly: true));
+
+    internal static List<string> InstallDirs(IEnumerable<GameEntry> entries) => entries.SelectMany(e => Inspect(e).Installs).ToList();
 
     public static GameInfo Inspect(GameEntry entry)
     {
