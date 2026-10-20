@@ -579,7 +579,7 @@ Describe 'gates (S1/S2: released means a fresh tag from origin and a published f
         [IO.File]::WriteAllText((Join-Path $origin 'b.cs'), 'two'); git -C $origin add -A; git -C $origin commit --quiet -m two
         git -C $origin tag -a v3.0.1 -m 'v3.0.1 again'
         git --git-dir $mirror fetch --quiet --no-tags origin '+refs/heads/*:refs/heads/*'
-        git --git-dir $mirror tag -f -a v3.0.1 -m stale 'HEAD~1' | Out-Null
+        git -c user.name=t -c user.email=t@invalid --git-dir $mirror tag -f -a v3.0.1 -m stale 'HEAD~1' | Out-Null
         (git --git-dir $mirror rev-parse 'refs/tags/v3.0.1^{commit}') | Should -Be (git -C $origin rev-parse HEAD~1)
         Get-ReleaseGateReason $mirror '3.0.1' 'HEAD' $full | Should -BeNullOrEmpty
         (git --git-dir $mirror rev-parse 'refs/tags/v3.0.1^{commit}') | Should -Be (git -C $origin rev-parse HEAD)
