@@ -34,8 +34,8 @@ public static class Demo
     private const string NrOriginalId = "2bc19bc09a7b89dd44f73e2ac0108fcc586e2154bdd0830f242f4f040e28789f";
     private static readonly Version NrCompatVersion = new(310, 9, 16, 0);
     private static readonly Version NrOriginalVersion = new(310, 8, 0, 0);
-    private static readonly Version DfcFileVersion = new(4, 0, 0, 0);
-    private const string DfcInstalled = "4.0.0";
+    private static readonly Version DfcFileVersion = new(5, 0, 0, 0);
+    private const string DfcInstalled = "5.0.0";
 
     private static readonly Dictionary<string, InstallManifest> Manifests = new(StringComparer.OrdinalIgnoreCase);
     private static readonly Dictionary<DlssDll, Version?> Originals = [];

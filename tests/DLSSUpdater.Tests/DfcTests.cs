@@ -1,3 +1,4 @@
+using System.IO.Compression;
 using DLSSUpdater.Core;
 using DLSSUpdater.Scan;
 
@@ -48,17 +49,30 @@ public sealed class DfcTests : IDisposable
     private static readonly string[] NeuralFiles = ["dfc-neural-helper64.exe", "dfc-neural-motion.onnx", "deep-fried-chicken-ort.dll", "DirectML.dll"];
     private static readonly string Effect = Path.Combine("reshade-shaders", "Shaders", "DFC_OutputState.addonfx");
 
-    /// <summary>The 4.x package layout: INSTALL.txt, a 64-bit folder with the whole set and a 32-bit folder with its host64 companion set.</summary>
-    private string Package(bool presentSupport = true, bool neural = true)
+    /// <summary>Files a newer package might add; the whole 64-bit folder is taken, so they come along.</summary>
+    private static readonly string[] ExtraFiles = ["notes.txt", Path.Combine("reshade-shaders", "Shaders", "ReShade.fxh"), Path.Combine("future", "model.bin")];
+    /// <summary>Files a user may have dropped into the 64-bit folder (README step 3, a test run) that the app places itself or never copies.</summary>
+    private static readonly string[] SkippedFiles = ["nvngx_dlssnr.dll", "nvngx_dlss.dll", "dxgi.dll", "ReShade.ini", "deep-fried-chicken.log"];
+
+    /// <summary>
+    /// The 4.x/5.x package layout: README.txt, a 64-bit folder with the whole set (plus <see cref="ExtraFiles"/> and
+    /// <see cref="SkippedFiles"/> when <paramref name="extras"/>) and a 32-bit folder with its host64 companion set.
+    /// </summary>
+    private string Package(bool presentSupport = true, bool neural = true, bool extras = true, int major = 4)
     {
         var root = Path.Combine(_tmp, "pkg-" + Guid.NewGuid().ToString("N")[..6]);
         var x64 = Path.Combine(root, "64-bit");
         Directory.CreateDirectory(x64);
-        File.WriteAllText(Path.Combine(root, "INSTALL.txt"), "Deep Fried Chicken 4.0.6 preview\n");
-        FakeVersionDll.Write(Path.Combine(x64, ComponentStore.DfcFile), new Version(4, 0, 0, 0), ComponentStore.DfcFile);
+        File.WriteAllText(Path.Combine(root, "README.txt"), $"Deep Fried Chicken {major}.0\n");
+        FakeVersionDll.Write(Path.Combine(x64, ComponentStore.DfcFile), new Version(major, 0, 0, 0), ComponentStore.DfcFile);
         File.WriteAllText(Path.Combine(x64, ComponentStore.DfcBridgeFile), "BRIDGE4");
         File.WriteAllText(Path.Combine(x64, ComponentStore.DfcConfigFile), V4Cfg);
-        File.WriteAllText(Path.Combine(x64, "notes.txt"), "not part of the set");
+        if (extras)
+            foreach (var rel in ExtraFiles.Concat(SkippedFiles))
+            {
+                Directory.CreateDirectory(Path.GetDirectoryName(Path.Combine(x64, rel))!);
+                File.WriteAllText(Path.Combine(x64, rel), "PKG-" + rel);
+            }
         if (presentSupport) File.WriteAllText(Path.Combine(x64, ComponentStore.DfcPresentSupportFile), "PRESENT");
         if (neural)
             foreach (var name in NeuralFiles)
@@ -79,10 +93,11 @@ public sealed class DfcTests : IDisposable
     }
 
     /// <summary>Paths of the 64-bit set relative to the game folder, the cfg excluded.</summary>
-    private static string[] V4Set() =>
+    private static string[] V4Set(bool extras = true) =>
     [
         ComponentStore.DfcFile, ComponentStore.DfcBridgeFile, ComponentStore.DfcPresentSupportFile, Effect,
         .. NeuralFiles.Select(n => Path.Combine(ComponentStore.DfcNeuralDir, n)),
+        .. extras ? ExtraFiles : [],
     ];
 
     private string RenoDxAddon()
@@ -480,7 +495,7 @@ public sealed class DfcTests : IDisposable
         Assert.True(report.VersionDiffers); // the fake legacy add-on is 2.0.0
         Assert.Equal(["passes"], report.MissingKeys);
 
-        _store.ImportDfc(Package());
+        _store.ImportDfc(Package(major: 5));
         report = _store.DfcCompat(ViewModels.SettingsOptions.Dfc([]).Select(o => o.Key))!;
         Assert.False(report.HasIssues, report.Summary);
     }
@@ -488,7 +503,7 @@ public sealed class DfcTests : IDisposable
     // ---------- 4.x package ----------
 
     [Fact]
-    public void Import_4xPackage_FromThePackageFolderOrThe64BitAddon_StoresTheWholeSetOnly()
+    public void Import_4xPackage_FromThePackageFolderOrThe64BitAddon_StoresTheWhole64BitFolder()
     {
         var pkg = Package();
         _store.ImportDfc(pkg);
@@ -499,8 +514,8 @@ public sealed class DfcTests : IDisposable
         foreach (var rel in V4Set())
             Assert.Equal(FileUtil.Sha256(Path.Combine(x64, rel)), FileUtil.Sha256(Path.Combine(ComponentStore.DfcDir, rel)));
         Assert.Equal(V4Cfg, File.ReadAllText(_store.DfcConfigPath));
-        Assert.False(File.Exists(Path.Combine(ComponentStore.DfcDir, "notes.txt")));
-        Assert.False(File.Exists(Path.Combine(ComponentStore.DfcDir, "INSTALL.txt")));
+        Assert.All(SkippedFiles, rel => Assert.False(File.Exists(Path.Combine(ComponentStore.DfcDir, rel)), rel));
+        Assert.False(File.Exists(Path.Combine(ComponentStore.DfcDir, "README.txt")));
 
         _store.RemoveDfcImport();
         _store.Import(Path.Combine(x64, ComponentStore.DfcFile), ComponentStore.DfcFile);
@@ -537,6 +552,109 @@ public sealed class DfcTests : IDisposable
     }
 
     [Fact]
+    public void Import_Zip_OfTheReleaseOrIts64BitFolder_TakesTheSameSet_AndLeavesNoUnpackedCopy()
+    {
+        var pkg = Package(major: 5);
+        var whole = Path.Combine(_tmp, "release.zip");
+        ZipFile.CreateFromDirectory(pkg, whole, CompressionLevel.Fastest, includeBaseDirectory: true);
+        _store.ImportDfc(whole);
+        Assert.Equal("5.0.0", _store.DfcVersion);
+        Assert.Equal(V4Set().Order(StringComparer.OrdinalIgnoreCase), _store.DfcInstallFiles());
+        Assert.Equal(V4Cfg, File.ReadAllText(_store.DfcConfigPath));
+        Assert.False(Directory.Exists(ComponentStore.DfcDir + ".zip"));
+
+        _store.RemoveDfcImport();
+        var x64 = Path.Combine(_tmp, "x64.zip");
+        ZipFile.CreateFromDirectory(Path.Combine(pkg, "64-bit"), x64);
+        _store.Import(x64, ComponentStore.DfcFile);
+        Assert.Equal(V4Set().Order(StringComparer.OrdinalIgnoreCase), _store.DfcInstallFiles());
+    }
+
+    [Fact]
+    public void Import_SevenZipOrABadZip_IsRefused_AndKeepsTheOldImport()
+    {
+        _store.ImportDfc(Package());
+        var tag = _store.DfcTag;
+        var sevenZip = Path.Combine(_tmp, "Deep-Fried-Chicken-v5.0.0-essentials.7z");
+        File.WriteAllText(sevenZip, "7z");
+        Assert.Contains("Extract it first", Assert.Throws<InvalidDataException>(() => _store.ImportDfc(sevenZip)).Message);
+
+        var escape = Path.Combine(_tmp, "escape.zip");
+        using (var zip = ZipFile.Open(escape, ZipArchiveMode.Create))
+        using (var w = new StreamWriter(zip.CreateEntry("../outside.txt").Open()))
+            w.Write("x");
+        Assert.Throws<IOException>(() => _store.ImportDfc(escape));
+        Assert.False(File.Exists(Path.Combine(AppPaths.Components, "outside.txt")));
+
+        var empty = Path.Combine(_tmp, "empty.zip");
+        using (ZipFile.Open(empty, ZipArchiveMode.Create)) { }
+        Assert.Contains(ComponentStore.DfcFile, Assert.Throws<InvalidDataException>(() => _store.ImportDfc(empty)).Message);
+        Assert.Equal(tag, _store.DfcTag);
+        Assert.False(Directory.Exists(ComponentStore.DfcDir + ".zip"));
+    }
+
+    [Fact]
+    public void Import_AFolderHoldingMuchMoreThanTheSet_IsRefused()
+    {
+        var x64 = Path.Combine(Package(), "64-bit");
+        for (var i = 0; i < ComponentStore.DfcMaxFiles; i++)
+            File.WriteAllText(Path.Combine(x64, $"download-{i}.txt"), "x");
+        Assert.Contains("holds more than", Assert.Throws<InvalidDataException>(() => _store.ImportDfc(x64)).Message);
+        Assert.False(_store.DfcImported);
+    }
+
+    [Theory]
+    [InlineData("deep-fried-chicken.addon64", true)]
+    [InlineData(@"deep-fried-chicken-neural\THIRD-PARTY-NOTICES.txt", true)]
+    [InlineData(@"reshade-shaders\Shaders\ReShade.fxh", true)]
+    [InlineData(@"future\nvngx_helper.dll", true)]
+    [InlineData("deep-fried-chicken.cfg", false)]
+    [InlineData("deep-fried-chicken-hooks.log", false)]
+    [InlineData(@"deep-fried-chicken-neural\helper.log", false)]
+    [InlineData("nvngx_dlssnr.dll", false)]
+    [InlineData("NVNGX_DLSS.DLL", false)]
+    [InlineData("ReShade64.dll", false)]
+    [InlineData("ReShade.ini", false)]
+    [InlineData("d3d11.dll", false)]
+    [InlineData("opengl32.dll", false)]
+    [InlineData(@".dlssupdater\manifest.json", false)]
+    public void SetFiles_AreTheWhole64BitFolder_ButCfgLogsAndWhatTheAppPlacesItself(string rel, bool taken) =>
+        Assert.Equal(taken, ComponentStore.IsDfcSetFile(rel));
+
+    [Fact]
+    public async Task Reinstall_TakesOutFilesTheNewSetNoLongerHas_IncludingExtraFolders()
+    {
+        _store.ImportDfc(Package());
+        var installer = new Installer(_store);
+        await installer.InstallAsync(_game, _root, Dfc(), null, default);
+        Assert.All(ExtraFiles, rel => Assert.True(File.Exists(G(rel)), rel));
+
+        _store.ImportDfc(Package(extras: false, major: 5));
+        await installer.InstallAsync(_game, _root, Dfc(), null, default);
+        Assert.All(V4Set(extras: false), rel => Assert.True(File.Exists(G(rel)), rel));
+        Assert.All(ExtraFiles, rel => Assert.False(File.Exists(G(rel)), rel));
+        Assert.False(Directory.Exists(G("future")));
+        var m = InstallManifest.Read(_root)!;
+        Assert.Equal(V4Set(extras: false).Order(StringComparer.OrdinalIgnoreCase), m.DfcFiles.Order(StringComparer.OrdinalIgnoreCase));
+    }
+
+    [Fact]
+    public async Task AnInstallRecordedBeforeDfcFiles_IsStillTakenOutWhole()
+    {
+        _store.ImportDfc(Package(extras: false));
+        _store.ImportRenoDx(RenoDxAddon());
+        var installer = new Installer(_store);
+        await installer.InstallAsync(_game, _root, Dfc(), null, default);
+        var m = InstallManifest.Read(_root)!;
+        m.DfcFiles.Clear();
+        m.Save(_root);
+
+        await installer.InstallAsync(_game, _root, Reno(), null, default);
+        Assert.All(V4Set(extras: false).Append(ComponentStore.DfcConfigFile), rel => Assert.False(File.Exists(G(rel)), rel));
+        Assert.False(Directory.Exists(G(ComponentStore.DfcNeuralDir)));
+    }
+
+    [Fact]
     public async Task Install_4x_PlacesTheWholeSet_CoversTheEffectFolder_AndUninstallLeavesNothing()
     {
         var pkg = Package();
@@ -548,9 +666,11 @@ public sealed class DfcTests : IDisposable
         var x64 = Path.Combine(pkg, "64-bit");
         foreach (var rel in V4Set().Append(ComponentStore.DfcConfigFile))
             Assert.Equal(FileUtil.Sha256(Path.Combine(x64, rel)), FileUtil.Sha256(G(rel)));
-        Assert.False(File.Exists(G("notes.txt")));
+        Assert.False(File.Exists(G("deep-fried-chicken.log")));
+        Assert.All(["nvngx_dlssnr.dll", "dxgi.dll", "ReShade.ini"], rel => Assert.NotEqual(FileUtil.Sha256(Path.Combine(x64, rel)), FileUtil.Sha256(G(rel))));
         var m = InstallManifest.Read(_root)!;
         Assert.All(V4Set(), rel => Assert.Contains(rel, m.Files, StringComparer.OrdinalIgnoreCase));
+        Assert.Equal(V4Set().Order(StringComparer.OrdinalIgnoreCase), m.DfcFiles.Order(StringComparer.OrdinalIgnoreCase));
         Assert.Equal(@".\,.\reshade-shaders\Shaders\**", IniFile.Load(G("ReShade.ini")).Get("GENERAL", "EffectSearchPaths"));
 
         await installer.UninstallAsync(_game, _root, default);
@@ -602,7 +722,10 @@ public sealed class DfcTests : IDisposable
         Assert.False(File.Exists(G(ComponentStore.DfcPresentSupportFile)));
         Assert.False(Directory.Exists(G(ComponentStore.DfcNeuralDir)));
         Assert.False(File.Exists(G(Effect)));
+        Assert.All(ExtraFiles, rel => Assert.False(File.Exists(G(rel)), rel));
+        Assert.False(Directory.Exists(G("reshade-shaders")));
         Assert.DoesNotContain(InstallManifest.Read(_root)!.Files, f => f.Contains(ComponentStore.DfcNeuralDir, StringComparison.OrdinalIgnoreCase));
+        Assert.Equal([ComponentStore.DfcBridgeFile, ComponentStore.DfcFile], InstallManifest.Read(_root)!.DfcFiles.Order(StringComparer.OrdinalIgnoreCase));
     }
 
     [Fact]

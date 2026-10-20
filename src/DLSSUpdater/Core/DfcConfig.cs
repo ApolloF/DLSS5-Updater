@@ -31,7 +31,7 @@ public sealed record DfcCompatReport(string? Version, int? Schema, IReadOnlyList
 public static class DfcConfig
 {
     public const string Section = "DFC";
-    public const string TestedVersion = "4.0.0";
+    public const string TestedVersion = "5.0.0";
     public const int TestedSchema = 13;
     private const string Header = "[" + Section + "]";
 

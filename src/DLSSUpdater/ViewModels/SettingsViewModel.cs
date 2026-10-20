@@ -506,7 +506,7 @@ public sealed partial class SettingsViewModel : ObservableObject
             return store.DfcImported
                 ? $"Imported  ·  {store.DfcVersion}  ·  {HashCache.Get(store.DfcPath)[..12]}" +
                   (DfcWarning is null ? "" : $"  ·  not the tested version ({DfcConfig.TestedVersion}, config schema {DfcConfig.TestedSchema}); see the log")
-                : "Not imported. Its licence is personal use only, so import your own copy: choose deep-fried-chicken.addon64 in the extracted package's 64-bit folder (the files next to it are imported too). 32-bit games are not supported.";
+                : "Not imported. Its licence is personal use only, so import your own copy: extract the release and choose its folder (Folder…), or choose deep-fried-chicken.addon64 or a .zip of the release (Import…). The whole 64-bit folder is imported. 32-bit games are not supported.";
         }
     }
 
@@ -523,7 +523,14 @@ public sealed partial class SettingsViewModel : ObservableObject
     public bool DfcImported => _main.S.Store.DfcImported;
 
     [RelayCommand]
-    private Task ImportDfc() => Import(ComponentStore.DfcFile, "Deep Fried Chicken|deep-fried-chicken.addon64;*.addon64");
+    private Task ImportDfc() => Import(ComponentStore.DfcFile, "Deep Fried Chicken|deep-fried-chicken.addon64;*.addon64;*.zip", "deep-fried-chicken.addon64 or a .zip of the release");
+
+    [RelayCommand]
+    private async Task ImportDfcFolder()
+    {
+        var dlg = new OpenFolderDialog { Title = "Select the extracted Deep Fried Chicken folder (or its 64-bit folder)" };
+        if (dlg.ShowDialog() == true) await ImportFrom(dlg.FolderName, ComponentStore.DfcFile);
+    }
 
     [RelayCommand]
     private async Task RemoveDfc()
@@ -734,13 +741,17 @@ public sealed partial class SettingsViewModel : ObservableObject
     private async Task Import(string fileName, string filter, string? what = null)
     {
         var dlg = new OpenFileDialog { Filter = filter, Title = $"Select {what ?? fileName}" };
-        if (dlg.ShowDialog() != true) return;
+        if (dlg.ShowDialog() == true) await ImportFrom(dlg.FileName, fileName);
+    }
+
+    private async Task ImportFrom(string source, string fileName)
+    {
         try
         {
-            await Task.Run(() => _main.S.Store.Import(dlg.FileName, fileName));
+            await Task.Run(() => _main.S.Store.Import(source, fileName));
             if (fileName == ComponentStore.DlssNrFile)
             {
-                var id = FileUtil.Sha256(dlg.FileName);
+                var id = FileUtil.Sha256(source);
                 Settings.SelectDlssNr(id);
                 Save();
             }
