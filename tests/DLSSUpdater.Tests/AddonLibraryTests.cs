@@ -464,6 +464,7 @@ public sealed class AddonLibraryTests : IDisposable
         var otherLecram = LecramV11();
         _settings.RenoDxId = sf.Id;
         _settings.LecramId = lecram.Id;
+        _settings.AllowSeveralNrAddons = true;
         var vm = NewGame();
         vm.Components.First(c => c.Key == "renodx").Enabled = true;
         vm.Components.First(c => c.Key == "lecram").Enabled = true;
@@ -607,5 +608,52 @@ public sealed class AddonLibraryTests : IDisposable
         vm.RebuildAddonChoices();
         vm.RefreshStatus();
         Assert.Equal(a.Name, row.Latest);
+    }
+
+    // ---------- one NR add-on per game ----------
+
+    private static bool On(GameViewModel vm, string key) => vm.Components.First(c => c.Key == key).Enabled;
+    private static void Turn(GameViewModel vm, string key, bool on) => vm.Components.First(c => c.Key == key).Enabled = on;
+
+    [Fact]
+    public void GameToggles_FollowTheSettingsRule()
+    {
+        var vm = NewGame();
+        Turn(vm, "renodx", true);
+        Turn(vm, "lecram", true);
+        Assert.False(On(vm, "renodx"));
+        Assert.True(On(vm, "lecram"));
+        Assert.Null(vm.NrAddonWarning);
+        Turn(vm, "dfc", true);
+        Assert.False(On(vm, "lecram"));
+        Turn(vm, "dfc", false);
+        Assert.DoesNotContain(vm.Components, c => c.Key is "renodx" or "lecram" or "uplift" or "dfc" && c.Enabled);
+
+        _settings.AllowSeveralNrAddons = true;
+        Turn(vm, "renodx", true);
+        Turn(vm, "lecram", true);
+        Assert.True(On(vm, "renodx") && On(vm, "lecram"));
+        Assert.Contains("NR runs twice", vm.NrAddonWarning);
+        Turn(vm, "uplift", true);
+        Assert.False(On(vm, "renodx") || On(vm, "lecram"));
+        Assert.Null(vm.NrAddonWarning);
+    }
+
+    [Fact]
+    public void GameWithBothInstalled_ShowsBoth_EvenWithoutTheOverride()
+    {
+        var root = Path.Combine(_tmp, "both-game");
+        Directory.CreateDirectory(root);
+        new InstallManifest { Mode = InstallMode.ReShadeOnly, ReShade = true, DlssNr = true, RenoDx = true, Lecram = true }.Save(root);
+        var vm = NewGameFor(root);
+        Assert.True(On(vm, "renodx") && On(vm, "lecram"));
+        Assert.NotNull(vm.NrAddonWarning);
+    }
+
+    [Fact]
+    public void EveryComponentRow_HasAHelpTopic()
+    {
+        var vm = NewGame();
+        Assert.All(vm.Components, c => Assert.NotNull(HelpTopics.Get(c.HelpTopic)));
     }
 }

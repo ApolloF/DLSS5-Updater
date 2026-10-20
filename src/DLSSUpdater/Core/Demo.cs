@@ -20,7 +20,10 @@ public static class Demo
 
     public const string LatestDlss = "v310.10.0";
     public const string LatestStreamline = "v2.14.1";
-    public const string LatestOpti = "v0.9.51";
+    // DLSSU_DEMO_OPTI_NR=1 pretends OptiScaler-NR (ShyVortex) is selected instead of the default F5 build, to check its labels.
+    private static bool OptiNr => Environment.GetEnvironmentVariable("DLSSU_DEMO_OPTI_NR") == "1";
+    public static string LatestOpti => OptiNr ? "v0.9.51" : "v0.1.32" + OptiSources.F5.TagSuffix;
+    private static string PreviousOpti => OptiNr ? "v0.9.47" : "v0.1.31" + OptiSources.F5.TagSuffix;
     public const string LatestMfg = "v1.4.0";
     public const string LatestUplift = "v1.4.2";
     public const string LatestReShade = "6.6.2";
@@ -139,15 +142,13 @@ public static class Demo
         store.Dlss = Release(LatestDlss, today.AddDays(-4), "## Neural texture compression\n- DLSS Super Resolution 310.10 improves stability of the preset A transformer model.\n- Frame Generation fixes for dynamic multi frame generation.\n- Smaller memory footprint on RTX 40 and 50 GPUs.");
         store.DlssReleases = [store.Dlss, Release("v310.9.1", today.AddDays(-45)), Release("v310.4.0", today.AddDays(-150)), Release("v310.2.1", today.AddDays(-230)), Release("v3.7.10", today.AddDays(-400))];
         store.Streamline = Release(LatestStreamline, today.AddDays(-20));
-        // DLSSU_DEMO_F5=1 pretends the F5 build is selected, to check its labels.
-        var f5 = Environment.GetEnvironmentVariable("DLSSU_DEMO_F5") == "1";
-        if (f5) settings.OptiSource = OptiSources.F5.Repo;
-        store.Opti = Release(f5 ? "v0.1.32" + OptiSources.F5.TagSuffix : LatestOpti, today.AddDays(-2), "## Faster NR pass\n- DLSSNR runs about 15% faster with the small model.\n- New tonemap and HDR output options.\n- Fixes the flicker in games that resize their swap chain.");
+        if (OptiNr) settings.OptiSource = ComponentStore.OptiRepo;
+        store.Opti = Release(LatestOpti, today.AddDays(-2), "## Faster NR pass\n- DLSSNR runs about 15% faster with the small model.\n- New tonemap and HDR output options.\n- Fixes the flicker in games that resize their swap chain.");
         store.Mfg = Release(LatestMfg, today.AddDays(-30), "## MFG Unlock\n- Works with Streamline 2.14.\n- Fixes a crash on startup in some Unreal Engine 5 games.");
         store.Uplift = Release(LatestUplift, today.AddDays(-12), "## GITC Uplift\n- New mask editor.\n- Lower VRAM use with the performance preset.");
         store.ReShade = Release(LatestReShade, today.AddDays(-60));
         // The first two have a release the user has not looked at yet; they show the NEW dot.
-        settings.SeenReleases[nameof(Component.OptiScaler)] = "v0.9.47";
+        settings.SeenReleases[nameof(Component.OptiScaler)] = PreviousOpti;
         settings.SeenReleases[nameof(Component.Dlss)] = "v310.9.1";
         settings.LecramLastVersion = "v11.0.1";
         settings.LecramLastResult = "Up to date: v11.0.1.";
@@ -174,7 +175,7 @@ public static class Demo
         new("Ember Crown", "Steam", @"EmberCrown\Binaries\Win64", "EmberCrown-Win64-Shipping.exe", "310.2.1", "310.2.1", "310.2.1", "2.7.30", Installed: m =>
         {
             m.Opti = m.ReShade = m.Mfg = m.DlssNr = m.Dlss = m.Streamline = true;
-            m.OptiTag = "v0.9.47"; m.MfgTag = "v1.3.0"; m.DlssTag = "v310.2.1"; m.StreamlineTag = "v2.7.30";
+            m.OptiTag = PreviousOpti; m.MfgTag = "v1.3.0"; m.DlssTag = "v310.2.1"; m.StreamlineTag = "v2.7.30";
             m.DlssNrId = NrCompatId; m.Proxy = "dxgi.dll";
         }),
         // Not installed yet.

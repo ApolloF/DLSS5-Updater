@@ -342,19 +342,48 @@ public sealed partial class SettingsViewModel : ObservableObject
     public bool InstallRenoDx
     {
         get => Settings.InstallRenoDx;
-        set { Settings.InstallRenoDx = value; Save(); }
+        set => SetNrAddon(NrAddon.RenoDx, value);
     }
 
     public bool InstallUplift
     {
         get => Settings.InstallUplift;
-        set { Settings.InstallUplift = value; Save(); }
+        set => SetNrAddon(NrAddon.Uplift, value);
     }
 
     public bool InstallLecram
     {
         get => Settings.InstallLecram;
-        set { Settings.InstallLecram = value; Save(); }
+        set => SetNrAddon(NrAddon.Lecram, value);
+    }
+
+    public bool AllowSeveralNrAddons
+    {
+        get => Settings.AllowSeveralNrAddons;
+        set
+        {
+            NrAddons.SetAllowSeveral(Settings, value);
+            Save();
+            NotifyNrAddons();
+        }
+    }
+
+    public string? NrAddonWarning => NrAddons.Warning(Settings.InstallRenoDx, Settings.InstallLecram);
+
+    private void SetNrAddon(NrAddon addon, bool on)
+    {
+        NrAddons.SetDefault(Settings, addon, on);
+        Save();
+        NotifyNrAddons();
+    }
+
+    private void NotifyNrAddons()
+    {
+        OnPropertyChanged(nameof(InstallRenoDx));
+        OnPropertyChanged(nameof(InstallUplift));
+        OnPropertyChanged(nameof(InstallLecram));
+        OnPropertyChanged(nameof(AllowSeveralNrAddons));
+        OnPropertyChanged(nameof(NrAddonWarning));
     }
 
     public string DlssNrInfo => Describe(_main.S.Store.DlssNrPath, _main.S.DlssNrSha, true);

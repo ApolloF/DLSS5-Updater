@@ -38,8 +38,9 @@ Settings for all games. Every option has a short explanation, and the help butto
 
 | Component | What it is | Where it comes from |
 |---|---|---|
-| [OptiScaler-NR](https://github.com/ShyVortex/OptiScaler-DLSSNR-PreSR-Multipass) | A fork of OptiScaler that adds DLSS neural rendering (NR). The main install mode. | Downloaded from GitHub. |
-| [OptiScaler](https://github.com/optiscaler/OptiScaler) | Lets a game use DLSS, FSR or XeSS as its upscaler. | Parent project of the fork above. An experimental fork by janblade (OptiScaler F5) can be chosen in Settings. |
+| [OptiScaler F5](https://github.com/janblade/OptiScaler-F5-DLSSNR-Multipass) | janblade's fork of OptiScaler with DLSS neural rendering (NR). The default build for new installs. | Downloaded from GitHub. |
+| [OptiScaler-NR](https://github.com/ShyVortex/OptiScaler-DLSSNR-PreSR-Multipass) | ShyVortex's fork of OptiScaler with DLSS neural rendering. Can be chosen in Settings instead of F5. | Downloaded from GitHub. |
+| [OptiScaler](https://github.com/optiscaler/OptiScaler) | Lets a game use DLSS, FSR or XeSS as its upscaler. | Parent project of the forks above. |
 | [NVIDIA DLSS](https://github.com/NVIDIA/DLSS) | The DLSS runtime files for upscaling, ray reconstruction and frame generation. | Downloaded from NVIDIA's GitHub. |
 | [NVIDIA Streamline](https://github.com/NVIDIA-RTX/Streamline) | The layer between a game and DLSS frame generation. Optional. | Downloaded from NVIDIA's GitHub. |
 | [MFG Unlock](https://github.com/mavismmg/MFGAdaUnlock-RenoDx) | A ReShade add-on that unlocks multi frame generation on RTX 40 cards. | Downloaded from GitHub. |
@@ -49,7 +50,7 @@ Settings for all games. Every option has a short explanation, and the help butto
 | Lecram DLSS5 add-on | A ReShade add-on for neural rendering by Lecram. | You can import it. Newer builds can also be fetched from the author's public download folder. |
 | Deep Fried Chicken | A neural rendering add-on. Its licence allows personal use only. | You import the file yourself. |
 
-The app only replaces files in a game with files from the sources above or files you imported. Which of these you use is up to you. Most people only need OptiScaler-NR or **DLSS only**.
+The app only replaces files in a game with files from the sources above or files you imported. Which of these you use is up to you. Most people only need the OptiScaler mode or **DLSS only**.
 
 ## Requirements
 
@@ -80,7 +81,7 @@ Both versions keep settings and downloads in `%LocalAppData%\DLSS5Updater`, so y
 
 1. Pick a game in the list. The filters at the top (**All**, **DLSS**, **Installed**, **Updates**) help you find games.
 2. Choose how to install:
-   - **OptiScaler-NR** is the default. It installs OptiScaler as a proxy DLL (`dxgi.dll` unless you change it), plus ReShade, MFG Unlock and the DLSS files.
+   - **OptiScaler** is the default (the F5 build unless you pick OptiScaler-NR under **OptiScaler build** in Settings). It installs OptiScaler as a proxy DLL (`dxgi.dll` unless you change it), plus ReShade, MFG Unlock and the DLSS files.
    - **ReShade + add-ons** installs ReShade itself as the proxy, with MFG Unlock and the DLSS and Streamline updates, and without OptiScaler.
    - You can set the default mode in Settings and change it for a single game.
 3. Press **Install**. The button reads **Update** when a newer release is available and **Reinstall** when the game is current.
@@ -151,7 +152,7 @@ Pushing a tag like `v2.0.0` that matches the version in the project file builds 
 
 DLSS5 Updater installs the work of these projects and their authors. It downloads their files as released and does not change them.
 
-- [OptiScaler](https://github.com/optiscaler/OptiScaler) and the [OptiScaler-NR fork](https://github.com/ShyVortex/OptiScaler-DLSSNR-PreSR-Multipass) by ShyVortex.
+- [OptiScaler](https://github.com/optiscaler/OptiScaler), the [OptiScaler F5 fork](https://github.com/janblade/OptiScaler-F5-DLSSNR-Multipass) by janblade and the [OptiScaler-NR fork](https://github.com/ShyVortex/OptiScaler-DLSSNR-PreSR-Multipass) by ShyVortex.
 - [MFG Unlock](https://github.com/mavismmg/MFGAdaUnlock-RenoDx) by mavismmg.
 - [ReShade](https://reshade.me) by crosire.
 - [RenoDX](https://github.com/clshortfuse/renodx) and [openNR](https://github.com/clshortfuse/openNR) by ShortFuse.
