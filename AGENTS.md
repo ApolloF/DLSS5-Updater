@@ -53,7 +53,7 @@ Takes about 40 seconds. `.github/workflows/ci.yml` (job `build-test`, windows-la
 - UI changes are checked in the running app.
 
 ## Git workflow
-- Remote: GitHub ApolloF/dlss5updater.
+- Remote: GitHub ApolloF/DLSS5-Updater.
 - Branch, PR, CI (`build-test`), then merge only when the user says "ship it" (auto-merge, squash).
 - Releases: tag `v<version>` as described in "Release flow"; `release.yml` publishes.
 
