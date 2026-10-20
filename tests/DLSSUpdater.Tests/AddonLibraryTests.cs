@@ -135,6 +135,13 @@ public sealed class AddonLibraryTests : IDisposable
         Assert.Equal("v11.0.0-beta.18", Label(
             "v11.0.0-H\0dlss5-nr11.0.0-beta.18nr_inputs\0v11.0.0-beta.18NR onNR offbytessha256\0" +
             "opens the DLSS 5 NR menu; Shift+key opens ReShade (v11.0.0-beta.18)\0v11.0.0-beta.18\0"));
+        // beta.45 (Patch 10) and beta.48 (Patch 11) dropped the "dlss5-nr11.0.0-beta.NN" description string; the label stays the same.
+        Assert.Equal("v11.0.0-beta.48", Label(
+            "v11.0.0-H\0v11.0.0-beta.48NR onNR offbytessha256Offline St\0" +
+            "opens the DLSS 5 NR menu; Shift+key opens ReShade (v11.0.0-beta.48)\0v11.0.0-beta.48\0"));
+        Assert.Equal("v11.0.0-beta.45", Label(
+            "v11.0.0-H\0v11.0.0-beta.45NR onNR offbytessha256Offline St\0" +
+            "opens the DLSS 5 NR menu; Shift+key opens ReShade (v11.0.0-beta.45)\0v11.0.0-beta.45\0"));
         var build = LecramV11("v11.0.0-beta.22NR on\0v11.0.0-H\0v11.0.0-beta.22\0v11.0.0-beta.22");
         Assert.Equal(LecramGeneration.V11, build.Generation);
         Assert.Equal("v11.0.0-beta.22", build.DetectedLabel);

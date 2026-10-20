@@ -473,12 +473,12 @@ public sealed partial class SettingsViewModel : ObservableObject
         OnPropertyChanged(nameof(HasLecramMessage));
     }
 
-    /// <summary>Hides the options the default Lecram build's generation doesn't have and switches the rest to its values.</summary>
+    /// <summary>Hides the options the default Lecram build doesn't have and switches the rest to its generation's values.</summary>
     public void ApplyLecramGeneration()
     {
-        var generation = _main.S.Store.LecramBuildFor(null)?.Generation;
+        var build = _main.S.Store.LecramBuildFor(null);
         foreach (var o in LecramOptions)
-            o.ApplyGeneration(generation);
+            o.ApplyGeneration(build?.Generation, build?.DetectedLabel);
     }
 
     // ---------- add-on libraries ----------

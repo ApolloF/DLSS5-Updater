@@ -16,20 +16,37 @@ public static class LecramIni
 
     /// <summary>v11 only: v10.7 does not read these.</summary>
     private static readonly HashSet<string> V11Only = new(
-        ["NeuralUplift", "NRPreset", "NRPass2Preset", "NRPass3Preset", "NRPass4Preset", "NRVramBuffering", "NRGpuCrashWitness"],
+        ["NeuralUplift", "NRPreset", "NRPass2Preset", "NRPass3Preset", "NRPass4Preset", "NRVramBuffering", "NRGpuCrashWitness", "NRPresentFgPath"],
         StringComparer.OrdinalIgnoreCase);
+
+    /// <summary>v11 keys that only later builds read, by the first checked build that has them (docs/addons/lecram-dlss5.md).</summary>
+    private static readonly Dictionary<string, string> FirstV11Build = new(StringComparer.OrdinalIgnoreCase)
+    {
+        ["NRGpuCrashWitness"] = "v11.0.0-beta.22",
+        ["NRPass2Preset"] = "v11.0.0-beta.29",
+        ["NRPass3Preset"] = "v11.0.0-beta.29",
+        ["NRPass4Preset"] = "v11.0.0-beta.29",
+        ["NRPresentFgPath"] = "v11.0.0-beta.48",
+    };
 
     public static bool IsLecram(IniOverride o) => o.Section.Trim().Equals(Section, StringComparison.OrdinalIgnoreCase);
 
     public static bool IsForeignNr(IniOverride o) => IsLecram(o) && o.Key.Trim().Equals(ForeignNrKey, StringComparison.OrdinalIgnoreCase);
 
-    /// <summary>False for a key the imported generation doesn't read; everything is available while nothing is imported.</summary>
-    public static bool IsAvailable(string key, LecramGeneration? generation) => generation switch
+    /// <summary>
+    /// False for a key the build doesn't read: the other generation's keys, and v11 keys newer than <paramref name="build"/>
+    /// (its detected label). Everything is available while nothing is imported; a build without a known label gets every v11 key.
+    /// </summary>
+    public static bool IsAvailable(string key, LecramGeneration? generation, string? build = null) => generation switch
     {
         LecramGeneration.V10 => !V11Only.Contains(key),
-        LecramGeneration.V11 => !V10Only.Contains(key),
+        LecramGeneration.V11 => !V10Only.Contains(key) && !OlderThanFirstBuild(key.Trim(), build),
         _ => true,
     };
+
+    private static bool OlderThanFirstBuild(string key, string? build) =>
+        !string.IsNullOrWhiteSpace(build) && FirstV11Build.TryGetValue(key, out var first) &&
+        BuildOrder.Key(build).CompareTo(BuildOrder.Key(first)) < 0;
 
     /// <summary>The 31 model-tuning axes that v11's one-time migration resets to default.</summary>
     public static readonly string[] ModelAxisKeys =

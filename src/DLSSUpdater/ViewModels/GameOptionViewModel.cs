@@ -32,20 +32,20 @@ public sealed partial class GameOptionViewModel : ObservableObject
     private readonly bool _reShade;
     private readonly AppSettings _s;
     private readonly string _gameId;
-    private readonly Func<LecramGeneration?>? _generation;
+    private readonly Func<AddonBuild?>? _lecram;
     private OptionChoice _inherit = null!;
 
-    /// <param name="generation">For Lecram's options: the generation of the build this game uses, which decides availability, hint and choices.</param>
-    public GameOptionViewModel(IniOptionViewModel definition, bool reShade, AppSettings settings, string gameId, Func<LecramGeneration?>? generation = null)
+    /// <param name="lecram">For Lecram's options: the build this game uses, whose generation and label decide availability, hint and choices.</param>
+    public GameOptionViewModel(IniOptionViewModel definition, bool reShade, AppSettings settings, string gameId, Func<AddonBuild?>? lecram = null)
     {
-        _generation = generation;
+        _lecram = lecram;
         _def = definition;
         _reShade = reShade;
         _s = settings;
         _gameId = gameId;
         _def.PropertyChanged += (_, e) =>
         {
-            if (_generation is not null) return;
+            if (_lecram is not null) return;
             if (e.PropertyName == nameof(IniOptionViewModel.IsAvailable)) OnPropertyChanged(nameof(IsAvailable));
             else if (e.PropertyName == nameof(IniOptionViewModel.Hint)) OnPropertyChanged(nameof(Hint));
             else if (e.PropertyName == nameof(IniOptionViewModel.Choices)) Refresh();
@@ -53,11 +53,19 @@ public sealed partial class GameOptionViewModel : ObservableObject
         Rebuild();
     }
 
-    public bool IsAvailable => _generation is null ? _def.IsAvailable : _def.ViewFor(_generation()).IsAvailable;
+    public bool IsAvailable => _lecram is null ? _def.IsAvailable : LecramView.IsAvailable;
 
     public string Label => _def.Label;
-    public string Hint => _generation is null ? _def.Hint : _def.ViewFor(_generation()).Hint;
-    private OptionChoice[] Choices => _generation is null ? _def.Choices : _def.ViewFor(_generation()).Choices;
+    public string Hint => _lecram is null ? _def.Hint : LecramView.Hint;
+    private OptionChoice[] Choices => _lecram is null ? _def.Choices : LecramView.Choices;
+    private (bool IsAvailable, string Hint, OptionChoice[] Choices) LecramView
+    {
+        get
+        {
+            var build = _lecram!();
+            return _def.ViewFor(build?.Generation, build?.DetectedLabel);
+        }
+    }
     public string? Topic => _def.Topic;
     public string Tip => _def.Tip;
 

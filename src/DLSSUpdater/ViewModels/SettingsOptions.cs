@@ -199,12 +199,13 @@ public static partial class SettingsOptions
             C("Inverse", "2", "Undocumented.")).About("rdx-exposure"),
     ];
 
-    // Keys, defaults and ranges from docs/addons/lecram-dlss5.md (v10.7 and v11.0.0-beta.6 / beta.18 / beta.22 / beta.29, read
-    // from the binaries and probed; beta.29 is the supported build). Values the docs don't confirm are not offered. Options of one
-    // generation only are hidden for the other (LecramIni.IsAvailable) and keys whose choices differ per generation carry a variant
-    // (IniOptionViewModel.In). Within v11 only values that mean the same in beta.6 and beta.18+ are offered (NRPresentGuides 0
-    // flipped meaning, so it is not), so no per-build variant is needed; keys an older v11 build lacks (NRPass2..4Preset before
-    // beta.29, NRGpuCrashWitness before beta.22) are ignored there. NRMaskBlendMode (raw NGX value, undocumented) is not offered.
+    // Keys, defaults and ranges from docs/addons/lecram-dlss5.md (v10.7 and v11.0.0-beta.6 / beta.18 / beta.22 / beta.29 / beta.45 /
+    // beta.48, read from the binaries and probed; beta.48, v11 Patch 11, is the supported build). Values the docs don't confirm are
+    // not offered. Options of one generation only are hidden for the other (LecramIni.IsAvailable) and keys whose choices differ per
+    // generation carry a variant (IniOptionViewModel.In). Within v11 only values that mean the same in beta.6 and beta.18+ are offered
+    // (NRPresentGuides 0 flipped meaning, so it is not), so no per-build choice variant is needed; keys an older v11 build lacks
+    // (NRGpuCrashWitness before beta.22, NRPass2..4Preset before beta.29, NRPresentFgPath before beta.48) are hidden and not written
+    // for it. NRMaskBlendMode (raw NGX value, undocumented) is not offered.
     // Not exposed: the other Present/HDR, normalisation, Look, model-lab, layer, per-pass look and screenshot keys, which are tuned
     // in the add-on's own overlay.
     public static IniOptionViewModel[] Lecram(ObservableCollection<IniOverride> rs) =>
@@ -282,8 +283,8 @@ public static partial class SettingsOptions
         new IniOptionViewModel("Preset", "Which model inside nvngx_dlssnr.dll (v11 and newer).", LecramIni.Section, "NRPreset", rs,
             C("Add-on default", null, "Leave the add-on's own choice (0)."),
             C("Default", "0", "The DLL's shipping default."),
-            C("Preset 1", "1", "DLL 310.9.16: honest_tench, the model the model lab edits."),
-            C("Preset 2", "2", "DLL 310.9.16: the small FP8 model.")).About("lc-preset"),
+            C("Old (preset 1)", "1", "DLL 310.9.16: honest_tench, the first model and the one the model lab edits. The add-on calls it Old from beta.45 on."),
+            C("New (preset 2)", "2", "DLL 310.9.16: the small FP8 model, newer and faster. The add-on calls it New from beta.45 on.")).About("lc-preset"),
         LecramPassPreset(2, rs), LecramPassPreset(3, rs), LecramPassPreset(4, rs),
         new IniOptionViewModel("VRAM buffering", "How much video memory the model keeps in reserve (v11 and newer).", LecramIni.Section, "NRVramBuffering", rs,
             C("Add-on default", null, "Leave the add-on's own choice (0, Full)."),
@@ -302,6 +303,10 @@ public static partial class SettingsOptions
                 C("Add-on default", null, "Leave the add-on's own choice (beta.18+: Always on; beta.6: DLSS frames)."),
                 C("DLSS frames only", "1", "Only the game's DLSS frames."),
                 C("Always on", "2", "Also menus, loading and pause screens, with neutral guides where the game gives none.")),
+        new IniOptionViewModel("Present with frame generation", "Test option (v11 beta.48 and newer): how NR runs at Present under frame generation.", LecramIni.Section, "NRPresentFgPath", rs,
+            C("Add-on default", null, "Leave the add-on's own choice (0, the usual path)."),
+            C("Usual path", "0", "The add-on's default."),
+            C("Real frames only (test)", "1", "NR runs once per real frame at frame generation's call and never again on the final frame. Try it if NR blinks at Present with frame generation (ROUTE-02).")).About("lc-fg-path"),
         new IniOptionViewModel("HDR brightness source", "Where the model takes an HDR frame's brightness from.", LecramIni.Section, "NRFeedMode", rs,
             C("Add-on default", null, "Leave the add-on's own choice (0, Auto; in v11 beta.18+ the game's exposure when the game hands DLSS one, else NR's own meter)."),
             C("Frame meter", "1", "NR measures the frame itself (v10.7: v1 frame meter)."),
@@ -332,8 +337,8 @@ public static partial class SettingsOptions
         new IniOptionViewModel($"Pass {pass} preset", $"Model for pass {pass} alone (v11 beta.29 and newer; needs Passes {pass} or more).", LecramIni.Section, $"NRPass{pass}Preset", rs,
             C("Add-on default", null, "Leave the add-on's own choice (0, same as pass 1)."),
             C("Same as pass 1", "0", "The model pass 1 runs."),
-            C("Preset 1", "1", "DLL 310.9.16: honest_tench, the model the model lab edits."),
-            C("Preset 2", "2", "DLL 310.9.16: the small FP8 model.")).About("lc-pass-preset");
+            C("Old (preset 1)", "1", "DLL 310.9.16: honest_tench, the first model and the one the model lab edits."),
+            C("New (preset 2)", "2", "DLL 310.9.16: the small FP8 model, newer and faster.")).About("lc-pass-preset");
 
     public static IniOptionViewModel[] Nr(ObservableCollection<IniOverride> o) =>
     [

@@ -264,7 +264,7 @@ public sealed class Installer(ComponentStore store)
                 if (reshade is not null)
                 {
                     WriteReShadeIni(ctx, o, addonEffects: uplift is not null || (dfc is not null && store.DfcInstallFiles().Any(f => f.StartsWith(ComponentStore.DfcShaderDir + "\\", StringComparison.OrdinalIgnoreCase))),
-                        lecramGen: lecram?.Build.Generation);
+                        lecram: lecram?.Build);
                     // ReShade-only: ReShade itself is the proxy the game loads; otherwise OptiScaler loads ReShade64.dll.
                     Place(ctx, reshade, Path.Combine(targetDir, o.ReShadeOnly ? o.Proxy : ComponentStore.ReShadeFile));
                     if (o.ReShadeOnly)
@@ -435,16 +435,18 @@ public sealed class Installer(ComponentStore store)
     /// ReShade.ini sits next to ReShade64.dll. ReShade's own settings stay; fresh mode clears the installed
     /// add-ons' sections before applying our profile. Otherwise user edits are kept unless overwrite is selected.
     /// <paramref name="addonEffects"/>: Add-on effects go to reshade-shaders\Shaders, which EffectSearchPaths must cover.
+    /// <paramref name="lecram"/>: the Lecram build installed; Lecram keys it doesn't read are left out.
     /// </summary>
-    private static void WriteReShadeIni(Ctx ctx, InstallOptions o, bool addonEffects, LecramGeneration? lecramGen)
+    private static void WriteReShadeIni(Ctx ctx, InstallOptions o, bool addonEffects, AddonBuild? lecram)
     {
+        var lecramGen = lecram?.Generation;
         var path = Path.Combine(ctx.Target, "ReShade.ini");
         var rel = ctx.Rel(path);
         var exists = File.Exists(path);
         var original = exists ? File.ReadAllText(path) : null;
         var profile = o.ReShadeOverrides
             .Where(x => o.RenoDx || !RenoDxIni.IsRenoDx(x))
-            .Where(x => o.Lecram || !LecramIni.IsLecram(x))
+            .Where(x => !LecramIni.IsLecram(x) || o.Lecram && LecramIni.IsAvailable(x.Key.Trim(), lecramGen, lecram?.DetectedLabel))
             .Where(x => o.Uplift || !UpliftConfig.IsUplift(x))
             .Where(x => !DfcConfig.IsDfc(x)).ToList();
         // Without a version marker, NeuralUplift makes v11 treat even a fresh profile as v10 and reset its hook point.
@@ -489,6 +491,8 @@ public sealed class Installer(ComponentStore store)
         }
         // The section also held keys of a different add-on that older versions of this app wrote; Lecram's own keys stay.
         hadStale |= !o.Lecram && DropWrittenKeys(cleaned, ctx.M.ReShadeIni, LecramIni.Section);
+        // A key written for a newer Lecram build goes when the game switches to a build that doesn't read it.
+        hadStale |= o.Lecram && DropWrittenKeys(cleaned, ctx.M.ReShadeIni, LecramIni.Section, k => !LecramIni.IsAvailable(k, lecramGen, lecram?.DetectedLabel));
         hadStale |= !o.Uplift && DropWrittenKeys(cleaned, ctx.M.ReShadeIni, UpliftConfig.Section);
         // Uplift saves Enabled=0 itself; until we have written Enabled once, that is its default, not the user's choice.
         if (o.Uplift && !ctx.M.ReShadeIni.ContainsKey($"{UpliftConfig.Section}/Enabled"))
