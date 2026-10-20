@@ -26,6 +26,7 @@ public sealed partial class OnboardingViewModel : ObservableObject
 {
     private readonly AppSettings _settings;
     private readonly NrAddon? _initialAddon;
+    private readonly int _initialKeep;
 
     public OnboardingViewModel(AppSettings settings)
     {
@@ -39,6 +40,8 @@ public sealed partial class OnboardingViewModel : ObservableObject
         _autoInstallAppUpdates = settings.AutoInstallAppUpdates;
         _autoDownloadReShade = settings.AutoDownloadReShade;
         _autoDownloadLecram = settings.AutoDownloadLecram;
+        _autoCleanBuilds = settings.AutoCleanBuilds;
+        _keepBuilds = _initialKeep = settings.KeepBuildsFor(LibraryKind.OptiScaler);
     }
 
     /// <summary>Shown by itself on a fresh install only; the demo shows it only with DLSSU_DEMO_ONBOARDING=1.</summary>
@@ -112,6 +115,12 @@ public sealed partial class OnboardingViewModel : ObservableObject
     [ObservableProperty] private bool _autoInstallAppUpdates;
     [ObservableProperty] private bool _autoDownloadReShade;
     [ObservableProperty] private bool _autoDownloadLecram;
+    [ObservableProperty] private bool _autoCleanBuilds;
+
+    /// <summary>How many newest builds each library keeps. Starts at the OptiScaler library's; written to every library only when changed.</summary>
+    [ObservableProperty] private int _keepBuilds;
+
+    public static IReadOnlyList<int> KeepChoices => LibraryRowViewModel.KeepChoices;
 
     // ---------- navigation ----------
 
@@ -142,6 +151,9 @@ public sealed partial class OnboardingViewModel : ObservableObject
         s.AutoInstallAppUpdates = AutoInstallAppUpdates;
         s.AutoDownloadReShade = AutoDownloadReShade;
         s.AutoDownloadLecram = AutoDownloadLecram;
+        s.AutoCleanBuilds = AutoCleanBuilds;
+        if (KeepBuilds != _initialKeep)
+            foreach (var kind in Enum.GetValues<LibraryKind>()) s.KeepBuilds[kind.ToString()] = KeepBuilds;
         return new OnboardingResult(true, build);
     }
 

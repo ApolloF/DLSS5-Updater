@@ -151,6 +151,19 @@
                                     <TextBlock Text="Looks at Lecram's public MediaFire channel during update checks and adds new v11 builds to the library." Style="{StaticResource MutedText}" FontSize="12" TextWrapping="Wrap" Margin="0,2,0,0" />
                                 </StackPanel>
                             </CheckBox>
+                            <TextBlock Text="DISK SPACE" Style="{StaticResource Caps}" Margin="0,14,0,4" />
+                            <CheckBox IsChecked="{Binding AutoCleanBuilds}" Margin="0,6" AutomationProperties.Name="Delete old downloads automatically after each download">
+                                <StackPanel>
+                                    <TextBlock Text="Delete old downloads automatically after each download" TextWrapping="Wrap" />
+                                    <TextBlock Text="Imported builds always stay, and so do defaults and builds a game uses." Style="{StaticResource MutedText}" FontSize="12" TextWrapping="Wrap" Margin="0,2,0,0" />
+                                </StackPanel>
+                            </CheckBox>
+                            <StackPanel Orientation="Horizontal" Margin="40,6,0,0">
+                                <TextBlock Text="Keep newest" VerticalAlignment="Center" Margin="0,0,8,0" />
+                                <ComboBox x:Name="KeepBox" Width="64" ItemsSource="{Binding KeepChoices}" SelectedItem="{Binding KeepBuilds}"
+                                          AutomationProperties.Name="Keep this many newest builds of each library" />
+                                <TextBlock Text="builds of each library" VerticalAlignment="Center" Margin="8,0,0,0" />
+                            </StackPanel>
                         </StackPanel>
 
                         <!-- 4: done -->
@@ -158,7 +171,7 @@
                             <TextBlock TextWrapping="Wrap" LineHeight="19"
                                        Text="That's it. Pick a game on the left and press Install." />
                             <TextBlock TextWrapping="Wrap" LineHeight="19" Margin="0,10,0,0" Foreground="{StaticResource Muted}"
-                                       Text="Settings holds the defaults you just chose, the info buttons explain each option, and every game has its own options on its Install and Config tabs. Settings → General → Run setup again brings this back." />
+                                       Text="Settings holds the defaults you just chose, the info buttons explain each option, and every game has its own options on its Install and Game config tabs. Settings → General → Run setup again brings this back." />
                         </StackPanel>
                     </Grid>
                 </ScrollViewer>

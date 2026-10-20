@@ -79,6 +79,8 @@ public sealed class OnboardingTests : IDisposable
         setup.Addon = OnboardingViewModel.Addons[2];
         setup.CheckAppUpdates = false;
         setup.AutoDownloadReShade = false;
+        setup.AutoCleanBuilds = true;
+        setup.KeepBuilds = 7;
 
         setup.SkipCommand.Execute(null);
 
@@ -113,6 +115,7 @@ public sealed class OnboardingTests : IDisposable
         Assert.False(setup.AutoInstallAppUpdates);
         Assert.True(setup.AutoDownloadReShade);
         Assert.True(setup.AutoDownloadLecram);
+        Assert.False(setup.AutoCleanBuilds);
     }
 
     [Fact]
@@ -200,6 +203,29 @@ public sealed class OnboardingTests : IDisposable
         Assert.False(s.AutoDownloadReShade);
         Assert.False(s.AutoDownloadLecram);
         Assert.True(AppSettings.Load().AutoInstallAppUpdates);
+    }
+
+    [Fact]
+    public void CleanupChoices_AreWritten_KeepToEveryLibrary()
+    {
+        var s = new AppSettings();
+        var setup = new OnboardingViewModel(s);
+        Assert.False(setup.AutoCleanBuilds);
+        Assert.Equal(BuildCleanup.DefaultKeep, setup.KeepBuilds);
+        setup.AutoCleanBuilds = true;
+        setup.KeepBuilds = 4;
+        setup.Finish();
+        Assert.True(s.AutoCleanBuilds);
+        Assert.All(Enum.GetValues<LibraryKind>(), k => Assert.Equal(4, s.KeepBuildsFor(k)));
+    }
+
+    [Fact]
+    public void UnchangedKeep_LeavesPerLibraryCountsAlone()
+    {
+        var s = new AppSettings { KeepBuilds = { [nameof(LibraryKind.Lecram)] = 5 } };
+        new OnboardingViewModel(s).Finish();
+        Assert.Equal(5, s.KeepBuildsFor(LibraryKind.Lecram));
+        Assert.Single(s.KeepBuilds);
     }
 
     [Fact]

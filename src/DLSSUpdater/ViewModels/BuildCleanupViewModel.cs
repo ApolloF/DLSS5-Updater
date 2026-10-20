@@ -36,6 +36,9 @@ public sealed partial class LibraryRowViewModel : ObservableObject
             _changed();
         }
     }
+
+    /// <summary>The first-run setup changed the setting: show it.</summary>
+    public void SettingsChanged() => OnPropertyChanged(nameof(Keep));
 }
 
 /// <summary>
@@ -69,6 +72,14 @@ public sealed partial class BuildCleanupViewModel : ObservableObject
             _main.S.Settings.Save();
             OnPropertyChanged();
         }
+    }
+
+    /// <summary>The first-run setup changed these settings: show them and measure again.</summary>
+    public void SettingsChanged()
+    {
+        OnPropertyChanged(nameof(AutoClean));
+        foreach (var row in Rows) row.SettingsChanged();
+        _ = RefreshAsync();
     }
 
     [ObservableProperty] private string _freeable = "";

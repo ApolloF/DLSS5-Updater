@@ -36,7 +36,8 @@ public partial class OnboardingView : UserControl
 
     private void OnPreviewKeyDown(object sender, KeyEventArgs e)
     {
-        if (Vm is not { } vm) return;
+        // An open dropdown keeps Esc and Enter for itself.
+        if (Vm is not { } vm || KeepBox.IsDropDownOpen) return;
         if (e.Key == Key.Escape)
         {
             if (vm.IsLast) vm.Finish();

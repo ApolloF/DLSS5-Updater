@@ -615,6 +615,7 @@ public sealed partial class SettingsViewModel : ObservableObject
         Lecram.Reload();
         _ = RefreshReShadeAsync();
         _main.SelfUpdate.SettingsChanged();
+        Cleanup.SettingsChanged();
     }
 
     /// <summary>Writes the override lists back to settings (called when the panel closes).</summary>
