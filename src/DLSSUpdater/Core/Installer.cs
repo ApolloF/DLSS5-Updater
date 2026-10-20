@@ -208,10 +208,7 @@ public sealed class Installer(ComponentStore store)
         if (o.Uplift && o.Proxy is "opengl32.dll" && FileUtil.ReadVersion(reshade!) < new Version(6, 8))
             throw new InvalidOperationException("GITC Uplift on OpenGL needs ReShade 6.8 or newer.");
         if (store.SfLecramMessage(o.RenoDx, o.Lecram, renoDx?.Build.Id, lecram?.Build.Id) is { } compat)
-        {
-            if (store.PairTestFor(renoDx?.Build.Id, lecram?.Build.Id)?.Status == AddonPairStatus.Crashed) Log.Warn($"{game.Name}: {compat}");
-            else Log.Info($"{game.Name}: {compat}");
-        }
+            Log.Warn($"{game.Name}: {compat}");
 
         progress?.Report(new TransferProgress($"Installing to {game.Name}", null));
         // An unreadable or unsafe record stops the install instead of starting over and burying the originals.

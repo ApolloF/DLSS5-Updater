@@ -11,6 +11,8 @@ public enum RowState { None, Current, Update, Missing }
 public sealed partial class ComponentRow(string key, string initialName) : ObservableObject
 {
     public string Key { get; } = key;
+    /// <summary>The topic behind the row's ⓘ button.</summary>
+    public string HelpTopic { get; } = HelpTopics.ForComponent(key);
     /// <summary>The OptiScaler row is renamed to the build it shows.</summary>
     [ObservableProperty] private string _name = initialName;
     [ObservableProperty] private bool _enabled = true;
@@ -93,14 +95,19 @@ public sealed partial class GameViewModel : ObservableObject
             {
                 Components.First(r => r.Key == "dlssnr").Enabled = true;
                 Components.First(r => r.Key == "reshade").Enabled = true;
-                // One NR provider per game; ShortFuse's and Lecram's add-ons are the pair that can run together.
-                foreach (var other in Components.Where(r => r.Key is "renodx" or "lecram" or "dfc" or "uplift" && r.Key != c.Key && (c.Key is "dfc" or "uplift" || r.Key is "dfc" or "uplift")))
-                    other.Enabled = false;
+                // One NR add-on per game unless Settings allows several; loading shows what is installed as it is.
+                if (!_loading)
+                {
+                    var enabled = Components.Where(r => r.Enabled && AddonOf(r.Key) is not null).Select(r => AddonOf(r.Key)!.Value);
+                    foreach (var other in NrAddons.ToSwitchOff(AddonOf(c.Key)!.Value, enabled, _s.Settings.AllowSeveralNrAddons))
+                        Components.First(r => AddonOf(r.Key) == other).Enabled = false;
+                }
             }
             OnPropertyChanged(nameof(AnyEnabled));
             OnPropertyChanged(nameof(RenoDxEnabled));
             OnPropertyChanged(nameof(LecramEnabled));
             OnPropertyChanged(nameof(BothAddonsEnabled));
+            OnPropertyChanged(nameof(NrAddonWarning));
             RefreshAddonPairStatus();
             NotifyDfcHint();
             RefreshModPick();
@@ -192,6 +199,16 @@ public sealed partial class GameViewModel : ObservableObject
     public bool RenoDxEnabled => On("renodx");
     public bool LecramEnabled => On("lecram");
     public bool BothAddonsEnabled => RenoDxEnabled && LecramEnabled;
+    public string? NrAddonWarning => NrAddons.Warning(RenoDxEnabled, LecramEnabled);
+
+    private static NrAddon? AddonOf(string key) => key switch
+    {
+        "renodx" => NrAddon.RenoDx,
+        "lecram" => NrAddon.Lecram,
+        "uplift" => NrAddon.Uplift,
+        "dfc" => NrAddon.Dfc,
+        _ => null,
+    };
 
     public string? SfLecramMessage => _s.Store.SfLecramMessage(RenoDxEnabled, LecramEnabled, EffectiveRenoDxId, EffectiveLecramId);
     public bool HasSfLecramMessage => SfLecramMessage is not null;
