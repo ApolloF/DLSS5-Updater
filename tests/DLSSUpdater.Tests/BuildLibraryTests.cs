@@ -321,6 +321,119 @@ public sealed class BuildLibraryTests : IDisposable
         Assert.Equal([ids[1], ids[4]], _store.CleanupCandidates(LibraryKind.Lecram, _settings, records).Select(b => b.Id));
     }
 
+    private static Dictionary<string, string> Names(params (string Key, string Name)[] names) =>
+        names.ToDictionary(n => n.Key, n => n.Name, StringComparer.OrdinalIgnoreCase);
+
+    private static IEnumerable<string> ReasonsOf(LibraryKeepNote note, string id) =>
+        note.Kept.Single(k => k.Build.Id == id).Reasons;
+
+    [Fact]
+    public void Keep_note_names_the_game_for_picks_and_installs_and_the_default()
+    {
+        foreach (var t in new[] { "v0.9.51", "v0.9.49", "v0.9.47", "v0.9.45", "v0.9.43" }) Release(Component.OptiScaler, t, t);
+        _settings.OptiTag = "v0.9.43";
+        _settings.For(@"c:\games\hollow tide").OptiTag = "v0.9.45";
+        InstallManifest[] records =
+        [
+            new() { Opti = true, OptiTag = "v0.9.47", Dir = @"C:\Games\Cyberpunk\bin" },
+            new() { Opti = true, OptiTag = "v0.9.47", Dir = @"D:\Gone\Elsewhere\bin", RootRel = ".." },
+        ];
+        var names = Names((@"c:\games\hollow tide", "Hollow Tide"), (@"C:\Games\Cyberpunk\bin", "Cyberpunk 2077"));
+
+        var note = _store.KeepNote(LibraryKind.OptiScaler, _settings, records, names);
+
+        Assert.Equal(["v0.9.47", "v0.9.45", "v0.9.43"], note.Kept.Select(k => k.Build.Id));
+        Assert.Equal(["installed in Cyberpunk 2077", "installed in Elsewhere"], ReasonsOf(note, "v0.9.47"));
+        Assert.Equal(["picked for Hollow Tide"], ReasonsOf(note, "v0.9.45"));
+        Assert.Equal(["default"], ReasonsOf(note, "v0.9.43"));
+        Assert.Equal("3 kept: installed in Cyberpunk 2077, installed in Elsewhere and 2 more", note.Line);
+        Assert.Contains("OptiScaler-NR v0.9.45: picked for Hollow Tide", note.Details);
+        Assert.Equal(_store.ProtectedBuilds(LibraryKind.OptiScaler, _settings, records), note.Kept.Select(k => k.Build.Id).ToHashSet());
+    }
+
+    [Fact]
+    public void Keep_note_shows_the_default_with_its_version_and_a_game_without_a_listing_by_its_folder()
+    {
+        foreach (var t in new[] { "v0.9.51", "v0.9.49", "v0.9.47" }) Release(Component.OptiScaler, t, t);
+        _settings.OptiTag = "v0.9.47";
+        _settings.For(@"c:\games\hollow tide").OptiTag = "v0.9.47";
+
+        var note = _store.KeepNote(LibraryKind.OptiScaler, _settings, [], null);
+
+        Assert.Equal("1 kept: default (v0.9.47), picked for hollow tide", note.Line);
+    }
+
+    [Fact]
+    public void Keep_note_counts_optiscaler_builds_per_source_and_stays_quiet_inside_the_keep_count()
+    {
+        foreach (var t in new[] { "v0.9.51", "v0.9.49" }) Release(Component.OptiScaler, t, t);
+        Release(Component.OptiScaler, "v0.1.32-f5", "F");
+
+        var note = _store.KeepNote(LibraryKind.OptiScaler, _settings, [], null);
+
+        Assert.Empty(note.Kept);
+        Assert.Equal("OptiScaler-NR 2, OptiScaler F5 1", note.PerSource);
+        Assert.Equal("per source: OptiScaler-NR 2, OptiScaler F5 1", note.Line);
+        Assert.Null(note.Details);
+
+        _settings.KeepBuilds[nameof(LibraryKind.OptiScaler)] = 3;
+        Assert.Null(_store.KeepNote(LibraryKind.OptiScaler, _settings, [], null).Line);
+        Assert.Null(_store.KeepNote(LibraryKind.Uplift, _settings, [], null).Line);
+    }
+
+    [Fact]
+    public void Keep_note_explains_nr_runtimes_to_switch_back_to_and_picks()
+    {
+        var ids = Enumerable.Range(0, 5).Select(i => (Id: new string((char)('a' + i), 64), Version: $"310.{9 - i}.0")).ToList();
+        foreach (var (id, version) in ids)
+        {
+            Write(Path.Combine(AppPaths.Components, "dlssnr", id, ComponentStore.DlssNrFile), id);
+            Write(Path.Combine(AppPaths.Components, "dlssnr", id, "version.json"), JsonSerializer.Serialize(new NrVersion(id, version, id), JsonCtx.Default.NrVersion));
+        }
+        _settings.DlssNrId = ids[0].Id;
+        _settings.PreviousDlssNrId = ids[2].Id;
+        _settings.For(@"c:\games\g").DlssNrId = ids[3].Id;
+        InstallManifest[] records = [new() { DlssNr = true, DlssNrId = ids[0].Id, PreviousDlssNrId = ids[4].Id, Dir = @"C:\Games\G\bin" }];
+
+        var note = _store.KeepNote(LibraryKind.DlssNr, _settings, records, null);
+
+        Assert.Equal([ids[2].Id, ids[3].Id, ids[4].Id], note.Kept.Select(k => k.Build.Id));
+        Assert.Equal(["NR runtime to switch back to"], ReasonsOf(note, ids[2].Id));
+        Assert.Equal(["picked for g"], ReasonsOf(note, ids[3].Id));
+        Assert.Equal(["NR runtime to switch back to"], ReasonsOf(note, ids[4].Id));
+        Assert.Equal("3 kept: NR runtime to switch back to, picked for g", note.Line);
+    }
+
+    [Fact]
+    public void Keep_note_treats_the_newest_lecram_build_as_the_default_and_names_the_last_download()
+    {
+        string[] ids = [new('1', 64), new('2', 64), new('3', 64), new('4', 64)];
+        for (var i = 0; i < ids.Length; i++)
+        {
+            var build = new AddonBuild(ids[i], ComponentStore.Lecram11File, "", LecramGeneration.V11, $"v11.0.{9 - i}", null, DateTime.UtcNow);
+            Write(Path.Combine(AppPaths.Components, "lecram-dlss5", ids[i], ComponentStore.Lecram11File), ids[i]);
+            Write(Path.Combine(AppPaths.Components, "lecram-dlss5", ids[i], "version.json"), JsonSerializer.Serialize(build, JsonCtx.Default.AddonBuild));
+        }
+        _settings.LecramId = null;
+        _settings.LecramLastBuildId = ids[3];
+
+        var note = _store.KeepNote(LibraryKind.Lecram, _settings, [], null);
+
+        Assert.Equal([ids[3]], note.Kept.Select(k => k.Build.Id));
+        Assert.Equal(["last downloaded Lecram build"], ReasonsOf(note, ids[3]));
+        Assert.Contains(_store.ProtectionReasons(LibraryKind.Lecram, _settings, [], null), p => p.Id == ids[0] && p.Reason == "default");
+    }
+
+    [Fact]
+    public void Nothing_to_clean_up_says_why_only_when_protected_builds_are_kept()
+    {
+        var none = new LibraryKeepNote([], null);
+        var kept = new LibraryKeepNote([new KeptBuild(Build("x"), ["default"])], null);
+
+        Assert.Equal("Nothing to clean up.", BuildCleanup.NothingToCleanText([none, none]));
+        Assert.Equal("Nothing to clean up: the rest are defaults or used by games.", BuildCleanup.NothingToCleanText([none, kept]));
+    }
+
     [Fact]
     public void Stale_downloads_keep_current_chosen_installed_and_imported_releases()
     {
@@ -438,7 +551,7 @@ public sealed class BuildLibraryTests : IDisposable
         var game = GameWithRecord("usb-serial", new InstallManifest { DlssNr = true, DlssNrId = ids[4] });
         uint? serial = 42;
         var first = KnownInstalls.Gather([game], InstallManifest.Read, (d, s) => KnownInstalls.Probe(d, s, _ => serial), volumeSerial: _ => serial);
-        Assert.Single(first.Records);
+        Assert.Equal(FileUtil.Normalize(game), first.Records.Single().Dir);
         Assert.Matches(@"""VolumeSerial"":\s*42", File.ReadAllText(KnownInstalls.FilePath));
 
         // The same drive letter now belongs to another device: the folder is missing, but its volume isn't the remembered one.
@@ -446,6 +559,7 @@ public sealed class BuildLibraryTests : IDisposable
         serial = 99;
         var other = KnownInstalls.Gather([], InstallManifest.Read, (d, s) => KnownInstalls.Probe(d, s, _ => serial), volumeSerial: _ => serial);
         Assert.Equal(1, other.Unreachable);
+        Assert.Equal(FileUtil.Normalize(game), other.Records.Single().Dir);
         Assert.Contains(LibraryKind.DlssNr, other.Unsure);
         Assert.Matches(@"""VolumeSerial"":\s*42", File.ReadAllText(KnownInstalls.FilePath));
 

@@ -64,6 +64,39 @@ public static partial class BuildOrder
 /// <summary>Something the cleanup would delete, with its size on disk.</summary>
 public sealed record CleanupItem(string What, string Path, long Bytes);
 
+/// <summary>A build the keep count would drop that stays anyway, with every reason (see <see cref="ComponentStore.ProtectionReasons"/>).</summary>
+public sealed record KeptBuild(LibraryBuild Build, IReadOnlyList<string> Reasons);
+
+/// <summary>
+/// Why a library holds more builds than its keep count, for the cleanup area of Settings: the protected builds beyond
+/// the newest ones, and for OptiScaler the count per source (each source keeps its own newest, so 3 builds can be all kept).
+/// </summary>
+public sealed record LibraryKeepNote(IReadOnlyList<KeptBuild> Kept, string? PerSource)
+{
+    private const int ShownReasons = 2;
+
+    /// <summary>One short line, or null when nothing needs explaining.</summary>
+    public string? Line
+    {
+        get
+        {
+            var parts = new List<string>();
+            if (Kept.Count > 0)
+            {
+                var reasons = Kept.SelectMany(k => k.Reasons.Select(r => r == "default" ? $"default ({k.Build.Version})" : r)).Distinct().ToList();
+                var more = reasons.Count > ShownReasons ? $" and {reasons.Count - ShownReasons} more" : "";
+                parts.Add($"{Kept.Count} kept: {string.Join(", ", reasons.Take(ShownReasons))}{more}");
+            }
+            if (PerSource is not null) parts.Add($"per source: {PerSource}");
+            return parts.Count == 0 ? null : string.Join("  ·  ", parts);
+        }
+    }
+
+    /// <summary>Every kept build with all its reasons, one per line; null when none is kept.</summary>
+    public string? Details => Kept.Count == 0 ? null
+        : string.Join(Environment.NewLine, Kept.Select(k => $"{k.Build.Label}: {string.Join(", ", k.Reasons)}"));
+}
+
 /// <summary>Which builds the cleanup removes. Pure: what to protect is collected by <see cref="ComponentStore.ProtectedBuilds"/>.</summary>
 public static class BuildCleanup
 {
@@ -74,18 +107,26 @@ public static class BuildCleanup
     /// The builds of <paramref name="newestFirst"/> beyond the newest <paramref name="keep"/> of their group (at least one),
     /// minus every protected id.
     /// </summary>
-    public static List<LibraryBuild> Select(IEnumerable<LibraryBuild> newestFirst, int keep, IReadOnlySet<string> protectedIds)
+    public static List<LibraryBuild> Select(IEnumerable<LibraryBuild> newestFirst, int keep, IReadOnlySet<string> protectedIds) =>
+        BeyondKeep(newestFirst, keep).Where(b => !protectedIds.Contains(b.Id)).ToList();
+
+    /// <summary>The builds of <paramref name="newestFirst"/> beyond the newest <paramref name="keep"/> of their group (at least one).</summary>
+    public static List<LibraryBuild> BeyondKeep(IEnumerable<LibraryBuild> newestFirst, int keep)
     {
         keep = Math.Clamp(keep, 1, MaxKeep);
         var seen = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
-        var delete = new List<LibraryBuild>();
+        var beyond = new List<LibraryBuild>();
         foreach (var b in newestFirst)
         {
             var n = seen[b.Group] = seen.GetValueOrDefault(b.Group) + 1;
-            if (n > keep && !protectedIds.Contains(b.Id)) delete.Add(b);
+            if (n > keep) beyond.Add(b);
         }
-        return delete;
+        return beyond;
     }
+
+    /// <summary>The status when a cleanup would delete nothing; says so when protected builds are why libraries hold more than the keep count.</summary>
+    public static string NothingToCleanText(IEnumerable<LibraryKeepNote> notes) =>
+        notes.Any(n => n.Kept.Count > 0) ? "Nothing to clean up: the rest are defaults or used by games." : "Nothing to clean up.";
 
     /// <summary>Bytes of every file under <paramref name="path"/>; links are not followed, unreadable parts count as zero.</summary>
     public static long SizeOf(string path)
@@ -243,56 +284,103 @@ public sealed partial class ComponentStore
     /// Builds of <paramref name="kind"/> the cleanup must keep: the default and every game's own pick, what any game has
     /// installed, the NR runtime a game or the default can switch back to, and Lecram's last downloaded build.
     /// </summary>
-    public HashSet<string> ProtectedBuilds(LibraryKind kind, AppSettings s, IEnumerable<InstallManifest> manifests)
+    public HashSet<string> ProtectedBuilds(LibraryKind kind, AppSettings s, IEnumerable<InstallManifest> manifests) =>
+        ProtectionReasons(kind, s, manifests, null).Select(p => p.Id).ToHashSet(StringComparer.OrdinalIgnoreCase);
+
+    /// <summary>
+    /// The one source of what <see cref="ProtectedBuilds"/> keeps: each (build id, reason) pair, a build once per reason.
+    /// <paramref name="gameNames"/> maps game ids and install folders to the names the game list shows; a game without an
+    /// entry is named by its folder.
+    /// </summary>
+    public IEnumerable<(string Id, string Reason)> ProtectionReasons(LibraryKind kind, AppSettings s, IEnumerable<InstallManifest> manifests,
+        IReadOnlyDictionary<string, string>? gameNames)
     {
-        var ids = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-        void Add(string? id)
+        var found = new List<(string Id, string Reason)>();
+        void Add(string? id, string reason)
         {
-            if (!string.IsNullOrEmpty(id)) ids.Add(id);
+            if (!string.IsNullOrEmpty(id) && !found.Any(f => f.Id.Equals(id, StringComparison.OrdinalIgnoreCase) && f.Reason == reason)) found.Add((id, reason));
         }
-        var games = s.Games.Values;
+        const string Default = "default", SwitchBack = "NR runtime to switch back to";
+        string PickedFor(string gameId) => "picked for " + GameName(gameNames, gameId, gameId);
+        string InstalledIn(InstallManifest m) => "installed in " + (m.Dir is null ? "a game" : GameName(gameNames, m.Dir, GameFolder(m)));
         var installed = manifests.ToList();
         switch (kind)
         {
             case LibraryKind.OptiScaler:
-                Add(s.OptiTag);
-                Add(Opti?.Tag);
-                foreach (var g in games) Add(g.OptiTag);
-                foreach (var m in installed) Add(m.OptiTag);
+                Add(s.OptiTag, Default);
+                Add(Opti?.Tag, "latest release");
+                foreach (var (id, g) in s.Games) Add(g.OptiTag, PickedFor(id));
+                foreach (var m in installed) Add(m.OptiTag, InstalledIn(m));
                 break;
             case LibraryKind.Uplift:
-                Add(s.UpliftTag);
-                Add(Uplift?.Tag);
-                foreach (var g in games) Add(g.UpliftTag);
-                foreach (var m in installed) Add(m.UpliftTag);
+                Add(s.UpliftTag, Default);
+                Add(Uplift?.Tag, "latest release");
+                foreach (var (id, g) in s.Games) Add(g.UpliftTag, PickedFor(id));
+                foreach (var m in installed) Add(m.UpliftTag, InstalledIn(m));
                 break;
             case LibraryKind.RenoDx:
             case LibraryKind.Lecram:
                 var addon = kind == LibraryKind.RenoDx ? AddonKind.RenoDx : AddonKind.Lecram;
-                Add(s.AddonId(addon));
-                Add(AddonBuildFor(addon, null)?.Id);
-                foreach (var g in games) Add(addon == AddonKind.RenoDx ? g.RenoDxId : g.LecramId);
+                Add(s.AddonId(addon), Default);
+                // Without a chosen default the newest build is the default.
+                Add(AddonBuildFor(addon, null)?.Id, Default);
+                foreach (var (id, g) in s.Games) Add(addon == AddonKind.RenoDx ? g.RenoDxId : g.LecramId, PickedFor(id));
                 foreach (var m in installed)
                 {
                     var (id, tag) = addon == AddonKind.RenoDx ? (m.RenoDxId, m.RenoDxTag) : (m.LecramId, m.LecramTag);
                     // Records from before the library only carry the tag.
-                    foreach (var b in AddonBuilds(addon).Where(b => b.Matches(id, tag))) Add(b.Id);
+                    foreach (var b in AddonBuilds(addon).Where(b => b.Matches(id, tag))) Add(b.Id, InstalledIn(m));
                 }
-                if (addon == AddonKind.Lecram) Add(s.LecramLastBuildId);
+                if (addon == AddonKind.Lecram) Add(s.LecramLastBuildId, "last downloaded Lecram build");
                 break;
             default:
-                Add(s.DlssNrId);
-                Add(s.PreviousDlssNrId);
-                Add(Path.GetFileName(Path.GetDirectoryName(DlssNrPath)));
-                foreach (var g in games) Add(g.DlssNrId);
+                Add(s.DlssNrId, Default);
+                Add(Path.GetFileName(Path.GetDirectoryName(DlssNrPath)), Default);
+                Add(s.PreviousDlssNrId, SwitchBack);
+                foreach (var (id, g) in s.Games) Add(g.DlssNrId, PickedFor(id));
                 foreach (var m in installed)
                 {
-                    Add(m.DlssNrId);
-                    Add(m.PreviousDlssNrId);
+                    Add(m.DlssNrId, InstalledIn(m));
+                    Add(m.PreviousDlssNrId, SwitchBack);
                 }
                 break;
         }
-        return ids;
+        return found;
+    }
+
+    private static string GameName(IReadOnlyDictionary<string, string>? names, string key, string path) =>
+        names is not null && names.TryGetValue(key, out var name) ? name : FolderName(path);
+
+    private static string FolderName(string path) => Path.GetFileName(path.TrimEnd('\\', '/')) is { Length: > 0 } name ? name : path;
+
+    /// <summary>The game folder a record belongs to, from its install folder and the root it names; the install folder when that can't be told.</summary>
+    private static string GameFolder(InstallManifest m)
+    {
+        try { return Path.GetFullPath(Path.Combine(m.Dir!, m.RootRel)); }
+        catch (Exception ex) when (ex is ArgumentException or NotSupportedException) { return m.Dir!; }
+    }
+
+    /// <summary>
+    /// Why <paramref name="kind"/> holds more builds than its keep count: the protected builds beyond the newest ones with
+    /// their reasons and, for OptiScaler with several sources, the count per source.
+    /// </summary>
+    public LibraryKeepNote KeepNote(LibraryKind kind, AppSettings s, IEnumerable<InstallManifest> manifests, IReadOnlyDictionary<string, string>? gameNames)
+    {
+        var builds = Library(kind);
+        var keep = s.KeepBuildsFor(kind);
+        var reasons = ProtectionReasons(kind, s, manifests, gameNames).ToLookup(p => p.Id, p => p.Reason, StringComparer.OrdinalIgnoreCase);
+        var kept = BuildCleanup.BeyondKeep(builds, keep).Where(b => reasons.Contains(b.Id))
+            .Select(b => new KeptBuild(b, reasons[b.Id].ToList())).ToList();
+        string? perSource = null;
+        if (kind == LibraryKind.OptiScaler && builds.Count > keep && builds.Select(b => b.Group).Distinct(StringComparer.OrdinalIgnoreCase).Count() > 1)
+            perSource = string.Join(", ", builds.GroupBy(b => b.Group, StringComparer.OrdinalIgnoreCase).Select(g => $"{OptiSources.For(g.Key).Name} {g.Count()}"));
+        return new LibraryKeepNote(kept, perSource);
+    }
+
+    public Dictionary<LibraryKind, LibraryKeepNote> KeepNotes(AppSettings s, IEnumerable<InstallManifest> manifests, IReadOnlyDictionary<string, string>? gameNames)
+    {
+        var records = manifests.ToList();
+        return Enum.GetValues<LibraryKind>().ToDictionary(k => k, k => KeepNote(k, s, records, gameNames));
     }
 
     /// <summary>

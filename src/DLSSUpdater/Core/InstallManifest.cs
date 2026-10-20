@@ -28,6 +28,9 @@ public sealed class InstallManifest
     public const string DirName = ".dlssupdater";
 
     public int Schema { get; set; } = 1;
+    /// <summary>The install folder this record was read from; set by <see cref="KnownInstalls"/> for the cleanup's messages, never saved.</summary>
+    [JsonIgnore]
+    public string? Dir { get; set; }
     /// <summary>Game root relative to the target dir (e.g. "..\..\.."), or a full path when the two are on different drives.</summary>
     public string RootRel { get; set; } = ".";
     /// <summary>Proxy the game loads: OptiScaler's, or ReShade's in ReShade-only mode.</summary>
