@@ -716,7 +716,7 @@ public sealed partial class MainViewModel : ObservableObject
     /// </summary>
     internal static CleanupRecords ReadRecords(IEnumerable<string> dirs, AppSettings? settings = null) =>
         Demo.Active
-            ? KnownInstalls.Gather(dirs, Demo.ManifestAt, _ => FolderState.Here)
+            ? KnownInstalls.Gather(dirs, Demo.ManifestAt, (_, _) => FolderState.Here, volumeSerial: _ => null)
             : KnownInstalls.Gather(dirs, InstallManifest.Read, KnownInstalls.Probe,
                 settings is null ? null : () => GameScanner.HiddenInstallDirs(settings));
 

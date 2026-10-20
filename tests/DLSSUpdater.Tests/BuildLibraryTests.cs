@@ -379,7 +379,7 @@ public sealed class BuildLibraryTests : IDisposable
 
         // The drive is unplugged: the next scan doesn't list the game at all.
         Directory.Move(game, game + "-unplugged");
-        var later = KnownInstalls.Gather([], InstallManifest.Read, _ => FolderState.Unplugged);
+        var later = KnownInstalls.Gather([], InstallManifest.Read, (_, _) => FolderState.Unplugged);
 
         Assert.False(later.Unknown);
         Assert.Contains(LibraryKind.DlssNr, later.Unsure);
@@ -402,11 +402,13 @@ public sealed class BuildLibraryTests : IDisposable
         var game = GameWithRecord("steam-uninstalled", new InstallManifest { DlssNr = true, DlssNrId = ids[4], PreviousDlssNrId = ids[3] });
         MainViewModel.ReadRecords([game]);
 
-        Assert.Equal(FolderState.Here, KnownInstalls.Probe(game));
+        var serial = KnownInstalls.VolumeSerial(game);
+        Assert.NotNull(serial);
+        Assert.Equal(FolderState.Here, KnownInstalls.Probe(game, serial));
         Directory.Delete(game, true);
-        Assert.Equal(FolderState.Gone, KnownInstalls.Probe(game));
+        Assert.Equal(FolderState.Gone, KnownInstalls.Probe(game, serial));
         var free = Enumerable.Range('D', 23).Select(c => $"{(char)c}:\\").FirstOrDefault(d => !Directory.Exists(d));
-        if (free is not null) Assert.Equal(FolderState.Unplugged, KnownInstalls.Probe(Path.Combine(free, "Games", "X")));
+        if (free is not null) Assert.Equal(FolderState.Unplugged, KnownInstalls.Probe(Path.Combine(free, "Games", "X"), serial));
 
         // Deleted outside the app (a Steam uninstall): its builds no longer hold up the automatic cleanup.
         var records = MainViewModel.ReadRecords([]);
@@ -414,6 +416,61 @@ public sealed class BuildLibraryTests : IDisposable
         Assert.Empty(records.Unsure);
         Assert.Equal([ids[2], ids[3], ids[4]], NrCandidates(records));
         Assert.DoesNotContain("steam-uninstalled", File.ReadAllText(KnownInstalls.FilePath));
+    }
+
+    [Fact]
+    public void Missing_folder_is_deleted_only_when_its_volume_serial_matches_the_stored_one()
+    {
+        var missing = Path.Combine(_tmp, "games", "never-there");
+        Assert.Equal(FolderState.Gone, KnownInstalls.Probe(missing, 7u, _ => 7u));
+        Assert.Equal(FolderState.Unplugged, KnownInstalls.Probe(missing, 7u, _ => 8u));
+        Assert.Equal(FolderState.Unplugged, KnownInstalls.Probe(missing, 7u, _ => null));
+        Assert.Equal(FolderState.Unplugged, KnownInstalls.Probe(missing, 7u, _ => throw new IOException("lookup failed")));
+        Assert.Equal(FolderState.Unplugged, KnownInstalls.Probe(missing, null, _ => 7u));
+        Assert.Equal(FolderState.Here, KnownInstalls.Probe(_tmp, null, _ => null));
+    }
+
+    [Fact]
+    public void Reachable_folder_stores_its_volume_serial_and_a_different_volume_later_keeps_the_builds()
+    {
+        var ids = NrBuilds(5);
+        _settings.DlssNrId = ids[0];
+        var game = GameWithRecord("usb-serial", new InstallManifest { DlssNr = true, DlssNrId = ids[4] });
+        uint? serial = 42;
+        var first = KnownInstalls.Gather([game], InstallManifest.Read, (d, s) => KnownInstalls.Probe(d, s, _ => serial), volumeSerial: _ => serial);
+        Assert.Single(first.Records);
+        Assert.Matches(@"""VolumeSerial"":\s*42", File.ReadAllText(KnownInstalls.FilePath));
+
+        // The same drive letter now belongs to another device: the folder is missing, but its volume isn't the remembered one.
+        Directory.Move(game, game + "-away");
+        serial = 99;
+        var other = KnownInstalls.Gather([], InstallManifest.Read, (d, s) => KnownInstalls.Probe(d, s, _ => serial), volumeSerial: _ => serial);
+        Assert.Equal(1, other.Unreachable);
+        Assert.Contains(LibraryKind.DlssNr, other.Unsure);
+        Assert.Matches(@"""VolumeSerial"":\s*42", File.ReadAllText(KnownInstalls.FilePath));
+
+        // The remembered volume again, folder still missing: deleted.
+        serial = 42;
+        var gone = KnownInstalls.Gather([], InstallManifest.Read, (d, s) => KnownInstalls.Probe(d, s, _ => serial), volumeSerial: _ => serial);
+        Assert.Empty(gone.Records);
+        Assert.Empty(gone.Unsure);
+    }
+
+    [Fact]
+    public void Install_refs_without_a_volume_serial_still_load_and_keep_the_builds_of_a_missing_folder()
+    {
+        var ids = NrBuilds(5);
+        _settings.DlssNrId = ids[0];
+        var game = GameWithRecord("old-entry", new InstallManifest { DlssNr = true, DlssNrId = ids[4] });
+        var key = JsonSerializer.Serialize(game);
+        File.WriteAllText(KnownInstalls.FilePath, $"{{{key}:{{\"DlssNrId\":\"{ids[4]}\"}}}}");
+        Directory.Move(game, game + "-away");
+
+        var records = KnownInstalls.Gather([], InstallManifest.Read, (d, s) => KnownInstalls.Probe(d, s, _ => 1u), volumeSerial: _ => 1u);
+
+        Assert.False(records.Unknown);
+        Assert.Equal(1, records.Unreachable);
+        Assert.Contains(LibraryKind.DlssNr, records.Unsure);
     }
 
     [Theory]

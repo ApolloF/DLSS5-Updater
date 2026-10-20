@@ -1,3 +1,5 @@
+using System.Runtime.InteropServices;
+using System.Text;
 using System.Text.Json;
 
 namespace DLSSUpdater.Core;
@@ -16,6 +18,8 @@ public sealed record InstallRefs
     public string? MfgTag { get; set; }
     public string? DlssTag { get; set; }
     public string? StreamlineTag { get; set; }
+    /// <summary>Serial number of the volume the install folder was last read from; tells a deleted folder from another device on the same drive letter.</summary>
+    public uint? VolumeSerial { get; set; }
 
     public static InstallRefs From(InstallManifest m) => new()
     {
@@ -77,13 +81,40 @@ public static class KnownInstalls
 
     public static string FilePath => Path.Combine(AppPaths.Root, "install-refs.json");
 
-    /// <summary>A missing folder whose drive (or share) is there was deleted; one whose drive is missing is unplugged.</summary>
-    public static FolderState Probe(string dir)
+    /// <summary>
+    /// A missing folder counts as deleted only when it is reported as not found and the volume it sits on is the one it was last
+    /// read from (same serial). A different or unknown volume (a reused drive letter, an offline folder mount), a failed lookup,
+    /// no stored serial, or a folder that can't be accessed all count as unplugged, so the remembered builds stay.
+    /// </summary>
+    public static FolderState Probe(string dir, uint? storedSerial) => Probe(dir, storedSerial, VolumeSerial);
+
+    public static FolderState Probe(string dir, uint? storedSerial, Func<string, uint?> volumeSerial)
     {
         if (Directory.Exists(dir)) return FolderState.Here;
-        var root = Path.GetPathRoot(dir);
-        return !string.IsNullOrEmpty(root) && Directory.Exists(root) ? FolderState.Gone : FolderState.Unplugged;
+        if (storedSerial is null) return FolderState.Unplugged;
+        try { File.GetAttributes(dir); return FolderState.Unplugged; }
+        catch (Exception ex) when (ex is DirectoryNotFoundException or FileNotFoundException) { }
+        catch (Exception) { return FolderState.Unplugged; }
+        uint? now;
+        try { now = volumeSerial(dir); }
+        catch (Exception) { return FolderState.Unplugged; }
+        return now == storedSerial ? FolderState.Gone : FolderState.Unplugged;
     }
+
+    /// <summary>The serial number of the volume mounted at the folder's real mount point (drive letter, folder mount or share); null when it can't be told.</summary>
+    public static uint? VolumeSerial(string dir)
+    {
+        var mount = new StringBuilder(1024);
+        if (!GetVolumePathName(Path.GetFullPath(dir), mount, (uint)mount.Capacity)) return null;
+        return GetVolumeInformation(mount.ToString(), null, 0, out var serial, out _, out _, null, 0) ? serial : null;
+    }
+
+    [DllImport("kernel32.dll", SetLastError = true, CharSet = CharSet.Unicode)]
+    private static extern bool GetVolumePathName(string path, StringBuilder volumePath, uint length);
+
+    [DllImport("kernel32.dll", SetLastError = true, CharSet = CharSet.Unicode)]
+    private static extern bool GetVolumeInformation(string root, StringBuilder? name, uint nameSize, out uint serial,
+        out uint maxComponent, out uint flags, StringBuilder? fileSystem, uint fileSystemSize);
 
     /// <summary>The remembered references; false when install-refs.json exists but can't be read (nothing may overwrite it then).</summary>
     private static bool TryLoad(out Dictionary<string, InstallRefs> known)
@@ -128,8 +159,8 @@ public static class KnownInstalls
     /// <see cref="FolderState.Unplugged"/> or whose record can't be read. A <see cref="FolderState.Gone"/> folder is forgotten.
     /// Before install-refs.json exists, <paramref name="firstRun"/> adds the folders the scan doesn't list (hidden games).
     /// </summary>
-    public static CleanupRecords Gather(IEnumerable<string> dirs, Func<string, InstallManifest?> read, Func<string, FolderState> probe,
-        Func<IEnumerable<string>>? firstRun = null)
+    public static CleanupRecords Gather(IEnumerable<string> dirs, Func<string, InstallManifest?> read, Func<string, uint?, FolderState> probe,
+        Func<IEnumerable<string>>? firstRun = null, Func<string, uint?>? volumeSerial = null)
     {
         lock (Gate)
         {
@@ -158,7 +189,7 @@ public static class KnownInstalls
                     records.Add(refs.ToManifest());
                     unsure.UnionWith(refs.Libraries());
                 }
-                switch (probe(dir))
+                switch (probe(dir, refs?.VolumeSerial))
                 {
                     case FolderState.Gone:
                         changed |= known.Remove(dir);
@@ -184,7 +215,10 @@ public static class KnownInstalls
                     continue;
                 }
                 records.Add(m);
-                var now = InstallRefs.From(m);
+                uint? serial = null;
+                try { serial = (volumeSerial ?? VolumeSerial)(dir); }
+                catch (Exception ex) { Log.Error($"Could not tell which volume {dir} is on", ex); }
+                var now = InstallRefs.From(m) with { VolumeSerial = serial ?? refs?.VolumeSerial };
                 if (now != refs)
                 {
                     known[dir] = now;
