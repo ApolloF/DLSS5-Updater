@@ -10,6 +10,7 @@ public enum AddonKind { RenoDx, Lecram }
 /// <summary>
 /// One imported build of ShortFuse's or Lecram's add-on, stored under components\&lt;add-on dir&gt;\&lt;sha256&gt;\&lt;FileName&gt;
 /// with this record next to it as version.json. <see cref="FileName"/> is the name the add-on is installed under.
+/// <see cref="Downloaded"/>: the app fetched it from Lecram's channel; false for every import and for builds from before the flag.
 /// </summary>
 public sealed record AddonBuild(
     string Id,
@@ -18,7 +19,8 @@ public sealed record AddonBuild(
     LecramGeneration? Generation,
     string DetectedLabel,
     string? UserLabel,
-    DateTime Imported)
+    DateTime Imported,
+    bool Downloaded = false)
 {
     /// <summary>The name this build goes by: the user's own label, else what was detected in the file.</summary>
     [JsonIgnore]
@@ -40,24 +42,9 @@ public sealed record AddonBuild(
     [JsonIgnore]
     public string Tag => $"{DetectedLabel}-{Id[..12]}";
 
-    /// <summary>
-    /// Sort key, oldest build first: the detected label's version ("v10.7.0", or ShortFuse's file version), a pre-release
-    /// before its release ("v11.0.0-beta.6" before "v11.0.0").
-    /// </summary>
+    /// <summary>Sort key (<see cref="BuildOrder.Key"/>): the detected label's version ("v10.7.0", or ShortFuse's file version), a pre-release before its release.</summary>
     [JsonIgnore]
-    public (Version Version, bool Release, int Stage, int Number) Order
-    {
-        get
-        {
-            var label = DetectedLabel.TrimStart('v', 'V');
-            var dash = label.IndexOf('-');
-            var core = dash < 0 ? label : label[..dash];
-            var pre = dash < 0 ? [] : label[(dash + 1)..].Split('.');
-            var stage = pre.Length > 0 ? pre[0] switch { "alpha" => 1, "beta" => 2, "rc" => 3, _ => 0 } : 0;
-            var number = pre.Length == 2 && int.TryParse(pre[1], out var n) ? n : 0;
-            return (Version.TryParse(core, out var v) ? v : ParsedVersion ?? new Version(0, 0), dash < 0, stage, number);
-        }
-    }
+    public (Version Version, bool Release, int Stage, int Number) Order => BuildOrder.Key(DetectedLabel, ParsedVersion);
 
     /// <summary>The file version as a <see cref="Version"/>, or null for a build without a version resource.</summary>
     [JsonIgnore]
@@ -140,7 +127,7 @@ public sealed partial class ComponentStore
 
     private readonly Dictionary<AddonKind, (string Root, IReadOnlyList<AddonBuild> Builds)> _addonCache = [];
 
-    /// <summary>Every readable build of one add-on, oldest build first (<see cref="AddonBuild.Order"/>). Read once; imports, renames and removals through this store refresh it.</summary>
+    /// <summary>Every readable build of one add-on, newest build first (<see cref="BuildOrder"/>). Read once; imports, renames and removals through this store refresh it.</summary>
     public IReadOnlyList<AddonBuild> AddonBuilds(AddonKind kind)
     {
         var root = AddonRoot(kind);
@@ -173,7 +160,7 @@ public sealed partial class ComponentStore
             catch (Exception ex) when (ex is IOException or JsonException)
             { Log.Error($"Could not read add-on library entry {file}", ex); }
         }
-        return builds.OrderBy(b => b.Order).ThenBy(b => b.Imported).ThenBy(b => b.Id).ToList();
+        return BuildOrder.NewestFirst(builds, b => b.DetectedLabel, b => b.Imported, b => b.Id, b => b.ParsedVersion);
     }
 
     private static bool ValidAddonFile(AddonKind kind, string name) =>
@@ -190,7 +177,7 @@ public sealed partial class ComponentStore
         var builds = AddonBuilds(kind);
         if (id is not null) return builds.FirstOrDefault(b => b.Id.Equals(id, StringComparison.OrdinalIgnoreCase));
         var chosen = DefaultAddonId(kind);
-        return builds.FirstOrDefault(b => chosen is not null && b.Id.Equals(chosen, StringComparison.OrdinalIgnoreCase)) ?? builds.LastOrDefault();
+        return builds.FirstOrDefault(b => chosen is not null && b.Id.Equals(chosen, StringComparison.OrdinalIgnoreCase)) ?? builds.FirstOrDefault();
     }
 
     public AddonBuild? RenoDxBuildFor(string? id) => AddonBuildFor(AddonKind.RenoDx, id);
@@ -215,16 +202,25 @@ public sealed partial class ComponentStore
 
     /// <summary>
     /// Stores <paramref name="source"/> as a library build. A file that is already there changes nothing (the user's label and
-    /// import date stay); other builds are never touched.
+    /// import date stay), except that importing a downloaded build by hand makes it an import; other builds are never touched.
     /// </summary>
-    private AddonBuild RetainAddon(AddonKind kind, string source, string fileName, string fileVersion, LecramGeneration? generation, string detectedLabel)
+    private AddonBuild RetainAddon(AddonKind kind, string source, string fileName, string fileVersion, LecramGeneration? generation, string detectedLabel,
+        bool downloaded = false)
     {
         var sha = FileUtil.Sha256(source);
         var dest = Path.Combine(AddonRoot(kind), sha, fileName);
         var meta = Path.Combine(AddonRoot(kind), sha, "version.json");
+        if (downloaded) NoteAdded(sha);
         var existing = AddonBuilds(kind).FirstOrDefault(b => b.Id == sha && b.FileName == fileName);
-        if (existing is not null) return existing;
-        var build = new AddonBuild(sha, fileName, fileVersion, generation, detectedLabel, null, DateTime.UtcNow);
+        if (existing is not null)
+        {
+            if (downloaded || !existing.Downloaded) return existing;
+            existing = existing with { Downloaded = false };
+            FileUtil.AtomicWriteText(meta, JsonSerializer.Serialize(existing, JsonCtx.Default.AddonBuild));
+            ForgetAddons(kind);
+            return existing;
+        }
+        var build = new AddonBuild(sha, fileName, fileVersion, generation, detectedLabel, null, DateTime.UtcNow, downloaded);
         if (!File.Exists(dest) || !FileUtil.SameFile(source, dest)) FileUtil.AtomicCopy(source, dest);
         FileUtil.AtomicWriteText(meta, JsonSerializer.Serialize(build, JsonCtx.Default.AddonBuild));
         ForgetAddons(kind);
@@ -286,7 +282,7 @@ public sealed partial class ComponentStore
             var builds = AddonBuilds(kind);
             var chosen = s.AddonId(kind);
             if (builds.Count == 0 || (chosen is not null && builds.Any(b => b.Id == chosen))) continue;
-            s.SetAddonId(kind, builds[^1].Id);
+            s.SetAddonId(kind, builds[0].Id);
             changed = true;
         }
         return changed;

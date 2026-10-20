@@ -246,6 +246,8 @@ public sealed partial class MainViewModel : ObservableObject
             if (cached.Count > 0) ApplyScan(cached);
 
             await Task.WhenAll(CheckUpdatesCore(ct), ScanCore(ct));
+            // Only now are all install records known, which the cleanup must keep builds for.
+            await AutoCleanUpAsync();
         }, lease);
         if (UpdateCount > 0) Log.Info($"{UpdateCount} game(s) have updates available");
         if (!Demo.Active) await Task.Run(HashCache.Save);
@@ -278,6 +280,7 @@ public sealed partial class MainViewModel : ObservableObject
         // An imported ReShade doesn't follow releases, so there is nothing new to point at.
         ReShadeNews.Load(auto ? store.ReShade : null);
         foreach (var g in Games) { g.RebuildNrChoices(); g.RebuildAddonChoices(); g.RefreshStatus(); }
+        SettingsVm.ReloadReleaseChoices();
         CountUpdates();
         OnPropertyChanged(nameof(LecramVersion));
     }
@@ -285,7 +288,11 @@ public sealed partial class MainViewModel : ObservableObject
     public string LecramVersion => S.Settings.LecramLastVersion ?? S.Store.LecramBuildFor(null)?.DetectedLabel ?? "not in library";
 
     /// <summary>Lecram check on its own (Add-on library "Check now", even with automatic checks off), as a run like any other.</summary>
-    internal Task CheckLecramNowAsync() => Run("Checking Lecram", ct => CheckLecramAsync(ct, force: true));
+    internal Task CheckLecramNowAsync() => Run("Checking Lecram", async ct =>
+    {
+        await CheckLecramAsync(ct, force: true);
+        await AutoCleanUpAsync();
+    });
 
     private async Task CheckLecramAsync(CancellationToken ct, bool force = false)
     {
@@ -417,6 +424,7 @@ public sealed partial class MainViewModel : ObservableObject
             catch (Exception ex) when (ex is not OperationCanceledException) { failed++; Log.Error(g.Name, ex); }
         }
         Log.Info(failed == 0 ? $"Updated {targets.Count} game(s)" : $"{failed} game(s) couldn't be updated. Details are in the log.");
+        await AutoCleanUpAsync();
     });
 
     [RelayCommand(CanExecute = nameof(CanAddGames))]
@@ -639,6 +647,7 @@ public sealed partial class MainViewModel : ObservableObject
         {
             await S.Installer.InstallAsync(g.Info, g.SelectedTarget.Dir, o, TransferProgress(), ct);
             await RescanOne(g);
+            await AutoCleanUpAsync();
         });
     }
 
@@ -676,6 +685,8 @@ public sealed partial class MainViewModel : ObservableObject
         await Run($"Uninstalling from {g.Name}", async ct =>
         {
             await S.Installer.UninstallAsync(g.Info, g.SelectedTarget.Dir, ct);
+            var dir = g.SelectedTarget.Dir;
+            await Task.Run(() => KnownInstalls.Forget([dir]));
             await RescanOne(g);
         });
     }
@@ -690,6 +701,96 @@ public sealed partial class MainViewModel : ObservableObject
             await S.Installer.RestoreDlssAsync(g.Info, g.SelectedTarget.Dir, ct);
             await RescanOne(g);
         });
+    }
+
+    // ---------- build cleanup ----------
+
+    /// <summary>Every folder a listed game has an install record in.</summary>
+    internal List<string> InstallDirs() =>
+        Games.SelectMany(g => g.Info.Installs).Distinct(StringComparer.OrdinalIgnoreCase).ToList();
+
+    /// <summary>
+    /// The install records the cleanup protects: those of the listed games and the remembered ones of games that are
+    /// hidden or can't be reached now (see <see cref="KnownInstalls"/>). With <paramref name="settings"/>, the first run
+    /// also reads the hidden games' records. Reads disk, so call it off the UI thread.
+    /// </summary>
+    internal static CleanupRecords ReadRecords(IEnumerable<string> dirs, AppSettings? settings = null) =>
+        Demo.Active
+            ? KnownInstalls.Gather(dirs, Demo.ManifestAt, (_, _) => FolderState.Here, volumeSerial: _ => null)
+            : KnownInstalls.Gather(dirs, InstallManifest.Read, KnownInstalls.Probe,
+                settings is null ? null : () => GameScanner.HiddenInstallDirs(settings));
+
+    /// <summary>The manual cleanup's plan; null when an install record can't be read and nothing about it is remembered.</summary>
+    private static List<CleanupItem>? PlanManual(ComponentStore store, AppSettings settings, IEnumerable<string> dirs) =>
+        ReadRecords(dirs, settings) is { Unknown: false } r ? store.PlanCleanup(settings, r.Records) : null;
+
+    /// <summary>Settings' Clean up: says what goes and how much it frees, deletes after a yes.</summary>
+    internal async Task CleanUpBuildsAsync()
+    {
+        if (IsBusy) return;
+        var dirs = InstallDirs();
+        var plan = await Task.Run(() => PlanManual(S.Store, S.Settings, dirs));
+        if (plan is null)
+        {
+            Dialog.Show("Cleanup skipped", "An install record can't be read, so nothing is deleted. The details are in the log.");
+            return;
+        }
+        if (plan.Count == 0)
+        {
+            Dialog.Show("Nothing to clean up", "Every kept build is one of the newest, a default, chosen for a game or installed in one.");
+            return;
+        }
+        var list = string.Join(Environment.NewLine, plan.Take(12).Select(p => $"• {p.What} ({BuildCleanup.FormatBytes(p.Bytes)})"))
+                   + (plan.Count > 12 ? $"{Environment.NewLine}… and {plan.Count - 12} more" : "");
+        if (!Dialog.Confirm("Clean up old builds",
+                $"Delete these for good and free {BuildCleanup.FormatBytes(plan.Sum(p => p.Bytes))}?{Environment.NewLine}{Environment.NewLine}{list}{Environment.NewLine}{Environment.NewLine}" +
+                "Defaults, builds chosen for a game and builds installed in one always stay.", "Delete", danger: true)) return;
+        await Run("Cleaning up old builds", async _ =>
+        {
+            // Something may have changed while the question was open: only what both plans name goes.
+            var confirmed = plan.Select(p => p.Path).ToHashSet(StringComparer.OrdinalIgnoreCase);
+            var dirsNow = InstallDirs();
+            await Task.Run(() =>
+            {
+                if (PlanManual(S.Store, S.Settings, dirsNow) is { } now) S.Store.RunCleanup(now.Where(p => confirmed.Contains(p.Path)));
+                else Log.Warn("Cleanup skipped: an install record can't be read");
+            });
+            await AfterCleanupAsync();
+        });
+    }
+
+    /// <summary>After an import outside a run: the automatic cleanup, when it is on, as a run of its own.</summary>
+    internal Task AutoCleanUpAfterImportAsync() =>
+        S.Settings.AutoCleanBuilds && !IsBusy ? Run("Deleting old builds", _ => AutoCleanUpAsync()) : Task.CompletedTask;
+
+    /// <summary>
+    /// Inside a run, after downloads or imports: deletes old downloads when automatic cleanup is on. Imported builds and
+    /// the builds just downloaded always stay, and a library that a game's unreadable or unreachable install points into is left alone.
+    /// </summary>
+    private async Task AutoCleanUpAsync()
+    {
+        var added = S.Store.TakeAdded();
+        if (!S.Settings.AutoCleanBuilds) return;
+        var dirs = InstallDirs();
+        var store = S.Store;
+        var settings = S.Settings;
+        var freed = await Task.Run(() =>
+        {
+            var r = ReadRecords(dirs, settings);
+            if (r.Unknown) return false;
+            var plan = store.PlanCleanup(settings, r.Records, added, r.Unsure, downloadsOnly: true);
+            if (plan.Count == 0) return false;
+            Log.Info("Deleting old downloads (automatic cleanup is on)");
+            store.RunCleanup(plan);
+            return true;
+        });
+        if (freed) await AfterCleanupAsync();
+    }
+
+    private async Task AfterCleanupAsync()
+    {
+        await RefreshLocalComponentsAsync();
+        SettingsVm.Reload();
     }
 
     // ---------- commands: game config ----------
@@ -770,8 +871,10 @@ public sealed partial class MainViewModel : ObservableObject
         if (g is null) return;
         if (g.IsInstalled && !Dialog.Confirm("Remove from list", $"{g.Name} still has DLSS5 Updater files installed. Remove it from the list anyway?", "Remove"))
             return;
+        // A hidden game can come back, so the cleanup keeps what it has installed; a removed one is gone from the app.
         if (S.Settings.ManualGames.RemoveAll(p => GameInfo.MakeId(p) == g.Id) == 0)
             S.Settings.HiddenGames.Add(g.Id);
+        else KnownInstalls.Forget(g.Info.Installs);
         S.Settings.Save();
         Games.Remove(g);
         OnPropertyChanged(nameof(GameListEmptyText));

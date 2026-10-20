@@ -271,16 +271,16 @@ public sealed class AddonLibraryTests : IDisposable
     }
 
     [Fact]
-    public void Builds_AreListedOldestFirst_ByVersion_NotByImportTime()
+    public void Builds_AreListedNewestFirst_ByVersion_NotByImportTime()
     {
         var newer = Sf(new Version(0, 2026, 1016, 1704));
         var older = Sf(new Version(0, 2026, 928, 306));
-        Assert.Equal([older.Id, newer.Id], _store.RenoDxBuilds.Select(b => b.Id));
+        Assert.Equal([newer.Id, older.Id], _store.RenoDxBuilds.Select(b => b.Id));
 
         var release = LecramV11("v11.0.0", frameworkNoise: false);
         var beta = LecramV11("v11.0.0-beta.6");
         var old = LecramV11("v8.5.0-rc10-model-sdr1");
-        Assert.Equal([old.Id, beta.Id, release.Id], _store.LecramBuilds.Select(b => b.Id));
+        Assert.Equal([release.Id, beta.Id, old.Id], _store.LecramBuilds.Select(b => b.Id));
     }
 
     [Fact]
@@ -341,7 +341,7 @@ public sealed class AddonLibraryTests : IDisposable
 
         _store.MigrateAddons();
 
-        Assert.Equal([LecramGeneration.V11, LecramGeneration.V10], _store.LecramBuilds.Select(b => b.Generation!.Value));
+        Assert.Equal([LecramGeneration.V10, LecramGeneration.V11], _store.LecramBuilds.Select(b => b.Generation!.Value));
         Assert.False(File.Exists(Path.Combine(AppPaths.Components, V10File)));
         Assert.False(File.Exists(Path.Combine(AppPaths.Components, V11File)));
         Assert.Empty(_store.RenoDxBuilds);
@@ -444,7 +444,7 @@ public sealed class AddonLibraryTests : IDisposable
         var sf = Sf(new Version(0, 2026, 928, 306));
         _settings.RenoDxId = sf.Id;
         var vm = NewGame();
-        Assert.Equal($"Default ({sf.Label})", vm.RenoDxChoices[0].Label);
+        Assert.Equal($"Default ({sf.Name})", vm.RenoDxChoices[0].Label);
         Assert.Equal("Default (none imported)", vm.LecramChoices[0].Label);
         Assert.Equal(new string?[] { null, sf.Id }, vm.RenoDxChoices.Select(c => c.Tag));
 

@@ -58,7 +58,11 @@ public sealed partial class ComponentStore
         {
             if (IsCached(Component.Uplift, r.Tag) && UpliftFiles.All(f => File.Exists(Path.Combine(pkg, f)))) return pkg;
             var marker = Path.Combine(dir, CompleteMarker);
-            if (File.Exists(marker)) File.Delete(marker);
+            if (File.Exists(marker))
+            {
+                File.Delete(marker);
+                ReleasesChanged();
+            }
             if (r.FromCache) throw new InvalidOperationException("Cached GITC Uplift files are incomplete.");
             var (name, url, _) = r.Files[0];
             var zip = Path.Combine(dir, name);
@@ -75,6 +79,7 @@ public sealed partial class ComponentStore
                     ExtractUplift(zip, pkg);
                 }, ct);
                 MarkComplete(Component.Uplift, r);
+                NoteAdded(r.Tag);
                 Log.Info($"Cached GITC Uplift {r.Tag}");
                 return pkg;
             }
