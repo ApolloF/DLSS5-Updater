@@ -717,4 +717,94 @@ function Get-PatchSectionRefusal($section, [string]$seen, [int]$testedMajor, [in
     $null
 }
 
+# ---------- drop folder ----------
+
+function Select-DropFiles($listing) {
+    # Drops are the files at the top of the drop folder (copyparty ?ls JSON). Folders (processed/, failed/,
+    # private-build/) and anything inside them are never drops, also when a listing names them among the files.
+    @(@($listing.files) | Where-Object { $_ } | ForEach-Object { @{ Name = [uri]::UnescapeDataString("$($_.href)"); Size = [long]$_.sz } } |
+        Where-Object { $_.Name -and $_.Name -notmatch '[\\/]' })
+}
+
+# ---------- private build (LecramChannel=true, owner only, copyparty) ----------
+
+function Test-LecramChannelSwitch([string]$csproj) {
+    # The app's compile-time switch for Lecram's MediaFire channel. Tags up to v2.1.0 don't have it; a comment that
+    # names it doesn't count.
+    ([regex]::Replace("$csproj", '(?s)<!--.*?-->', '')) -match '<LecramChannel\b'
+}
+
+function Select-PrivateBuildTag($releases, $builds, $failures, [int]$maxFailures = 3) {
+    # $releases: gh release list --json tagName,isDraft,isPrerelease. Only the newest full release gets a private build
+    # (older ones never do). Returns @{ Tag; Note }: Tag is $null when that release is built, skipped or parked.
+    $full = @(@($releases) | Where-Object { $_ -and "$($_.tagName)" -cmatch '^v\d+\.\d+\.\d+$' -and $_.isDraft -eq $false -and $_.isPrerelease -eq $false })
+    $newest = $full | Sort-Object { ConvertTo-BotVersion $_.tagName } -Descending | Select-Object -First 1
+    if (-not $newest) { return @{ Tag = $null; Note = 'no full release' } }
+    $tag = "$($newest.tagName)"
+    $rec = if ($builds) { $builds[$tag] } else { $null }
+    if ($rec -and $rec.skipped) { return @{ Tag = $null; Note = "$tag skipped ($($rec.skipped))" } }
+    if ($rec) { return @{ Tag = $null; Note = "$tag already built" } }
+    if ($failures -and [int]$failures["private|$tag"] -ge $maxFailures) { return @{ Tag = $null; Note = "$tag failed $maxFailures times, parked until the next release" } }
+    @{ Tag = $tag; Note = "$tag needs a private build" }
+}
+
+function Get-PrivateBuildName([string]$version) {
+    if ($version -notmatch '^\d+\.\d+\.\d+$') { throw "not a release version: $(Format-SafeText $version 40)" }
+    "DLSS5Updater-$version-private.exe"
+}
+
+function Test-PrivateExe([string]$fileVersion, [string]$productVersion, [long]$size, [string]$version, [long]$maxBytes = 150MB) {
+    # What the build produced must be the app at that tag: FileVersion and ProductVersion X.Y.Z equal the tag's, and a
+    # plausible size. Returns the violations (empty = fine).
+    $v = [Collections.Generic.List[string]]::new()
+    if ($size -le 0 -or $size -gt $maxBytes) { $v.Add("size $size bytes is outside 1..$maxBytes") }
+    foreach ($p in @(@('FileVersion', $fileVersion), @('ProductVersion', $productVersion))) {
+        $pv = ConvertTo-BotVersion $p[1]
+        if (-not $pv -or "$($pv.Major).$($pv.Minor).$($pv.Build)" -ne $version) { $v.Add("$($p[0]) $(Format-SafeText $p[1] 40) is not $version") }
+    }
+    @($v)
+}
+
+function Select-PrivateBuildsToDelete($builds, [int]$keep = 3) {
+    # Tags whose private build the bot uploaded and hasn't deleted yet, beyond the newest $keep.
+    if (-not $builds) { return @() }
+    @(@($builds.Keys | Where-Object { $builds[$_].name -and -not $builds[$_].deleted -and (ConvertTo-BotVersion $_) }) |
+        Sort-Object { ConvertTo-BotVersion $_ } -Descending | Select-Object -Skip $keep)
+}
+
+function Copy-SandboxFile([string]$from, [string]$rel, [string]$to, [string]$isolationRoot, [string]$botRoot, [long]$maxBytes = 150MB) {
+    # Copy-SandboxBack for a single file (the private build's exe): no links in its folder, the sandbox inside the
+    # isolation root and apart from the bot's folder, the file opened without following a link, its final path inside
+    # the sandbox, one hard link, a size cap. Nothing else comes back.
+    $ErrorActionPreference = 'Stop'
+    if (-not $isolationRoot -or -not $botRoot) { throw 'copy-back needs the isolation root and the bot root' }
+    if ($rel -notmatch '^[A-Za-z0-9_-][A-Za-z0-9._-]*(\\[A-Za-z0-9_-][A-Za-z0-9._-]*)*$' -or -not (Test-SafeRelPath ($rel -replace '\\', '/'))) { throw "not a plain relative path: $rel" }
+    $src = Join-Path $from $rel
+    # The sandbox, every folder on the way to the file, and everything in the file's own folder: no links.
+    $links = [Collections.Generic.List[string]]::new()
+    $dir = $from; $name = '.'; $parts = @($rel -split '\\')
+    for ($i = 0; $i -lt $parts.Count - 1; $i++) {
+        if ([IO.DirectoryInfo]::new($dir).Attributes -band [IO.FileAttributes]::ReparsePoint) { $links.Add($name) }
+        $dir = Join-Path $dir $parts[$i]; $name = $parts[0..$i] -join '/'
+    }
+    if (Test-Path -LiteralPath $dir -PathType Container) {
+        foreach ($l in Find-ReparsePoints $dir) { $links.Add($(if ($l -eq '.') { $name } elseif ($name -eq '.') { $l } else { "$name/$l" })) }
+    }
+    if ($links.Count) { throw "the isolated sandbox has links ($(Format-SafeText ($links -join ', ') 200)); nothing copied back" }
+    $root = [ReleaseBot.HandleCopy]::DirFinalPath($from, $true)
+    if (-not [ReleaseBot.HandleCopy]::Under($root, [ReleaseBot.HandleCopy]::DirFinalPath($isolationRoot, $false))) {
+        throw "the isolated sandbox $root is not inside the isolation root $isolationRoot; nothing copied back"
+    }
+    if (Test-Path -LiteralPath $botRoot) {
+        $bot = [ReleaseBot.HandleCopy]::DirFinalPath($botRoot, $false)
+        if ($root -ieq $bot -or [ReleaseBot.HandleCopy]::Under($root, $bot)) { throw "the isolated sandbox $root is inside the bot's own folder; nothing copied back" }
+    }
+    if (Test-Path -LiteralPath $to) { throw "copy-back target $to already exists" }
+    try { [void][ReleaseBot.HandleCopy]::CopyChecked($src, $to, $root, $maxBytes) }
+    catch {
+        Remove-Item -LiteralPath $to -Force -ErrorAction SilentlyContinue
+        throw "copy-back aborted, nothing copied back: $($_.Exception.GetBaseException().Message)"
+    }
+}
+
 Export-ModuleMember -Function *

@@ -233,6 +233,16 @@ Describe 'diff safety (finding 6: binaries, off-limits files)' {
         $run = @{ $iss.Path = [pscustomobject]@{ Removed = @(); Added = @('[Run]') } }
         Test-DiffSafety @($iss) $run @{} | Should -Match 'version line'
     }
+    It "refuses a review PR that changes the LecramChannel default (public builds stay without Lecram's channel)" {
+        $csproj = [pscustomobject]@{ Path = 'src/DLSSUpdater/DLSSUpdater.csproj'; Status = 'M'; NewMode = '100644'; Binary = $false }
+        $flip = @{ $csproj.Path = [pscustomobject]@{ Removed = @("    <LecramChannel Condition=`"'`$(LecramChannel)' == ''`">false</LecramChannel>")
+                                                     Added = @("    <LecramChannel Condition=`"'`$(LecramChannel)' == ''`">true</LecramChannel>") } }
+        Test-DiffSafety @($csproj) $flip @{} | Should -Match 'version line'
+        $drop = @{ $csproj.Path = [pscustomobject]@{ Removed = @("    <LecramChannel Condition=`"'`$(LecramChannel)' == ''`">false</LecramChannel>"); Added = @() } }
+        Test-DiffSafety @($csproj) $drop @{} | Should -Match 'version line'
+        $props = [pscustomobject]@{ Path = 'Directory.Build.props'; Status = 'A'; NewMode = '100644'; Binary = $false }
+        Test-DiffSafety @($props) @{ $props.Path = [pscustomobject]@{ Removed = @(); Added = @('<LecramChannel>true</LecramChannel>') } } @{} | Should -Match 'off-limits'
+    }
     It 'catches a real binary and .gitattributes in a git diff' {
         $d = New-TempRepo
         try {
@@ -820,5 +830,131 @@ Describe 'gates (N3: auto-merge really off on review PRs)' {
         Test-AutoMergeOff ('{"autoMergeRequest":{"mergeMethod":"SQUASH"},"isDraft":false}' | ConvertFrom-Json) | Should -BeFalse
         Test-AutoMergeOff ('{"isDraft":false}' | ConvertFrom-Json) | Should -BeFalse
         Test-AutoMergeOff $null | Should -BeFalse
+    }
+}
+
+Describe 'private build (LecramChannel=true on copyparty)' {
+    BeforeAll {
+        $full = { param($t, $extra = @{}) Merge @{ tagName = $t; isDraft = $false; isPrerelease = $false } $extra }
+    }
+    It 'finds the build switch only as a real csproj property' {
+        $with = "<Project>`n  <PropertyGroup>`n    <!-- the private build: dotnet publish -p:LecramChannel=true -->`n    <LecramChannel Condition=`"'`$(LecramChannel)' == ''`">false</LecramChannel>`n  </PropertyGroup>`n</Project>"
+        Test-LecramChannelSwitch $with | Should -BeTrue
+        Test-LecramChannelSwitch "<Project>`n  <PropertyGroup>`n    <Version>2.1.0</Version>`n  </PropertyGroup>`n</Project>" | Should -BeFalse
+        Test-LecramChannelSwitch "<Project><!-- <LecramChannel>true</LecramChannel> later --><Version>2.1.0</Version></Project>" | Should -BeFalse
+        Test-LecramChannelSwitch "<Project><LecramChannelFoo>1</LecramChannelFoo></Project>" | Should -BeFalse
+        Test-LecramChannelSwitch '' | Should -BeFalse
+    }
+    It 'builds only the newest full release, once' {
+        $rels = @((& $full 'v2.1.0'), (& $full 'v2.2.0'), (& $full 'v2.10.0' @{ isPrerelease = $true }), (& $full 'v2.3.0' @{ isDraft = $true }),
+            (& $full 'v9.0.0-beta'), (& $full 'v2.1.5'))
+        (Select-PrivateBuildTag $rels @{} @{}).Tag | Should -Be 'v2.2.0'
+        (Select-PrivateBuildTag $rels $null $null).Tag | Should -Be 'v2.2.0'
+        $r = Select-PrivateBuildTag $rels @{ 'v2.2.0' = @{ name = 'x'; sha256 = 'y' } } @{}
+        $r.Tag | Should -BeNullOrEmpty; $r.Note | Should -Match 'already built'
+        # The newest release is done: older ones are never built afterwards.
+        (Select-PrivateBuildTag $rels @{ 'v2.2.0' = @{ skipped = 'predates LecramChannel' } } @{}).Note | Should -Match 'skipped'
+        (Select-PrivateBuildTag @() @{} @{}).Tag | Should -BeNullOrEmpty
+        (Select-PrivateBuildTag @((& $full 'v2.0.0' @{ isPrerelease = $null })) @{} @{}).Tag | Should -BeNullOrEmpty
+    }
+    It 'parks a release after three failed builds, until the next release' {
+        $rels = @((& $full 'v2.2.0'))
+        (Select-PrivateBuildTag $rels @{} @{ 'private|v2.2.0' = 2 }).Tag | Should -Be 'v2.2.0'
+        (Select-PrivateBuildTag $rels @{} @{ 'private|v2.2.0' = 3 }).Note | Should -Match 'parked'
+        (Select-PrivateBuildTag ($rels + (& $full 'v2.2.1')) @{} @{ 'private|v2.2.0' = 3 }).Tag | Should -Be 'v2.2.1'
+    }
+    It 'names the build after the version' {
+        Get-PrivateBuildName '2.2.0' | Should -Be 'DLSS5Updater-2.2.0-private.exe'
+        { Get-PrivateBuildName '2.2.0/../x' } | Should -Throw
+        { Get-PrivateBuildName 'v2.2.0' } | Should -Throw
+    }
+    It 'checks the version resource and the size of the built exe' {
+        Test-PrivateExe '2.2.0.0' '2.2.0+0123abcd' 80MB '2.2.0' | Should -BeNullOrEmpty
+        Test-PrivateExe '2.2.0' '2.2.0' 1 '2.2.0' | Should -BeNullOrEmpty
+        Test-PrivateExe '2.1.0.0' '2.2.0' 80MB '2.2.0' | Should -Match 'FileVersion'
+        Test-PrivateExe '2.2.0.0' '' 80MB '2.2.0' | Should -Match 'ProductVersion'
+        Test-PrivateExe $null $null 80MB '2.2.0' | Should -HaveCount 2
+        Test-PrivateExe '2.2.0.0' '2.2.0' 151MB '2.2.0' | Should -Match 'size'
+        Test-PrivateExe '2.2.0.0' '2.2.0' 0 '2.2.0' | Should -Match 'size'
+    }
+    It 'deletes only its own uploads beyond the newest three' {
+        $b = @{
+            'v2.2.0' = @{ name = 'DLSS5Updater-2.2.0-private.exe' }; 'v2.3.0' = @{ name = 'DLSS5Updater-2.3.0-private.exe' }
+            'v2.10.0' = @{ name = 'DLSS5Updater-2.10.0-private.exe' }; 'v2.4.0' = @{ name = 'DLSS5Updater-2.4.0-private.exe' }
+            'v2.1.9' = @{ name = 'DLSS5Updater-2.1.9-private.exe'; deleted = '2026-10-01' }; 'v2.1.0' = @{ skipped = 'predates LecramChannel' }
+        }
+        $d = @(Select-PrivateBuildsToDelete $b 3)
+        $d | Should -HaveCount 1
+        $d[0] | Should -Be 'v2.2.0'
+        @(Select-PrivateBuildsToDelete $b 5) | Should -HaveCount 0
+        @(Select-PrivateBuildsToDelete $null) | Should -HaveCount 0
+    }
+    It 'never treats private-build/, failed/ or processed/ as drops' {
+        $ls = @'
+{"dirs":[{"href":"private-build/","sz":0},{"href":"failed/","sz":0},{"href":"processed/","sz":0}],
+ "files":[{"href":"DLSS5-NR-v11.zip","sz":10},{"href":"private-build/DLSS5Updater-2.2.0-private.exe","sz":5},
+          {"href":"private-build%2FDLSS5Updater-2.2.0-private.exe.sha256","sz":5},{"href":"failed%5Cx.zip","sz":1},{"href":"","sz":1}]}
+'@ | ConvertFrom-Json
+        $f = @(Select-DropFiles $ls)
+        $f | Should -HaveCount 1
+        $f[0].Name | Should -Be 'DLSS5-NR-v11.zip'; $f[0].Size | Should -Be 10
+        @(Select-DropFiles ('{"files":[]}' | ConvertFrom-Json)) | Should -HaveCount 0
+        $s = Get-Content -Raw (Join-Path $PSScriptRoot 'release-bot.ps1')
+        $s | Should -Match 'Select-DropFiles \(\$resp\.Content \| ConvertFrom-Json\)'
+    }
+    It 'builds only isolated (or as the owner by name), without the Claude token, and never in a dry run without -RunAs' {
+        $s = Get-Content -Raw (Join-Path $PSScriptRoot 'release-bot.ps1')
+        $fn = [regex]::Match($s, '(?s)function Update-PrivateBuild\b.*?\n}\r?\n').Value
+        $fn | Should -Match 'Get-ClaudeLaunchRefusal \$RunAs \$UnsafeRunClaudeAsOwner'
+        $fn | Should -Match "if \(\`$DryRun -and -not \`$RunAs\)"
+        $fn | Should -Match "\`$envMap\.Remove\('CLAUDE_CODE_OAUTH_TOKEN'\)"
+        $fn | Should -Match "'-p:LecramChannel=true'"
+        $fn | Should -Match 'Copy-SandboxFile \$r\.Sandbox'
+        $fn | Should -Match 'Sync-ReleaseTag \$Mirror'
+        # A dry run returns before it uploads, deletes, notifies or records the build.
+        $dry = $fn.IndexOf('if ($DryRun) {'); $dry | Should -BeGreaterThan 0
+        foreach ($call in 'Send-PrivateBuild $local', 'Remove-OldPrivateBuilds $state', 'Send-Notice', '$state.privateBuilds[$tag] = @{ name') { $fn.IndexOf($call) | Should -BeGreaterThan $dry }
+    }
+}
+
+Describe 'private build copy-back (one file)' {
+    BeforeEach {
+        $from = Join-Path $TestDrive "pb-$([guid]::NewGuid().ToString('N').Substring(0, 6))"
+        $to = Join-Path $TestDrive "pb-back-$([guid]::NewGuid().ToString('N').Substring(0, 6)).exe"
+        New-Item -ItemType Directory -Force "$from/out", "$from/repo" | Out-Null
+        Set-Content "$from/out/DLSS5Updater.exe" 'exe'; Set-Content "$from/out/other.dll" 'dll'
+        $bot = Join-Path $TestDrive "pbbot-$([guid]::NewGuid().ToString('N').Substring(0, 6))"
+        New-Item -ItemType Directory $bot | Out-Null
+    }
+    It 'copies only the one file' {
+        Copy-SandboxFile $from 'out\DLSS5Updater.exe' $to $TestDrive $bot
+        Get-Content $to | Should -Be 'exe'
+        { Copy-SandboxFile $from 'out\DLSS5Updater.exe' $to $TestDrive $bot } | Should -Throw '*already exists*'
+    }
+    It 'refuses links: inside the out folder, or the out folder itself' {
+        $secret = Join-Path $TestDrive "pbsecret-$([guid]::NewGuid().ToString('N').Substring(0, 6))"
+        New-Item -ItemType Directory $secret | Out-Null; Set-Content "$secret/DLSS5Updater.exe" 'owner file'
+        try {
+            New-Item -ItemType Junction -Path "$from/out/j" -Target $secret | Out-Null
+            { Copy-SandboxFile $from 'out\DLSS5Updater.exe' $to $TestDrive $bot } | Should -Throw '*links (out/j)*'
+            (Get-Item "$from/out/j" -Force).Delete()
+            Remove-Item -Recurse -Force "$from/out"
+            New-Item -ItemType Junction -Path "$from/out" -Target $secret | Out-Null
+            { Copy-SandboxFile $from 'out\DLSS5Updater.exe' $to $TestDrive $bot } | Should -Throw '*links (out)*'
+            Test-Path $to | Should -BeFalse
+        } finally { Get-ChildItem -Recurse -Force $from -Attributes ReparsePoint | ForEach-Object { $_.Delete() } }
+    }
+    It 'refuses a second hard link, a sandbox outside the isolation root, the cap and odd paths' {
+        $other = Join-Path $TestDrive "pbiso-$([guid]::NewGuid().ToString('N').Substring(0, 6))"
+        New-Item -ItemType Directory $other | Out-Null
+        { Copy-SandboxFile $from 'out\DLSS5Updater.exe' $to $other $bot } | Should -Throw '*not inside the isolation root*'
+        { Copy-SandboxFile $from 'out\DLSS5Updater.exe' $to $TestDrive $TestDrive } | Should -Throw "*bot's own folder*"
+        { Copy-SandboxFile $from 'out\DLSS5Updater.exe' $to $TestDrive $bot -maxBytes 2 } | Should -Throw '*size cap*'
+        Test-Path $to | Should -BeFalse
+        { Copy-SandboxFile $from 'out\..\..\x.exe' $to $TestDrive $bot } | Should -Throw '*plain relative path*'
+        { Copy-SandboxFile $from 'C:\x.exe' $to $TestDrive $bot } | Should -Throw '*plain relative path*'
+        New-Item -ItemType HardLink -Path "$from/repo/copy.exe" -Target "$from/out/DLSS5Updater.exe" | Out-Null
+        { Copy-SandboxFile $from 'out\DLSS5Updater.exe' $to $TestDrive $bot } | Should -Throw '*2 hard links*'
+        Test-Path $to | Should -BeFalse
     }
 }

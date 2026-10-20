@@ -102,6 +102,36 @@ network, gitleaks or the Claude token missing, Claude API errors) are logged and
 
 Notices go to ntfy `claude-work`, are bot templates with sanitised names, and pass gitleaks first.
 
+## Private build
+The app has a compile-time switch `LecramChannel` (csproj, default false) for the automatic fetch from Lecram's
+MediaFire channel. Public releases are built with it off (`release.yml`); the owner's private build has it on and
+doesn't self-update from GitHub, so the bot builds it and puts it on copyparty.
+- When: every run (not the first one with a new state), for the newest full GitHub release (not a draft, not a
+  prerelease: a hand-tagged release, or a bot prerelease once promoted), once. Older releases are never built. Same
+  check as the auto path: `gh release view` shows a published full release, the tag is fetched fresh from origin
+  (`Sync-ReleaseTag`), and the csproj at the tag has that `<Version>`.
+- Skip: a tag whose csproj has no `LecramChannel` property predates the switch (v2.1.0 and older). One log line,
+  `privateBuilds[<tag>].skipped` in the state, no failure, no build.
+- Build: a fresh worktree of the mirror at the tag's commit, cloned into a sandbox, then `dotnet publish
+  src/DLSSUpdater -c Release -p:LecramChannel=true -o <sandbox>\out` through `isolation.ps1` as the `-RunAs` user
+  (`-PrivateBuildTimeoutMinutes`, 30), in Claude's reduced environment without the Claude token (NuGet cache under
+  the isolated `home\`, no node reuse or build server). Without `-RunAs` it refuses like Claude does, unless
+  `-UnsafeRunClaudeAsOwner`. The isolated user's restore needs nuget.org (mind step 6 of Full isolation).
+- Copy-back: only `out\DLSS5Updater.exe`, through `Copy-SandboxFile` (`Copy-SandboxBack`'s checks for one file: no
+  link on the way or in `out\`, final path inside the sandbox, one hard link, 150 MB). Its FileVersion and
+  ProductVersion must be the tag's X.Y.Z.
+- Upload: `dlss5updater-drop/private-build/DLSS5Updater-<version>-private.exe` and `.exe.sha256` (sha256sum format),
+  PUT with the drop account (`DLSS5_DROP_PW`), then the listing must show the exe with its size. State:
+  `privateBuilds[<tag>]` with name, sha256, size, time. The bot keeps its own newest 3 there and deletes older ones it
+  uploaded (`?delete`, marked `deleted`). One ntfy note: "Private build v<version> is on copyparty".
+- Drop processing only takes files at the top of the share: `private-build/`, `processed/` and `failed/` are never
+  drops.
+- Failures: its own try/catch, so it never stops the rest of the run. A failed build counts under
+  `private|<tag>`: three strikes park it until the next release. Machine failures (gh, dotnet missing, isolation hook
+  missing) aren't counted. The build log goes to `logs\private-build-<run>.log`.
+- `-DryRun`: builds only with `-RunAs` (into the run's temp folder), then logs "would upload"; never uploads,
+  deletes, notifies, or records the build. The skip mark is saved only to a `-StateFile`.
+
 ## Claude's reduced environment
 - The environment is cleared. Claude gets PATH, SystemRoot and the other Windows basics, USERPROFILE, TEMP/TMP in
   the sandbox, the bot's own APPDATA/LOCALAPPDATA, `CLAUDE_CONFIG_DIR` and NuGet package cache under `claude-home\`
@@ -115,6 +145,9 @@ Notices go to ntfy `claude-work`, are bot templates with sanitised names, and pa
   `unzip -l` and `sha256sum`. No git at all (`git diff/log --output` writes any file, `git grep -O` starts a
   program, and the clone's `.git/config` is Claude-writable), no interpreters (python, py, node, pwsh, cmd, bash,
   perl), no gh/curl. WebFetch only github.com, raw.githubusercontent.com, api.github.com.
+- prompt.md tells Claude about `LecramChannel`: never change its default or turn it on for public releases (a csproj
+  change beyond the version line is refused anyway), keep both variants compiling (`dotnet build -warnaserror
+  -p:LecramChannel=true` too, covered by `Bash(dotnet build:*)`), and do a new Lecram build's options as usual.
 - Files come back by name only: the bot rejects links, `.git*` names, names ending in a dot or space and 8.3 short
   names (Windows would write them somewhere else, for example over the worktree's `.git` file), and checks that its
   worktree's `.git` file is unchanged before it runs `git add`.
@@ -190,8 +223,8 @@ modify on new top-level folders, so `C:\dev` with the owner's repos is one); and
   you pass `-Enable`.
 - State: `...\state.json` (last seen value per source, ETags, processed and seen drops, failure counts, bot PRs with
   mode / head / patch-id / needs-review, the pending auto release, prereleases waiting for promotion, cached proof
-  hashes per OptiScaler release asset).
-- Logs: `...\logs\release-bot-<date>.log` and `claude-<run>.json`, deleted after 30 days.
+  hashes per OptiScaler release asset, private builds per tag).
+- Logs: `...\logs\release-bot-<date>.log`, `claude-<run>.json` and `private-build-<run>.log`, deleted after 30 days.
 - `...\mirror.git`: bare clone only the bot touches; every run makes its worktrees from it and removes them.
   `...\claude-home`: Claude's config, AppData and NuGet folders. `...\browser-profile`: the bot's Buy Me a Coffee
   login (`-LoginBuyMeACoffee`). `...\nohooks`: the empty hooks folder in Claude's sandbox git config.
