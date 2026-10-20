@@ -246,6 +246,8 @@ public sealed partial class MainViewModel : ObservableObject
             if (cached.Count > 0) ApplyScan(cached);
 
             await Task.WhenAll(CheckUpdatesCore(ct), ScanCore(ct));
+            // Only now are all install records known, which the cleanup must keep builds for.
+            await AutoCleanUpAsync();
         }, lease);
         if (UpdateCount > 0) Log.Info($"{UpdateCount} game(s) have updates available");
         if (!Demo.Active) await Task.Run(HashCache.Save);
@@ -278,6 +280,7 @@ public sealed partial class MainViewModel : ObservableObject
         // An imported ReShade doesn't follow releases, so there is nothing new to point at.
         ReShadeNews.Load(auto ? store.ReShade : null);
         foreach (var g in Games) { g.RebuildNrChoices(); g.RebuildAddonChoices(); g.RefreshStatus(); }
+        SettingsVm.ReloadReleaseChoices();
         CountUpdates();
         OnPropertyChanged(nameof(LecramVersion));
     }
@@ -285,7 +288,11 @@ public sealed partial class MainViewModel : ObservableObject
     public string LecramVersion => S.Settings.LecramLastVersion ?? S.Store.LecramBuildFor(null)?.DetectedLabel ?? "not in library";
 
     /// <summary>Lecram check on its own (Add-on library "Check now", even with automatic checks off), as a run like any other.</summary>
-    internal Task CheckLecramNowAsync() => Run("Checking Lecram", ct => CheckLecramAsync(ct, force: true));
+    internal Task CheckLecramNowAsync() => Run("Checking Lecram", async ct =>
+    {
+        await CheckLecramAsync(ct, force: true);
+        await AutoCleanUpAsync();
+    });
 
     private async Task CheckLecramAsync(CancellationToken ct, bool force = false)
     {
@@ -417,6 +424,7 @@ public sealed partial class MainViewModel : ObservableObject
             catch (Exception ex) when (ex is not OperationCanceledException) { failed++; Log.Error(g.Name, ex); }
         }
         Log.Info(failed == 0 ? $"Updated {targets.Count} game(s)" : $"{failed} game(s) couldn't be updated. Details are in the log.");
+        await AutoCleanUpAsync();
     });
 
     [RelayCommand(CanExecute = nameof(CanAddGames))]
@@ -639,6 +647,7 @@ public sealed partial class MainViewModel : ObservableObject
         {
             await S.Installer.InstallAsync(g.Info, g.SelectedTarget.Dir, o, TransferProgress(), ct);
             await RescanOne(g);
+            await AutoCleanUpAsync();
         });
     }
 
@@ -690,6 +699,81 @@ public sealed partial class MainViewModel : ObservableObject
             await S.Installer.RestoreDlssAsync(g.Info, g.SelectedTarget.Dir, ct);
             await RescanOne(g);
         });
+    }
+
+    // ---------- build cleanup ----------
+
+    /// <summary>Every folder a game has an install record in.</summary>
+    internal List<string> InstallDirs() =>
+        Games.SelectMany(g => g.Info.Installs).Distinct(StringComparer.OrdinalIgnoreCase).ToList();
+
+    /// <summary>The install records in <paramref name="dirs"/>; null when one exists but can't be read, so the cleanup can't know what it needs.</summary>
+    internal static List<InstallManifest>? ReadRecords(IEnumerable<string> dirs)
+    {
+        var records = new List<InstallManifest>();
+        foreach (var dir in dirs)
+        {
+            try
+            {
+                if ((Demo.Active ? Demo.ManifestAt(dir) : InstallManifest.Read(dir)) is { } m) records.Add(m);
+            }
+            catch (Exception ex) when (ex is InvalidDataException or IOException or UnauthorizedAccessException)
+            {
+                Log.Error($"Cleanup skipped: the install record in {dir} can't be read", ex);
+                return null;
+            }
+        }
+        return records;
+    }
+
+    /// <summary>Settings' Clean up: says what goes and how much it frees, deletes after a yes.</summary>
+    internal async Task CleanUpBuildsAsync()
+    {
+        if (IsBusy) return;
+        if (ReadRecords(InstallDirs()) is not { } records)
+        {
+            Dialog.Show("Cleanup skipped", "An install record can't be read, so nothing is deleted. The details are in the log.");
+            return;
+        }
+        var plan = S.Store.PlanCleanup(S.Settings, records);
+        if (plan.Count == 0)
+        {
+            Dialog.Show("Nothing to clean up", "Every kept build is one of the newest, a default, chosen for a game or installed in one.");
+            return;
+        }
+        var list = string.Join(Environment.NewLine, plan.Take(12).Select(p => $"• {p.What} ({BuildCleanup.FormatBytes(p.Bytes)})"))
+                   + (plan.Count > 12 ? $"{Environment.NewLine}… and {plan.Count - 12} more" : "");
+        if (!Dialog.Confirm("Clean up old builds",
+                $"Delete these for good and free {BuildCleanup.FormatBytes(plan.Sum(p => p.Bytes))}?{Environment.NewLine}{Environment.NewLine}{list}{Environment.NewLine}{Environment.NewLine}" +
+                "Defaults, builds chosen for a game and builds installed in one always stay.", "Delete", danger: true)) return;
+        await Run("Cleaning up old builds", async _ =>
+        {
+            await Task.Run(() => S.Store.RunCleanup(plan));
+            await AfterCleanupAsync();
+        });
+    }
+
+    /// <summary>After an import outside a run: the automatic cleanup, when it is on, as a run of its own.</summary>
+    internal Task AutoCleanUpAfterImportAsync() =>
+        S.Settings.AutoCleanBuilds && !IsBusy ? Run("Deleting old builds", _ => AutoCleanUpAsync()) : Task.CompletedTask;
+
+    /// <summary>Inside a run, after downloads or imports: deletes old builds when automatic cleanup is on.</summary>
+    private async Task AutoCleanUpAsync()
+    {
+        if (!S.Settings.AutoCleanBuilds) return;
+        var dirs = InstallDirs();
+        if (await Task.Run(() => ReadRecords(dirs)) is not { } records) return;
+        var plan = S.Store.PlanCleanup(S.Settings, records);
+        if (plan.Count == 0) return;
+        Log.Info("Deleting old builds (automatic cleanup is on)");
+        await Task.Run(() => S.Store.RunCleanup(plan));
+        await AfterCleanupAsync();
+    }
+
+    private async Task AfterCleanupAsync()
+    {
+        await RefreshLocalComponentsAsync();
+        SettingsVm.Reload();
     }
 
     // ---------- commands: game config ----------

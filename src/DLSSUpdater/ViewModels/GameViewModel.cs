@@ -127,8 +127,8 @@ public sealed partial class GameViewModel : ObservableObject
     public ObservableCollection<ComponentRow> Components { get; }
     public ObservableCollection<DlssRow> DlssRows { get; } = [];
     public IReadOnlyList<string> ProxyNames => IsReShadeOnly ? AppSettings.ReShadeProxyNames : AppSettings.ProxyNames;
-    /// <summary>The OptiScaler build selected in Settings; games installed with the other one name theirs in the component row.</summary>
-    private OptiSource SelectedBuild => OptiSources.For(_s.Settings.OptiSource);
+    /// <summary>The OptiScaler source this game installs: that of its chosen build, else the one selected in Settings.</summary>
+    private OptiSource SelectedBuild => EffectiveOptiTag is { } tag ? OptiSources.OfTag(tag) : OptiSources.For(_s.Settings.OptiSource);
     public IReadOnlyList<ModeChoice> Modes => ModeChoice.For(SelectedBuild);
     public string ModeHint => $"{SelectedBuild.Name}, or ReShade + add-ons without OptiScaler";
 
@@ -196,6 +196,14 @@ public sealed partial class GameViewModel : ObservableObject
     public string? EffectiveLecramId => LecramChoice?.Tag ?? _s.Settings.LecramId;
     /// <summary>Generation of the Lecram build this game uses; it decides which Lecram options apply.</summary>
     public LecramGeneration? EffectiveLecramGeneration => _s.Store.LecramBuildFor(EffectiveLecramId)?.Generation;
+
+    [ObservableProperty] private DlssChoice? _optiChoice;
+    [ObservableProperty] private DlssChoice? _upliftChoice;
+    public ObservableCollection<DlssChoice> OptiChoices { get; } = [];
+    public ObservableCollection<DlssChoice> UpliftChoices { get; } = [];
+    /// <summary>The OptiScaler build this game installs: its own pick, else the default; null is the newest release of the selected source.</summary>
+    public string? EffectiveOptiTag => OptiChoice?.Tag ?? _s.Settings.OptiTag;
+    public string? EffectiveUpliftTag => UpliftChoice?.Tag ?? _s.Settings.UpliftTag;
     public bool RenoDxEnabled => On("renodx");
     public bool LecramEnabled => On("lecram");
     public bool BothAddonsEnabled => RenoDxEnabled && LecramEnabled;
@@ -565,7 +573,7 @@ public sealed partial class GameViewModel : ObservableObject
         _loading = loading;
     }
 
-    /// <summary>The add-on dropdowns: "Default" plus every library build.</summary>
+    /// <summary>The build dropdowns of the add-ons, OptiScaler and GITC Uplift: "Default" plus every library build, newest first.</summary>
     public void RebuildAddonChoices()
     {
         var loading = _loading;
@@ -573,10 +581,29 @@ public sealed partial class GameViewModel : ObservableObject
         var over = _s.Settings.Games.GetValueOrDefault(Id);
         RenoDxChoice = FillAddonChoices(RenoDxChoices, AddonKind.RenoDx, over?.RenoDxId);
         LecramChoice = FillAddonChoices(LecramChoices, AddonKind.Lecram, over?.LecramId);
+        OptiChoice = FillBuildChoices(OptiChoices, _s.Store.Library(LibraryKind.OptiScaler), _s.Settings.OptiTag, NewestOptiLabel(_s.Store), over?.OptiTag);
+        UpliftChoice = FillBuildChoices(UpliftChoices, _s.Store.Library(LibraryKind.Uplift), _s.Settings.UpliftTag, NewestUpliftLabel(_s.Store), over?.UpliftTag);
         _loading = loading;
         OnPropertyChanged(nameof(EffectiveLecramGeneration));
         RefreshAddonPairStatus();
         if (_rowsBuilt) RefreshConfigRows();
+    }
+
+    /// <summary>"newest: OptiScaler-NR v0.9.51", what a default that follows the releases installs now.</summary>
+    internal static string NewestOptiLabel(ComponentStore store) =>
+        store.Opti is { } r ? $"newest: {OptiSources.OfTag(r.Tag).Name} {OptiSources.RawTag(r.Tag)}" : $"newest {store.OptiSource.Name}";
+
+    internal static string NewestUpliftLabel(ComponentStore store) => store.Uplift is { } r ? $"newest: {r.Tag}" : "newest";
+
+    /// <summary>"Default (…)" naming what the default installs, then the library newest first, then a game pick the library lost.</summary>
+    private static DlssChoice FillBuildChoices(ObservableCollection<DlssChoice> list, IReadOnlyList<LibraryBuild> builds, string? global, string newest, string? pin)
+    {
+        var follows = global is null ? newest : builds.FirstOrDefault(b => b.Id.Equals(global, StringComparison.OrdinalIgnoreCase))?.Label ?? global;
+        list.Clear();
+        list.Add(new DlssChoice(null, $"Default ({follows})"));
+        foreach (var b in builds) list.Add(new DlssChoice(b.Id, b.Label));
+        if (pin is not null && list.All(c => c.Tag != pin)) list.Add(new DlssChoice(pin, $"{pin} · not downloaded"));
+        return list.FirstOrDefault(c => c.Tag == pin) ?? list[0];
     }
 
     private DlssChoice FillAddonChoices(ObservableCollection<DlssChoice> list, AddonKind kind, string? pin)
@@ -612,6 +639,23 @@ public sealed partial class GameViewModel : ObservableObject
         if (_loading) return;
         _s.Settings.For(Id).LecramId = value?.Tag;
         AddonPicksChanged();
+    }
+
+    partial void OnOptiChoiceChanged(DlssChoice? value)
+    {
+        if (_loading) return;
+        _s.Settings.For(Id).OptiTag = value?.Tag;
+        _s.Settings.Save();
+        // The chosen build may be the other OptiScaler source: its name goes on the mode, the mod list and the row.
+        RefreshBuildName();
+    }
+
+    partial void OnUpliftChoiceChanged(DlssChoice? value)
+    {
+        if (_loading) return;
+        _s.Settings.For(Id).UpliftTag = value?.Tag;
+        _s.Settings.Save();
+        RefreshStatus();
     }
 
     partial void OnNrChoiceChanged(DlssChoice? value)
@@ -713,7 +757,7 @@ public sealed partial class GameViewModel : ObservableObject
 
         // The row names the build actually installed (the manifest tag carries it); without an install it names the selected one.
         Components.First(c => c.Key == "opti").Name = (m?.Opti == true && m.OptiTag is not null ? OptiSources.OfTag(m.OptiTag) : SelectedBuild).Name;
-        Row("opti", m?.Opti == true ? m.OptiTag : null, store.Opti?.Tag, true);
+        Row("opti", m?.Opti == true ? m.OptiTag : null, EffectiveOptiTag ?? store.Opti?.Tag, true);
         Row("reshade", m?.ReShade == true ? InstalledVersion(ReShadeInstalledName(m)) : null, ReShadeLatest(), ReShadeCurrent(m));
         Row("mfg", m?.Mfg == true ? m.MfgTag : null, store.Mfg?.Tag, true);
         if (!Info.Streamline.Any(d => d.Name.Equals("sl.dlss_g.dll", StringComparison.OrdinalIgnoreCase)) && m?.Mfg != true)
@@ -734,7 +778,7 @@ public sealed partial class GameViewModel : ObservableObject
         var lecram = store.LecramBuildFor(EffectiveLecramId);
         Row("renodx", m?.RenoDx == true ? InstalledAddon(AddonKind.RenoDx, m.RenoDxId, m.RenoDxTag) : null, sf?.Name, sf is not null && sf.Matches(m?.RenoDxId, m?.RenoDxTag));
         Row("lecram", m?.Lecram == true ? InstalledAddon(AddonKind.Lecram, m.LecramId, m.LecramTag) : null, lecram?.Name, lecram is not null && lecram.Matches(m?.LecramId, m?.LecramTag));
-        Row("uplift", m?.Uplift == true ? m.UpliftTag : null, store.Uplift?.Tag, true);
+        Row("uplift", m?.Uplift == true ? m.UpliftTag : null, EffectiveUpliftTag ?? store.Uplift?.Tag, true);
         Row("dfc", m?.Dfc == true ? RenoDxVersionOf(m.DfcTag) : null, store.DfcVersion, m?.DfcTag == store.DfcTag);
         OnPropertyChanged(nameof(CanSwitchNr));
         OnPropertyChanged(nameof(CanUndoNr));
@@ -855,6 +899,7 @@ public sealed partial class GameViewModel : ObservableObject
         Lecram = !dlssOnly && IsReShadeOnly && On("lecram") && !On("dfc"),
         LecramId = EffectiveLecramId,
         Uplift = !dlssOnly && IsReShadeOnly && On("uplift"),
+        UpliftTag = EffectiveUpliftTag,
         Dfc = !dlssOnly && IsReShadeOnly && On("dfc"),
         DfcFrameGen = DfcFrameGen,
         Dlss = dlssOnly || On("dlss"),
@@ -867,6 +912,7 @@ public sealed partial class GameViewModel : ObservableObject
         Proxy = Proxy,
         Overrides = GameConfig.EffectiveOpti(_s.Settings, Id),
         AntiCheatConfirmed = acConfirmed,
+        OptiTag = EffectiveOptiTag,
     };
 
     /// <summary>Options that reproduce what is installed, for "Update all".</summary>
@@ -883,6 +929,7 @@ public sealed partial class GameViewModel : ObservableObject
         Lecram = m.Lecram,
         LecramId = EffectiveLecramId,
         Uplift = m.Uplift,
+        UpliftTag = EffectiveUpliftTag,
         Dfc = m.Dfc,
         DfcFrameGen = DfcFrameGen,
         Dlss = m.Dlss,
@@ -895,6 +942,7 @@ public sealed partial class GameViewModel : ObservableObject
         Proxy = m.Proxy ?? Proxy,
         Overrides = GameConfig.EffectiveOpti(_s.Settings, Id),
         AntiCheatConfirmed = m.AntiCheatConfirmed,
+        OptiTag = EffectiveOptiTag,
     };
 
     private string IniMode => GameConfig.EffectiveIniMode(_s.Settings, Id);

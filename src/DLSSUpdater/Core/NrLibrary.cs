@@ -44,7 +44,7 @@ public sealed partial class ComponentStore
                 catch (Exception ex) when (ex is IOException or JsonException)
                 { Log.Error($"Could not read NR library entry {file}", ex); }
             }
-            return versions.OrderByDescending(v => FileUtil.ParseTag(v.Version)).ThenBy(v => v.Id).ToList();
+            return BuildOrder.NewestFirst(versions, v => v.Version, _ => null, v => v.Id);
         }
     }
 

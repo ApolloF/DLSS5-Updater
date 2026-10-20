@@ -815,10 +815,23 @@
                                                         <Style.Triggers>
                                                             <DataTrigger Binding="{Binding Key}" Value="renodx"><Setter Property="Visibility" Value="Collapsed" /></DataTrigger>
                                                             <DataTrigger Binding="{Binding Key}" Value="lecram"><Setter Property="Visibility" Value="Collapsed" /></DataTrigger>
+                                                            <DataTrigger Binding="{Binding Key}" Value="opti"><Setter Property="Visibility" Value="Collapsed" /></DataTrigger>
+                                                            <DataTrigger Binding="{Binding Key}" Value="uplift"><Setter Property="Visibility" Value="Collapsed" /></DataTrigger>
                                                         </Style.Triggers>
                                                     </Style>
                                                 </TextBlock.Style>
                                             </TextBlock>
+                                            <!-- OptiScaler and GITC Uplift pick the downloaded build this game installs. -->
+                                            <ComboBox Grid.Column="3" Margin="0,0,8,0" MaxDropDownHeight="300"
+                                                      Visibility="{Binding Key, Converter={StaticResource EqualsToVis}, ConverterParameter=opti}"
+                                                      ItemsSource="{Binding DataContext.OptiChoices, RelativeSource={RelativeSource AncestorType=ItemsControl}}"
+                                                      SelectedItem="{Binding DataContext.OptiChoice, RelativeSource={RelativeSource AncestorType=ItemsControl}}"
+                                                      AutomationProperties.Name="OptiScaler version for this game" ToolTip="Which OptiScaler build this game installs; Default follows Settings" />
+                                            <ComboBox Grid.Column="3" Margin="0,0,8,0" MaxDropDownHeight="300"
+                                                      Visibility="{Binding Key, Converter={StaticResource EqualsToVis}, ConverterParameter=uplift}"
+                                                      ItemsSource="{Binding DataContext.UpliftChoices, RelativeSource={RelativeSource AncestorType=ItemsControl}}"
+                                                      SelectedItem="{Binding DataContext.UpliftChoice, RelativeSource={RelativeSource AncestorType=ItemsControl}}"
+                                                      AutomationProperties.Name="GITC Uplift version for this game" ToolTip="Which GITC Uplift build this game installs; Default follows Settings" />
                                             <!-- The add-on rows pick the imported build this game installs. -->
                                             <ComboBox Grid.Column="3" Margin="0,0,8,0" MaxDropDownHeight="300"
                                                       Visibility="{Binding Key, Converter={StaticResource EqualsToVis}, ConverterParameter=renodx}"
@@ -1189,6 +1202,29 @@
                                                                   ItemsSource="{Binding OptiBuilds}" DisplayMemberPath="Label" SelectedItem="{Binding OptiBuild}"
                                                                   AutomationProperties.Name="OptiScaler build" />
                                                     </Grid>
+                                                    <Grid Margin="0,8">
+                                                        <Grid.ColumnDefinitions>
+                                                            <ColumnDefinition Width="*" />
+                                                            <ColumnDefinition Width="Auto" />
+                                                        </Grid.ColumnDefinitions>
+                                                        <StackPanel>
+                                                            <TextBlock Text="OptiScaler version" VerticalAlignment="Center" />
+                                                            <TextBlock Text="Newest follows each release. Pick a kept build to stay on it; each game can choose its own." Style="{StaticResource MutedText}" FontSize="11.5" TextWrapping="Wrap" Margin="0,2,0,0" />
+                                                        </StackPanel>
+                                                        <ComboBox Grid.Column="1" Width="250" Margin="16,0,0,0" VerticalAlignment="Center" MaxDropDownHeight="360"
+                                                                  ItemsSource="{Binding OptiVersionChoices}" SelectedItem="{Binding SelectedOptiVersion}"
+                                                                  AutomationProperties.Name="Default OptiScaler version" />
+                                                    </Grid>
+                                                    <Grid Margin="0,8">
+                                                        <Grid.ColumnDefinitions>
+                                                            <ColumnDefinition Width="*" />
+                                                            <ColumnDefinition Width="Auto" />
+                                                        </Grid.ColumnDefinitions>
+                                                        <TextBlock Text="GITC Uplift version" VerticalAlignment="Center" />
+                                                        <ComboBox Grid.Column="1" Width="250" Margin="16,0,0,0" VerticalAlignment="Center" MaxDropDownHeight="360"
+                                                                  ItemsSource="{Binding UpliftVersionChoices}" SelectedItem="{Binding SelectedUpliftVersion}"
+                                                                  AutomationProperties.Name="Default GITC Uplift version" />
+                                                    </Grid>
                                                     <CheckBox IsChecked="{Binding IncludePrereleases}" Margin="0,8">
                                                         <StackPanel Orientation="Horizontal">
                                                             <TextBlock Text="Include pre-releases" VerticalAlignment="Center" />
@@ -1248,6 +1284,46 @@
                                                         </StackPanel>
                                                         <ComboBox Grid.Column="1" Width="210" Margin="16,0,0,0" ItemsSource="{Binding IniModes}" SelectedItem="{Binding IniMode}"
                                                                   ItemContainerStyle="{StaticResource DescribedItem}" AutomationProperties.Name="Existing game configs" />
+                                                    </Grid>
+                                                </StackPanel>
+                                            </Border>
+
+                                            <!-- Old builds of every library and download leftovers; what games need always stays. -->
+                                            <TextBlock Text="BUILD LIBRARY" Style="{StaticResource SectionTitle}" />
+                                            <Border Style="{StaticResource Card}" Padding="16,6" DataContext="{Binding Cleanup}">
+                                                <StackPanel>
+                                                    <TextBlock Text="Downloaded and imported builds stay so games can switch back. Cleanup keeps the newest builds of each library (per OptiScaler source) and always keeps defaults, builds chosen for a game, builds installed in one and the NR runtime a game can switch back to."
+                                                               Style="{StaticResource MutedText}" FontSize="11.5" TextWrapping="Wrap" Margin="0,8,0,4" />
+                                                    <ItemsControl ItemsSource="{Binding Rows}" Focusable="False">
+                                                        <ItemsControl.ItemTemplate>
+                                                            <DataTemplate DataType="{x:Type vm:LibraryRowViewModel}">
+                                                                <Grid Margin="0,5">
+                                                                    <Grid.ColumnDefinitions>
+                                                                        <ColumnDefinition Width="190" />
+                                                                        <ColumnDefinition Width="*" />
+                                                                        <ColumnDefinition Width="Auto" />
+                                                                        <ColumnDefinition Width="Auto" />
+                                                                    </Grid.ColumnDefinitions>
+                                                                    <TextBlock Text="{Binding Title}" VerticalAlignment="Center" />
+                                                                    <TextBlock Grid.Column="1" Text="{Binding Summary}" Style="{StaticResource MutedText}" FontSize="12" VerticalAlignment="Center" TextTrimming="CharacterEllipsis" />
+                                                                    <TextBlock Grid.Column="2" Text="Keep newest" Style="{StaticResource MutedText}" FontSize="12" VerticalAlignment="Center" Margin="12,0,8,0" />
+                                                                    <ComboBox Grid.Column="3" Width="64" ItemsSource="{x:Static vm:LibraryRowViewModel.KeepChoices}" SelectedItem="{Binding Keep}"
+                                                                              AutomationProperties.Name="{Binding Title, StringFormat='Keep this many newest {0} builds'}" />
+                                                                </Grid>
+                                                            </DataTemplate>
+                                                        </ItemsControl.ItemTemplate>
+                                                    </ItemsControl>
+                                                    <CheckBox IsChecked="{Binding AutoClean}" Margin="0,10,0,4" AutomationProperties.Name="Delete old builds automatically after each download or import">
+                                                        <TextBlock Text="Delete old builds automatically after each download or import" TextWrapping="Wrap" />
+                                                    </CheckBox>
+                                                    <Grid Margin="0,6,0,8">
+                                                        <Grid.ColumnDefinitions>
+                                                            <ColumnDefinition Width="*" />
+                                                            <ColumnDefinition Width="Auto" />
+                                                        </Grid.ColumnDefinitions>
+                                                        <TextBlock Text="{Binding Freeable}" Style="{StaticResource MutedText}" FontSize="12" TextWrapping="Wrap" VerticalAlignment="Center" />
+                                                        <Button Grid.Column="1" Content="Clean up old builds…" Command="{Binding CleanCommand}" Margin="12,0,0,0"
+                                                                ToolTip="Shows what goes and how much space it frees, then asks before deleting" />
                                                     </Grid>
                                                 </StackPanel>
                                             </Border>

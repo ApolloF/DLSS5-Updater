@@ -329,7 +329,9 @@ public sealed partial class ComponentStore
 
     // ---------- cache ----------
 
-    private static string ComponentDir(Component c) => Path.Combine(AppPaths.Cache, c.ToString().ToLowerInvariant());
+    /// <summary>OptiScaler and GITC Uplift downloads are kept as a build library under components; the rest is cache.</summary>
+    private static string ComponentDir(Component c) =>
+        Path.Combine(c is Component.OptiScaler or Component.Uplift ? AppPaths.Components : AppPaths.Cache, c.ToString().ToLowerInvariant());
     internal static string TagDir(Component c, string tag) => Path.Combine(ComponentDir(c), SafeName(tag));
     private static string SafeName(string s) => string.Concat(s.Select(ch => Path.GetInvalidFileNameChars().Contains(ch) ? '_' : ch));
     private const string CompleteMarker = ".complete";
@@ -362,6 +364,7 @@ public sealed partial class ComponentStore
     {
         var meta = new CachedComponent { Tag = r.Tag, Prerelease = r.Prerelease, Published = r.Published, Fetched = DateTime.UtcNow };
         FileUtil.AtomicWriteText(Path.Combine(TagDir(c, r.Tag), CompleteMarker), JsonSerializer.Serialize(meta, JsonCtx.Default.CachedComponent));
+        ReleasesChanged();
     }
 
     // ---------- ensure (download + verify) ----------
@@ -632,6 +635,7 @@ public sealed partial class ComponentStore
     {
         MigrateDlssNr();
         MigrateAddons();
+        MigrateReleaseLibraries();
         var dirs = new[] { Path.GetDirectoryName(Environment.ProcessPath), AppContext.BaseDirectory, Environment.CurrentDirectory }
             .Where(d => !string.IsNullOrEmpty(d)).Distinct(StringComparer.OrdinalIgnoreCase);
         foreach (var file in new[] { DlssNrFile, ReShadeFile, MfgFile, RenoDxFile, DfcFile })
