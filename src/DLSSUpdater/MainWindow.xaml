@@ -803,12 +803,9 @@
                                                      ToolTip="{Binding State, Converter={StaticResource StateToText}}"
                                                      AutomationProperties.Name="{Binding State, Converter={StaticResource StateToText}}" />
                                             <DockPanel Grid.Column="1" Margin="0,0,12,0">
-                                                <Button DockPanel.Dock="Right" Style="{StaticResource InfoBtn}" CommandParameter="uplift"
-                                                        Visibility="{Binding Key, Converter={StaticResource EqualsToVis}, ConverterParameter=uplift}"
-                                                        ToolTip="{Binding Source=uplift, Converter={StaticResource HelpTip}}" AutomationProperties.Name="About GITC Uplift" />
-                                                <Button DockPanel.Dock="Right" Style="{StaticResource InfoBtn}" CommandParameter="dfc"
-                                                        Visibility="{Binding Key, Converter={StaticResource EqualsToVis}, ConverterParameter=dfc}"
-                                                        ToolTip="{Binding Source=dfc, Converter={StaticResource HelpTip}}" AutomationProperties.Name="About Deep Fried Chicken" />
+                                                <Button DockPanel.Dock="Right" Style="{StaticResource InfoBtn}" CommandParameter="{Binding HelpTopic}"
+                                                        ToolTip="{Binding HelpTopic, Converter={StaticResource HelpTip}}"
+                                                        AutomationProperties.Name="{Binding Name, StringFormat='About {0}'}" />
                                                 <TextBlock Text="{Binding Name}" VerticalAlignment="Center" TextTrimming="CharacterEllipsis" ToolTip="{Binding Name}" />
                                             </DockPanel>
                                             <TextBlock Grid.Column="2" Text="{Binding Installed}" Style="{StaticResource Mono}" Foreground="{StaticResource Muted}" VerticalAlignment="Center" />
@@ -851,20 +848,13 @@
                                         <TextBlock Text="{Binding PairStatusText}" Style="{StaticResource MutedText}" Margin="0,2,0,0" />
                                     </StackPanel>
                                 </Grid>
+                                <TextBlock Text="{Binding NrAddonWarning}" Style="{StaticResource MutedText}" Foreground="{StaticResource Warn}" FontSize="11.5" TextWrapping="Wrap" Margin="18,4,0,0" />
                                 <WrapPanel Margin="18,6,0,0">
                                     <Button Content="Mark as working" Style="{StaticResource BtnGhost}" Command="{Binding MarkPairWorkingCommand}" Margin="0,0,8,0" />
                                     <Button Content="Mark as crashed" Style="{StaticResource BtnGhost}" Command="{Binding MarkPairCrashedCommand}" />
                                 </WrapPanel>
-                                <TextBlock Text="{Binding SfLecramMessage}" TextWrapping="Wrap" FontSize="12" Margin="18,8,0,0"
-                                           Visibility="{Binding HasSfLecramMessage, Converter={StaticResource BoolToVis}}">
-                                    <TextBlock.Style>
-                                        <Style TargetType="TextBlock" BasedOn="{StaticResource MutedText}">
-                                            <Style.Triggers>
-                                                <DataTrigger Binding="{Binding IsPairCrashed}" Value="True"><Setter Property="Foreground" Value="{StaticResource Warn}" /></DataTrigger>
-                                            </Style.Triggers>
-                                        </Style>
-                                    </TextBlock.Style>
-                                </TextBlock>
+                                <TextBlock Text="{Binding SfLecramMessage}" Style="{StaticResource MutedText}" TextWrapping="Wrap" FontSize="12" Margin="18,8,0,0" Foreground="{StaticResource Warn}"
+                                           Visibility="{Binding HasSfLecramMessage, Converter={StaticResource BoolToVis}}" />
                             </StackPanel>
                             <!-- Deep Fried Chicken in a game without its own DLSS: what changes, and the DLSS-G runtime for its frame generation. -->
                             <TextBlock Text="{Binding DfcNoDlssWarning}" Foreground="{StaticResource Warn}" TextWrapping="Wrap" FontSize="12" Margin="34,4,16,12"
@@ -1104,20 +1094,15 @@
                                                             <Button Content="Import…" Command="{Binding ImportReShadeCommand}" Margin="12,0,0,0" />
                                                         </StackPanel>
                                                     </Grid>
+                                                    <CheckBox IsChecked="{Binding AutoDownloadReShade}" Margin="0,0,0,10" AutomationProperties.Name="Download ReShade (add-on build) from reshade.me when none is imported">
+                                                        <TextBlock Text="Download ReShade (add-on build) from reshade.me when none is imported" TextWrapping="Wrap" />
+                                                    </CheckBox>
                                                     <Border Style="{StaticResource Divider}" />
                                                     <ContentControl Content="{Binding RenoDx}" ContentTemplate="{StaticResource AddonLibraryRow}" Margin="0,10" />
                                                     <Border Style="{StaticResource Divider}" />
                                                     <ContentControl Content="{Binding Lecram}" ContentTemplate="{StaticResource AddonLibraryRow}" Margin="0,10" />
-                                                    <TextBlock Text="{Binding LecramMessage}" TextWrapping="Wrap" FontSize="12" Margin="0,0,0,10"
-                                                               Visibility="{Binding HasLecramMessage, Converter={StaticResource BoolToVis}}">
-                                                        <TextBlock.Style>
-                                                            <Style TargetType="TextBlock" BasedOn="{StaticResource MutedText}">
-                                                                <Style.Triggers>
-                                                                    <DataTrigger Binding="{Binding IsPairCrashed}" Value="True"><Setter Property="Foreground" Value="{StaticResource Warn}" /></DataTrigger>
-                                                                </Style.Triggers>
-                                                            </Style>
-                                                        </TextBlock.Style>
-                                                    </TextBlock>
+                                                    <TextBlock Text="{Binding LecramMessage}" Style="{StaticResource MutedText}" TextWrapping="Wrap" FontSize="12" Margin="0,0,0,10" Foreground="{StaticResource Warn}"
+                                                               Visibility="{Binding HasLecramMessage, Converter={StaticResource BoolToVis}}" />
                                                     <Grid Margin="0,10">
                                                         <Grid.ColumnDefinitions>
                                                             <ColumnDefinition Width="*" />
@@ -1135,10 +1120,6 @@
                                                             <Button Content="Import…" Command="{Binding ImportDfcCommand}" Margin="12,0,0,0" />
                                                         </StackPanel>
                                                     </Grid>
-                                                    <Border Style="{StaticResource Divider}" />
-                                                    <CheckBox IsChecked="{Binding AutoDownloadReShade}" Margin="0,10" AutomationProperties.Name="Download ReShade (add-on build) from reshade.me when none is imported">
-                                                        <TextBlock Text="Download ReShade (add-on build) from reshade.me when none is imported" TextWrapping="Wrap" />
-                                                    </CheckBox>
                                                 </StackPanel>
                                             </Border>
                                             <TextBlock Text="Import each NR runtime you want to keep; they all stay in your library. NVIDIA's original needs an RTX 50 card. For RTX 20/30/40, download and extract ShortFuse's compat build (compat-fp16-310.9.16-cuda13.4.3) and import it. ReShade is downloaded from reshade.me."
@@ -1225,9 +1206,15 @@
                                                     <CheckBox IsChecked="{Binding InstallUplift}" Margin="0,8" AutomationProperties.Name="Install GITC Uplift (ReShade + add-ons mode; exclusive NR route, 64-bit only; uses your imported NR runtime)">
                                                         <TextBlock Text="Install GITC Uplift (ReShade + add-ons mode; exclusive NR route, 64-bit only; uses your imported NR runtime)" TextWrapping="Wrap" />
                                                     </CheckBox>
-                                                    <CheckBox IsChecked="{Binding InstallLecram}" Margin="0,8" AutomationProperties.Name="Install Lecram DLSS5 add-on (ReShade + add-ons mode; runs its own NR, also next to ShortFuse's, then NR runs twice; needs ReShade 6+ and the NR runtime)">
-                                                        <TextBlock Text="Install Lecram DLSS5 add-on (ReShade + add-ons mode; runs its own NR, also next to ShortFuse's, then NR runs twice; needs ReShade 6+ and the NR runtime)" TextWrapping="Wrap" />
+                                                    <CheckBox IsChecked="{Binding InstallLecram}" Margin="0,8" AutomationProperties.Name="Install Lecram DLSS5 add-on (ReShade + add-ons mode; runs its own NR; needs ReShade 6+ and the NR runtime)">
+                                                        <TextBlock Text="Install Lecram DLSS5 add-on (ReShade + add-ons mode; runs its own NR; needs ReShade 6+ and the NR runtime)" TextWrapping="Wrap" />
                                                     </CheckBox>
+                                                    <CheckBox IsChecked="{Binding AllowSeveralNrAddons}" Margin="0,4,0,8"
+                                                              AutomationProperties.Name="Allow more than one NR add-on (only ShortFuse and Lecram can run together)">
+                                                        <TextBlock Text="Allow more than one NR add-on (only ShortFuse and Lecram can run together)" Style="{StaticResource MutedText}" FontSize="11.5" TextWrapping="Wrap" />
+                                                    </CheckBox>
+                                                    <TextBlock Text="{Binding NrAddonWarning}" Style="{StaticResource MutedText}" Foreground="{StaticResource Warn}" FontSize="11.5" TextWrapping="Wrap" Margin="0,0,0,8"
+                                                               Visibility="{Binding NrAddonWarning, Converter={StaticResource NullToVis}}" />
                                                     <CheckBox IsChecked="{Binding InstallDlssNr}" Margin="0,8" AutomationProperties.Name="Install NR runtime (nvngx_dlssnr.dll)">
                                                         <TextBlock Text="Install NR runtime (nvngx_dlssnr.dll)" TextWrapping="Wrap" />
                                                     </CheckBox>

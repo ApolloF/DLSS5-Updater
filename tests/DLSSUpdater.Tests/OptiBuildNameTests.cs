@@ -52,7 +52,7 @@ public sealed class OptiBuildNameTests : IDisposable
     [Fact]
     public void GameViewModel_RenamesLabelsWhenTheBuildIsSwitched()
     {
-        var settings = new AppSettings();
+        var settings = new AppSettings { OptiSource = ComponentStore.OptiRepo };
         var vm = NewGame(settings);
         Assert.Equal("OptiScaler-NR", OptiRowName(vm));
         Assert.Equal("OptiScaler-NR", vm.ModeChoice.Label);

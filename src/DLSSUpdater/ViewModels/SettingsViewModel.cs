@@ -342,19 +342,48 @@ public sealed partial class SettingsViewModel : ObservableObject
     public bool InstallRenoDx
     {
         get => Settings.InstallRenoDx;
-        set { Settings.InstallRenoDx = value; Save(); }
+        set => SetNrAddon(NrAddon.RenoDx, value);
     }
 
     public bool InstallUplift
     {
         get => Settings.InstallUplift;
-        set { Settings.InstallUplift = value; Save(); }
+        set => SetNrAddon(NrAddon.Uplift, value);
     }
 
     public bool InstallLecram
     {
         get => Settings.InstallLecram;
-        set { Settings.InstallLecram = value; Save(); }
+        set => SetNrAddon(NrAddon.Lecram, value);
+    }
+
+    public bool AllowSeveralNrAddons
+    {
+        get => Settings.AllowSeveralNrAddons;
+        set
+        {
+            NrAddons.SetAllowSeveral(Settings, value);
+            Save();
+            NotifyNrAddons();
+        }
+    }
+
+    public string? NrAddonWarning => NrAddons.Warning(Settings.InstallRenoDx, Settings.InstallLecram);
+
+    private void SetNrAddon(NrAddon addon, bool on)
+    {
+        NrAddons.SetDefault(Settings, addon, on);
+        Save();
+        NotifyNrAddons();
+    }
+
+    private void NotifyNrAddons()
+    {
+        OnPropertyChanged(nameof(InstallRenoDx));
+        OnPropertyChanged(nameof(InstallUplift));
+        OnPropertyChanged(nameof(InstallLecram));
+        OnPropertyChanged(nameof(AllowSeveralNrAddons));
+        OnPropertyChanged(nameof(NrAddonWarning));
     }
 
     public string DlssNrInfo => Describe(_main.S.Store.DlssNrPath, _main.S.DlssNrSha, true);
@@ -374,13 +403,11 @@ public sealed partial class SettingsViewModel : ObservableObject
 
     public string? LecramMessage => _main.S.Store.SfLecramMessage(_main.S.Store.RenoDxImported, _main.S.Store.LecramImported, Settings.RenoDxId, Settings.LecramId);
     public bool HasLecramMessage => LecramMessage is not null;
-    public bool IsPairCrashed => _main.S.Store.PairTestFor(Settings.RenoDxId, Settings.LecramId)?.Status == AddonPairStatus.Crashed;
 
     public void RefreshAddonPairStatus()
     {
         OnPropertyChanged(nameof(LecramMessage));
         OnPropertyChanged(nameof(HasLecramMessage));
-        OnPropertyChanged(nameof(IsPairCrashed));
     }
 
     /// <summary>Hides the options the default Lecram build's generation doesn't have and switches the rest to its values.</summary>
