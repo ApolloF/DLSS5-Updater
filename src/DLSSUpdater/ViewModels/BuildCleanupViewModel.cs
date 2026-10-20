@@ -96,7 +96,7 @@ public sealed partial class BuildCleanupViewModel : ObservableObject
                     var size = builds.Sum(b => BuildCleanup.SizeOf(b.Dir));
                     return builds.Count == 0 ? "none kept" : $"{builds.Count} build{(builds.Count == 1 ? "" : "s")}  ·  {BuildCleanup.FormatBytes(size)}";
                 }).ToList();
-                return (summaries, records is null ? null : store.PlanCleanup(settings, records));
+                return (summaries, records.Unknown ? null : store.PlanCleanup(settings, records.Records));
             });
             if (run != _refresh) return;
             for (var i = 0; i < Rows.Count; i++) Rows[i].Summary = summaries[i];

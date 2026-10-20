@@ -1,4 +1,4 @@
-using System.Text.Json;
+using System.Text.RegularExpressions;
 
 namespace DLSSUpdater.Core;
 
@@ -19,24 +19,35 @@ public sealed record LibraryBuild(LibraryKind Kind, string Id, string Label, str
 }
 
 /// <summary>The one place that decides which build is newer, for every list and the cleanup.</summary>
-public static class BuildOrder
+public static partial class BuildOrder
 {
     /// <summary>
-    /// Sort key of a version label ("v11.0.0-beta.48", "v0.9.51", "310.9.16"): the version, then a release after its
-    /// pre-releases ("v11.0.0-beta.6" before "v11.0.0"), alpha before beta before rc, then the pre-release number.
-    /// A label without a version uses <paramref name="fallback"/>.
+    /// Sort key of a version label ("v11.0.0-beta.48", "v8.5.0-rc10-model-sdr1", "v0.7.0-pre10", "310.9.16"): the version,
+    /// then a release after its pre-releases ("v11.0.0-beta.6" before "v11.0.0"), alpha before beta before pre before rc,
+    /// then the pre-release number. The stage is the first dash- or dot-separated part that starts with one; its number
+    /// follows it directly ("rc10") or as the next part ("beta.48"). A label without a version uses <paramref name="fallback"/>.
     /// </summary>
     public static (Version Version, bool Release, int Stage, int Number) Key(string? label, Version? fallback = null)
     {
         var text = (label ?? "").Trim().TrimStart('v', 'V');
         var dash = text.IndexOf('-');
         var core = dash < 0 ? text : text[..dash];
-        var pre = dash < 0 ? [] : text[(dash + 1)..].Split('.');
-        var stage = pre.Length > 0 ? pre[0].ToLowerInvariant() switch { "alpha" => 1, "beta" => 2, "rc" => 3, _ => 0 } : 0;
-        var number = pre.Length == 2 && int.TryParse(pre[1], out var n) ? n : 0;
+        var pre = dash < 0 ? [] : text[(dash + 1)..].Split('-', '.');
+        var (stage, number) = (0, 0);
+        for (var i = 0; i < pre.Length; i++)
+        {
+            if (PreRelease().Match(pre[i]) is not { Success: true } m) continue;
+            stage = m.Groups[1].Value.ToLowerInvariant() switch { "alpha" => 1, "beta" => 2, "pre" => 3, _ => 4 };
+            var digits = m.Groups[2].Value.Length > 0 ? m.Groups[2].Value : i + 1 < pre.Length ? pre[i + 1] : "";
+            number = int.TryParse(digits, out var n) ? n : 0;
+            break;
+        }
         var version = (core.Length > 0 && char.IsAsciiDigit(core[0]) ? FileUtil.ParseTag(core) : null) ?? fallback ?? new Version(0, 0);
         return (Normalize(version), dash < 0, stage, number);
     }
+
+    [GeneratedRegex(@"^(alpha|beta|pre|rc)(\d*)$", RegexOptions.IgnoreCase)]
+    private static partial Regex PreRelease();
 
     /// <summary>1.2 and 1.2.0.0 are the same version here.</summary>
     private static Version Normalize(Version v) => new(v.Major, v.Minor, Math.Max(v.Build, 0), Math.Max(v.Revision, 0));
@@ -131,28 +142,19 @@ public sealed partial class ComponentStore
 
     private static IReadOnlyList<LibraryBuild> ReadReleaseBuilds(Component c, string root)
     {
-        if (!Directory.Exists(root)) return [];
         var kind = c == Component.OptiScaler ? LibraryKind.OptiScaler : LibraryKind.Uplift;
         var found = new List<(LibraryBuild Build, string Raw)>();
-        foreach (var dir in Directory.EnumerateDirectories(root))
+        foreach (var (dir, meta) in CompleteBuilds(c, root))
         {
-            var marker = Path.Combine(dir, CompleteMarker);
-            if (!File.Exists(marker)) continue;
-            try
+            if (!Path.GetFileName(dir).Equals(SafeName(meta.Tag), StringComparison.OrdinalIgnoreCase)) continue;
+            var pre = meta.Prerelease ? " pre" : "";
+            if (c == Component.OptiScaler)
             {
-                var meta = JsonSerializer.Deserialize(File.ReadAllText(marker), JsonCtx.Default.CachedComponent);
-                if (meta is null || string.IsNullOrWhiteSpace(meta.Tag) || !Path.GetFileName(dir).Equals(SafeName(meta.Tag), StringComparison.OrdinalIgnoreCase)) continue;
-                var pre = meta.Prerelease ? " pre" : "";
-                if (c == Component.OptiScaler)
-                {
-                    var source = OptiSources.OfTag(meta.Tag);
-                    var raw = OptiSources.RawTag(meta.Tag);
-                    found.Add((new LibraryBuild(kind, meta.Tag, $"{source.Name} {raw}{pre}", raw, meta.Published ?? meta.Fetched, dir, source.Repo), raw));
-                }
-                else found.Add((new LibraryBuild(kind, meta.Tag, meta.Tag + pre, meta.Tag, meta.Published ?? meta.Fetched, dir), meta.Tag));
+                var source = OptiSources.OfTag(meta.Tag);
+                var raw = OptiSources.RawTag(meta.Tag);
+                found.Add((new LibraryBuild(kind, meta.Tag, $"{source.Name} {raw}{pre}", raw, meta.Published ?? meta.Fetched, dir, source.Repo), raw));
             }
-            catch (Exception ex) when (ex is IOException or JsonException or UnauthorizedAccessException)
-            { Log.Error($"Could not read library entry {marker}", ex); }
+            else found.Add((new LibraryBuild(kind, meta.Tag, meta.Tag + pre, meta.Tag, meta.Published ?? meta.Fetched, dir), meta.Tag));
         }
         // OptiScaler's sources number their releases differently, so each source is its own newest-first run.
         return found.GroupBy(f => f.Build.Group)
@@ -174,30 +176,36 @@ public sealed partial class ComponentStore
 
     /// <summary>
     /// First run with the build library: complete OptiScaler and GITC Uplift downloads move from the cache into
-    /// components (a rename on the same drive, nothing is downloaded again). One that can't move stays and is logged.
+    /// components (a rename on the same drive, nothing is downloaded again). One that can't move stays and is logged;
+    /// once the library has that build, the cleanup lists the copy left in the cache (see <see cref="StaleDownloads"/>).
     /// </summary>
     public void MigrateReleaseLibraries()
     {
         foreach (var c in new[] { Component.OptiScaler, Component.Uplift })
         {
-            var legacy = Path.Combine(AppPaths.Cache, c.ToString().ToLowerInvariant());
-            if (!Directory.Exists(legacy)) continue;
+            var legacy = LegacyDir(c);
             var moved = 0;
-            foreach (var dir in Directory.EnumerateDirectories(legacy).ToList())
+            try
             {
-                if (!File.Exists(Path.Combine(dir, CompleteMarker))) continue;
-                var dest = Path.Combine(ComponentDir(c), Path.GetFileName(dir));
-                if (Directory.Exists(dest)) continue;
-                try
+                if (!Directory.Exists(legacy)) continue;
+                foreach (var dir in Directory.EnumerateDirectories(legacy).ToList())
                 {
-                    Directory.CreateDirectory(ComponentDir(c));
-                    Directory.Move(dir, dest);
-                    moved++;
+                    if (!File.Exists(Path.Combine(dir, CompleteMarker))) continue;
+                    var dest = Path.Combine(ComponentDir(c), Path.GetFileName(dir));
+                    if (Directory.Exists(dest)) continue;
+                    try
+                    {
+                        Directory.CreateDirectory(ComponentDir(c));
+                        Directory.Move(dir, dest);
+                        moved++;
+                    }
+                    catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+                    { Log.Error($"Could not move {dir} into the build library", ex); }
                 }
-                catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
-                { Log.Error($"Could not move {dir} into the build library", ex); }
+                FileUtil.TryDeleteEmptyDir(legacy);
             }
-            FileUtil.TryDeleteEmptyDir(legacy);
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+            { Log.Error($"Could not read {legacy} to move its builds into the build library", ex); }
             if (moved > 0)
             {
                 ReleasesChanged();
@@ -206,7 +214,29 @@ public sealed partial class ComponentStore
         }
     }
 
+    /// <summary>Where 2.0 and older kept OptiScaler and GITC Uplift downloads.</summary>
+    private static string LegacyDir(Component c) => Path.Combine(AppPaths.Cache, c.ToString().ToLowerInvariant());
+
     // ---------- cleanup ----------
+
+    private readonly HashSet<string> _added = new(StringComparer.OrdinalIgnoreCase);
+
+    /// <summary>A build just entered a library (downloaded or imported): the next automatic cleanup keeps it.</summary>
+    private void NoteAdded(string id)
+    {
+        lock (_added) _added.Add(id);
+    }
+
+    /// <summary>The builds added since the last call, which the automatic cleanup that follows must not delete.</summary>
+    public HashSet<string> TakeAdded()
+    {
+        lock (_added)
+        {
+            var ids = new HashSet<string>(_added, StringComparer.OrdinalIgnoreCase);
+            _added.Clear();
+            return ids;
+        }
+    }
 
     /// <summary>
     /// Builds of <paramref name="kind"/> the cleanup must keep: the default and every game's own pick, what any game has
@@ -264,16 +294,24 @@ public sealed partial class ComponentStore
         return ids;
     }
 
-    /// <summary>What the cleanup deletes in one library, under the keep count of the settings.</summary>
-    public List<LibraryBuild> CleanupCandidates(LibraryKind kind, AppSettings s, IEnumerable<InstallManifest> manifests) =>
-        BuildCleanup.Select(Library(kind), s.KeepBuildsFor(kind), ProtectedBuilds(kind, s, manifests));
+    /// <summary>What the cleanup deletes in one library, under the keep count of the settings, keeping <paramref name="keep"/> too.</summary>
+    public List<LibraryBuild> CleanupCandidates(LibraryKind kind, AppSettings s, IEnumerable<InstallManifest> manifests, IEnumerable<string>? keep = null)
+    {
+        var ids = ProtectedBuilds(kind, s, manifests);
+        if (keep is not null) ids.UnionWith(keep);
+        return BuildCleanup.Select(Library(kind), s.KeepBuildsFor(kind), ids);
+    }
 
-    /// <summary>Everything the cleanup would delete now: old builds of every library and stale download leftovers, with sizes.</summary>
-    public List<CleanupItem> PlanCleanup(AppSettings s, IReadOnlyCollection<InstallManifest> manifests)
+    /// <summary>
+    /// Everything the cleanup would delete now: old builds of every library and stale download leftovers, with sizes.
+    /// <paramref name="keep"/> are ids that stay as well (the builds just added); libraries in <paramref name="skip"/> are left alone.
+    /// </summary>
+    public List<CleanupItem> PlanCleanup(AppSettings s, IReadOnlyCollection<InstallManifest> manifests,
+        IReadOnlySet<string>? keep = null, IReadOnlySet<LibraryKind>? skip = null)
     {
         var items = new List<CleanupItem>();
-        foreach (var kind in Enum.GetValues<LibraryKind>())
-            foreach (var b in CleanupCandidates(kind, s, manifests))
+        foreach (var kind in Enum.GetValues<LibraryKind>().Where(k => skip?.Contains(k) != true))
+            foreach (var b in CleanupCandidates(kind, s, manifests, keep))
                 items.Add(new CleanupItem($"{LibraryTitle(kind)} {b.Label}", b.Dir, BuildCleanup.SizeOf(b.Dir)));
         items.AddRange(StaleDownloads(s, manifests));
         return items;
@@ -309,12 +347,20 @@ public sealed partial class ComponentStore
         {
             var library = c is Component.OptiScaler or Component.Uplift;
             // The library's own unfinished downloads, and whatever the move into the library left in the cache.
-            var roots = library ? new[] { ComponentDir(c), Path.Combine(AppPaths.Cache, c.ToString().ToLowerInvariant()) } : [ComponentDir(c)];
+            var roots = library ? new[] { ComponentDir(c), LegacyDir(c) } : [ComponentDir(c)];
             foreach (var root in roots.Where(Directory.Exists))
                 foreach (var dir in Directory.EnumerateDirectories(root))
                     if (!File.Exists(Path.Combine(dir, CompleteMarker)) && !dir.EndsWith(DeletingSuffix, StringComparison.OrdinalIgnoreCase))
                         items.Add(new CleanupItem($"Unfinished {c} download {Path.GetFileName(dir)}", dir, BuildCleanup.SizeOf(dir)));
-            if (library) continue;
+            if (library)
+            {
+                // A complete build the migration couldn't move: once the library holds the same build, the copy is spare.
+                if (Directory.Exists(LegacyDir(c)))
+                    foreach (var dir in Directory.EnumerateDirectories(LegacyDir(c)))
+                        if (File.Exists(Path.Combine(dir, CompleteMarker)) && File.Exists(Path.Combine(ComponentDir(c), Path.GetFileName(dir), CompleteMarker)))
+                            items.Add(new CleanupItem($"Leftover {c} download {Path.GetFileName(dir)}", dir, BuildCleanup.SizeOf(dir)));
+                continue;
+            }
 
             var keep = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
             void Add(string? tag)

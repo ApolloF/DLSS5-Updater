@@ -342,4 +342,5 @@ public sealed class AppSettings
 [JsonSerializable(typeof(NrVersion))]
 [JsonSerializable(typeof(AddonBuild))]
 [JsonSerializable(typeof(AddonPairTest))]
+[JsonSerializable(typeof(Dictionary<string, InstallRefs>))]
 internal partial class JsonCtx : JsonSerializerContext;

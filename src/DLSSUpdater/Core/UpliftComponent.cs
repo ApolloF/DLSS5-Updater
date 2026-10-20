@@ -79,6 +79,7 @@ public sealed partial class ComponentStore
                     ExtractUplift(zip, pkg);
                 }, ct);
                 MarkComplete(Component.Uplift, r);
+                NoteAdded(r.Tag);
                 Log.Info($"Cached GITC Uplift {r.Tag}");
                 return pkg;
             }

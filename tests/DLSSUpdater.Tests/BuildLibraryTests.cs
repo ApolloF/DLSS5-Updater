@@ -75,6 +75,17 @@ public sealed class BuildLibraryTests : IDisposable
     }
 
     [Fact]
+    public void Prerelease_numbers_compare_by_value_inside_dash_and_dot_parts()
+    {
+        string[] labels = ["v8.5.0-rc9-model-sdr1", "v0.7.0-pre9", "v11.0.0-beta.5", "v8.5.0-rc10-model-sdr1", "v11.0.0-beta.48", "v0.7.0-pre10", "v11.0.0-beta.45"];
+        var sorted = BuildOrder.NewestFirst(labels, l => l, _ => null, l => l);
+        Assert.Equal(["v11.0.0-beta.48", "v11.0.0-beta.45", "v11.0.0-beta.5", "v8.5.0-rc10-model-sdr1", "v8.5.0-rc9-model-sdr1", "v0.7.0-pre10", "v0.7.0-pre9"], sorted);
+        // The date only decides between labels that say the same.
+        var dated = new[] { ("v8.5.0-rc9-x", new DateTime(2026, 6, 1)), ("v8.5.0-rc10-x", new DateTime(2026, 1, 1)) };
+        Assert.Equal("v8.5.0-rc10-x", BuildOrder.NewestFirst(dated, d => d.Item1, d => d.Item2, d => d.Item1)[0].Item1);
+    }
+
+    [Fact]
     public void Same_version_falls_back_to_the_later_date_and_versions_compare_by_value()
     {
         var items = new[] { ("a", new DateTime(2026, 1, 1)), ("b", new DateTime(2026, 3, 1)) };
@@ -108,13 +119,13 @@ public sealed class BuildLibraryTests : IDisposable
         _store.Uplift = Release(Component.Uplift, "v1.4.2", "U2");
         var vm = NewGame();
 
-        Assert.Equal(["Default (newest: OptiScaler-NR v0.9.51)", "OptiScaler-NR v0.9.51", "OptiScaler-NR v0.9.47"], vm.OptiChoices.Select(c => c.Label));
-        Assert.Equal(["Default (newest: v1.4.2)", "v1.4.2", "v1.3.0"], vm.UpliftChoices.Select(c => c.Label));
+        Assert.Equal(["Default (v0.9.51)", "OptiScaler-NR v0.9.51", "OptiScaler-NR v0.9.47"], vm.OptiChoices.Select(c => c.Label));
+        Assert.Equal(["Default (v1.4.2)", "v1.4.2", "v1.3.0"], vm.UpliftChoices.Select(c => c.Label));
         Assert.Null(vm.OptiChoice?.Tag);
 
         _settings.OptiTag = "v0.9.47";
         vm.RebuildAddonChoices();
-        Assert.Equal("Default (OptiScaler-NR v0.9.47)", vm.OptiChoices[0].Label);
+        Assert.Equal("Default (v0.9.47)", vm.OptiChoices[0].Label);
     }
 
     // ---------- migration ----------
@@ -143,6 +154,45 @@ public sealed class BuildLibraryTests : IDisposable
         _store.MigrateReleaseLibraries();
         Assert.Equal(2, _store.Library(LibraryKind.OptiScaler).Count);
         Assert.Contains(_store.StaleDownloads(_settings, []), i => i.Path == unfinished);
+    }
+
+    [Fact]
+    public void Migration_leftover_of_a_build_the_library_has_is_stale_and_an_unreadable_cache_is_logged()
+    {
+        Release(Component.OptiScaler, "v0.9.49", "library copy");
+        var leftover = LegacyRelease(Component.OptiScaler, "v0.9.49");
+        var notYet = LegacyRelease(Component.Uplift, "v1.3.0");
+
+        _store.MigrateReleaseLibraries();
+
+        Assert.True(Directory.Exists(leftover));
+        var stale = _store.StaleDownloads(_settings, []).Select(i => i.Path).ToList();
+        Assert.Contains(leftover, stale);
+        Assert.DoesNotContain(notYet, stale);
+
+        // A cache folder that can't be listed doesn't stop the start.
+        var blocked = Path.Combine(AppPaths.Cache, "uplift");
+        FileUtil.DeleteDirectory(blocked);
+        Write(blocked, "a file where the folder should be");
+        _store.MigrateReleaseLibraries();
+    }
+
+    [Fact]
+    public void Cached_release_lists_skip_half_deleted_builds_and_the_newest_is_by_version()
+    {
+        Release(Component.Uplift, "v1.4.2", "U2", new DateTime(2026, 1, 1));
+        Release(Component.Uplift, "v1.3.0", "U1", new DateTime(2026, 2, 1));
+        var doomed = Release(Component.Uplift, "v9.0.0", "gone");
+        Directory.Move(ComponentStore.TagDir(Component.Uplift, doomed.Tag), ComponentStore.TagDir(Component.Uplift, doomed.Tag) + ".dlssu-delete");
+        // The older build's record is written last: its write time must not make it the newest.
+        ComponentStore.MarkComplete(Component.Uplift, new ReleaseInfo { Tag = "v1.3.0", Published = new DateTime(2026, 2, 1) });
+        Write(Path.Combine(ComponentStore.TagDir(Component.Dlss, "v310.1.0"), "nvngx_dlss.dll"), "x");
+        ComponentStore.MarkComplete(Component.Dlss, new ReleaseInfo { Tag = "v310.1.0" });
+        Directory.Move(ComponentStore.TagDir(Component.Dlss, "v310.1.0"), ComponentStore.TagDir(Component.Dlss, "v310.1.0") + ".dlssu-delete");
+
+        Assert.Equal("v1.4.2", ComponentStore.NewestCached(Component.Uplift)?.Tag);
+        Assert.Equal(["v1.4.2", "v1.3.0"], ComponentStore.CachedReleases(Component.Uplift).Select(r => r.Tag));
+        Assert.Empty(ComponentStore.CachedReleases(Component.Dlss));
     }
 
     // ---------- per-game choice ----------
@@ -290,6 +340,120 @@ public sealed class BuildLibraryTests : IDisposable
         var stale = _store.StaleDownloads(_settings, records).Select(i => i.Path).ToList();
 
         Assert.Equal(new[] { temp, ComponentStore.TagDir(Component.Dlss, "v310.3.0"), ComponentStore.TagDir(Component.MfgUnlock, "1.0") }.Order(), stale.Order());
+    }
+
+    // ---------- installs the scan can't see ----------
+
+    private List<string> NrBuilds(int count)
+    {
+        var ids = Enumerable.Range(0, count).Select(i => new string((char)('a' + i), 64)).ToList();
+        for (var i = 0; i < count; i++)
+        {
+            Write(Path.Combine(AppPaths.Components, "dlssnr", ids[i], ComponentStore.DlssNrFile), ids[i]);
+            Write(Path.Combine(AppPaths.Components, "dlssnr", ids[i], "version.json"), JsonSerializer.Serialize(new NrVersion(ids[i], $"310.{9 - i}.0", ids[i]), JsonCtx.Default.NrVersion));
+        }
+        return ids;
+    }
+
+    private List<string> NrCandidates(CleanupRecords r) => _store.CleanupCandidates(LibraryKind.DlssNr, _settings, r.Records).Select(b => b.Id).ToList();
+
+    private string GameWithRecord(string name, InstallManifest m)
+    {
+        var dir = Path.Combine(_tmp, "games", name);
+        Directory.CreateDirectory(dir);
+        m.Save(dir);
+        return dir;
+    }
+
+    [Fact]
+    public void Install_on_an_unplugged_drive_keeps_its_builds_and_the_automatic_cleanup_leaves_the_library_alone()
+    {
+        var ids = NrBuilds(5);
+        _settings.DlssNrId = ids[0];
+        // Installed: the oldest build, with the one before the switch to undo to.
+        var game = GameWithRecord("usb", new InstallManifest { DlssNr = true, DlssNrId = ids[4], PreviousDlssNrId = ids[3] });
+        var first = MainViewModel.ReadRecords([game]);
+        Assert.False(first.Unknown);
+        Assert.Empty(first.Records.Single().Files);
+
+        // The drive is unplugged: the next scan doesn't list the game at all.
+        Directory.Move(game, game + "-unplugged");
+        var later = MainViewModel.ReadRecords([]);
+
+        Assert.False(later.Unknown);
+        Assert.Contains(LibraryKind.DlssNr, later.Unsure);
+        var manual = NrCandidates(later);
+        Assert.Equal([ids[2]], manual);
+        Assert.DoesNotContain(_store.PlanCleanup(_settings, later.Records, skip: later.Unsure), i => i.Path.Contains("dlssnr"));
+        // Back again, with nothing changed: the remembered entry stays as long as the record does.
+        Directory.Move(game + "-unplugged", game);
+        Assert.Empty(MainViewModel.ReadRecords([]).Unsure);
+        Assert.Single(MainViewModel.ReadRecords([]).Records);
+    }
+
+    [Fact]
+    public void Hidden_game_keeps_its_builds_until_it_is_uninstalled_or_removed()
+    {
+        var ids = NrBuilds(5);
+        _settings.DlssNrId = ids[0];
+        var hidden = GameWithRecord("hidden", new InstallManifest { DlssNr = true, DlssNrId = ids[4], PreviousDlssNrId = ids[3] });
+        MainViewModel.ReadRecords([hidden]);
+
+        // Hidden from the list: the scan no longer names it, its record is still read from the remembered folder.
+        var records = MainViewModel.ReadRecords([]);
+        Assert.Empty(records.Unsure);
+        Assert.Equal([ids[2]], NrCandidates(records));
+
+        // Uninstalled outside the app: the folder is there and its record is gone.
+        File.Delete(InstallManifest.PathFor(hidden));
+        Assert.Equal([ids[2], ids[3], ids[4]], NrCandidates(MainViewModel.ReadRecords([])));
+
+        // Removed from the app or uninstalled by it.
+        var other = GameWithRecord("other", new InstallManifest { DlssNr = true, DlssNrId = ids[4] });
+        MainViewModel.ReadRecords([other]);
+        KnownInstalls.Forget([other]);
+        Directory.Delete(other, true);
+        Assert.Empty(MainViewModel.ReadRecords([]).Records);
+    }
+
+    [Fact]
+    public void Unreadable_record_falls_back_to_what_it_named_and_stops_every_cleanup_when_nothing_is_known()
+    {
+        var ids = NrBuilds(4);
+        _settings.DlssNrId = ids[0];
+        var known = GameWithRecord("known", new InstallManifest { DlssNr = true, DlssNrId = ids[3] });
+        MainViewModel.ReadRecords([known]);
+        File.WriteAllText(InstallManifest.PathFor(known), "{ broken");
+
+        var records = MainViewModel.ReadRecords([known]);
+        Assert.False(records.Unknown);
+        Assert.Contains(LibraryKind.DlssNr, records.Unsure);
+        Assert.Equal([ids[2]], NrCandidates(records));
+
+        var stranger = GameWithRecord("stranger", new InstallManifest());
+        File.WriteAllText(InstallManifest.PathFor(stranger), "{ broken");
+        Assert.True(MainViewModel.ReadRecords([known, stranger]).Unknown);
+    }
+
+    [Fact]
+    public void Automatic_cleanup_keeps_the_build_just_imported_even_when_it_is_older()
+    {
+        var ids = NrBuilds(3);
+        _settings.DlssNrId = ids[0];
+        _settings.KeepBuilds[nameof(LibraryKind.DlssNr)] = 1;
+        _store.TakeAdded();
+        var source = Path.Combine(_tmp, "old-nr", ComponentStore.DlssNrFile);
+        Write(source, "an old NR without a version resource");
+
+        var imported = _store.RetainDlssNr(source);
+        var added = _store.TakeAdded();
+
+        Assert.Contains(imported.Id, added);
+        var plan = _store.PlanCleanup(_settings, [], added).Select(i => Path.GetFileName(i.Path)).ToList();
+        Assert.DoesNotContain(imported.Id, plan);
+        Assert.Contains(ids[1], plan);
+        // The pass after that treats it like any other build.
+        Assert.Contains(imported.Id, _store.PlanCleanup(_settings, [], _store.TakeAdded()).Select(i => Path.GetFileName(i.Path)));
     }
 
     [Fact]

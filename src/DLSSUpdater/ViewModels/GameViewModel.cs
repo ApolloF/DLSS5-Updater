@@ -581,8 +581,8 @@ public sealed partial class GameViewModel : ObservableObject
         var over = _s.Settings.Games.GetValueOrDefault(Id);
         RenoDxChoice = FillAddonChoices(RenoDxChoices, AddonKind.RenoDx, over?.RenoDxId);
         LecramChoice = FillAddonChoices(LecramChoices, AddonKind.Lecram, over?.LecramId);
-        OptiChoice = FillBuildChoices(OptiChoices, _s.Store.Library(LibraryKind.OptiScaler), _s.Settings.OptiTag, NewestOptiLabel(_s.Store), over?.OptiTag);
-        UpliftChoice = FillBuildChoices(UpliftChoices, _s.Store.Library(LibraryKind.Uplift), _s.Settings.UpliftTag, NewestUpliftLabel(_s.Store), over?.UpliftTag);
+        OptiChoice = FillBuildChoices(OptiChoices, _s.Store.Library(LibraryKind.OptiScaler), _s.Settings.OptiTag, _s.Store.Opti?.Tag, over?.OptiTag);
+        UpliftChoice = FillBuildChoices(UpliftChoices, _s.Store.Library(LibraryKind.Uplift), _s.Settings.UpliftTag, _s.Store.Uplift?.Tag, over?.UpliftTag);
         _loading = loading;
         OnPropertyChanged(nameof(EffectiveLecramGeneration));
         RefreshAddonPairStatus();
@@ -595,12 +595,14 @@ public sealed partial class GameViewModel : ObservableObject
 
     internal static string NewestUpliftLabel(ComponentStore store) => store.Uplift is { } r ? $"newest: {r.Tag}" : "newest";
 
-    /// <summary>"Default (…)" naming what the default installs, then the library newest first, then a game pick the library lost.</summary>
-    private static DlssChoice FillBuildChoices(ObservableCollection<DlssChoice> list, IReadOnlyList<LibraryBuild> builds, string? global, string newest, string? pin)
+    /// <summary>
+    /// "Default (v0.1.32-f5)" naming the tag the default installs (the row already names the build), then the library
+    /// newest first, then a game pick the library lost.
+    /// </summary>
+    private static DlssChoice FillBuildChoices(ObservableCollection<DlssChoice> list, IReadOnlyList<LibraryBuild> builds, string? global, string? newest, string? pin)
     {
-        var follows = global is null ? newest : builds.FirstOrDefault(b => b.Id.Equals(global, StringComparison.OrdinalIgnoreCase))?.Label ?? global;
         list.Clear();
-        list.Add(new DlssChoice(null, $"Default ({follows})"));
+        list.Add(new DlssChoice(null, $"Default ({global ?? newest ?? "newest"})"));
         foreach (var b in builds) list.Add(new DlssChoice(b.Id, b.Label));
         if (pin is not null && list.All(c => c.Tag != pin)) list.Add(new DlssChoice(pin, $"{pin} · not downloaded"));
         return list.FirstOrDefault(c => c.Tag == pin) ?? list[0];
@@ -612,7 +614,7 @@ public sealed partial class GameViewModel : ObservableObject
         var global = _s.Settings.AddonId(kind);
         var follows = builds.FirstOrDefault(b => b.Id == global) ?? builds.FirstOrDefault();
         list.Clear();
-        list.Add(new DlssChoice(null, $"Default ({follows?.Label ?? "none imported"})"));
+        list.Add(new DlssChoice(null, $"Default ({follows?.Name ?? "none imported"})"));
         foreach (var b in builds) list.Add(new DlssChoice(b.Id, b.Label));
         if (pin is not null && list.All(c => c.Tag != pin)) list.Add(new DlssChoice(pin, "Missing add-on file · import again"));
         return list.FirstOrDefault(c => c.Tag == pin) ?? list[0];

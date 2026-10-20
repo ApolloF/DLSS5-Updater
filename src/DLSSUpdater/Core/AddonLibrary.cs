@@ -207,6 +207,7 @@ public sealed partial class ComponentStore
         var sha = FileUtil.Sha256(source);
         var dest = Path.Combine(AddonRoot(kind), sha, fileName);
         var meta = Path.Combine(AddonRoot(kind), sha, "version.json");
+        NoteAdded(sha);
         var existing = AddonBuilds(kind).FirstOrDefault(b => b.Id == sha && b.FileName == fileName);
         if (existing is not null) return existing;
         var build = new AddonBuild(sha, fileName, fileVersion, generation, detectedLabel, null, DateTime.UtcNow);

@@ -338,26 +338,38 @@ public sealed partial class ComponentStore
 
     public static bool IsCached(Component c, string tag) => File.Exists(Path.Combine(TagDir(c, tag), CompleteMarker));
 
-    private static ReleaseInfo? NewestCached(Component c, Func<ReleaseInfo, bool>? filter = null)
+    /// <summary>
+    /// The complete builds under one component's folder with their .complete records: one folder per tag, never the
+    /// rest of a build the cleanup is deleting. An unreadable record is logged and skipped.
+    /// </summary>
+    private static List<(string Dir, CachedComponent Meta)> CompleteBuilds(Component c, string? root = null)
     {
-        var dir = ComponentDir(c);
-        if (!Directory.Exists(dir)) return null;
-        return Directory.EnumerateFiles(dir, CompleteMarker, SearchOption.AllDirectories)
-            .Select(f => (File: f, Time: File.GetLastWriteTimeUtc(f)))
-            .OrderByDescending(x => x.Time)
-            .Select(x =>
+        root ??= ComponentDir(c);
+        var found = new List<(string, CachedComponent)>();
+        if (!Directory.Exists(root)) return found;
+        foreach (var dir in Directory.EnumerateDirectories(root))
+        {
+            var marker = Path.Combine(dir, CompleteMarker);
+            if (dir.EndsWith(DeletingSuffix, StringComparison.OrdinalIgnoreCase) || !File.Exists(marker)) continue;
+            try
             {
-                try
-                {
-                    var meta = JsonSerializer.Deserialize(File.ReadAllText(x.File), JsonCtx.Default.CachedComponent);
-                    return meta is null ? null : new ReleaseInfo
-                    {
-                        Tag = meta.Tag, Prerelease = meta.Prerelease, Published = meta.Published, FromCache = true,
-                    };
-                }
-                catch (JsonException) { return null; }
-            })
-            .FirstOrDefault(r => r is not null && (filter is null || filter(r)));
+                if (JsonSerializer.Deserialize(File.ReadAllText(marker), JsonCtx.Default.CachedComponent) is { } meta && !string.IsNullOrWhiteSpace(meta.Tag))
+                    found.Add((dir, meta));
+            }
+            catch (Exception ex) when (ex is IOException or JsonException or UnauthorizedAccessException)
+            { Log.Error($"Could not read cached component {marker}", ex); }
+        }
+        return found;
+    }
+
+    internal static ReleaseInfo? NewestCached(Component c, Func<ReleaseInfo, bool>? filter = null)
+    {
+        var releases = CompleteBuilds(c).Select(b => (Release: new ReleaseInfo
+        {
+            Tag = b.Meta.Tag, Prerelease = b.Meta.Prerelease, Published = b.Meta.Published, FromCache = true,
+        }, Date: b.Meta.Published ?? b.Meta.Fetched)).Where(r => filter is null || filter(r.Release));
+        return BuildOrder.NewestFirst(releases, r => c == Component.OptiScaler ? OptiSources.RawTag(r.Release.Tag) : r.Release.Tag, r => r.Date, r => r.Release.Tag)
+            .Select(r => r.Release).FirstOrDefault();
     }
 
     internal static void MarkComplete(Component c, ReleaseInfo r)
@@ -400,6 +412,7 @@ public sealed partial class ComponentStore
                 throw new InvalidDataException("OptiScaler.dll missing from release package.");
 
             MarkComplete(Component.OptiScaler, r);
+            NoteAdded(r.Tag);
             Log.Info($"Cached {name} {r.Tag}");
             return pkg;
         }
