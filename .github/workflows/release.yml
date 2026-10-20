@@ -65,6 +65,8 @@ jobs:
         id: notes
         if: startsWith(github.ref, 'refs/tags/')
         shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
         run: |
           # docs/releases/v<version>.md becomes the release text when it exists.
           $f = "docs/releases/v${{ steps.version.outputs.version }}.md"
@@ -76,7 +78,14 @@ jobs:
           if ($LASTEXITCODE -ne 0) { throw "cannot read tag $t" }
           $kind = git for-each-ref "refs/tags/$t" --format='%(objecttype)'
           $subject = git for-each-ref "refs/tags/$t" --format='%(contents:subject)'
-          "prerelease=$(if ($kind -eq 'tag' -and $subject -like 'release-bot prerelease*') { 'true' } else { 'false' })" >> $env:GITHUB_OUTPUT
+          $pre = $kind -eq 'tag' -and $subject -like 'release-bot prerelease*'
+          # A re-run after the bot (or the owner) promoted the release must not turn it back into a prerelease.
+          if ($pre) {
+            $existing = gh release view $t --json isPrerelease 2>$null
+            if ($LASTEXITCODE -eq 0 -and -not ($existing | ConvertFrom-Json).isPrerelease) { $pre = $false }
+            $global:LASTEXITCODE = 0  # no release yet is the normal case, not a failed step
+          }
+          "prerelease=$(if ($pre) { 'true' } else { 'false' })" >> $env:GITHUB_OUTPUT
 
       - name: Release
         if: startsWith(github.ref, 'refs/tags/')

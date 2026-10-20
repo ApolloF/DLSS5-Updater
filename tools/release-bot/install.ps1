@@ -13,6 +13,8 @@ param([switch]$DryRun, [int]$Hours = 6, [switch]$Remove, [switch]$Enable, [strin
 
 $ErrorActionPreference = 'Stop'
 $TaskName = 'DLSS5UpdaterReleaseBot'
+# The schedule starts the real Claude (a dry run does too): only as the isolated user. Checked before anything changes.
+if ($Enable -and -not $RunAs) { throw '-Enable needs -RunAs <isolated user>: without it headless Claude would run as you. See README, "Full isolation".' }
 
 if ($Remove) {
     Unregister-ScheduledTask -TaskName $TaskName -Confirm:$false -ErrorAction SilentlyContinue
@@ -40,7 +42,5 @@ $settings = New-ScheduledTaskSettingsSet -StartWhenAvailable -MultipleInstances 
 $principal = New-ScheduledTaskPrincipal -UserId "$env:USERDOMAIN\$env:USERNAME" -LogonType Interactive -RunLevel Limited
 Register-ScheduledTask -TaskName $TaskName -Action $action -Trigger $trigger -Settings $settings -Principal $principal `
     -Description "DLSS5 Updater release bot (tools/release-bot in ApolloF/DLSS5-Updater)$(if ($DryRun) { ' - DRY RUN' })" -Force | Out-Null
-# Until the isolation hook is set up, headless Claude runs as the owner, so the task stays off unless asked for.
-if ($Enable -and -not $RunAs -and -not $DryRun) { Write-Warning 'Enabling without -RunAs: Claude runs as you. See README, "Full isolation".' }
 if (-not $Enable) { Disable-ScheduledTask -TaskName $TaskName | Out-Null }
 Write-Host "Registered $TaskName$(if ($DryRun) { ' (dry run)' }) $(if ($Enable) { 'enabled' } else { 'DISABLED (-Enable or Enable-ScheduledTask starts it)' }): every $Hours h from $start; bot installed in $bin."

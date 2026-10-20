@@ -41,6 +41,48 @@ function Get-ClaudeVerdict($result) {
     if ($null -ne $result -and $result.config_changed -is [bool] -and $result.config_changed -eq $false) { 'claims-neutral' } else { 'config-change' }
 }
 
+# ---------- gates ----------
+
+function Get-ClaudeLaunchRefusal([string]$runAs, [bool]$unsafeAsOwner) {
+    # Real Claude only runs as the isolated user, or as the owner when that was asked for by name. -DryRun doesn't
+    # change this: a dry run starts the real Claude too.
+    if ($runAs) { return $null }
+    if ($unsafeAsOwner) { return $null }
+    'real Claude needs -RunAs <isolated user> (README, Full isolation), or -UnsafeRunClaudeAsOwner to run it as you'
+}
+
+function Get-UnreleasedReason([string]$gitDir, [string]$version, [string]$ref, [string[]]$gitPrefix = @()) {
+    # $null when $ref holds nothing beyond the release tag v<version> except docs/; otherwise why not. An auto
+    # release must never ship work on main that nobody released yet.
+    $tag = "refs/tags/v$version"
+    # git.exe, not git: release-bot.ps1's own Git function would win the lookup.
+    $sha = git.exe @gitPrefix --git-dir $gitDir rev-parse --verify --quiet "$tag^{commit}" 2>$null
+    if ($LASTEXITCODE -ne 0 -or -not $sha) { return "main is at $version but there is no tag v$version" }
+    git.exe @gitPrefix --git-dir $gitDir diff --quiet --no-ext-diff --no-textconv $sha $ref -- . ':(exclude)docs/' 2>$null
+    switch ($LASTEXITCODE) {
+        0 { return $null }
+        1 { return "main has unreleased changes since v$version" }
+        default { return "cannot compare v$version with $ref" }
+    }
+}
+
+function Find-PushBlockers([string]$worktree, [string]$gitDir) {
+    # The owner's global pre-push hook runs the command in a repo's .prepush, and its hooks chain to the repo's own
+    # hooks folder. Neither may run anything that came from the repo or a bot run.
+    $b = [Collections.Generic.List[string]]::new()
+    if ($worktree -and (Test-Path -LiteralPath (Join-Path $worktree '.prepush'))) { $b.Add('the tree has a .prepush file') }
+    $hooks = Join-Path $gitDir 'hooks'
+    if (Test-Path -LiteralPath $hooks) {
+        foreach ($h in Get-ChildItem -LiteralPath $hooks -Force) { if ($h.Name -notlike '*.sample') { $b.Add("$($gitDir) has a repo hook: $($h.Name)") } }
+    }
+    @($b)
+}
+
+function Test-NoAiTrailer([string]$messages) {
+    # The bot's commits carry no AI attribution (the owner's commit-msg hook strips it too; this doesn't rely on it).
+    $messages -notmatch '(?im)^\s*co-authored-by:.*(claude|anthropic)|generated with \[?claude code'
+}
+
 # ---------- bot PRs ----------
 
 function Select-BotPr($prs, [string]$botLogin, [string]$prefix) {
@@ -56,6 +98,11 @@ function Test-AutoEligible($pr, $rec) {
     # A PR may auto-merge only while it is exactly what the bot pushed on the auto path and never needed review.
     [bool]($pr -and $rec -and $rec.mode -eq 'auto' -and $rec.needsReview -ne $true -and $pr.isCrossRepository -eq $false -and
         $rec.head -and $pr.headRefOid -eq $rec.head -and -not (Test-NeedsReviewLabel $pr))
+}
+
+function Test-AutoMergeOff($prView) {
+    # $prView: gh pr view --json autoMergeRequest,isDraft. Off only when GitHub reports no auto-merge request.
+    [bool]($prView -and $prView.PSObject.Properties['autoMergeRequest'] -and $null -eq $prView.autoMergeRequest)
 }
 
 function Get-PendingDecision($pending, $pr, $rec, [string]$mergedPatchId) {
@@ -77,15 +124,23 @@ function Get-ReleaseFingerprint($rel) {
     [Convert]::ToHexString([Security.Cryptography.SHA256]::HashData([Text.Encoding]::UTF8.GetBytes($text))).ToLowerInvariant()
 }
 
+function Get-NotesHash([string]$text) { Get-TextHash (ConvertTo-NormalIni $text) }
+
 function Get-PromoteDecision($rel, $rec, [datetime]$now, [int]$hours = 24) {
-    # $rel: gh release view JSON or $null when there is no release. $rec: what the bot recorded when it tagged.
+    # $rel: gh release view JSON or $null when there is no release. $rec: what the bot recorded when it tagged,
+    # including notesHash, the hash of the release notes template it wrote.
     # release.yml needs a while to create the release, so "not found" only means deleted after 12 hours.
     if (-not $rel) { return $(if (-not $rec.fingerprint -and ($now - [datetime]$rec.tagged).TotalHours -lt 12) { 'building' } else { 'gone' }) }
     if ($rel.isDraft) { return 'edited' }
     if (-not $rel.isPrerelease) { return 'already' }
     if (@($rel.assets).Count -lt 3) { return 'building' }
     $fp = Get-ReleaseFingerprint $rel
-    if (-not $rec.fingerprint) { return 'record' }
+    if (-not $rec.fingerprint) {
+        # The first look must already match what release.yml makes from the bot's tag, so an edit the owner made
+        # before the bot ever saw the release also stops the promotion.
+        if (-not $rec.notesHash -or (Get-NotesHash "$($rel.body)") -ne $rec.notesHash -or $rel.name -cne $rel.tagName) { return 'edited' }
+        return 'record'
+    }
     if ($rec.fingerprint -ne $fp) { return 'edited' }
     if (($now - [datetime]$rec.tagged).TotalHours -lt $hours) { return 'wait' }
     'promote'
@@ -327,19 +382,41 @@ function Get-TreeChanges([string]$base, [string]$work) {
 
 # ---------- Lecram's members-only release notes (Buy Me a Coffee) ----------
 
+$script:BlockMark = '[[block]]'
+$script:PageChrome = '(?i)^(\d+\s+)?(comments?|replies|likes?)$|^(write|leave|add|post) a (comment|reply)|^(reply|share|like|report)$|^(buy|support)\b.*\bcoffee\b|^(join|become) a (member|supporter)|^(log ?in|sign ?in|sign ?up)$'
+
+function Test-ContainsPaidText([string]$text, [string[]]$notes, [int]$words = 8) {
+    # True when $text repeats any run of $words words from the members-only notes (case, punctuation and spacing
+    # ignored). Used on everything that leaves the machine after Claude saw the notes.
+    $norm = { param($s) (("$s".ToLowerInvariant() -replace '[^\p{L}\p{N}=._\[\]-]+', ' ').Trim() -split ' ') | ForEach-Object { $_.Trim('.') } | Where-Object { $_ } }
+    $hay = " $((& $norm $text) -join ' ') "
+    foreach ($n in @($notes)) {
+        $w = @(& $norm $n)
+        for ($i = 0; $i + $words -le $w.Count; $i++) {
+            if ($hay.Contains(" $($w[$i..($i + $words - 1)] -join ' ') ")) { return $true }
+        }
+    }
+    $false
+}
+
 function ConvertFrom-HtmlText([string]$html) {
     # Visible text of a dumped DOM, one block element per line.
     $t = $html -replace '(?is)<(script|style|noscript|svg|template)\b.*?</\1\s*>', ' '
+    # Headings and page regions (comments, footer, sidebar) start a new block: a patch section never runs past one.
+    $t = $t -replace '(?i)<(h[1-6]|footer|aside|form|section|nav|header|hr|dialog)\b|</article\s*>', "`n$($script:BlockMark)`n$&"
     $t = $t -replace '(?i)<br\s*/?>', "`n" -replace '(?i)</(p|div|li|h[1-6]|tr|section|article|blockquote|pre)\s*>', "`n" -replace '(?i)<li\b[^>]*>', "`n- "
     $t = [Net.WebUtility]::HtmlDecode(($t -replace '(?s)<[^>]*>', ''))
     (($t -split "`n") | ForEach-Object { ($_ -replace '[\s ]+', ' ').Trim() } | Where-Object { $_ }) -join "`n"
 }
 
 function Get-PatchSections([string]$text, [int]$maxChars = 4000) {
-    # "v11 Patch 11" headings and the text under each, newest last. A heading is a line that starts with it.
+    # "v11 Patch 11" headings and the text under each, newest last. A heading is a line that starts with it. A section
+    # ends at the next heading or page region, or at a line that looks like the comments or the page around the post,
+    # so members' comments under the post never end up in a section.
     $sections = [Collections.Generic.List[pscustomobject]]::new()
     $cur = $null
     foreach ($line in ($text -split "`n")) {
+        if ($line -eq $script:BlockMark -or $line -match $script:PageChrome) { $cur = $null; continue }
         if ($line -match '^\s*v(\d+)\s+Patch\s+(\d+)\b') {
             $cur = [pscustomobject]@{ Major = [int]$Matches[1]; Patch = [int]$Matches[2]; Key = "v$([int]$Matches[1]) Patch $([int]$Matches[2])"; Text = '' }
             if (-not ($sections | Where-Object Key -EQ $cur.Key)) { $sections.Add($cur) } else { $cur = $null }

@@ -22,6 +22,8 @@ param(
     [string]$StateFile,
     # Isolation hook (not active yet): run Claude as this local user through %LocalAppData%\dlss5updater-releasebot\isolation.ps1.
     [string]$RunAs,
+    # Without -RunAs the bot refuses to start the real Claude (also in a dry run) unless this is given.
+    [switch]$UnsafeRunClaudeAsOwner,
     [int]$ClaudeTimeoutMinutes = 60,
     [double]$ClaudeBudgetUsd = 15,
     [int]$ClaudeMaxTurns = 200,
@@ -110,9 +112,11 @@ function Invoke-Native([string]$exe, [string[]]$argv, [string]$cwd = $null, [swi
     $r
 }
 
-# Every bot git command runs with hooks, fsmonitor, attribute files and external diff/textconv switched off, so no
-# repo content or config can make git run a program. The user's own git config (core.hooksPath etc.) is not changed.
-$SafeGit = @('-c', "core.hooksPath=$NoHooks", '-c', 'core.fsmonitor=false', '-c', "core.attributesFile=$EmptyFile",
+# Every bot git command runs with fsmonitor, attribute files and external diff/textconv switched off, so no repo
+# content or config can make git run a program. The owner's global hooks do run (commit-msg strips AI trailers,
+# pre-commit runs gitleaks, pre-push runs a repo's .prepush): Assert-PushSafe makes sure they find nothing from the
+# repo to run.
+$SafeGit = @('-c', 'core.fsmonitor=false', '-c', "core.attributesFile=$EmptyFile",
     '-c', 'core.quotePath=false', '-c', 'diff.external=', '-c', 'core.pager=cat', '-c', 'protocol.ext.allow=never')
 $DiffArgs = @('--no-ext-diff', '--no-textconv', '--no-renames', '--no-color')
 
@@ -304,7 +308,11 @@ function Get-ZipFacts([string]$url, [long]$size, [string]$tag) {
         $inis = @($zip.Entries | Where-Object { $_.FullName -match '(?i)(^|[\\/])OptiScaler\.ini$' })
         $ini = $null
         if ($inis.Count -eq 1 -and $inis[0].Length -lt 1MB) {
-            $r = [IO.StreamReader]::new($inis[0].Open()); try { $ini = Get-TextHash (ConvertTo-NormalIni $r.ReadToEnd()) } finally { $r.Dispose() }
+            # The size in the zip directory can lie (decompression bomb): never read more than 1 MB of it.
+            $s = $inis[0].Open(); $buf = [byte[]]::new(1MB + 1); $n = 0
+            try { while ($n -lt $buf.Length -and ($k = $s.Read($buf, $n, $buf.Length - $n)) -gt 0) { $n += $k } } finally { $s.Dispose() }
+            if ($n -gt 1MB) { throw 'OptiScaler.ini in the zip is over 1 MB' }
+            $ini = Get-TextHash (ConvertTo-NormalIni ([Text.UTF8Encoding]::new($false).GetString($buf, 0, $n)))
         }
         @{ Entries = Get-TextHash ($entries -join "`n"); ZipIni = $ini }
     } finally { $zip.Dispose() }
@@ -459,8 +467,22 @@ function Set-AppVersion([string]$dir, [string]$version) {
 }
 
 function New-BotWorktree([string]$dir, [string]$branch, [string]$start) {
+    Assert-PushSafe $null
     MGit @('worktree', 'add', '--quiet', '-B', $branch, $dir, $start) -Check | Out-Null
     $script:BotWorktrees.Add(@{ Dir = $dir; Branch = $branch })
+}
+
+function Assert-PushSafe([string]$wt) {
+    # Before any git command that runs the owner's hooks with repo content around (worktree add, commit, push).
+    $b = @(Find-PushBlockers $wt $Mirror)
+    if ($b.Count) { throw "not running git hooks over repo content: $($b -join '; ')" }
+}
+
+function Push-BotBranch([string]$wt, [string]$base, [string]$branch) {
+    Assert-PushSafe $wt
+    $log = (Git (@('log', '--format=%B', "$base..HEAD")) $wt -Check -Raw).Out
+    if (-not (Test-NoAiTrailer $log)) { throw 'a bot commit carries an AI attribution trailer; not pushing' }
+    Git @('push', '--quiet', 'origin', "HEAD:refs/heads/$branch") $wt -Check | Out-Null
 }
 
 function Remove-BotWorktrees {
@@ -491,6 +513,14 @@ function Get-PatchId([string]$cwd, [string]$patch) {
     if (-not $patch) { return $null }
     $r = Git @('patch-id', '--verbatim') $cwd -Stdin $patch -Check
     ($r.Out -split ' ')[0]
+}
+
+function Get-ReleasedGate([string]$version, [string]$ref) {
+    # $null when $ref is the released v<version> (docs/ aside); otherwise the reason. The mirror fetches without tags,
+    # so the one tag needed is fetched here (a missing tag on origin is a reason, not an error).
+    if ($version -notmatch '^\d+\.\d+\.\d+$') { return "not a release version: $version" }
+    MGit @('fetch', '--quiet', '--no-tags', 'origin', "+refs/tags/v$($version):refs/tags/v$version") -Quiet | Out-Null
+    Get-UnreleasedReason $Mirror $version $ref $SafeGit
 }
 
 function Get-MergedPatchId([string]$sha) {
@@ -531,7 +561,9 @@ function Get-ClaudeEnv([string]$sandbox, [string]$token) {
 function Get-ClaudeArgs([string]$sandbox) {
     # Read and edit files, build and test, inspect dropped binaries. No git at all (git diff/log --output writes any
     # file, git grep -O starts a program, the clone's config is Claude-writable), no interpreters, no gh/curl,
-    # no MCP, no user or local settings (so no hooks, no global CLAUDE.md, no plugins).
+    # no MCP, no settings files (so no hooks, no global CLAUDE.md, no plugins). --restricted confines the file tools
+    # to the sandbox (--add-dir) and ignores user, project and local settings; --permission-prompts none denies
+    # whatever would need a person to approve it (writes to settings, git and tool config files among them).
     $allowed = @('Read', 'Edit', 'Write', 'Glob', 'Grep',
         'Bash(dotnet build:*)', 'Bash(dotnet test:*)', 'Bash(dotnet restore:*)',
         'Bash(strings:*)', 'Bash(unzip -l:*)', 'Bash(sha256sum:*)',
@@ -540,12 +572,15 @@ function Get-ClaudeArgs([string]$sandbox) {
         'Bash(node:*)', 'Bash(pwsh:*)', 'Bash(powershell:*)', 'Bash(cmd:*)', 'Bash(bash:*)', 'Bash(sh:*)', 'Bash(perl:*)', 'Bash(dotnet run:*)', 'WebSearch')
     @('-p', '--model', 'opus', '--output-format', 'json', '--max-turns', "$ClaudeMaxTurns",
         '--max-budget-usd', "$ClaudeBudgetUsd", '--permission-mode', 'acceptEdits', '--no-session-persistence',
-        '--setting-sources', 'project', '--settings', '{"disableAllHooks":true,"includeCoAuthoredBy":false}', '--strict-mcp-config',
+        '--restricted', '--permission-prompts', 'none', '--settings', '{"disableAllHooks":true,"includeCoAuthoredBy":false}', '--strict-mcp-config',
         '--tools', 'Read,Edit,Write,Glob,Grep,Bash,WebFetch', '--add-dir', $sandbox,
         '--allowedTools') + $allowed + @('--disallowedTools') + $denied
 }
 
 function Invoke-Claude([string]$sandbox, [string]$prompt, [string]$outFile) {
+    $refusal = Get-ClaudeLaunchRefusal $RunAs $UnsafeRunClaudeAsOwner.IsPresent
+    if ($refusal) { Fail-Global "$refusal; Claude not started" }
+    if (-not $RunAs) { Log 'WARNING: -UnsafeRunClaudeAsOwner: Claude runs as the owner, not isolated' }
     $token = Get-Secret 'DLSS5_BOT_CLAUDE_TOKEN'
     if (-not $token) { Fail-Global 'DLSS5_BOT_CLAUDE_TOKEN is not set (claude setup-token, see README); Claude not started' }
     if (-not (Test-Path $ClaudeExe)) { Fail-Global "claude not found at $ClaudeExe" }
@@ -603,6 +638,12 @@ function Get-OpenBotPr([string]$login) {
     Select-BotPr ($list.Out | ConvertFrom-Json) $login $BranchPrefix
 }
 
+function Get-PrAutoMerge([int]$num) {
+    $v = Gh @('pr', 'view', "$num", '--repo', $Repo, '--json', 'autoMergeRequest,isDraft') -Quiet
+    if ($v.Code -ne 0) { return $null }
+    try { $v.Out | ConvertFrom-Json } catch { $null }
+}
+
 function Set-NeedsReview($state, [int]$num, [string]$reason) {
     # Sticky: label + state. A PR that ever needed review never auto-merges again.
     $rec = $state.prs["$num"] ?? @{}
@@ -611,6 +652,16 @@ function Set-NeedsReview($state, [int]$num, [string]$reason) {
     if ($state.pending -and [int]$state.pending.pr -eq $num) { $state.Remove('pending') }
     if ($DryRun) { Log "would disable auto-merge on PR #$num and label it $ReviewLabel ($reason)"; return }
     Gh @('pr', 'merge', "$num", '--repo', $Repo, '--disable-auto') -Quiet | Out-Null
+    if (-not (Test-AutoMergeOff (Get-PrAutoMerge $num))) {
+        # Auto-merge is still on (or unknown): park the PR as a draft, which GitHub won't merge, and tell the owner.
+        $rec.parked = $true
+        Save-State $state
+        Gh @('pr', 'ready', "$num", '--repo', $Repo, '--undo') -Quiet | Out-Null
+        $v = Get-PrAutoMerge $num
+        $parked = $v -and $v.isDraft -eq $true
+        Send-Notice "DLSS5 Updater bot: PR #$num auto-merge not off" "The bot couldn't turn off auto-merge on PR #$num, which needs review ($reason). $(if ($parked) { 'It is a draft now.' } else { 'Making it a draft failed too: turn auto-merge off by hand.' })" "https://github.com/$Repo/pull/$num" 5 'warning'
+        if (-not $parked) { throw "PR #${num}: auto-merge still on and not a draft" }
+    }
     Gh @('label', 'create', $ReviewLabel, '--repo', $Repo, '--color', 'D93F0B', '--description', 'Release bot: contains unreviewed changes, never auto-merges') -Quiet | Out-Null
     Gh @('pr', 'edit', "$num", '--repo', $Repo, '--add-label', $ReviewLabel) -Check | Out-Null
     Save-State $state
@@ -641,7 +692,7 @@ function Remove-ClosedBotBranches($state, [string]$login) {
             $tip = (MGit @('ls-remote', '--heads', 'origin', "refs/heads/$($pr.headRefName)") -Quiet).Out
             if ($tip -and ($tip -split "`t")[0] -eq $pr.headRefOid) {
                 if ($DryRun) { Log "would delete branch $($pr.headRefName) of closed PR #$($pr.number)" }
-                else { MGit @('push', '--quiet', 'origin', '--delete', "refs/heads/$($pr.headRefName)") | Out-Null; Log "deleted branch $($pr.headRefName) of closed PR #$($pr.number)" }
+                else { Assert-PushSafe $null; MGit @('push', '--quiet', 'origin', '--delete', "refs/heads/$($pr.headRefName)") | Out-Null; Log "deleted branch $($pr.headRefName) of closed PR #$($pr.number)" }
             }
         }
         if (-not ($state.pending -and [int]$state.pending.pr -eq $pr.number)) { $state.prs.Remove("$($pr.number)") }
@@ -679,12 +730,20 @@ function Complete-PendingRelease($state) {
     $remote = MGit @('ls-remote', '--tags', 'origin', "refs/tags/$tag")
     if ($remote.Code -ne 0) { Fail-Global 'cannot list the tags on origin' }
     if ($remote.Out) { Log "$tag already exists on origin"; $state.Remove('pending'); return }
+    # The squash commit's parent must still be the released state the bot checked: nothing unreleased rides along.
+    $unreleased = if ($pending.baseVersion -and $pending.notesHash) { Get-ReleasedGate $pending.baseVersion "$sha^1" } else { 'pending record from an older bot version' }
+    if ($unreleased) {
+        Log "PR #$($pending.pr) merged, but not tagging: $unreleased"
+        Send-Notice 'DLSS5 Updater bot: release not tagged' "PR #$($pending.pr) merged, but main had changes that weren't released yet ($(Format-SafeText $unreleased)). Tag it by hand once reviewed." $pr.url 4 'warning'
+        $state.Remove('pending'); return
+    }
     if ($DryRun) { Log "would tag $tag on $sha as 'release-bot prerelease' and push it"; return }
     # A tag left in the mirror by a push that failed last time is replaced, not tripped over.
     MGit @('tag', '-d', $tag) -Quiet | Out-Null
     MGit @('tag', '-a', $tag, $sha, '-m', "release-bot prerelease $tag") -Check | Out-Null
+    Assert-PushSafe $null
     MGit @('push', '--quiet', 'origin', "refs/tags/$tag") -Check | Out-Null
-    $state.prereleases[$tag] = @{ tagged = (Get-Date).ToString('o'); pr = $pending.pr }
+    $state.prereleases[$tag] = @{ tagged = (Get-Date).ToString('o'); pr = $pending.pr; notesHash = $pending.notesHash }
     $state.Remove('pending')
     Save-State $state
     Log "tagged $tag on $sha; release.yml publishes it as a prerelease"
@@ -859,6 +918,9 @@ try {
     $autoReasons = [Collections.Generic.List[string]]::new()
     if ($openPr) { $autoReasons.Add("bot PR #$($openPr.number) is open for review") }
     if ($todoDrops.Count) { $autoReasons.Add('dropped files need Claude') }
+    # The auto release ships all of main: only when main is exactly the last release (docs/ aside).
+    $unreleased = Get-ReleasedGate $mainVersion 'refs/remotes/origin/main'
+    if ($unreleased) { $autoReasons.Add($unreleased) }
     foreach ($c in $todo) {
         $src = $GhSources | Where-Object Id -EQ $c.Key
         if (-not $src -or -not $src.Pin) { $autoReasons.Add("$($c.Key) has no mechanical proof"); continue }
@@ -921,7 +983,7 @@ try {
             Log "PR body:`n$body"
             return
         }
-        Git @('push', '--quiet', 'origin', "HEAD:refs/heads/$branch") $botWt -Check | Out-Null
+        Push-BotBranch $botWt $base $branch
         $created = Gh @('pr', 'create', '--repo', $Repo, '--base', 'main', '--head', $branch, '--title', $title, '--body-file', $bodyFile) -Check
         $prUrl = ($created.Out -split "`n" | Select-Object -Last 1).Trim()
         $prNum = [int]($prUrl -replace '.*/pull/(\d+).*', '$1')
@@ -929,7 +991,7 @@ try {
         Save-State $state
         Log "PR #$prNum $prUrl"
         Gh @('pr', 'merge', "$prNum", '--repo', $Repo, '--auto', '--squash', '--match-head-commit', $head) -Check | Out-Null
-        $state.pending = @{ pr = $prNum; version = $version; patchId = $d.PatchId; head = $head }
+        $state.pending = @{ pr = $prNum; version = $version; patchId = $d.PatchId; head = $head; baseVersion = $mainVersion; notesHash = (Get-NotesHash $notes) }
         & $markDone
         Save-State $state
         Log "auto-merge enabled; waiting up to $MergeWaitMinutes min for CI"
@@ -1060,12 +1122,19 @@ try {
     if (-not (Test-VersionConsistent $botWt $version)) { $bad += "version $version not consistent in csproj, installer, README and docs/releases" }
     if ($bad.Count) { throw "Claude's diff is not publishable: $(Format-SafeText ($bad -join '; ') 600)" }
     Log "review diff passed the publish checks ($(@($d.Entries).Count) file(s)); build and tests run in CI, not here"
+    # Lecram's members-only notes went to Claude as paid content to paraphrase: none of it may reach GitHub verbatim.
+    $paid = @($todo | ForEach-Object { $_.Notes } | Where-Object { $_ })
+    $summary = "$($result.summary)"
+    if ($paid.Count) {
+        if (Test-ContainsPaidText $d.Patch $paid) { throw "Claude's diff quotes Lecram's members-only notes; not publishing it" }
+        if (Test-ContainsPaidText $summary $paid) { Log "Claude's summary quotes the members-only notes; left out of the PR"; $summary = '(Withheld by the bot: it quoted the members-only notes.)' }
+    }
 
     $body = "Release bot run ${RunId}: $what.`n`n" +
         "**Needs review.** This PR has changes written by headless Claude from untrusted upstream data. It never auto-merges, and the bot didn't build or run it: CI does. " +
         "If it's fine, merge it yourself and tag v$version by hand (AGENTS.md, Release flow).`n`n" +
         "Claude's own verdict (not trusted): $(if ($verdict -eq 'claims-neutral') { 'says config-neutral' } else { 'config change' }).`n`n" +
-        "<details><summary>Unreviewed bot output: Claude's summary, not checked by the bot</summary>`n`n$(Format-Unreviewed $result.summary)`n`n</details>"
+        "<details><summary>Unreviewed bot output: Claude's summary, not checked by the bot</summary>`n`n$(Format-Unreviewed $summary)`n`n</details>"
     Assert-NoLeaks @{ 'diff.patch' = $d.Patch; 'pr-body.md' = $body; 'title.txt' = $title }
     $bodyFile = Join-Path $Work 'pr-body.md'
     Write-Atomic $bodyFile $body
@@ -1076,7 +1145,7 @@ try {
         Log "PR body:`n$body"
         return
     }
-    Git @('push', '--quiet', 'origin', "HEAD:refs/heads/$branch") $botWt -Check | Out-Null
+    Push-BotBranch $botWt $mb $branch
     if ($openPr) {
         Gh @('pr', 'edit', "$($openPr.number)", '--repo', $Repo, '--title', $title, '--body-file', $bodyFile) -Check | Out-Null
         $prNum = $openPr.number; $prUrl = $openPr.url

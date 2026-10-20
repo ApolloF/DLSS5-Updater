@@ -32,8 +32,11 @@ downloaded the dropped files; read them from the paths given. Nobody answers que
    - OptiScaler builds: compare `OptiScaler.ini` at the new tag with the tested tag
      (`https://raw.githubusercontent.com/<repo>/<tag>/OptiScaler.ini`); look at every key the app writes.
    - GITC Uplift (MIT, open source): compare the config and settings code between the tested and the new tag.
-   - Closed-source add-ons (Lecram, ShortFuse RenoDX): use the method in `docs/addons/README.md` (version resource,
-     `strings` with offsets, the scripts in `tools/addon-probe/static/`). Mark facts C / D / I as that page says.
+   - Closed-source add-ons (Lecram, ShortFuse RenoDX): use the static part of the method in `docs/addons/README.md`
+     with the tools you have: the version resource in the facts file, `strings -t x -n 4 <file>` and
+     `strings -t x -e l <file>` (UTF-16) with offsets, `unzip -l` and `sha256sum`, and Read/Grep on the output (if you
+     save it, save it in `%TEMP%`, not the repo). You can't run the python scripts in `tools/addon-probe/` or the probe host; where a
+     fact needs them, mark it unchecked and say so in your summary. Mark facts C / D / I as that page says.
    - Deep Fried Chicken: its licence forbids reverse engineering. Only read what its author ships (INSTALL.txt, cfg
      keys and comments, file names, version resource). No strings dumps, no disassembly, no probing.
    - Check every add-on's bundled licence first and stop where it forbids analysis.

@@ -145,7 +145,7 @@ Describe 'prerelease promotion' {
     }
     It 'records, waits 24 h, then promotes an untouched prerelease' {
         $r = & $rel
-        $rec = @{ tagged = '2026-10-21T00:00:00' }
+        $rec = @{ tagged = '2026-10-21T00:00:00'; notesHash = (Get-NotesHash "notes`r`n") }
         Get-PromoteDecision $r $rec $now | Should -Be 'record'
         $rec.fingerprint = Get-ReleaseFingerprint $r
         Get-PromoteDecision $r $rec $now | Should -Be 'wait'
@@ -159,6 +159,13 @@ Describe 'prerelease promotion' {
         Get-PromoteDecision (& $rel @{ isDraft = $true }) $rec $now | Should -Be 'edited'
         Get-PromoteDecision (& $rel @{ isPrerelease = $false }) $rec $now | Should -Be 'already'
         Get-PromoteDecision (& $rel @{ assets = @() }) $rec $now | Should -Be 'building'
+    }
+    It 'does not record a release the owner edited before the bot first saw it (N1)' {
+        $rec = @{ tagged = '2026-10-21T00:00:00'; notesHash = (Get-NotesHash 'notes') }
+        Get-PromoteDecision (& $rel @{ body = 'owner edited' }) $rec $now | Should -Be 'edited'
+        Get-PromoteDecision (& $rel @{ name = 'My release' }) $rec $now | Should -Be 'edited'
+        Get-PromoteDecision (& $rel) @{ tagged = '2026-10-21T00:00:00' } $now | Should -Be 'edited'
+        $rec.ContainsKey('fingerprint') | Should -BeFalse
     }
     It 'waits for release.yml before calling a missing release gone' {
         Get-PromoteDecision $null @{ tagged = '2026-10-21T11:59:00' } $now | Should -Be 'building'
@@ -411,5 +418,108 @@ Describe "Lecram's release-note sections" {
     }
     It 'finds nothing on a logged-out page' {
         Get-PatchSections (ConvertFrom-HtmlText '<html><body><h1>Members only</h1><a>Log in</a></body></html>') | Should -BeNullOrEmpty
+    }
+    It 'ends the last section before the comments (N4)' {
+        $page = @'
+<html><body><article><h3>v11 Patch 11</h3><p>New</p><ul><li>Key Foo=1 under [Bar]</li></ul></article>
+<section class="comments"><p>2 comments</p><div><p>member one</p><p>Private note from a member that must stay out</p></div></section>
+<footer>Buy Lecram a coffee</footer></body></html>
+'@
+        $s = @(Get-PatchSections (ConvertFrom-HtmlText $page))
+        $s.Key | Should -Be @('v11 Patch 11')
+        $s[0].Text | Should -Match 'Foo=1'
+        $s[0].Text | Should -Not -Match 'member'
+        # Without any page structure, the comment box's own lines still end it.
+        $flat = "v11 Patch 12`nNew key Baz=2`n3 Comments`nmember two: private text"
+        $f = @(Get-PatchSections $flat)
+        $f[0].Text | Should -Be 'New key Baz=2'
+    }
+    It 'spots the paid notes quoted in text that would be published (N4)' {
+        $notes = @("#### v11 Patch 12`nThe new Sharpen Boost slider now goes up to 2.5 and defaults to 1.2 in every preset.")
+        Test-ContainsPaidText 'Summary: the new sharpen boost slider now goes up to 2.5, and defaults to 1.2 in every preset!' $notes | Should -BeTrue
+        Test-ContainsPaidText 'Raised SharpenBoost max to 2.5 (default 1.2), checked with strings.' $notes | Should -BeFalse
+        Test-ContainsPaidText 'anything' @() | Should -BeFalse
+    }
+}
+
+Describe 'gates (M1: Claude never as the owner by accident)' {
+    It 'refuses the real Claude without -RunAs, dry run or not' {
+        Get-ClaudeLaunchRefusal '' $false | Should -Match 'RunAs'
+        Get-ClaudeLaunchRefusal $null $false | Should -Match 'RunAs'
+        Get-ClaudeLaunchRefusal 'dlss5bot' $false | Should -BeNullOrEmpty
+        Get-ClaudeLaunchRefusal '' $true | Should -BeNullOrEmpty
+    }
+    It 'starts Claude restricted, without settings sources' {
+        $s = Get-Content -Raw (Join-Path $PSScriptRoot 'release-bot.ps1')
+        $s | Should -Match "'--restricted'"
+        $s | Should -Match "'--permission-prompts', 'none'"
+        $s | Should -Not -Match "'--setting-sources'"
+        $s | Should -Match 'Get-ClaudeLaunchRefusal \$RunAs \$UnsafeRunClaudeAsOwner'
+    }
+    It 'install.ps1 -Enable without -RunAs throws before it touches anything' {
+        Mock Register-ScheduledTask {}; Mock Disable-ScheduledTask {}; Mock Unregister-ScheduledTask {}; Mock Copy-Item {}
+        { & (Join-Path $PSScriptRoot 'install.ps1') -Enable } | Should -Throw '*-RunAs*'
+        { & (Join-Path $PSScriptRoot 'install.ps1') -Enable -DryRun } | Should -Throw '*-RunAs*'
+        Should -Invoke Register-ScheduledTask -Times 0 -Exactly
+        Should -Invoke Copy-Item -Times 0 -Exactly
+    }
+}
+
+Describe 'gates (M2: the auto path never releases unreleased work on main)' {
+    BeforeAll {
+        $d = New-TempRepo
+        function Commit([string]$rel, [string]$text) {
+            $p = Join-Path $d $rel; New-Item -ItemType Directory -Force (Split-Path $p) | Out-Null
+            [IO.File]::WriteAllText($p, $text); git -C $d add -A; git -C $d commit --quiet -m $rel
+        }
+        Commit 'src/a.cs' 'one'
+        git -C $d tag -a v2.0.1 -m 'v2.0.1'
+        $g = Join-Path $d '.git'
+    }
+    AfterAll { Remove-Item -Recurse -Force $d -ErrorAction SilentlyContinue }
+    It 'allows main that is the release tag, docs aside' {
+        Get-UnreleasedReason $g '2.0.1' 'HEAD' | Should -BeNullOrEmpty
+        Commit 'docs/releases/v2.0.2.md' 'notes'
+        Get-UnreleasedReason $g '2.0.1' 'HEAD' | Should -BeNullOrEmpty
+    }
+    It 'blocks main with unreleased changes, and a version without a tag' {
+        Commit 'src/b.cs' 'unreleased work'
+        Get-UnreleasedReason $g '2.0.1' 'HEAD' | Should -Match 'unreleased'
+        Get-UnreleasedReason $g '2.0.1' 'HEAD~1' | Should -BeNullOrEmpty
+        Get-UnreleasedReason $g '2.0.2' 'HEAD' | Should -Match 'no tag v2.0.2'
+    }
+}
+
+Describe 'gates (M3: owner hooks run, but never over repo content)' {
+    BeforeEach {
+        $wt = Join-Path $TestDrive "wt-$([guid]::NewGuid().ToString('N').Substring(0, 6))"; $gd = Join-Path $TestDrive "git-$([guid]::NewGuid().ToString('N').Substring(0, 6))"
+        New-Item -ItemType Directory -Force $wt, (Join-Path $gd 'hooks') | Out-Null
+        Set-Content (Join-Path $gd 'hooks\pre-push.sample') 'x'
+    }
+    It 'has no core.hooksPath override in the bot git calls' {
+        Get-Content -Raw (Join-Path $PSScriptRoot 'release-bot.ps1') | Should -Not -Match 'core\.hooksPath='
+    }
+    It 'passes a clean tree and a mirror with only sample hooks' {
+        Find-PushBlockers $wt $gd | Should -BeNullOrEmpty
+    }
+    It 'refuses a tree with a .prepush and a mirror with a repo hook' {
+        Set-Content (Join-Path $wt '.prepush') 'dotnet build'
+        @(Find-PushBlockers $wt $gd) | Should -HaveCount 1
+        Set-Content (Join-Path $gd 'hooks\post-checkout') '#!/bin/sh'
+        @(Find-PushBlockers $wt $gd) | Should -HaveCount 2
+        @(Find-PushBlockers $null $gd) | Should -HaveCount 1
+    }
+    It 'finds AI trailers in bot commit messages' {
+        Test-NoAiTrailer "Release bot: OptiScaler-NR v0.9.34 tested`n" | Should -BeTrue
+        Test-NoAiTrailer "x`n`nCo-Authored-By: Claude <noreply@anthropic.com>`n" | Should -BeFalse
+    }
+}
+
+Describe 'gates (N3: auto-merge really off on review PRs)' {
+    It 'trusts only an explicit null autoMergeRequest' {
+        Test-AutoMergeOff ('{"autoMergeRequest":null,"isDraft":false}' | ConvertFrom-Json) | Should -BeTrue
+        Test-AutoMergeOff ('{"autoMergeRequest":{"mergeMethod":"SQUASH"},"isDraft":false}' | ConvertFrom-Json) | Should -BeFalse
+        Test-AutoMergeOff ('{"isDraft":false}' | ConvertFrom-Json) | Should -BeFalse
+        Test-AutoMergeOff $null | Should -BeFalse
     }
 }
