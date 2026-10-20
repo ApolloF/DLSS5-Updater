@@ -65,15 +65,32 @@ jobs:
         id: notes
         if: startsWith(github.ref, 'refs/tags/')
         shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
         run: |
           # docs/releases/v<version>.md becomes the release text when it exists.
           $f = "docs/releases/v${{ steps.version.outputs.version }}.md"
           "path=$(if (Test-Path $f) { $f } else { '' })" >> $env:GITHUB_OUTPUT
+          # The release bot tags with an annotated "release-bot prerelease" message: those start as a prerelease (the
+          # app's self-update skips them) and the bot promotes them after 24 hours. Every other tag is a normal release.
+          $t = $env:GITHUB_REF_NAME
+          git fetch --no-tags --depth=1 origin "+refs/tags/${t}:refs/tags/${t}"
+          if ($LASTEXITCODE -ne 0) { throw "cannot read tag $t" }
+          $kind = git for-each-ref "refs/tags/$t" --format='%(objecttype)'
+          $subject = git for-each-ref "refs/tags/$t" --format='%(contents:subject)'
+          $pre = $kind -eq 'tag' -and $subject -like 'release-bot prerelease*'
+          # A re-run keeps the prerelease state the release already has, whoever set it (the bot's promotion, or the
+          # owner holding any tag back as a prerelease).
+          $existing = gh release view $t --json isPrerelease 2>$null
+          if ($LASTEXITCODE -eq 0) { $pre = [bool]($existing | ConvertFrom-Json).isPrerelease }
+          $global:LASTEXITCODE = 0  # no release yet is the normal case, not a failed step
+          "prerelease=$(if ($pre) { 'true' } else { 'false' })" >> $env:GITHUB_OUTPUT
 
       - name: Release
         if: startsWith(github.ref, 'refs/tags/')
         uses: softprops/action-gh-release@v3
         with:
+          prerelease: ${{ steps.notes.outputs.prerelease == 'true' }}
           body_path: ${{ steps.notes.outputs.path }}
           files: |
             publish/DLSS5Updater.exe
