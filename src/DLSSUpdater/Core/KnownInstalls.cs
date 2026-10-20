@@ -29,9 +29,9 @@ public sealed record InstallRefs
     };
 
     /// <summary>A record holding only the references, which is all <see cref="ComponentStore.PlanCleanup"/> reads.</summary>
-    public InstallManifest ToManifest() => new()
+    public InstallManifest ToManifest(string dir) => new()
     {
-        OptiTag = OptiTag, UpliftTag = UpliftTag, DlssNrId = DlssNrId, PreviousDlssNrId = PreviousDlssNrId,
+        Dir = dir, OptiTag = OptiTag, UpliftTag = UpliftTag, DlssNrId = DlssNrId, PreviousDlssNrId = PreviousDlssNrId,
         RenoDxId = RenoDxId, RenoDxTag = RenoDxTag, LecramId = LecramId, LecramTag = LecramTag,
         MfgTag = MfgTag, DlssTag = DlssTag, StreamlineTag = StreamlineTag,
     };
@@ -186,7 +186,7 @@ public static class KnownInstalls
                 void Remembered()
                 {
                     if (refs is null) return;
-                    records.Add(refs.ToManifest());
+                    records.Add(refs.ToManifest(dir));
                     unsure.UnionWith(refs.Libraries());
                 }
                 switch (probe(dir, refs?.VolumeSerial))
@@ -214,6 +214,7 @@ public static class KnownInstalls
                     changed |= known.Remove(dir);
                     continue;
                 }
+                m.Dir = dir;
                 records.Add(m);
                 uint? serial = null;
                 try { serial = (volumeSerial ?? VolumeSerial)(dir); }

@@ -709,6 +709,18 @@ public sealed partial class MainViewModel : ObservableObject
     internal List<string> InstallDirs() =>
         Games.SelectMany(g => g.Info.Installs).Distinct(StringComparer.OrdinalIgnoreCase).ToList();
 
+    /// <summary>Game ids and install folders to game names, for the reasons a build is kept. Read on the UI thread.</summary>
+    internal Dictionary<string, string> GameNames()
+    {
+        var names = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+        foreach (var g in Games)
+        {
+            names[g.Info.Id] = g.Name;
+            foreach (var dir in g.Info.Installs) names[FileUtil.Normalize(dir)] = g.Name;
+        }
+        return names;
+    }
+
     /// <summary>
     /// The install records the cleanup protects: those of the listed games and the remembered ones of games that are
     /// hidden or can't be reached now (see <see cref="KnownInstalls"/>). With <paramref name="settings"/>, the first run
@@ -724,12 +736,25 @@ public sealed partial class MainViewModel : ObservableObject
     private static List<CleanupItem>? PlanManual(ComponentStore store, AppSettings settings, IEnumerable<string> dirs) =>
         ReadRecords(dirs, settings) is { Unknown: false } r ? store.PlanCleanup(settings, r.Records) : null;
 
+    /// <summary>The kept builds of every library with their reasons for a dialog, a few lines at most; null when none is kept.</summary>
+    private static string? KeptDetails(Dictionary<LibraryKind, LibraryKeepNote> notes)
+    {
+        const int MaxLines = 12;
+        var lines = notes.SelectMany(n => n.Value.Kept.Select(k => $"• {ComponentStore.LibraryTitle(n.Key)} {k.Build.Label}: {string.Join(", ", k.Reasons)}")).ToList();
+        return lines.Count == 0 ? null
+            : string.Join(Environment.NewLine, lines.Take(MaxLines)) + (lines.Count > MaxLines ? $"{Environment.NewLine}… and {lines.Count - MaxLines} more" : "");
+    }
+
     /// <summary>Settings' Clean up: says what goes and how much it frees, deletes after a yes.</summary>
     internal async Task CleanUpBuildsAsync()
     {
         if (IsBusy) return;
         var dirs = InstallDirs();
-        var plan = await Task.Run(() => PlanManual(S.Store, S.Settings, dirs));
+        var names = GameNames();
+        var (plan, kept) = await Task.Run(() =>
+            ReadRecords(dirs, S.Settings) is { Unknown: false } r
+                ? (S.Store.PlanCleanup(S.Settings, r.Records), KeptDetails(S.Store.KeepNotes(S.Settings, r.Records, names)))
+                : (null, null));
         if (plan is null)
         {
             Dialog.Show("Cleanup skipped", "An install record can't be read, so nothing is deleted. The details are in the log.");
@@ -737,14 +762,16 @@ public sealed partial class MainViewModel : ObservableObject
         }
         if (plan.Count == 0)
         {
-            Dialog.Show("Nothing to clean up", "Every kept build is one of the newest, a default, chosen for a game or installed in one.");
+            Dialog.Show("Nothing to clean up", "Every kept build is one of the newest, a default, chosen for a game or installed in one." +
+                (kept is null ? "" : $"{Environment.NewLine}{Environment.NewLine}Kept beyond the newest:{Environment.NewLine}{kept}"));
             return;
         }
         var list = string.Join(Environment.NewLine, plan.Take(12).Select(p => $"• {p.What} ({BuildCleanup.FormatBytes(p.Bytes)})"))
                    + (plan.Count > 12 ? $"{Environment.NewLine}… and {plan.Count - 12} more" : "");
         if (!Dialog.Confirm("Clean up old builds",
                 $"Delete these for good and free {BuildCleanup.FormatBytes(plan.Sum(p => p.Bytes))}?{Environment.NewLine}{Environment.NewLine}{list}{Environment.NewLine}{Environment.NewLine}" +
-                "Defaults, builds chosen for a game and builds installed in one always stay.", "Delete", danger: true)) return;
+                "Defaults, builds chosen for a game and builds installed in one always stay." +
+                (kept is null ? "" : $"{Environment.NewLine}{Environment.NewLine}Kept beyond the newest:{Environment.NewLine}{kept}"), "Delete", danger: true)) return;
         await Run("Cleaning up old builds", async _ =>
         {
             // Something may have changed while the question was open: only what both plans name goes.

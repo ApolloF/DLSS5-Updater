@@ -24,6 +24,12 @@ public sealed partial class LibraryRowViewModel : ObservableObject
 
     [ObservableProperty] private string _summary = "";
 
+    /// <summary>Why this library holds more builds than the keep count; empty when it doesn't.</summary>
+    [ObservableProperty] private string _note = "";
+
+    /// <summary>Every kept build with all its reasons.</summary>
+    [ObservableProperty] private string _noteDetails = "";
+
     public int Keep
     {
         get => _settings.KeepBuildsFor(Kind);
@@ -99,9 +105,10 @@ public sealed partial class BuildCleanupViewModel : ObservableObject
         var store = _main.S.Store;
         var settings = _main.S.Settings;
         var dirs = _main.InstallDirs();
+        var names = _main.GameNames();
         try
         {
-            var (summaries, plan, skipped) = await Task.Run(() =>
+            var (summaries, plan, notes, skipped) = await Task.Run(() =>
             {
                 var records = MainViewModel.ReadRecords(dirs, settings);
                 var summaries = Rows.Select(r =>
@@ -110,13 +117,19 @@ public sealed partial class BuildCleanupViewModel : ObservableObject
                     var size = builds.Sum(b => BuildCleanup.SizeOf(b.Dir));
                     return builds.Count == 0 ? "none kept" : $"{builds.Count} build{(builds.Count == 1 ? "" : "s")}  ·  {BuildCleanup.FormatBytes(size)}";
                 }).ToList();
-                return (summaries, records.Unknown ? null : store.PlanCleanup(settings, records.Records), records.AutoSkipNote());
+                return (summaries, records.Unknown ? null : store.PlanCleanup(settings, records.Records),
+                    records.Unknown ? null : store.KeepNotes(settings, records.Records, names), records.AutoSkipNote());
             });
             if (run != _refresh) return;
-            for (var i = 0; i < Rows.Count; i++) Rows[i].Summary = summaries[i];
+            for (var i = 0; i < Rows.Count; i++)
+            {
+                Rows[i].Summary = summaries[i];
+                Rows[i].Note = notes?[Rows[i].Kind].Line ?? "";
+                Rows[i].NoteDetails = notes?[Rows[i].Kind].Details ?? "";
+            }
             AutoSkipped = skipped ?? "";
             Freeable = plan is null ? "An install record or the list of known installs can't be read, so nothing is cleaned up. The details are in the log."
-                : plan.Count == 0 ? "Nothing to clean up."
+                : plan.Count == 0 ? BuildCleanup.NothingToCleanText(notes!.Values)
                 : $"Clean up frees {BuildCleanup.FormatBytes(plan.Sum(p => p.Bytes))} ({plan.Count} item{(plan.Count == 1 ? "" : "s")}).";
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or InvalidOperationException)
