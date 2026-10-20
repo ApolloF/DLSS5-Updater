@@ -61,7 +61,15 @@ Name: "{autodesktop}\{#AppName}"; Filename: "{app}\{#AppExe}"; Tasks: desktopico
 
 [Run]
 Filename: "{app}\{#AppExe}"; Description: "{cm:LaunchProgram,{#AppName}}"; Flags: nowait postinstall skipifsilent
+; Self-update: the app runs setup with /VERYSILENT ... /RELAUNCH=1 and has already exited; start it again as the user.
+Filename: "{app}\{#AppExe}"; Parameters: "--restarted"; Flags: nowait runasoriginaluser; Check: RelaunchAfterUpdate
 
 [UninstallRun]
 ; Drop the old add-on link if it points at this copy. Settings and caches in %LocalAppData%\DLSS5Updater are kept.
 Filename: "{app}\{#AppExe}"; Parameters: "--unregister-addon"; Flags: runhidden waituntilterminated; RunOnceId: "UnregisterAddon"
+
+[Code]
+function RelaunchAfterUpdate: Boolean;
+begin
+  Result := WizardSilent and (ExpandConstant('{param:RELAUNCH|0}') = '1');
+end;
