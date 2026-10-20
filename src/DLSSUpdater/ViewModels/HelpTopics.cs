@@ -86,10 +86,13 @@ public static class HelpTopics
             "ReShade64.dll replaces the download until you press Use download. Import a newer file here and Update all rolls it out. " +
             "ShortFuse's renodx-dlss.addon64 is imported the same way and only accepted when the file identifies itself as renodx-dlss.addon64; every import stays in a library of builds, with a default here, an optional pick per game and your own name per build. " +
             "Deep Fried Chicken is imported from its extracted release folder or its 64-bit folder (Folder…), from deep-fried-chicken.addon64 in that folder or from a .zip of the release (Import…); the NGX bridge deep-fried-chicken-nvngx.dll must be beside the add-on. From 4.x the whole 64-bit folder is taken, as the package's README asks. A .7z can't be read: extract it first. " +
+            "Each import is kept as a build of its own, so several DFC versions sit side by side; importing the same add-on again replaces that build's files. The default is Newest unless you pick a build. " +
             "Lecram's DLSS5 add-on is imported as renodx-dlss5.addon64 (v10 and older) or dlss5-nr.addon64 (v11 and newer); all builds are kept side by side and each game picks its own."),
         new("dfc", "General", "Deep Fried Chicken",
             "Deep Fried Chicken (DFC) is a closed-source ReShade add-on that runs NVIDIA DLSS neural rendering. 2.x needs a game with native DLSS; 4.x and newer also run in games without their own DLSS (see Deep Fried Chicken without DLSS). " +
             "Its licence is personal use only, so this app never downloads or redistributes it: you import your own copy (add-on, NGX bridge and default config) in Local components, and the files are copied into games unchanged. " +
+            "Every import stays in a library of builds. The default in Settings is Newest (the highest version, follows new imports) until you pick a build; a game can pick its own build on its page, and that build decides the files, the default cfg and whether games without DLSS work. " +
+            "Switching a game to another build replaces the whole set; its deep-fried-chicken.cfg stays. Builds stay until you remove them: the automatic cleanup never deletes an import. " +
             "From 4.x the whole 64-bit folder goes beside the game exe, as the package asks: in 4.0.6 and 5.0 that is the add-on, the bridge, deep-fried-chicken-present-support.dll, the deep-fried-chicken-neural folder and reshade-shaders\\Shaders\\DFC_OutputState.addonfx. " +
             "Logs, NVIDIA's nvngx_*.dll and ReShade's own files in that folder are left out (the app places those itself), and ReShade.ini's EffectSearchPaths gets .\\reshade-shaders\\Shaders\\** when it doesn't cover that folder yet. " +
             "DFC's 32-bit route (addon32 plus a 64-bit companion host) is not supported by this app. " +
@@ -458,7 +461,7 @@ public static class HelpTopics
         ["add-missing"] = "Leave on. It only adds a file to games that have none, and Uninstall removes it again.",
         ["ini-mode"] = "Keep game settings for everyday use: updates never undo tuning you did in-game. Apply app settings once after you changed something here and want " +
                        "it everywhere, then switch back. Fresh config when a mod's config got messy or a new release changed a lot.",
-        ["local-components"] = "Import each nvngx_dlssnr.dll to keep it in the local library. Choose the default here or a version on a game, then use Switch NR. Switch back restores its previous file. No NR binary is downloaded by this app. The ShortFuse and Lecram add-ons keep a library too: import every build you want, pick the default, and name builds yourself.",
+        ["local-components"] = "Import each nvngx_dlssnr.dll to keep it in the local library. Choose the default here or a version on a game, then use Switch NR. Switch back restores its previous file. No NR binary is downloaded by this app. The ShortFuse and Lecram add-ons and Deep Fried Chicken keep a library too: import every build you want, pick the default, and name builds yourself.",
         ["keybinds"] = "Pick keys the game doesn't use: Delete, Insert, End, Page Up/Down and \\ are usually free. Avoid Home if you use ReShade's default overlay key.",
         ["skip-tutorial"] = "On, unless you are new to ReShade.",
         ["performance-mode"] = "Off while you set up effects, on for playing. With only add-ons (RenoDX, MFG Unlock) and no effects it makes no difference.",

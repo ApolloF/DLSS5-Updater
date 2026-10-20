@@ -1,22 +1,21 @@
 using System.IO.Compression;
+using System.Text.Json;
 
 namespace DLSSUpdater.Core;
 
 /// <summary>
 /// Deep Fried Chicken is closed source and its licence allows personal use only: no redistribution, rehosting or
 /// modification. It is import-only: the user's own files are kept byte for byte in the components folder and copied
-/// unchanged into games. Nothing is ever downloaded.
+/// unchanged into games. Nothing is ever downloaded. Every import is a build of the add-on library
+/// (<see cref="AddonKind.Dfc"/>): components\dfc\&lt;sha256 of the add-on&gt;\ holds its whole 64-bit set, the default cfg
+/// and version.json.
 /// </summary>
 public sealed partial class ComponentStore
 {
     public static string DfcDir => Path.Combine(AppPaths.Components, "dfc");
-    public string DfcPath => Path.Combine(DfcDir, DfcFile);
-    public string DfcBridgePath => Path.Combine(DfcDir, DfcBridgeFile);
-    public string DfcConfigPath => Path.Combine(DfcDir, DfcConfigFile);
-    public bool DfcImported => File.Exists(DfcPath) && File.Exists(DfcBridgePath);
-
-    /// <summary>Version shown for the imported add-on, or null when none is imported.</summary>
-    public string? DfcVersion => DfcImported ? FileUtil.Format(FileUtil.ReadVersion(DfcPath)) : null;
+    public static string DfcBuildDir(AddonBuild build) => Path.Combine(DfcDir, build.Id);
+    public static string DfcConfigOf(AddonBuild build) => Path.Combine(DfcBuildDir(build), DfcConfigFile);
+    public bool DfcImported => DfcBuilds.Count > 0;
 
     /// <summary>
     /// From 4.x (INSTALL.txt 4.0.6 preview) DFC also runs in games without their own DLSS, on its own or an external motion
@@ -24,14 +23,8 @@ public sealed partial class ComponentStore
     /// </summary>
     public const int DfcNonDlssMajor = 4;
 
-    /// <summary>Whether the imported add-on runs in games without their own DLSS; false when none is imported.</summary>
-    public bool DfcSupportsNonDlssGames => DfcImported && FileUtil.ReadVersion(DfcPath) is { Major: >= DfcNonDlssMajor };
-
-    /// <summary>"{version}-{sha[..12]}" of the imported add-on; this is what an install records.</summary>
-    public string? DfcTag => DfcImported ? DfcTagOf(DfcPath) : null;
-
-    internal static string DfcTagOf(string path) =>
-        $"{FileUtil.Format(FileUtil.ReadVersion(path))}-{HashCache.Get(path)[..12]}";
+    /// <summary>Whether <paramref name="build"/> runs in games without their own DLSS.</summary>
+    public static bool DfcSupportsNonDlssGames(AddonBuild build) => build.ParsedVersion is { Major: >= DfcNonDlssMajor };
 
     /// <summary>
     /// Whether <paramref name="relative"/> (a path relative to the game folder) is one of the files the 64-bit set had
@@ -51,7 +44,7 @@ public sealed partial class ComponentStore
     /// <summary>
     /// Whether a file of the 64-bit folder (path relative to it) is copied into games. Not taken: the cfg (kept as the
     /// default and merged separately), logs, what the user adds per README.txt or the app places itself (NVIDIA's nvngx_*
-    /// runtimes, ReShade and its proxy dlls, all beside the exe) and an install record of ours.
+    /// runtimes, ReShade and its proxy dlls, all beside the exe), an install record of ours and the library's version.json.
     /// </summary>
     public static bool IsDfcSetFile(string relative)
     {
@@ -60,6 +53,7 @@ public sealed partial class ComponentStore
         if (name.EndsWith(".log", StringComparison.OrdinalIgnoreCase)) return false;
         if (rel.Contains('\\')) return !rel.StartsWith(InstallManifest.DirName + "\\", StringComparison.OrdinalIgnoreCase);
         return !name.Equals(DfcConfigFile, StringComparison.OrdinalIgnoreCase)
+            && !name.Equals(BuildRecordFile, StringComparison.OrdinalIgnoreCase)
             && !name.StartsWith("nvngx_", StringComparison.OrdinalIgnoreCase)
             && !name.StartsWith("ReShade", StringComparison.OrdinalIgnoreCase)
             && !AppSettings.IsKnownProxy(name);
@@ -69,12 +63,16 @@ public sealed partial class ComponentStore
     public const int DfcMaxFiles = 64;
     public const long DfcMaxBytes = 1L << 30;
 
-    /// <summary>The imported 64-bit set as paths relative to <see cref="DfcDir"/> (the game folder layout), without the cfg.</summary>
-    public IReadOnlyList<string> DfcInstallFiles() => !Directory.Exists(DfcDir) ? []
-        : Directory.EnumerateFiles(DfcDir, "*", SearchOption.AllDirectories)
-            .Select(f => Path.GetRelativePath(DfcDir, f))
-            .Where(IsDfcSetFile)
-            .OrderBy(r => r, StringComparer.OrdinalIgnoreCase).ToList();
+    /// <summary>The 64-bit set of <paramref name="build"/> as paths relative to its folder (the game folder layout), without the cfg.</summary>
+    public static IReadOnlyList<string> DfcInstallFiles(AddonBuild build)
+    {
+        var dir = DfcBuildDir(build);
+        return !Directory.Exists(dir) ? []
+            : Directory.EnumerateFiles(dir, "*", SearchOption.AllDirectories)
+                .Select(f => Path.GetRelativePath(dir, f))
+                .Where(IsDfcSetFile)
+                .OrderBy(r => r, StringComparer.OrdinalIgnoreCase).ToList();
+    }
 
     /// <summary>
     /// <paramref name="source"/> is deep-fried-chicken.addon64, the folder that holds it, the extracted package folder
@@ -82,9 +80,11 @@ public sealed partial class ComponentStore
     /// taken when present. From 4.x the package says to copy the contents of the 64-bit folder next to the game exe, so
     /// the whole folder is taken (see <see cref="IsDfcSetFile"/>) and must hold the present-support dll and the neural
     /// folder. 2.x takes the add-on and the bridge only.
-    /// Everything is staged first and replaces the previous import as a whole, so no file of an older set stays behind.
+    /// Everything is staged first and becomes one library build; other builds are never touched. The same add-on again is
+    /// the same build: its set is replaced as a whole by the new one (so no file of an older set stays behind), its name and
+    /// import date stay.
     /// </summary>
-    public string ImportDfc(string source)
+    public AddonBuild ImportDfc(string source)
     {
         if (source.EndsWith(".7z", StringComparison.OrdinalIgnoreCase) || source.EndsWith(".rar", StringComparison.OrdinalIgnoreCase))
             throw new InvalidDataException($"The app can't open {Path.GetFileName(source)}. Extract it first (Deep Fried Chicken's .7z needs the password from its release post), then import the extracted folder.");
@@ -101,7 +101,7 @@ public sealed partial class ComponentStore
         }
     }
 
-    private string ImportDfcFrom(string source, string shownSource)
+    private AddonBuild ImportDfcFrom(string source, string shownSource)
     {
         var addon = ResolveDfcAddon(source);
         if (!File.Exists(addon))
@@ -133,13 +133,80 @@ public sealed partial class ComponentStore
 
         var staging = DfcDir + ".new";
         if (Directory.Exists(staging)) Directory.Delete(staging, true);
-        foreach (var rel in files) FileUtil.AtomicCopy(Path.Combine(dir, rel), Path.Combine(staging, rel));
-        if (File.Exists(config)) FileUtil.AtomicCopy(config, Path.Combine(staging, DfcConfigFile));
-        if (Directory.Exists(DfcDir)) Directory.Delete(DfcDir, true);
-        Directory.Move(staging, DfcDir);
-        Log.Info($"Imported {DfcFile} {DfcVersion} from {shownSource} ({files.Count} files)");
-        if (DfcCompat([]) is { HasIssues: true } report) Log.Info("Config check: " + report.Summary.ReplaceLineEndings(" "));
-        return DfcTagOf(DfcPath);
+        try
+        {
+            foreach (var rel in files) FileUtil.AtomicCopy(Path.Combine(dir, rel), Path.Combine(staging, rel));
+            if (File.Exists(config)) FileUtil.AtomicCopy(config, Path.Combine(staging, DfcConfigFile));
+            var build = StoreDfcBuild(staging, FileUtil.Format(version));
+            Log.Info($"Imported {DfcFile} {build.FileVersion} from {shownSource} ({files.Count} files)");
+            if (DfcCompat([], build.Id) is { HasIssues: true } report) Log.Info("Config check: " + report.Summary.ReplaceLineEndings(" "));
+            return build;
+        }
+        finally
+        {
+            if (Directory.Exists(staging)) Directory.Delete(staging, true);
+        }
+    }
+
+    /// <summary>
+    /// Moves a staged set into the library as the build its add-on names. A build that is already there is swapped out
+    /// whole; when the swap fails it is put back, so a failed import leaves the library as it was.
+    /// </summary>
+    private AddonBuild StoreDfcBuild(string staging, string version)
+    {
+        var id = FileUtil.Sha256(Path.Combine(staging, DfcFile));
+        var build = DfcBuilds.FirstOrDefault(b => b.Id == id) ?? new AddonBuild(id, DfcFile, version, null, version, null, DateTime.UtcNow);
+        FileUtil.AtomicWriteText(Path.Combine(staging, BuildRecordFile), JsonSerializer.Serialize(build, JsonCtx.Default.AddonBuild));
+        var dest = DfcBuildDir(build);
+        var old = dest + DeletingSuffix;
+        Directory.CreateDirectory(DfcDir);
+        if (Directory.Exists(dest))
+        {
+            FileUtil.DeleteDirectory(old);
+            Directory.Move(dest, old);
+        }
+        try { Directory.Move(staging, dest); }
+        catch
+        {
+            if (Directory.Exists(old) && !Directory.Exists(dest)) Directory.Move(old, dest);
+            throw;
+        }
+        finally { ForgetAddons(AddonKind.Dfc); }
+        // A copy in use stays as a deleted build's rest, which the cleanup lists.
+        try { FileUtil.DeleteDirectory(old); }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) { Log.Warn($"Could not delete the replaced set {old}: {ex.Message}"); }
+        return build;
+    }
+
+    /// <summary>
+    /// First run with the library: an import of the single-slot layout (its set directly in components\dfc) becomes a
+    /// build. Everything moves into the build folder and the add-on goes last, after version.json, so a run that stops
+    /// part-way leaves the add-on where the next run finds it again. An unreadable import is logged and stays.
+    /// </summary>
+    public void MigrateDfc()
+    {
+        var legacy = Path.Combine(DfcDir, DfcFile);
+        if (!File.Exists(legacy)) return;
+        try
+        {
+            var version = FileUtil.Format(FileUtil.ReadVersion(legacy));
+            var build = new AddonBuild(FileUtil.Sha256(legacy), DfcFile, version, null, version, null, File.GetCreationTimeUtc(legacy));
+            var dest = DfcBuildDir(build);
+            Directory.CreateDirectory(dest);
+            foreach (var entry in Directory.EnumerateFileSystemEntries(DfcDir).ToList())
+            {
+                var target = Path.Combine(dest, Path.GetFileName(entry));
+                if (entry.Equals(dest, StringComparison.OrdinalIgnoreCase) || entry.Equals(legacy, StringComparison.OrdinalIgnoreCase)) continue;
+                if (Directory.Exists(entry)) Directory.Move(entry, target);
+                else File.Move(entry, target, overwrite: true);
+            }
+            FileUtil.AtomicWriteText(Path.Combine(dest, BuildRecordFile), JsonSerializer.Serialize(build, JsonCtx.Default.AddonBuild));
+            File.Move(legacy, Path.Combine(dest, DfcFile), overwrite: true);
+            ForgetAddons(AddonKind.Dfc);
+            Log.Info($"Moved the imported Deep Fried Chicken {version} into the add-on library");
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        { Log.Error("Could not move the imported Deep Fried Chicken into the add-on library", ex); }
     }
 
     /// <summary>The add-on path: the file itself, the folder holding it, or the package folder's 64-bit subfolder.</summary>
@@ -195,19 +262,13 @@ public sealed partial class ComponentStore
     }
 
     /// <summary>
-    /// The imported add-on against the version and config schema this app was tested with, plus which of
-    /// <paramref name="managedKeys"/> its default cfg lacks. Null when nothing is imported.
+    /// A build (<paramref name="id"/>; null is the default build) against the version and config schema this app was tested
+    /// with, plus which of <paramref name="managedKeys"/> its default cfg lacks. Null when there is no such build.
     /// </summary>
-    public DfcCompatReport? DfcCompat(IEnumerable<string> managedKeys) => !DfcImported ? null
-        : DfcConfig.Check(DfcVersion, File.Exists(DfcConfigPath) ? File.ReadAllText(DfcConfigPath) : null, managedKeys);
-
-    public void RemoveDfcImport()
+    public DfcCompatReport? DfcCompat(IEnumerable<string> managedKeys, string? id = null)
     {
-        if (Directory.Exists(DfcDir)) Directory.Delete(DfcDir, true);
+        if (DfcBuildFor(id) is not { } build) return null;
+        var cfg = DfcConfigOf(build);
+        return DfcConfig.Check(build.FileVersion, File.Exists(cfg) ? File.ReadAllText(cfg) : null, managedKeys);
     }
-
-    /// <summary>The imported add-on, or a clear error when none was imported.</summary>
-    internal string RequireDfc() => DfcImported
-        ? DfcPath
-        : throw new FileNotFoundException($"Import {DfcFile} in Settings → Local components first.", DfcPath);
 }

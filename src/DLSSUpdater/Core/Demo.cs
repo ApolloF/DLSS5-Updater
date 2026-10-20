@@ -34,8 +34,8 @@ public static class Demo
     private const string NrOriginalId = "2bc19bc09a7b89dd44f73e2ac0108fcc586e2154bdd0830f242f4f040e28789f";
     private static readonly Version NrCompatVersion = new(310, 9, 16, 0);
     private static readonly Version NrOriginalVersion = new(310, 8, 0, 0);
-    private static readonly Version DfcFileVersion = new(5, 0, 0, 0);
     private const string DfcInstalled = "5.0.0";
+    private const string DfcSeed = "dfc-5.0.0";
 
     private static readonly Dictionary<string, InstallManifest> Manifests = new(StringComparer.OrdinalIgnoreCase);
     private static readonly Dictionary<DlssDll, Version?> Originals = [];
@@ -113,15 +113,9 @@ public static class Demo
         PlaceRelease(Component.Uplift, "v1.3.0", new DateTime(2026, 9, 1));
         PlaceRelease(Component.Uplift, "v1.2.0", new DateTime(2026, 7, 14));
 
-        var dfc = Path.Combine(AppPaths.Components, "dfc");
-        Directory.CreateDirectory(dfc);
-        foreach (var file in new[] { ComponentStore.DfcFile, ComponentStore.DfcBridgeFile })
-        {
-            var path = Path.Combine(dfc, file);
-            File.WriteAllText(path, Placeholder(file));
-            Fakes[path] = (DfcFileVersion, Sha(file));
-        }
-        File.WriteAllText(Path.Combine(dfc, ComponentStore.DfcConfigFile), $"config_schema={DfcConfig.TestedSchema}\n");
+        // Deep Fried Chicken: 5.0.0 (the newest, so the default) and the 4.0.6 preview, each a whole set.
+        PlaceDfc(DfcSeed, DfcInstalled);
+        PlaceDfc("dfc-4.0.6-preview", "4.0.0");
 
         void PlaceNr(string id, Version version)
         {
@@ -146,6 +140,14 @@ public static class Demo
             FileUtil.AtomicWriteText(Path.Combine(folder, file), Placeholder(seed));
             var build = new AddonBuild(id, file, fileVersion, generation, label, null, new DateTime(2026, 9, 28, 0, 0, 0, DateTimeKind.Utc));
             FileUtil.AtomicWriteText(Path.Combine(folder, "version.json"), JsonSerializer.Serialize(build, JsonCtx.Default.AddonBuild));
+        }
+
+        void PlaceDfc(string seed, string version)
+        {
+            PlaceAddon("dfc", seed, ComponentStore.DfcFile, version, version, null);
+            var folder = Path.Combine(ComponentStore.DfcDir, Sha(seed));
+            FileUtil.AtomicWriteText(Path.Combine(folder, ComponentStore.DfcBridgeFile), Placeholder(seed + " bridge"));
+            FileUtil.AtomicWriteText(Path.Combine(folder, ComponentStore.DfcConfigFile), $"config_schema={DfcConfig.TestedSchema}\n");
         }
     }
 
@@ -209,7 +211,7 @@ public static class Demo
         {
             m.Mode = InstallMode.ReShadeOnly;
             m.ReShade = m.DlssNr = m.Dfc = true;
-            m.DfcTag = DfcInstalledTag; m.DlssNrId = NrCompatId; m.Proxy = "dxgi.dll";
+            m.DfcId = DfcId; m.DfcTag = DfcTag; m.DlssNrId = NrCompatId; m.Proxy = "dxgi.dll";
         }),
         // Anti-cheat game with an old DLSS-only swap.
         new("Iron Veil", "Steam", "x64", "IronVeil.exe", "310.9.1", "310.9.1", "310.9.1", "2.7.30", AntiCheat: "EasyAntiCheat", Installed: m => { m.Dlss = true; m.DlssTag = "v310.9.1"; }),
@@ -253,7 +255,8 @@ public static class Demo
         new("Wicker & Ash", "Steam", @"bin\win64", "WickerAndAsh.exe", "310.9.1", null, "310.9.1", Installed: m => { m.Dlss = true; m.DlssTag = "v310.9.1"; }),
     ];
 
-    private static string DfcInstalledTag => $"{DfcInstalled}-{Sha(ComponentStore.DfcFile)[..12]}";
+    private static string DfcId => Sha(DfcSeed);
+    private static string DfcTag => $"{DfcInstalled}-{DfcId[..12]}";
 
     /// <summary>Rebuilds the made-up library; games live on a drive the demo never writes to.</summary>
     public static void Reset()
@@ -331,7 +334,7 @@ public static class Demo
             m.OptiTag = o.Opti ? o.OptiTag ?? store.Opti?.Tag : null;
             m.MfgTag = o.Mfg ? o.MfgTag ?? store.Mfg?.Tag : null;
             m.UpliftTag = o.Uplift ? o.UpliftTag ?? store.Uplift?.Tag : null;
-            m.DfcTag = o.Dfc ? store.DfcTag : null;
+            (m.DfcId, m.DfcTag) = o.Dfc && store.DfcBuildFor(o.DfcId) is { } dfc ? (dfc.Id, dfc.Tag) : (null, null);
             (m.RenoDxId, m.RenoDxTag) = o.RenoDx && store.RenoDxBuildFor(o.RenoDxId) is { } sf ? (sf.Id, sf.Tag) : (null, null);
             (m.LecramId, m.LecramTag, m.LecramFile) = o.Lecram && store.LecramBuildFor(o.LecramId) is { } lc ? (lc.Id, lc.Tag, lc.FileName) : (null, null, null);
         }

@@ -819,6 +819,7 @@
                                                         <Style.Triggers>
                                                             <DataTrigger Binding="{Binding Key}" Value="renodx"><Setter Property="Visibility" Value="Collapsed" /></DataTrigger>
                                                             <DataTrigger Binding="{Binding Key}" Value="lecram"><Setter Property="Visibility" Value="Collapsed" /></DataTrigger>
+                                                            <DataTrigger Binding="{Binding Key}" Value="dfc"><Setter Property="Visibility" Value="Collapsed" /></DataTrigger>
                                                             <DataTrigger Binding="{Binding Key}" Value="opti"><Setter Property="Visibility" Value="Collapsed" /></DataTrigger>
                                                             <DataTrigger Binding="{Binding Key}" Value="uplift"><Setter Property="Visibility" Value="Collapsed" /></DataTrigger>
                                                         </Style.Triggers>
@@ -847,6 +848,11 @@
                                                       ItemsSource="{Binding DataContext.LecramChoices, RelativeSource={RelativeSource AncestorType=ItemsControl}}"
                                                       SelectedItem="{Binding DataContext.LecramChoice, RelativeSource={RelativeSource AncestorType=ItemsControl}}"
                                                       AutomationProperties.Name="Lecram DLSS5 version for this game" ToolTip="Which imported Lecram build this game installs; its generation decides which Lecram options apply" />
+                                            <ComboBox Grid.Column="3" Margin="0,0,8,0" MaxDropDownHeight="300"
+                                                      Visibility="{Binding Key, Converter={StaticResource EqualsToVis}, ConverterParameter=dfc}"
+                                                      ItemsSource="{Binding DataContext.DfcChoices, RelativeSource={RelativeSource AncestorType=ItemsControl}}"
+                                                      SelectedItem="{Binding DataContext.DfcChoice, RelativeSource={RelativeSource AncestorType=ItemsControl}}"
+                                                      AutomationProperties.Name="Deep Fried Chicken version for this game" ToolTip="Which imported Deep Fried Chicken build this game installs; it decides the files, the default cfg and whether games without DLSS work" />
                                             <CheckBox Grid.Column="4" IsChecked="{Binding Enabled}" IsEnabled="{Binding Editable}" HorizontalAlignment="Right" ToolTip="Include in install"
                                                       AutomationProperties.Name="{Binding Name, StringFormat='Install {0}'}" />
                                         </Grid>
@@ -1049,6 +1055,9 @@
                                                                             <Button Content="Remove" Style="{StaticResource BtnGhost}" Command="{Binding RemoveCommand}" Margin="12,0,0,0"
                                                                                     Visibility="{Binding HasBuilds, Converter={StaticResource BoolToVis}}"
                                                                                     ToolTip="Remove the selected build from the library; other builds stay" />
+                                                                            <Button Content="Folder…" Style="{StaticResource BtnGhost}" Command="{Binding ImportFolderCommand}" Margin="12,0,0,0"
+                                                                                    Visibility="{Binding CanImportFolder, Converter={StaticResource BoolToVis}}"
+                                                                                    ToolTip="Add the extracted release folder or its 64-bit folder to the library" />
                                                                             <Button Content="Import…" Command="{Binding ImportCommand}" Margin="12,0,0,0"
                                                                                     ToolTip="Add a build to the library; builds already there are kept" />
                                                                         </StackPanel>
@@ -1120,26 +1129,8 @@
                                                     <ContentControl Content="{Binding Lecram}" ContentTemplate="{StaticResource AddonLibraryRow}" Margin="0,10" />
                                                     <TextBlock Text="{Binding LecramMessage}" Style="{StaticResource MutedText}" TextWrapping="Wrap" FontSize="12" Margin="0,0,0,10" Foreground="{StaticResource Warn}"
                                                                Visibility="{Binding HasLecramMessage, Converter={StaticResource BoolToVis}}" />
-                                                    <Grid Margin="0,10">
-                                                        <Grid.ColumnDefinitions>
-                                                            <ColumnDefinition Width="*" />
-                                                            <ColumnDefinition Width="Auto" />
-                                                        </Grid.ColumnDefinitions>
-                                                        <StackPanel VerticalAlignment="Center">
-                                                            <TextBlock Text="Deep Fried Chicken" FontWeight="SemiBold" />
-                                                            <TextBlock Text="deep-fried-chicken.addon64" Style="{StaticResource Mono}" Foreground="{StaticResource Muted}" FontSize="11" TextWrapping="Wrap" />
-                                                            <TextBlock Text="{Binding DfcInfo}" Style="{StaticResource MutedText}" TextWrapping="Wrap" FontSize="12" Margin="0,4,0,0" />
-                                                        </StackPanel>
-                                                        <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Top">
-                                                            <Button Content="Remove" Style="{StaticResource BtnGhost}" Command="{Binding RemoveDfcCommand}" Margin="12,0,0,0"
-                                                                    Visibility="{Binding DfcImported, Converter={StaticResource BoolToVis}}"
-                                                                    ToolTip="Remove the imported Deep Fried Chicken files from the local components" />
-                                                            <Button Content="Folder…" Style="{StaticResource BtnGhost}" Command="{Binding ImportDfcFolderCommand}" Margin="12,0,0,0"
-                                                                    ToolTip="Import the extracted release folder or its 64-bit folder" />
-                                                            <Button Content="Import…" Command="{Binding ImportDfcCommand}" Margin="12,0,0,0"
-                                                                    ToolTip="Import deep-fried-chicken.addon64 (its whole folder comes along) or a .zip of the release" />
-                                                        </StackPanel>
-                                                    </Grid>
+                                                    <Border Style="{StaticResource Divider}" />
+                                                    <ContentControl Content="{Binding Dfc}" ContentTemplate="{StaticResource AddonLibraryRow}" Margin="0,10" />
                                                 </StackPanel>
                                             </Border>
                                             <TextBlock Text="Import each NR runtime you want to keep; they all stay in your library. NVIDIA's original needs an RTX 50 card. For RTX 20/30/40, download and extract ShortFuse's compat build (compat-fp16-310.9.16-cuda13.4.3) and import it. ReShade is downloaded from reshade.me."

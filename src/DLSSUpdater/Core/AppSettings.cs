@@ -17,6 +17,8 @@ public sealed class GameOverride
     public string? RenoDxId { get; set; }
     /// <summary>Lecram add-on build (library id) pinned for this game; null follows the global choice.</summary>
     public string? LecramId { get; set; }
+    /// <summary>Deep Fried Chicken build (library id) pinned for this game; null follows the global choice.</summary>
+    public string? DfcId { get; set; }
     /// <summary>OptiScaler build (app tag, either source) chosen for this game; null follows the default.</summary>
     public string? OptiTag { get; set; }
     /// <summary>GITC Uplift build (release tag) chosen for this game; null follows the default.</summary>
@@ -161,6 +163,8 @@ public sealed class AppSettings
     public string? LecramId { get; set; }
     /// <summary>Set once <see cref="LecramId"/> was reset to "Newest": older settings pinned the build automatically, which can't be told from a user's pick.</summary>
     public bool LecramNewestMigrated { get; set; }
+    /// <summary>Default Deep Fried Chicken build (library id); null follows the newest build in the library.</summary>
+    public string? DfcId { get; set; }
     public List<AddonPairTest> AddonPairTests { get; set; } = [];
     /// <summary>Default OptiScaler build (app tag, either source); null follows the newest release of the selected source.</summary>
     public string? OptiTag { get; set; }
@@ -176,12 +180,18 @@ public sealed class AppSettings
     /// <summary>First-run setup: false on a fresh install until it is finished or skipped. Missing (settings from 1.x) counts as done.</summary>
     public bool? OnboardingDone { get; set; }
 
-    public string? AddonId(AddonKind kind) => kind == AddonKind.RenoDx ? RenoDxId : LecramId;
+    public string? AddonId(AddonKind kind) => kind switch
+    {
+        AddonKind.RenoDx => RenoDxId,
+        AddonKind.Lecram => LecramId,
+        _ => DfcId,
+    };
 
     public void SetAddonId(AddonKind kind, string? id)
     {
         if (kind == AddonKind.RenoDx) RenoDxId = id;
-        else LecramId = id;
+        else if (kind == AddonKind.Lecram) LecramId = id;
+        else DfcId = id;
     }
 
     public void SelectDlssNr(string id)

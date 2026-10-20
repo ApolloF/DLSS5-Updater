@@ -5,11 +5,12 @@ using System.Text.Json.Serialization;
 namespace DLSSUpdater.Core;
 
 /// <summary>The import-only add-ons that keep a library of builds, like the NR library does for nvngx_dlssnr.dll.</summary>
-public enum AddonKind { RenoDx, Lecram }
+public enum AddonKind { RenoDx, Lecram, Dfc }
 
 /// <summary>
-/// One imported build of ShortFuse's or Lecram's add-on, stored under components\&lt;add-on dir&gt;\&lt;sha256&gt;\&lt;FileName&gt;
-/// with this record next to it as version.json. <see cref="FileName"/> is the name the add-on is installed under.
+/// One imported build of ShortFuse's or Lecram's add-on or of Deep Fried Chicken, stored under
+/// components\&lt;add-on dir&gt;\&lt;sha256&gt;\&lt;FileName&gt; with this record next to it as version.json. <see cref="FileName"/> is the
+/// name the add-on is installed under. A Deep Fried Chicken build's folder holds its whole 64-bit set beside the add-on.
 /// <see cref="Downloaded"/>: the app fetched it from Lecram's channel; false for every import and for builds from before the flag.
 /// </summary>
 public sealed record AddonBuild(
@@ -74,10 +75,13 @@ public sealed partial class ComponentStore
 {
     private const string RenoDxDir = "renodx-dlss";
     private const string LecramDir = "lecram-dlss5";
+    /// <summary>The <see cref="AddonBuild"/> record in each build folder.</summary>
+    private const string BuildRecordFile = "version.json";
 
     /// <summary>Build id the settings choose as the default; null follows the newest import.</summary>
     public Func<string?> SelectedRenoDx { get; set; } = () => null;
     public Func<string?> SelectedLecram { get; set; } = () => null;
+    public Func<string?> SelectedDfc { get; set; } = () => null;
 
     public Func<IReadOnlyList<AddonPairTest>> PairTests { get; set; } = () => [];
     public event Action? PairStatusChanged;
@@ -118,10 +122,16 @@ public sealed partial class ComponentStore
         .Where(p => p.Sf is not null && p.Lecram is not null)
         .Select(p => $"ShortFuse {p.Sf!.Label} + Lecram {p.Lecram!.Label}"));
 
-    private static string AddonRoot(AddonKind kind) => Path.Combine(AppPaths.Components, kind == AddonKind.RenoDx ? RenoDxDir : LecramDir);
+    private static string AddonRoot(AddonKind kind) => kind switch
+    {
+        AddonKind.RenoDx => Path.Combine(AppPaths.Components, RenoDxDir),
+        AddonKind.Lecram => Path.Combine(AppPaths.Components, LecramDir),
+        _ => DfcDir,
+    };
 
     public IReadOnlyList<AddonBuild> RenoDxBuilds => AddonBuilds(AddonKind.RenoDx);
     public IReadOnlyList<AddonBuild> LecramBuilds => AddonBuilds(AddonKind.Lecram);
+    public IReadOnlyList<AddonBuild> DfcBuilds => AddonBuilds(AddonKind.Dfc);
     public bool RenoDxImported => RenoDxBuilds.Count > 0;
     public bool LecramImported => LecramBuilds.Count > 0;
 
@@ -149,13 +159,14 @@ public sealed partial class ComponentStore
     {
         if (!Directory.Exists(root)) return [];
         var builds = new List<AddonBuild>();
-        foreach (var file in Directory.EnumerateFiles(root, "version.json", SearchOption.AllDirectories))
+        foreach (var file in Directory.EnumerateFiles(root, BuildRecordFile, SearchOption.AllDirectories))
         {
             try
             {
                 var b = JsonSerializer.Deserialize(File.ReadAllText(file), JsonCtx.Default.AddonBuild);
                 if (b is not null && ValidId(b.Id) && Path.GetFileName(Path.GetDirectoryName(file)) == b.Id
-                    && ValidAddonFile(kind, b.FileName) && File.Exists(Path.Combine(root, b.Id, b.FileName))) builds.Add(b);
+                    && ValidAddonFile(kind, b.FileName) && File.Exists(Path.Combine(root, b.Id, b.FileName))
+                    && (kind != AddonKind.Dfc || File.Exists(Path.Combine(root, b.Id, DfcBridgeFile)))) builds.Add(b);
             }
             catch (Exception ex) when (ex is IOException or JsonException)
             { Log.Error($"Could not read add-on library entry {file}", ex); }
@@ -163,10 +174,19 @@ public sealed partial class ComponentStore
         return BuildOrder.NewestFirst(builds, b => b.DetectedLabel, b => b.Imported, b => b.Id, b => b.ParsedVersion);
     }
 
-    private static bool ValidAddonFile(AddonKind kind, string name) =>
-        kind == AddonKind.RenoDx ? name == RenoDxFile : LecramFiles.Contains(name);
+    private static bool ValidAddonFile(AddonKind kind, string name) => kind switch
+    {
+        AddonKind.RenoDx => name == RenoDxFile,
+        AddonKind.Lecram => LecramFiles.Contains(name),
+        _ => name == DfcFile,
+    };
 
-    public string? DefaultAddonId(AddonKind kind) => kind == AddonKind.RenoDx ? SelectedRenoDx() : SelectedLecram();
+    public string? DefaultAddonId(AddonKind kind) => kind switch
+    {
+        AddonKind.RenoDx => SelectedRenoDx(),
+        AddonKind.Lecram => SelectedLecram(),
+        _ => SelectedDfc(),
+    };
 
     /// <summary>
     /// The build an id names. A given id must exist; no id follows the default of the settings, and falls back to the newest
@@ -182,13 +202,19 @@ public sealed partial class ComponentStore
 
     public AddonBuild? RenoDxBuildFor(string? id) => AddonBuildFor(AddonKind.RenoDx, id);
     public AddonBuild? LecramBuildFor(string? id) => AddonBuildFor(AddonKind.Lecram, id);
+    public AddonBuild? DfcBuildFor(string? id) => AddonBuildFor(AddonKind.Dfc, id);
 
     public static string AddonPathOf(AddonKind kind, AddonBuild build) => Path.Combine(AddonRoot(kind), build.Id, build.FileName);
 
     /// <summary>The chosen build and its file for an install; a missing or changed file is a clear error.</summary>
     internal AddonFile RequireAddon(AddonKind kind, string? id)
     {
-        var what = kind == AddonKind.RenoDx ? RenoDxFile : $"Lecram's {Lecram10File} / {Lecram11File}";
+        var what = kind switch
+        {
+            AddonKind.RenoDx => RenoDxFile,
+            AddonKind.Lecram => $"Lecram's {Lecram10File} / {Lecram11File}",
+            _ => DfcFile,
+        };
         var build = AddonBuildFor(kind, id)
                     ?? throw new FileNotFoundException(id is null
                         ? $"Import {what} in Settings → Local components first."
@@ -209,7 +235,7 @@ public sealed partial class ComponentStore
     {
         var sha = FileUtil.Sha256(source);
         var dest = Path.Combine(AddonRoot(kind), sha, fileName);
-        var meta = Path.Combine(AddonRoot(kind), sha, "version.json");
+        var meta = Path.Combine(AddonRoot(kind), sha, BuildRecordFile);
         if (downloaded) NoteAdded(sha);
         var existing = AddonBuilds(kind).FirstOrDefault(b => b.Id == sha && b.FileName == fileName);
         if (existing is not null)
@@ -232,7 +258,7 @@ public sealed partial class ComponentStore
     {
         var build = AddonBuildFor(kind, id) ?? throw new FileNotFoundException("That add-on build is no longer in the library.");
         var renamed = build with { UserLabel = string.IsNullOrWhiteSpace(label) ? null : label.Trim() };
-        FileUtil.AtomicWriteText(Path.Combine(AddonRoot(kind), id, "version.json"), JsonSerializer.Serialize(renamed, JsonCtx.Default.AddonBuild));
+        FileUtil.AtomicWriteText(Path.Combine(AddonRoot(kind), id, BuildRecordFile), JsonSerializer.Serialize(renamed, JsonCtx.Default.AddonBuild));
         ForgetAddons(kind);
         return renamed;
     }
@@ -272,17 +298,17 @@ public sealed partial class ComponentStore
 
     /// <summary>
     /// A default that is unset or points at a removed build follows the newest build (after a migration that is the migrated file).
-    /// ShortFuse's default is written down as an id; Lecram's stays unset ("Newest"), a removed pin goes back to unset.
-    /// Returns true when the settings changed.
+    /// ShortFuse's default is written down as an id; Lecram's and Deep Fried Chicken's stay unset ("Newest"), a removed pin
+    /// goes back to unset. Returns true when the settings changed.
     /// </summary>
     public bool EnsureAddonDefaults(AppSettings s)
     {
         var changed = false;
-        foreach (var kind in new[] { AddonKind.RenoDx, AddonKind.Lecram })
+        foreach (var kind in Enum.GetValues<AddonKind>())
         {
             var builds = AddonBuilds(kind);
             var chosen = s.AddonId(kind);
-            if (kind == AddonKind.Lecram)
+            if (FollowsNewest(kind))
             {
                 if (chosen is null || builds.Any(b => b.Id == chosen)) continue;
                 s.SetAddonId(kind, null);
@@ -298,17 +324,20 @@ public sealed partial class ComponentStore
 
     /// <summary>
     /// An imported build becomes the default only when it is newer than the current default, so importing an older build
-    /// to keep it around doesn't silently downgrade every game. Lecram on "Newest" (no pinned id) follows the library by itself.
-    /// Returns true when the default changed.
+    /// to keep it around doesn't silently downgrade every game. Lecram and Deep Fried Chicken on "Newest" (no pinned id) follow
+    /// the library by themselves. Returns true when the default changed.
     /// </summary>
     public bool AdoptImportedAddon(AppSettings s, AddonKind kind, AddonBuild imported)
     {
-        if (kind == AddonKind.Lecram && s.LecramId is null) return false;
+        if (FollowsNewest(kind) && s.AddonId(kind) is null) return false;
         var current = AddonBuilds(kind).FirstOrDefault(b => b.Id == s.AddonId(kind));
         if (current is not null && imported.Order.CompareTo(current.Order) <= 0) return false;
         s.SetAddonId(kind, imported.Id);
         return true;
     }
+
+    /// <summary>Add-ons whose default may be "Newest" (no pinned id); ShortFuse's default is always a pinned build.</summary>
+    public static bool FollowsNewest(AddonKind kind) => kind != AddonKind.RenoDx;
 
     /// <summary>Records the tested 0928 build pair as working when both builds are imported.</summary>
     public bool SeedTestedAddonPair(AppSettings s)

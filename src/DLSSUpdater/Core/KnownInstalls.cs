@@ -15,6 +15,8 @@ public sealed record InstallRefs
     public string? RenoDxTag { get; set; }
     public string? LecramId { get; set; }
     public string? LecramTag { get; set; }
+    public string? DfcId { get; set; }
+    public string? DfcTag { get; set; }
     public string? MfgTag { get; set; }
     public string? DlssTag { get; set; }
     public string? StreamlineTag { get; set; }
@@ -24,7 +26,7 @@ public sealed record InstallRefs
     public static InstallRefs From(InstallManifest m) => new()
     {
         OptiTag = m.OptiTag, UpliftTag = m.UpliftTag, DlssNrId = m.DlssNrId, PreviousDlssNrId = m.PreviousDlssNrId,
-        RenoDxId = m.RenoDxId, RenoDxTag = m.RenoDxTag, LecramId = m.LecramId, LecramTag = m.LecramTag,
+        RenoDxId = m.RenoDxId, RenoDxTag = m.RenoDxTag, LecramId = m.LecramId, LecramTag = m.LecramTag, DfcId = m.DfcId, DfcTag = m.DfcTag,
         MfgTag = m.MfgTag, DlssTag = m.DlssTag, StreamlineTag = m.StreamlineTag,
     };
 
@@ -32,7 +34,7 @@ public sealed record InstallRefs
     public InstallManifest ToManifest(string dir) => new()
     {
         Dir = dir, OptiTag = OptiTag, UpliftTag = UpliftTag, DlssNrId = DlssNrId, PreviousDlssNrId = PreviousDlssNrId,
-        RenoDxId = RenoDxId, RenoDxTag = RenoDxTag, LecramId = LecramId, LecramTag = LecramTag,
+        RenoDxId = RenoDxId, RenoDxTag = RenoDxTag, LecramId = LecramId, LecramTag = LecramTag, DfcId = DfcId, DfcTag = DfcTag,
         MfgTag = MfgTag, DlssTag = DlssTag, StreamlineTag = StreamlineTag,
     };
 
@@ -44,6 +46,7 @@ public sealed record InstallRefs
         if (DlssNrId is not null || PreviousDlssNrId is not null) yield return LibraryKind.DlssNr;
         if (RenoDxId is not null || RenoDxTag is not null) yield return LibraryKind.RenoDx;
         if (LecramId is not null || LecramTag is not null) yield return LibraryKind.Lecram;
+        if (DfcId is not null || DfcTag is not null) yield return LibraryKind.Dfc;
     }
 }
 

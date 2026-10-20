@@ -6,7 +6,7 @@ namespace DLSSUpdater.Core;
 /// Every library of kept builds: the downloaded OptiScaler and GITC Uplift releases, the imported add-ons and the NR runtime.
 /// Each keeps several builds side by side; settings choose a default and each game may choose its own.
 /// </summary>
-public enum LibraryKind { OptiScaler, Uplift, Lecram, RenoDx, DlssNr }
+public enum LibraryKind { OptiScaler, Uplift, Lecram, RenoDx, Dfc, DlssNr }
 
 /// <summary>
 /// One kept build as the lists and the cleanup see it. <see cref="Id"/> is what settings, game picks and install records name
@@ -152,15 +152,29 @@ public sealed partial class ComponentStore
     private static int _releaseGeneration;
     private readonly Dictionary<Component, (string Root, int Generation, IReadOnlyList<LibraryBuild> Builds)> _releaseCache = [];
 
-    public static LibraryKind KindOf(AddonKind kind) => kind == AddonKind.RenoDx ? LibraryKind.RenoDx : LibraryKind.Lecram;
+    public static LibraryKind KindOf(AddonKind kind) => kind switch
+    {
+        AddonKind.RenoDx => LibraryKind.RenoDx,
+        AddonKind.Lecram => LibraryKind.Lecram,
+        _ => LibraryKind.Dfc,
+    };
+
+    /// <summary>The add-on library behind <paramref name="kind"/>; null for the download libraries and the NR runtime.</summary>
+    private static AddonKind? AddonOf(LibraryKind kind) => kind switch
+    {
+        LibraryKind.RenoDx => AddonKind.RenoDx,
+        LibraryKind.Lecram => AddonKind.Lecram,
+        LibraryKind.Dfc => AddonKind.Dfc,
+        _ => null,
+    };
 
     /// <summary>The builds of one library, newest first (see <see cref="BuildOrder"/>). Only metadata is read.</summary>
     public IReadOnlyList<LibraryBuild> Library(LibraryKind kind) => kind switch
     {
         LibraryKind.OptiScaler => ReleaseBuilds(Component.OptiScaler),
         LibraryKind.Uplift => ReleaseBuilds(Component.Uplift),
-        LibraryKind.RenoDx or LibraryKind.Lecram => AddonBuilds(kind == LibraryKind.RenoDx ? AddonKind.RenoDx : AddonKind.Lecram)
-            .Select(b => new LibraryBuild(kind, b.Id, b.Label, b.DetectedLabel, b.Imported, Path.Combine(AddonRoot(kind == LibraryKind.RenoDx ? AddonKind.RenoDx : AddonKind.Lecram), b.Id), Downloaded: b.Downloaded))
+        _ when AddonOf(kind) is { } addon => AddonBuilds(addon)
+            .Select(b => new LibraryBuild(kind, b.Id, b.Label, b.DetectedLabel, b.Imported, Path.Combine(AddonRoot(addon), b.Id), Downloaded: b.Downloaded))
             .ToList(),
         _ => DlssNrVersions.Select(v => new LibraryBuild(kind, v.Id, v.Label, v.Version, null, Path.Combine(NrRoot, v.Id))).ToList(),
     };
@@ -320,14 +334,21 @@ public sealed partial class ComponentStore
                 break;
             case LibraryKind.RenoDx:
             case LibraryKind.Lecram:
-                var addon = kind == LibraryKind.RenoDx ? AddonKind.RenoDx : AddonKind.Lecram;
+            case LibraryKind.Dfc:
+                var addon = AddonOf(kind)!.Value;
                 Add(s.AddonId(addon), Default);
                 // Without a chosen default the newest build is the default.
                 Add(AddonBuildFor(addon, null)?.Id, Default);
-                foreach (var (id, g) in s.Games) Add(addon == AddonKind.RenoDx ? g.RenoDxId : g.LecramId, PickedFor(id));
+                foreach (var (id, g) in s.Games)
+                    Add(addon switch { AddonKind.RenoDx => g.RenoDxId, AddonKind.Lecram => g.LecramId, _ => g.DfcId }, PickedFor(id));
                 foreach (var m in installed)
                 {
-                    var (id, tag) = addon == AddonKind.RenoDx ? (m.RenoDxId, m.RenoDxTag) : (m.LecramId, m.LecramTag);
+                    var (id, tag) = addon switch
+                    {
+                        AddonKind.RenoDx => (m.RenoDxId, m.RenoDxTag),
+                        AddonKind.Lecram => (m.LecramId, m.LecramTag),
+                        _ => (m.DfcId, m.DfcTag),
+                    };
                     // Records from before the library only carry the tag.
                     foreach (var b in AddonBuilds(addon).Where(b => b.Matches(id, tag))) Add(b.Id, InstalledIn(m));
                 }
@@ -418,6 +439,7 @@ public sealed partial class ComponentStore
         LibraryKind.Uplift => "GITC Uplift",
         LibraryKind.Lecram => "Lecram DLSS5",
         LibraryKind.RenoDx => "ShortFuse RenoDX DLSS",
+        LibraryKind.Dfc => "Deep Fried Chicken",
         _ => "NR runtime",
     };
 
@@ -526,8 +548,7 @@ public sealed partial class ComponentStore
             { Log.Warn($"Could not delete {item.What}, skipped: {ex.Message}"); }
         }
         ReleasesChanged();
-        ForgetAddons(AddonKind.RenoDx);
-        ForgetAddons(AddonKind.Lecram);
+        foreach (var kind in Enum.GetValues<AddonKind>()) ForgetAddons(kind);
         if (count > 0) Log.Info($"Cleanup freed {BuildCleanup.FormatBytes(freed)} ({count} item(s))");
         return freed;
     }

@@ -48,7 +48,7 @@ Settings for all games. Every option has a short explanation, and the help butto
 | [GITC Uplift](https://github.com/ghostinthecamera/GITC-Uplift) | A ReShade add-on that runs DLSS neural rendering. Replaces the other neural rendering routes. | Downloaded from GitHub. |
 | [RenoDX DLSS add-on](https://github.com/clshortfuse/renodx) | ShortFuse's ReShade add-on for neural rendering. | You import the file yourself. |
 | Lecram DLSS5 add-on | A ReShade add-on for neural rendering by Lecram. | You import it yourself. The builds are available to supporters on the author's Buy Me a Coffee. |
-| Deep Fried Chicken | A neural rendering add-on. Its licence allows personal use only. | You import the extracted release folder (or a .zip) yourself. |
+| Deep Fried Chicken | A neural rendering add-on. Its licence allows personal use only. | You import the extracted release folder (or a .zip) yourself. Every import is kept, and each game can use its own version. |
 
 The app only replaces files in a game with files from the sources above or files you imported. Which of these you use is up to you. Most people only need the OptiScaler mode or **DLSS only**.
 

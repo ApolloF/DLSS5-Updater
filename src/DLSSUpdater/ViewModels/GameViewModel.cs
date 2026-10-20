@@ -189,11 +189,15 @@ public sealed partial class GameViewModel : ObservableObject
 
     [ObservableProperty] private DlssChoice? _renoDxChoice;
     [ObservableProperty] private DlssChoice? _lecramChoice;
+    [ObservableProperty] private DlssChoice? _dfcChoice;
     public ObservableCollection<DlssChoice> RenoDxChoices { get; } = [];
     public ObservableCollection<DlssChoice> LecramChoices { get; } = [];
+    public ObservableCollection<DlssChoice> DfcChoices { get; } = [];
     /// <summary>The ShortFuse build this game installs: its own pick, else the default of the settings.</summary>
     public string? EffectiveRenoDxId => RenoDxChoice?.Tag ?? _s.Settings.RenoDxId;
     public string? EffectiveLecramId => LecramChoice?.Tag ?? _s.Settings.LecramId;
+    /// <summary>The Deep Fried Chicken build this game installs: its own pick, else the default (null follows the newest build).</summary>
+    public string? EffectiveDfcId => DfcChoice?.Tag ?? _s.Settings.DfcId;
     /// <summary>Generation of the Lecram build this game uses; it decides which Lecram options apply.</summary>
     public LecramGeneration? EffectiveLecramGeneration => _s.Store.LecramBuildFor(EffectiveLecramId)?.Generation;
 
@@ -261,9 +265,9 @@ public sealed partial class GameViewModel : ObservableObject
 
     /// <summary>Deep Fried Chicken is ticked for a game that ships no DLSS of its own (copies an install of ours added don't count).</summary>
     public bool DfcWithoutNativeDlss => IsReShadeOnly && On("dfc") && !Installer.HasNativeDlss(Info, Manifest, SelectedTarget?.Dir ?? Root);
-    /// <summary>The imported DFC is older than 4.x and the installer will refuse this game; null otherwise.</summary>
-    public string? DfcNoDlssWarning => DfcWithoutNativeDlss && _s.Store.DfcImported && !_s.Store.DfcSupportsNonDlssGames
-        ? Installer.DfcNeedsNativeDlss(_s.Store.DfcVersion) : null;
+    /// <summary>The DFC build this game uses is older than 4.x and the installer will refuse this game; null otherwise.</summary>
+    public string? DfcNoDlssWarning => DfcWithoutNativeDlss && _s.Store.DfcBuildFor(EffectiveDfcId) is { } dfc && !ComponentStore.DfcSupportsNonDlssGames(dfc)
+        ? Installer.DfcNeedsNativeDlss(dfc.FileVersion) : null;
     public bool HasDfcNoDlssWarning => DfcNoDlssWarning is not null;
     public bool ShowDfcNoDlssHint => DfcWithoutNativeDlss && !HasDfcNoDlssWarning;
     public const string DfcNoDlssHint =
@@ -440,14 +444,15 @@ public sealed partial class GameViewModel : ObservableObject
         Fill(RenoDxRows, GameOptionViewModel.Definitions.RenoDx, true);
         Fill(LecramRows, GameOptionViewModel.Definitions.Lecram, true, () => _s.Store.LecramBuildFor(EffectiveLecramId));
         Fill(UpliftRows, GameOptionViewModel.Definitions.Uplift, true);
-        Fill(DfcRows, GameOptionViewModel.Definitions.Dfc, true);
+        Fill(DfcRows, GameOptionViewModel.Definitions.Dfc, true, available: key => _s.Store.DfcCompat([key], EffectiveDfcId) is not { MissingKeys.Count: > 0 });
         Fill(NrRows, GameOptionViewModel.Definitions.Nr, false);
         Fill(TonemapRows, GameOptionViewModel.Definitions.Tonemap, false);
         Fill(HdrRows, GameOptionViewModel.Definitions.HdrOutput, false);
 
-        void Fill(ObservableCollection<GameOptionViewModel> rows, IEnumerable<IniOptionViewModel> defs, bool reShade, Func<AddonBuild?>? lecram = null)
+        void Fill(ObservableCollection<GameOptionViewModel> rows, IEnumerable<IniOptionViewModel> defs, bool reShade, Func<AddonBuild?>? lecram = null,
+            Func<string, bool>? available = null)
         {
-            foreach (var d in defs) rows.Add(new GameOptionViewModel(d, reShade, _s.Settings, Id, lecram));
+            foreach (var d in defs) rows.Add(new GameOptionViewModel(d, reShade, _s.Settings, Id, lecram, available));
         }
     }
 
@@ -581,6 +586,7 @@ public sealed partial class GameViewModel : ObservableObject
         var over = _s.Settings.Games.GetValueOrDefault(Id);
         RenoDxChoice = FillAddonChoices(RenoDxChoices, AddonKind.RenoDx, over?.RenoDxId);
         LecramChoice = FillAddonChoices(LecramChoices, AddonKind.Lecram, over?.LecramId);
+        DfcChoice = FillAddonChoices(DfcChoices, AddonKind.Dfc, over?.DfcId);
         OptiChoice = FillBuildChoices(OptiChoices, _s.Store.Library(LibraryKind.OptiScaler), _s.Settings.OptiTag, _s.Store.Opti?.Tag, over?.OptiTag);
         UpliftChoice = FillBuildChoices(UpliftChoices, _s.Store.Library(LibraryKind.Uplift), _s.Settings.UpliftTag, _s.Store.Uplift?.Tag, over?.UpliftTag);
         _loading = loading;
@@ -640,6 +646,13 @@ public sealed partial class GameViewModel : ObservableObject
     {
         if (_loading) return;
         _s.Settings.For(Id).LecramId = value?.Tag;
+        AddonPicksChanged();
+    }
+
+    partial void OnDfcChoiceChanged(DlssChoice? value)
+    {
+        if (_loading) return;
+        _s.Settings.For(Id).DfcId = value?.Tag;
         AddonPicksChanged();
     }
 
@@ -781,7 +794,8 @@ public sealed partial class GameViewModel : ObservableObject
         Row("renodx", m?.RenoDx == true ? InstalledAddon(AddonKind.RenoDx, m.RenoDxId, m.RenoDxTag) : null, sf?.Name, sf is not null && sf.Matches(m?.RenoDxId, m?.RenoDxTag));
         Row("lecram", m?.Lecram == true ? InstalledAddon(AddonKind.Lecram, m.LecramId, m.LecramTag) : null, lecram?.Name, lecram is not null && lecram.Matches(m?.LecramId, m?.LecramTag));
         Row("uplift", m?.Uplift == true ? m.UpliftTag : null, EffectiveUpliftTag ?? store.Uplift?.Tag, true);
-        Row("dfc", m?.Dfc == true ? RenoDxVersionOf(m.DfcTag) : null, store.DfcVersion, m?.DfcTag == store.DfcTag);
+        var dfc = store.DfcBuildFor(EffectiveDfcId);
+        Row("dfc", m?.Dfc == true ? InstalledAddon(AddonKind.Dfc, m.DfcId, m.DfcTag) : null, dfc?.Name, dfc is not null && dfc.Matches(m?.DfcId, m?.DfcTag));
         OnPropertyChanged(nameof(CanSwitchNr));
         OnPropertyChanged(nameof(CanUndoNr));
         RefreshAddonPairStatus();
@@ -903,6 +917,7 @@ public sealed partial class GameViewModel : ObservableObject
         Uplift = !dlssOnly && IsReShadeOnly && On("uplift"),
         UpliftTag = EffectiveUpliftTag,
         Dfc = !dlssOnly && IsReShadeOnly && On("dfc"),
+        DfcId = EffectiveDfcId,
         DfcFrameGen = DfcFrameGen,
         Dlss = dlssOnly || On("dlss"),
         AddMissingDlss = _s.Settings.AddMissingDlss && !dlssOnly && !IsReShadeOnly && On("opti"),
@@ -933,6 +948,7 @@ public sealed partial class GameViewModel : ObservableObject
         Uplift = m.Uplift,
         UpliftTag = EffectiveUpliftTag,
         Dfc = m.Dfc,
+        DfcId = EffectiveDfcId,
         DfcFrameGen = DfcFrameGen,
         Dlss = m.Dlss,
         AddMissingDlss = m.Opti && m.Files.Any(f => Path.GetFileName(f).Equals("nvngx_dlss.dll", StringComparison.OrdinalIgnoreCase)),

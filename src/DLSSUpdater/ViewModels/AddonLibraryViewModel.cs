@@ -7,8 +7,8 @@ using Microsoft.Win32;
 namespace DLSSUpdater.ViewModels;
 
 /// <summary>
-/// The Settings row of one import-only add-on (ShortFuse's or Lecram's): the library of imported builds, the default build,
-/// a name the user gives the selected build, and import / remove.
+/// The Settings row of one import-only add-on (ShortFuse's, Lecram's or Deep Fried Chicken): the library of imported builds,
+/// the default build, a name the user gives the selected build, and import / remove.
 /// </summary>
 public sealed partial class AddonLibraryViewModel : ObservableObject
 {
@@ -33,11 +33,14 @@ public sealed partial class AddonLibraryViewModel : ObservableObject
 
     private AppSettings Settings => _main.S.Settings;
     private ComponentStore Store => _main.S.Store;
-    private bool IsRenoDx => _kind == AddonKind.RenoDx;
+    private bool IsDfc => _kind == AddonKind.Dfc;
     public bool CanCheckUpdates => CanCheck(_kind, BuildFlags.LecramChannel);
 
     /// <summary>Only Lecram has a channel, and only the private build is allowed to use it.</summary>
-    internal static bool CanCheck(AddonKind kind, bool channelEnabled) => kind != AddonKind.RenoDx && channelEnabled;
+    internal static bool CanCheck(AddonKind kind, bool channelEnabled) => kind == AddonKind.Lecram && channelEnabled;
+
+    /// <summary>Deep Fried Chicken ships as a folder: its row also imports the extracted release folder.</summary>
+    public bool CanImportFolder => IsDfc;
 
     public bool AutoDownload
     {
@@ -62,8 +65,13 @@ public sealed partial class AddonLibraryViewModel : ObservableObject
         await _changed();
     }
 
-    public string Title => IsRenoDx ? "ShortFuse RenoDX DLSS" : "Lecram DLSS5";
-    public string FileNames => IsRenoDx ? ComponentStore.RenoDxFile : $"{ComponentStore.Lecram10File} (v10 and older) · {ComponentStore.Lecram11File} (v11 and newer)";
+    public string Title => ComponentStore.LibraryTitle(ComponentStore.KindOf(_kind));
+    public string FileNames => _kind switch
+    {
+        AddonKind.RenoDx => ComponentStore.RenoDxFile,
+        AddonKind.Lecram => $"{ComponentStore.Lecram10File} (v10 and older) · {ComponentStore.Lecram11File} (v11 and newer)",
+        _ => $"{ComponentStore.DfcFile} with its 64-bit folder",
+    };
     public string AutomationName => $"Default {Title} version";
 
     public ObservableCollection<DlssChoice> Choices { get; } = [];
@@ -71,8 +79,8 @@ public sealed partial class AddonLibraryViewModel : ObservableObject
     private int _buildCount;
     public bool HasBuilds => _buildCount > 0;
 
-    /// <summary>Lecram's first choice: no pinned build, the default follows the newest one in the library.</summary>
-    private bool HasNewestChoice => !IsRenoDx;
+    /// <summary>Lecram's and Deep Fried Chicken's first choice: no pinned build, the default follows the newest one in the library.</summary>
+    private bool HasNewestChoice => ComponentStore.FollowsNewest(_kind);
 
     /// <summary>The default build; games without their own pick install it.</summary>
     public DlssChoice? Selected
@@ -95,6 +103,22 @@ public sealed partial class AddonLibraryViewModel : ObservableObject
         ? $"No builds yet. Use Check now to fetch the latest v11 build, or import your own copy ({ComponentStore.Lecram10File} for v10 and older, {ComponentStore.Lecram11File} for v11 and newer)."
         : $"No builds yet. Import the add-on ({ComponentStore.Lecram10File} for v10 and older, {ComponentStore.Lecram11File} for v11 and newer). Builds are available to supporters on the author's Buy Me a Coffee.";
 
+    private const string NoDfcBuilds =
+        "Not imported. Its licence is personal use only, so import your own copy: extract the release and choose its folder (Folder…), " +
+        "or choose deep-fried-chicken.addon64 or a .zip of the release (Import…). The whole 64-bit folder is imported. 32-bit games are not supported.";
+
+    /// <summary>The keys the app writes into deep-fried-chicken.cfg, which a build's default cfg is checked against.</summary>
+    private static IEnumerable<string> DfcKeys => GameOptionViewModel.Definitions.Dfc.Select(o => o.Key);
+
+    /// <summary>The default Deep Fried Chicken build, and whether it differs from the tested release (details in the log).</summary>
+    private static string DfcInfo(AddonBuild build, DfcCompatReport? compat, int buildCount)
+    {
+        var warning = compat is { HasIssues: true }
+            ? $"  ·  not the tested version ({DfcConfig.TestedVersion}, config schema {DfcConfig.TestedSchema}); see the log" : "";
+        var count = buildCount > 1 ? $"  ·  {buildCount} builds in the library" : "";
+        return $"Default {build.Name}  ·  SHA-256 {build.Id[..12]}…{warning}{count}";
+    }
+
     private AddonBuild? SelectedBuild => Store.AddonBuildFor(_kind, null);
 
     /// <summary>The user's name for the selected build, edited in a text box and applied with Save name.</summary>
@@ -105,9 +129,13 @@ public sealed partial class AddonLibraryViewModel : ObservableObject
         get
         {
             if (SelectedBuild is not { } build)
-                return IsRenoDx
-                    ? $"Not imported. ShortFuse's {ComponentStore.RenoDxFile} isn't published on GitHub; get it from ShortFuse's RenoDX Discord and import it here."
-                    : NoLecramBuilds(BuildFlags.LecramChannel);
+                return _kind switch
+                {
+                    AddonKind.RenoDx => $"Not imported. ShortFuse's {ComponentStore.RenoDxFile} isn't published on GitHub; get it from ShortFuse's RenoDX Discord and import it here.",
+                    AddonKind.Lecram => NoLecramBuilds(BuildFlags.LecramChannel),
+                    _ => NoDfcBuilds,
+                };
+            if (IsDfc) return DfcInfo(build, Store.DfcCompat(DfcKeys, build.Id), _buildCount);
             var path = ComponentStore.AddonPathOf(_kind, build);
             var generation = build.Generation switch { LecramGeneration.V11 => "v11 and newer  ·  ", LecramGeneration.V10 => "v10 and older  ·  ", _ => "" };
             var size = File.Exists(path) ? $"{new FileInfo(path).Length / 1048576.0:0.0} MB  ·  " : "";
@@ -138,17 +166,38 @@ public sealed partial class AddonLibraryViewModel : ObservableObject
     [RelayCommand]
     private async Task Import()
     {
-        var filter = IsRenoDx
-            ? "RenoDX DLSS add-on|renodx-dlss.addon64;*.addon64"
-            : "Lecram DLSS5 add-on|renodx-dlss5.addon64;dlss5-nr.addon64;*.addon64";
-        var dlg = new OpenFileDialog { Filter = filter, Title = $"Select {Title}" };
-        if (dlg.ShowDialog() != true) return;
+        var filter = _kind switch
+        {
+            AddonKind.RenoDx => "RenoDX DLSS add-on|renodx-dlss.addon64;*.addon64",
+            AddonKind.Lecram => "Lecram DLSS5 add-on|renodx-dlss5.addon64;dlss5-nr.addon64;*.addon64",
+            _ => "Deep Fried Chicken|deep-fried-chicken.addon64;*.addon64;*.zip",
+        };
+        var dlg = new OpenFileDialog { Filter = filter, Title = IsDfc ? "Select deep-fried-chicken.addon64 or a .zip of the release" : $"Select {Title}" };
+        if (dlg.ShowDialog() == true) await ImportFrom(dlg.FileName);
+    }
+
+    [RelayCommand]
+    private async Task ImportFolder()
+    {
+        var dlg = new OpenFolderDialog { Title = "Select the extracted Deep Fried Chicken folder (or its 64-bit folder)" };
+        if (dlg.ShowDialog() == true) await ImportFrom(dlg.FolderName);
+    }
+
+    private async Task ImportFrom(string source)
+    {
         try
         {
-            var build = await Task.Run(() => IsRenoDx ? Store.ImportRenoDx(dlg.FileName) : Store.ImportLecram(dlg.FileName));
+            var build = await Task.Run(() => _kind switch
+            {
+                AddonKind.RenoDx => Store.ImportRenoDx(source),
+                AddonKind.Lecram => Store.ImportLecram(source),
+                _ => Store.ImportDfc(source),
+            });
             if (Store.AdoptImportedAddon(Settings, _kind, build)) Settings.Save();
-            else Log.Info($"Imported {Title} {build.Name}; the default stays on the newer {SelectedBuild?.Name}");
+            else if (SelectedBuild is { } current && current.Id != build.Id) Log.Info($"Imported {Title} {build.Name}; the default stays on the newer {current.Name}");
             await _changed();
+            if (IsDfc && Store.DfcCompat(DfcKeys, build.Id) is { HasIssues: true } compat)
+                Views.Dialog.Show("Deep Fried Chicken config check", compat.Summary + Environment.NewLine + Environment.NewLine + "Settings that still exist are applied normally.");
             await _main.AutoCleanUpAfterImportAsync();
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or InvalidDataException)

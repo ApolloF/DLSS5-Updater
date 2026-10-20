@@ -17,6 +17,7 @@ public sealed partial class SettingsViewModel : ObservableObject
         _main = main;
         RenoDx = new AddonLibraryViewModel(main, AddonKind.RenoDx, AddonsChanged);
         Lecram = new AddonLibraryViewModel(main, AddonKind.Lecram, AddonsChanged);
+        Dfc = new AddonLibraryViewModel(main, AddonKind.Dfc, AddonsChanged);
         Cleanup = new BuildCleanupViewModel(main);
         Overrides = new ObservableCollection<IniOverride>(Settings.IniOverrides);
         ReShadeOverrides = new ObservableCollection<IniOverride>(Settings.ReShadeOverrides);
@@ -43,6 +44,7 @@ public sealed partial class SettingsViewModel : ObservableObject
 
     public AddonLibraryViewModel RenoDx { get; }
     public AddonLibraryViewModel Lecram { get; }
+    public AddonLibraryViewModel Dfc { get; }
     public BuildCleanupViewModel Cleanup { get; }
     public IReadOnlyList<string> ProxyNames => AppSettings.ProxyNames;
     public ObservableCollection<IniOverride> Overrides { get; }
@@ -494,57 +496,18 @@ public sealed partial class SettingsViewModel : ObservableObject
     {
         RenoDx.Reload();
         Lecram.Reload();
+        Dfc.Reload();
         ApplyLecramGeneration();
+        ApplyDfcCompat();
         RefreshAddonPairStatus();
     }
 
-    public string DfcInfo
-    {
-        get
-        {
-            var store = _main.S.Store;
-            return store.DfcImported
-                ? $"Imported  ·  {store.DfcVersion}  ·  {HashCache.Get(store.DfcPath)[..12]}" +
-                  (DfcWarning is null ? "" : $"  ·  not the tested version ({DfcConfig.TestedVersion}, config schema {DfcConfig.TestedSchema}); see the log")
-                : "Not imported. Its licence is personal use only, so import your own copy: extract the release and choose its folder (Folder…), or choose deep-fried-chicken.addon64 or a .zip of the release (Import…). The whole 64-bit folder is imported. 32-bit games are not supported.";
-        }
-    }
-
-    /// <summary>Hides the DFC options its imported default cfg doesn't have (a different config schema).</summary>
+    /// <summary>Hides the DFC options the default build's cfg doesn't have (a different config schema); a game uses its own build.</summary>
     public void ApplyDfcCompat()
     {
         var missing = _main.S.Store.DfcCompat(DfcOptions.Select(o => o.Key))?.MissingKeys ?? [];
-        foreach (var o in DfcOptions.Concat(GameOptionViewModel.Definitions.Dfc))
+        foreach (var o in DfcOptions)
             o.IsAvailable = !missing.Contains(o.Key, StringComparer.OrdinalIgnoreCase);
-    }
-
-    public string? DfcWarning => _main.S.Store.DfcCompat(DfcOptions.Select(o => o.Key)) is { HasIssues: true } r ? r.Summary : null;
-
-    public bool DfcImported => _main.S.Store.DfcImported;
-
-    [RelayCommand]
-    private Task ImportDfc() => Import(ComponentStore.DfcFile, "Deep Fried Chicken|deep-fried-chicken.addon64;*.addon64;*.zip", "deep-fried-chicken.addon64 or a .zip of the release");
-
-    [RelayCommand]
-    private async Task ImportDfcFolder()
-    {
-        var dlg = new OpenFolderDialog { Title = "Select the extracted Deep Fried Chicken folder (or its 64-bit folder)" };
-        if (dlg.ShowDialog() == true) await ImportFrom(dlg.FolderName, ComponentStore.DfcFile);
-    }
-
-    [RelayCommand]
-    private async Task RemoveDfc()
-    {
-        try
-        {
-            _main.S.Store.RemoveDfcImport();
-            Log.Info($"Removed imported {ComponentStore.DfcFile}");
-        }
-        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) { Log.Error("Could not remove the imported Deep Fried Chicken files", ex); }
-        await _main.RefreshLocalComponentsAsync();
-        ApplyDfcCompat();
-        OnPropertyChanged(nameof(DfcInfo));
-        OnPropertyChanged(nameof(DfcImported));
     }
 
     public bool AutoDownloadReShade
@@ -738,9 +701,9 @@ public sealed partial class SettingsViewModel : ObservableObject
     [RelayCommand]
     private Task ImportReShade() => Import(ComponentStore.ReShadeFile, "ReShade (add-on build)|ReShade64.dll;dxgi.dll;*.dll");
 
-    private async Task Import(string fileName, string filter, string? what = null)
+    private async Task Import(string fileName, string filter)
     {
-        var dlg = new OpenFileDialog { Filter = filter, Title = $"Select {what ?? fileName}" };
+        var dlg = new OpenFileDialog { Filter = filter, Title = $"Select {fileName}" };
         if (dlg.ShowDialog() == true) await ImportFrom(dlg.FileName, fileName);
     }
 
@@ -757,14 +720,9 @@ public sealed partial class SettingsViewModel : ObservableObject
             }
             Reload();
             await _main.RefreshLocalComponentsAsync();
-            ApplyDfcCompat();
-            if (fileName == ComponentStore.DfcFile && DfcWarning is { } warning)
-                Views.Dialog.Show("Deep Fried Chicken config check", warning + Environment.NewLine + Environment.NewLine + "Settings that still exist are applied normally.");
             OnPropertyChanged(nameof(DlssNrInfo));
             OnPropertyChanged(nameof(ReShadeInfo));
             OnPropertyChanged(nameof(ReShadeImported));
-            OnPropertyChanged(nameof(DfcInfo));
-            OnPropertyChanged(nameof(DfcImported));
             OnPropertyChanged(nameof(SelectedNrHint));
             if (fileName == ComponentStore.DlssNrFile) await _main.AutoCleanUpAfterImportAsync();
         }

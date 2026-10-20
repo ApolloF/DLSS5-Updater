@@ -137,15 +137,32 @@ The 32-bit `deep-fried-chicken-bridge.cfg` (mode, work_resolution, cast_*, sr_*,
     required. A folder with more than 64 files or 1 GiB is refused as not DFC's folder (5.0: 11 files, 75 MB), and a
     `.zip` with more than 256 entries or 2 GiB unpacked is refused before unpacking.
   - **2.x**: only the add-on and the bridge (the folder may be Downloads).
-  - The set is staged and replaces the previous import as a whole, so files of an older set never stay behind.
-- **Install** (`Installer.PlaceDfc`): every file of the set goes to the same relative path beside the game exe, each
+  - The set is staged first, so a failed import leaves the library as it was.
+- **Library** (`AddonKind.Dfc` in `Core/AddonLibrary.cs`, the same model as the Lecram and ShortFuse builds): every
+  import is one build under `components\dfc\<id>\`, id = SHA-256 of its `deep-fried-chicken.addon64`, holding the whole
+  imported set, its default cfg and `version.json` (id, version resource as label, import date, the user's own name).
+  Importing the same add-on again is the same build: its set is replaced as a whole (no file of the older set stays),
+  its name and import date stay. Builds are ordered by version resource, then import date. An import from before the
+  library (the set directly in `components\dfc\`) moves into it once at startup (`MigrateDfc`), and old install records
+  whose `DfcTag` is `<version>-<sha12>` are matched to that build by the hash prefix.
+- **Default and per-game pick**: Settings → Local components lists the builds with "Newest (…)" first. `DfcId` null
+  (the default) follows the newest build; picking a build pins it, picking Newest unpins it, the app never pins on its
+  own, and a removed pinned build falls back to Newest. Each game can pick its own build on its page ("Default (…)",
+  then the builds; `GameOverride.DfcId`). That build decides the set placed, the default cfg, which options are shown
+  for the game, and whether games without their own DLSS are allowed.
+- **Cleanup**: DFC is a library in the build cleanup (keep count 2 by default). The default, builds picked for a game
+  and builds installed in one are protected, and the reason is shown. The automatic cleanup never deletes an import;
+  only the manual Clean up or Remove in Settings does.
+- **Install** (`Installer.PlaceDfc`): every file of the chosen build's set goes to the same relative path beside the game exe, each
   one recorded in the manifest (`Files`, and `DfcFiles` for which of them are DFC's; recorded before the copy), with
-  anything already there backed up. Files an earlier set of ours had and the new one lacks are taken out. Records
+  anything already there backed up; the manifest also records the build (`DfcId`, `DfcTag`). Files an earlier set of
+  ours had and the new one lacks (switching builds) are taken out. Records
   from before `DfcFiles` are matched by the old file list (`IsDfcPackagePath`), which covered every file 4.0.6 had. If ReShade.ini's `[GENERAL] EffectSearchPaths` doesn't cover `reshade-shaders\Shaders`
   (ReShade's default without the key is `.\`, not recursive), `.\reshade-shaders\Shaders\**` is appended; that
   entry stays when DFC goes (it is ReShade's standard folder).
-- **cfg**: the imported default is placed when the game has none; the app's options are merged in (only the keys
-  set in Settings). Options whose key the imported cfg lacks are hidden.
+- **cfg**: the chosen build's default is placed when the game has none; the app's options are merged in (only the keys
+  set in Settings). Options whose key that cfg lacks are hidden: in Settings by the default build, on a game's page by
+  the game's build.
 - **Remove / switch** (RenoDX, Lecram or OptiScaler-NR): all DFC files of ours go, originals come back and empty
   folders (`deep-fried-chicken-neural`, `reshade-shaders\Shaders`, any other folder of the set) are deleted. Foreign copies of the add-on, bridge
   and present-support dll are moved to the backup; a foreign neural folder or effect file is left, since it does
@@ -157,16 +174,17 @@ The 32-bit `deep-fried-chicken-bridge.cfg` (mode, work_resolution, cast_*, sr_*,
   anywhere in the game); copies an install of ours added beside the exe (for DFC, or OptiScaler's "add missing DLSS")
   don't count (`Installer.HasNativeDlss`). The same rule now decides the native-DLSS requirement of ShortFuse and Lecram,
   so a DFC install never makes a game look like a DLSS game to them.
-- **4.x import**: installs. Besides the whole 64-bit set and the user's `nvngx_dlssnr.dll` (as in every game), the app
-  places `nvngx_dlss.dll` from NVIDIA's DLSS release (the DLSS component, the version picked for the game's DLSS files)
+- **4.x build** (the game's chosen build decides): installs. Besides the whole 64-bit set and the user's
+  `nvngx_dlssnr.dll` (as in every game), the app places `nvngx_dlss.dll` from NVIDIA's DLSS release (the DLSS component, the version picked for the game's DLSS files)
   beside the exe, because INSTALL.txt asks for it and DFC doesn't ship it. It is recorded in the manifest
   (`DfcRuntimes`), kept current on reinstall and update, and taken out when DFC goes (uninstall or switching route).
   Restore DLSS leaves it, since DFC needs it. A copy the app doesn't own is never replaced.
 - **Frame generation**: the per-game toggle "Add nvngx_dlssg.dll for DFC's DLSS-G frame generation" places NVIDIA's
   `nvngx_dlssg.dll` from the same release the same way; off takes it out again. Frame generation itself is switched on,
   and DLSS-G or FSR 3.1 chosen, in the overlay's Rendering card. FSR 3.1's AMD dll is not provided by the app.
-- **2.x import**: refused in such games ("Deep Fried Chicken 2.0.0 needs a game with native DLSS. Import Deep Fried
-  Chicken 4.x, which also supports games without their own DLSS."). The game page shows the same text before install.
+- **2.x build**: refused in such games ("Deep Fried Chicken 2.0.0 needs a game with native DLSS. Import Deep Fried
+  Chicken 4.x, which also supports games without their own DLSS."). The game page shows the same text before install;
+  picking a 4.x or newer build for the game lifts it.
 - In games with native DLSS nothing extra is placed: DFC uses the game's own DLSS.
 - The game page shows a short hint for these games (no DLSS upscaling, DFC's or an external motion, frame generation
   needs borderless/windowed and RTX 40/50 for DLSS-G).

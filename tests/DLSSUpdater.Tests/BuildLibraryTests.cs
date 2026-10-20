@@ -23,6 +23,7 @@ public sealed class BuildLibraryTests : IDisposable
         _store.SelectedDlssNr = () => _settings.DlssNrId;
         _store.SelectedRenoDx = () => _settings.RenoDxId;
         _store.SelectedLecram = () => _settings.LecramId;
+        _store.SelectedDfc = () => _settings.DfcId;
     }
 
     public void Dispose()
@@ -422,6 +423,51 @@ public sealed class BuildLibraryTests : IDisposable
         Assert.Equal([ids[3]], note.Kept.Select(k => k.Build.Id));
         Assert.Equal(["last downloaded Lecram build"], ReasonsOf(note, ids[3]));
         Assert.Contains(_store.ProtectionReasons(LibraryKind.Lecram, _settings, [], null), p => p.Id == ids[0] && p.Reason == "default");
+    }
+
+    /// <summary>Deep Fried Chicken imports 5.0.9, 5.0.8, … newest first, each with the add-on and the bridge.</summary>
+    private static string[] DfcBuilds(int count)
+    {
+        var ids = Enumerable.Range(0, count).Select(i => new string((char)('1' + i), 64)).ToArray();
+        for (var i = 0; i < count; i++)
+        {
+            var version = $"5.0.{9 - i}";
+            var build = new AddonBuild(ids[i], ComponentStore.DfcFile, version, null, version, null, DateTime.UtcNow);
+            Write(Path.Combine(ComponentStore.DfcDir, ids[i], ComponentStore.DfcFile), ids[i]);
+            Write(Path.Combine(ComponentStore.DfcDir, ids[i], ComponentStore.DfcBridgeFile), "BRIDGE");
+            Write(Path.Combine(ComponentStore.DfcDir, ids[i], "version.json"), JsonSerializer.Serialize(build, JsonCtx.Default.AddonBuild));
+        }
+        return ids;
+    }
+
+    [Fact]
+    public void Dfc_cleanup_says_why_builds_stay_and_only_the_manual_one_deletes_an_import()
+    {
+        var ids = DfcBuilds(5);
+        _settings.DfcId = ids[2];
+        _settings.For(@"c:\games\hollow tide").DfcId = ids[3];
+        // A record from before the library: only the tag names the build.
+        InstallManifest[] records = [new() { Dfc = true, DfcTag = $"5.0.5-{ids[4][..12]}", Dir = @"C:\Games\Cyberpunk\bin" }];
+        var names = Names((@"c:\games\hollow tide", "Hollow Tide"), (@"C:\Games\Cyberpunk\bin", "Cyberpunk 2077"));
+
+        var note = _store.KeepNote(LibraryKind.Dfc, _settings, records, names);
+
+        Assert.Equal("Deep Fried Chicken", ComponentStore.LibraryTitle(LibraryKind.Dfc));
+        Assert.Equal([ids[2], ids[3], ids[4]], note.Kept.Select(k => k.Build.Id));
+        Assert.Equal(["default"], ReasonsOf(note, ids[2]));
+        Assert.Equal(["picked for Hollow Tide"], ReasonsOf(note, ids[3]));
+        Assert.Equal(["installed in Cyberpunk 2077"], ReasonsOf(note, ids[4]));
+        Assert.Equal("3 kept: default (5.0.7), picked for Hollow Tide and 1 more", note.Line);
+
+        _settings.KeepBuilds[nameof(LibraryKind.Dfc)] = 1;
+        Assert.Equal([ids[1]], _store.CleanupCandidates(LibraryKind.Dfc, _settings, records).Select(b => b.Id));
+        Assert.Empty(_store.CleanupCandidates(LibraryKind.Dfc, _settings, records, downloadsOnly: true));
+        Assert.DoesNotContain(_store.PlanCleanup(_settings, records, downloadsOnly: true), i => FileUtil.IsUnder(i.Path, ComponentStore.DfcDir));
+        Assert.Contains(_store.PlanCleanup(_settings, records), i => i.Path == Path.Combine(ComponentStore.DfcDir, ids[1]));
+
+        // Without a pinned default the newest build is the default.
+        _settings.DfcId = null;
+        Assert.Contains(_store.ProtectionReasons(LibraryKind.Dfc, _settings, records, null), p => p.Id == ids[0] && p.Reason == "default");
     }
 
     [Fact]

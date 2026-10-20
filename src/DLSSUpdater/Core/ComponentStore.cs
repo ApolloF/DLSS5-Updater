@@ -648,13 +648,14 @@ public sealed partial class ComponentStore
     {
         MigrateDlssNr();
         MigrateAddons();
+        MigrateDfc();
         MigrateReleaseLibraries();
         var dirs = new[] { Path.GetDirectoryName(Environment.ProcessPath), AppContext.BaseDirectory, Environment.CurrentDirectory }
             .Where(d => !string.IsNullOrEmpty(d)).Distinct(StringComparer.OrdinalIgnoreCase);
         foreach (var file in new[] { DlssNrFile, ReShadeFile, MfgFile, RenoDxFile, DfcFile })
         {
-            var dest = file == DfcFile ? DfcPath : Path.Combine(AppPaths.Components, file);
-            if (File.Exists(dest) || (file == DlssNrFile && DlssNrVersions.Count > 0) || (file == RenoDxFile && RenoDxImported)) continue;
+            if (File.Exists(Path.Combine(AppPaths.Components, file)) || (file == DlssNrFile && DlssNrVersions.Count > 0)
+                || (file == RenoDxFile && RenoDxImported) || (file == DfcFile && DfcImported)) continue;
             var src = dirs.Select(d => Path.Combine(d!, file))
                 .FirstOrDefault(f => File.Exists(f) && (file != DfcFile || File.Exists(Path.Combine(Path.GetDirectoryName(f)!, DfcBridgeFile))));
             if (src is null) continue;

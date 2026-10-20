@@ -108,6 +108,10 @@ public sealed class DfcTests : IDisposable
         return path;
     }
 
+    /// <summary>The build installs use when the game picks none.</summary>
+    private AddonBuild Default => _store.DfcBuildFor(null)!;
+    private static string Stored(AddonBuild build, string rel) => Path.Combine(ComponentStore.DfcBuildDir(build), rel);
+
     private string G(string name) => Path.Combine(_root, name);
     private Dictionary<string, string> Snapshot() =>
         Directory.EnumerateFiles(_root, "*", SearchOption.AllDirectories).ToDictionary(f => Path.GetRelativePath(_root, f), FileUtil.Sha256);
@@ -195,22 +199,23 @@ public sealed class DfcTests : IDisposable
         Assert.False(_store.DfcImported);
 
         var folder = Release();
-        _store.ImportDfc(folder);
+        var build = _store.ImportDfc(folder);
         Assert.True(_store.DfcImported);
-        Assert.Equal("2.0.0", _store.DfcVersion);
+        Assert.Equal("2.0.0", build.FileVersion);
         var addon = Path.Combine(folder, ComponentStore.DfcFile);
-        Assert.Equal("2.0.0-" + FileUtil.Sha256(addon)[..12], _store.DfcTag);
-        Assert.Equal(FileUtil.Sha256(addon), FileUtil.Sha256(_store.DfcPath));
-        Assert.Equal("BRIDGE", File.ReadAllText(_store.DfcBridgePath));
-        Assert.True(File.Exists(_store.DfcConfigPath));
+        Assert.Equal(FileUtil.Sha256(addon), build.Id);
+        Assert.Equal("2.0.0-" + FileUtil.Sha256(addon)[..12], build.Tag);
+        Assert.Equal(FileUtil.Sha256(addon), FileUtil.Sha256(Stored(build, ComponentStore.DfcFile)));
+        Assert.Equal("BRIDGE", File.ReadAllText(Stored(build, ComponentStore.DfcBridgeFile)));
+        Assert.True(File.Exists(ComponentStore.DfcConfigOf(build)));
 
-        _store.RemoveDfcImport();
+        _store.RemoveAddon(AddonKind.Dfc, build.Id);
         Assert.False(_store.DfcImported);
-        Assert.Null(_store.DfcTag);
+        Assert.Null(_store.DfcBuildFor(null));
 
-        _store.Import(Path.Combine(Release(cfg: false), ComponentStore.DfcFile), ComponentStore.DfcFile);
+        build = _store.ImportDfc(Path.Combine(Release(cfg: false), ComponentStore.DfcFile));
         Assert.True(_store.DfcImported);
-        Assert.False(File.Exists(_store.DfcConfigPath));
+        Assert.False(File.Exists(ComponentStore.DfcConfigOf(build)));
     }
 
     [Fact]
@@ -226,7 +231,8 @@ public sealed class DfcTests : IDisposable
             Assert.Equal(FileUtil.Sha256(Path.Combine(folder, name)), FileUtil.Sha256(G(name)));
         var m = InstallManifest.Read(_root)!;
         Assert.True(m.Dfc);
-        Assert.Equal(_store.DfcTag, m.DfcTag);
+        Assert.Equal(Default.Tag, m.DfcTag);
+        Assert.Equal(Default.Id, m.DfcId);
         Assert.False(File.Exists(G("ReShade.ini")));
 
         await installer.UninstallAsync(_game, _root, default);
@@ -243,10 +249,10 @@ public sealed class DfcTests : IDisposable
         await installer.InstallAsync(_game, _root, Dfc(), null, default);
         File.WriteAllText(G(ComponentStore.DfcConfigFile), "tuned=1\n");
 
-        _store.ImportDfc(Release(cfgText: "config_schema=14\n"));
+        _store.ImportDfc(Package());
         await installer.InstallAsync(_game, _root, Dfc(), null, default);
         Assert.Equal("tuned=1\n", File.ReadAllText(G(ComponentStore.DfcConfigFile)));
-        Assert.Equal(FileUtil.Sha256(_store.DfcPath), FileUtil.Sha256(G(ComponentStore.DfcFile)));
+        Assert.Equal(FileUtil.Sha256(Stored(Default, ComponentStore.DfcFile)), FileUtil.Sha256(G(ComponentStore.DfcFile)));
 
         await installer.UninstallAsync(_game, _root, default);
         File.WriteAllText(G(ComponentStore.DfcConfigFile), "users-own\n");
@@ -506,49 +512,58 @@ public sealed class DfcTests : IDisposable
     public void Import_4xPackage_FromThePackageFolderOrThe64BitAddon_StoresTheWhole64BitFolder()
     {
         var pkg = Package();
-        _store.ImportDfc(pkg);
+        var build = _store.ImportDfc(pkg);
         Assert.True(_store.DfcImported);
-        Assert.Equal("4.0.0", _store.DfcVersion);
-        Assert.Equal(V4Set().Order(StringComparer.OrdinalIgnoreCase), _store.DfcInstallFiles());
+        Assert.Equal("4.0.0", build.FileVersion);
+        Assert.Equal(V4Set().Order(StringComparer.OrdinalIgnoreCase), ComponentStore.DfcInstallFiles(build));
         var x64 = Path.Combine(pkg, "64-bit");
         foreach (var rel in V4Set())
-            Assert.Equal(FileUtil.Sha256(Path.Combine(x64, rel)), FileUtil.Sha256(Path.Combine(ComponentStore.DfcDir, rel)));
-        Assert.Equal(V4Cfg, File.ReadAllText(_store.DfcConfigPath));
-        Assert.All(SkippedFiles, rel => Assert.False(File.Exists(Path.Combine(ComponentStore.DfcDir, rel)), rel));
-        Assert.False(File.Exists(Path.Combine(ComponentStore.DfcDir, "README.txt")));
+            Assert.Equal(FileUtil.Sha256(Path.Combine(x64, rel)), FileUtil.Sha256(Stored(build, rel)));
+        Assert.Equal(V4Cfg, File.ReadAllText(ComponentStore.DfcConfigOf(build)));
+        Assert.All(SkippedFiles, rel => Assert.False(File.Exists(Stored(build, rel)), rel));
+        Assert.False(File.Exists(Stored(build, "README.txt")));
 
-        _store.RemoveDfcImport();
+        _store.RemoveAddon(AddonKind.Dfc, build.Id);
         _store.Import(Path.Combine(x64, ComponentStore.DfcFile), ComponentStore.DfcFile);
-        Assert.Equal(V4Set().Length, _store.DfcInstallFiles().Count);
+        Assert.Equal(V4Set().Length, ComponentStore.DfcInstallFiles(Default).Count);
     }
 
     [Fact]
     public void Import_4xWithoutPresentSupportOrNeuralFolder_OrThe32BitHostSet_IsRefused_AndKeepsTheOldImport()
     {
-        _store.ImportDfc(Release());
-        var tag = _store.DfcTag;
+        var old = _store.ImportDfc(Release());
         Assert.Contains(ComponentStore.DfcPresentSupportFile, Assert.Throws<InvalidDataException>(() => _store.ImportDfc(Package(presentSupport: false))).Message);
         Assert.Contains(ComponentStore.DfcNeuralDir, Assert.Throws<InvalidDataException>(() => _store.ImportDfc(Package(neural: false))).Message);
         var host = Path.Combine(Package(), "32-bit", "host64", ComponentStore.DfcFile);
         Assert.Contains("32-bit", Assert.Throws<InvalidDataException>(() => _store.ImportDfc(host)).Message);
-        Assert.Equal(tag, _store.DfcTag);
+        Assert.Equal([old.Id], _store.DfcBuilds.Select(b => b.Id));
     }
 
     [Fact]
-    public void Reimport_ReplacesTheWholeSet_InBothDirections()
+    public void Imports_AreKeptSideBySide_NewestFirst_AndTheSameAddonAgainReplacesOnlyItsOwnSet()
     {
-        _store.ImportDfc(Release());
-        Assert.Equal([ComponentStore.DfcBridgeFile, ComponentStore.DfcFile], _store.DfcInstallFiles());
+        var v2 = _store.ImportDfc(Release());
+        Assert.Equal([ComponentStore.DfcBridgeFile, ComponentStore.DfcFile], ComponentStore.DfcInstallFiles(v2));
 
-        _store.ImportDfc(Package());
-        Assert.Equal(V4Set().Length, _store.DfcInstallFiles().Count);
-        Assert.Equal("BRIDGE4", File.ReadAllText(_store.DfcBridgePath));
+        var v4 = _store.ImportDfc(Package());
+        var v5 = _store.ImportDfc(Package(major: 5));
+        Assert.Equal([v5.Id, v4.Id, v2.Id], _store.DfcBuilds.Select(b => b.Id));
+        Assert.Equal(["5.0.0", "4.0.0", "2.0.0"], _store.DfcBuilds.Select(b => b.Name));
+        Assert.Equal(V4Set().Length, ComponentStore.DfcInstallFiles(v4).Count);
+        Assert.Equal("BRIDGE4", File.ReadAllText(Stored(v4, ComponentStore.DfcBridgeFile)));
+        Assert.Equal("BRIDGE", File.ReadAllText(Stored(v2, ComponentStore.DfcBridgeFile)));
 
-        _store.ImportDfc(Release(cfg: false));
-        Assert.Equal([ComponentStore.DfcBridgeFile, ComponentStore.DfcFile], _store.DfcInstallFiles());
-        Assert.False(Directory.Exists(Path.Combine(ComponentStore.DfcDir, ComponentStore.DfcNeuralDir)));
-        Assert.False(File.Exists(_store.DfcConfigPath));
+        // The same add-on again: still one build with its name and date, its set replaced as a whole.
+        _store.RenameAddon(AddonKind.Dfc, v2.Id, "my 2.0");
+        var again = _store.ImportDfc(Release(cfg: false));
+        Assert.Equal(v2.Id, again.Id);
+        Assert.Equal("my 2.0", again.Name);
+        Assert.Equal(v2.Imported, again.Imported);
+        Assert.Equal(3, _store.DfcBuilds.Count);
+        Assert.False(File.Exists(ComponentStore.DfcConfigOf(again)));
+        Assert.Equal(V4Set().Length, ComponentStore.DfcInstallFiles(v4).Count);
         Assert.False(Directory.Exists(ComponentStore.DfcDir + ".new"));
+        Assert.Equal(new[] { v2.Id, v4.Id, v5.Id }.Order(), Directory.EnumerateDirectories(ComponentStore.DfcDir).Select(d => Path.GetFileName(d)).Order());
     }
 
     [Fact]
@@ -557,24 +572,23 @@ public sealed class DfcTests : IDisposable
         var pkg = Package(major: 5);
         var whole = Path.Combine(_tmp, "release.zip");
         ZipFile.CreateFromDirectory(pkg, whole, CompressionLevel.Fastest, includeBaseDirectory: true);
-        _store.ImportDfc(whole);
-        Assert.Equal("5.0.0", _store.DfcVersion);
-        Assert.Equal(V4Set().Order(StringComparer.OrdinalIgnoreCase), _store.DfcInstallFiles());
-        Assert.Equal(V4Cfg, File.ReadAllText(_store.DfcConfigPath));
+        var build = _store.ImportDfc(whole);
+        Assert.Equal("5.0.0", build.FileVersion);
+        Assert.Equal(V4Set().Order(StringComparer.OrdinalIgnoreCase), ComponentStore.DfcInstallFiles(build));
+        Assert.Equal(V4Cfg, File.ReadAllText(ComponentStore.DfcConfigOf(build)));
         Assert.False(Directory.Exists(ComponentStore.DfcDir + ".zip"));
 
-        _store.RemoveDfcImport();
+        _store.RemoveAddon(AddonKind.Dfc, build.Id);
         var x64 = Path.Combine(_tmp, "x64.zip");
         ZipFile.CreateFromDirectory(Path.Combine(pkg, "64-bit"), x64);
         _store.Import(x64, ComponentStore.DfcFile);
-        Assert.Equal(V4Set().Order(StringComparer.OrdinalIgnoreCase), _store.DfcInstallFiles());
+        Assert.Equal(V4Set().Order(StringComparer.OrdinalIgnoreCase), ComponentStore.DfcInstallFiles(Default));
     }
 
     [Fact]
     public void Import_SevenZipOrABadZip_IsRefused_AndKeepsTheOldImport()
     {
-        _store.ImportDfc(Package());
-        var tag = _store.DfcTag;
+        var build = _store.ImportDfc(Package());
         var sevenZip = Path.Combine(_tmp, "Deep-Fried-Chicken-v5.0.0-essentials.7z");
         File.WriteAllText(sevenZip, "7z");
         Assert.Contains("Extract it first", Assert.Throws<InvalidDataException>(() => _store.ImportDfc(sevenZip)).Message);
@@ -589,7 +603,7 @@ public sealed class DfcTests : IDisposable
         var empty = Path.Combine(_tmp, "empty.zip");
         using (ZipFile.Open(empty, ZipArchiveMode.Create)) { }
         Assert.Contains(ComponentStore.DfcFile, Assert.Throws<InvalidDataException>(() => _store.ImportDfc(empty)).Message);
-        Assert.Equal(tag, _store.DfcTag);
+        Assert.Equal([build.Id], _store.DfcBuilds.Select(b => b.Id));
         Assert.False(Directory.Exists(ComponentStore.DfcDir + ".zip"));
     }
 
@@ -705,19 +719,20 @@ public sealed class DfcTests : IDisposable
     [Fact]
     public async Task UpdatingFromA2xInstall_AddsTheNewFiles_AndGoingBackTakesThemOut()
     {
-        _store.ImportDfc(Release());
+        var v2 = _store.ImportDfc(Release());
         var installer = new Installer(_store);
         await installer.InstallAsync(_game, _root, Dfc(), null, default);
         Assert.False(File.Exists(G(ComponentStore.DfcPresentSupportFile)));
 
-        _store.ImportDfc(Package());
+        var v4 = _store.ImportDfc(Package());
         await installer.InstallAsync(_game, _root, Dfc(), null, default);
         Assert.All(V4Set(), rel => Assert.True(File.Exists(G(rel)), rel));
-        Assert.Equal(FileUtil.Sha256(_store.DfcPath), FileUtil.Sha256(G(ComponentStore.DfcFile)));
-        Assert.Equal(_store.DfcTag, InstallManifest.Read(_root)!.DfcTag);
+        Assert.Equal(v4.Id, FileUtil.Sha256(G(ComponentStore.DfcFile)));
+        Assert.Equal(v4.Tag, InstallManifest.Read(_root)!.DfcTag);
 
-        _store.ImportDfc(Release());
-        await installer.InstallAsync(_game, _root, Dfc(), null, default);
+        // The game picks the older build: its set replaces the newer one.
+        await installer.InstallAsync(_game, _root, Dfc() with { DfcId = v2.Id }, null, default);
+        Assert.Equal(v2.Id, InstallManifest.Read(_root)!.DfcId);
         Assert.True(File.Exists(G(ComponentStore.DfcFile)));
         Assert.False(File.Exists(G(ComponentStore.DfcPresentSupportFile)));
         Assert.False(Directory.Exists(G(ComponentStore.DfcNeuralDir)));
@@ -889,7 +904,7 @@ public sealed class DfcTests : IDisposable
         Assert.Contains("4.x", error.Message);
         Assert.DoesNotContain("Chicken Assist", error.Message);
         Assert.Equal(before, PlainFiles());
-        Assert.False(_store.DfcSupportsNonDlssGames);
+        Assert.False(ComponentStore.DfcSupportsNonDlssGames(Default));
 
         // A 2.x import still installs into a game with native DLSS.
         await new Installer(_store).InstallAsync(_game, _root, Dfc(), null, default);
@@ -1072,5 +1087,134 @@ public sealed class DfcTests : IDisposable
         native.Components.First(c => c.Key == "dfc").Enabled = true;
         Assert.False(native.DfcWithoutNativeDlss);
         Assert.False(native.ShowDfcNoDlssHint);
+    }
+
+    // ---------- library ----------
+
+    [Fact]
+    public void FlatImportFromBeforeTheLibrary_MovesIntoItOnce_AndAnOldInstallRecordMatchesItByTag()
+    {
+        // The single-slot layout: the set and the cfg directly in components\dfc.
+        var x64 = Path.Combine(Package(extras: false), "64-bit");
+        foreach (var rel in V4Set(extras: false).Append(ComponentStore.DfcConfigFile))
+        {
+            Directory.CreateDirectory(Path.GetDirectoryName(Path.Combine(ComponentStore.DfcDir, rel))!);
+            File.Copy(Path.Combine(x64, rel), Path.Combine(ComponentStore.DfcDir, rel));
+        }
+        var id = FileUtil.Sha256(Path.Combine(x64, ComponentStore.DfcFile));
+        Assert.False(_store.DfcImported);
+
+        _store.MigrateDfc();
+        var build = Assert.Single(_store.DfcBuilds);
+        Assert.Equal(id, build.Id);
+        Assert.Equal("4.0.0", build.Name);
+        Assert.Equal(V4Set(extras: false).Order(StringComparer.OrdinalIgnoreCase), ComponentStore.DfcInstallFiles(build));
+        Assert.Equal(V4Cfg, File.ReadAllText(ComponentStore.DfcConfigOf(build)));
+        Assert.Equal([id], Directory.EnumerateFileSystemEntries(ComponentStore.DfcDir).Select(Path.GetFileName));
+        _store.MigrateDfc();
+        Assert.Single(_store.DfcBuilds);
+
+        // An install recorded before the library names the build by its tag only.
+        var old = new InstallManifest { Dfc = true, DfcTag = $"4.0.0-{id[..12]}", Dir = _root };
+        Assert.True(build.Matches(old.DfcId, old.DfcTag));
+        Assert.Contains(_store.ProtectionReasons(LibraryKind.Dfc, new AppSettings(), [old], null), p => p.Id == id && p.Reason.StartsWith("installed in"));
+    }
+
+    [Fact]
+    public void Default_FollowsTheNewestBuild_APickPins_AndARemovedPinGoesBackToNewest()
+    {
+        var settings = new AppSettings();
+        _store.SelectedDfc = () => settings.DfcId;
+        var v4 = _store.ImportDfc(Package());
+        Assert.False(_store.AdoptImportedAddon(settings, AddonKind.Dfc, v4));
+        Assert.Equal(v4.Id, Default.Id);
+
+        // A newer import becomes the default without a settings write; an older one doesn't.
+        var v5 = _store.ImportDfc(Package(major: 5));
+        Assert.False(_store.AdoptImportedAddon(settings, AddonKind.Dfc, v5));
+        var v2 = _store.ImportDfc(Release());
+        Assert.False(_store.AdoptImportedAddon(settings, AddonKind.Dfc, v2));
+        Assert.False(_store.EnsureAddonDefaults(settings));
+        Assert.Null(settings.DfcId);
+        Assert.Equal(v5.Id, Default.Id);
+
+        settings.DfcId = v4.Id;
+        Assert.False(_store.AdoptImportedAddon(settings, AddonKind.Dfc, v2));
+        Assert.False(_store.EnsureAddonDefaults(settings));
+        Assert.Equal(v4.Id, Default.Id);
+
+        _store.RemoveAddon(AddonKind.Dfc, v4.Id);
+        Assert.True(_store.EnsureAddonDefaults(settings));
+        Assert.Null(settings.DfcId);
+        Assert.Equal(v5.Id, Default.Id);
+    }
+
+    [Fact]
+    public async Task PerGamePick_InstallsThatBuild_SwitchingReplacesTheSet_AndTheBuildDecidesNonDlssSupport()
+    {
+        SeedDlss("v310.9.1", "NEW");
+        var v2 = _store.ImportDfc(Release());
+        var v4 = _store.ImportDfc(Package());
+        var installer = new Installer(_store);
+
+        // In a game without DLSS the newest build installs, the game's 2.x pick is refused.
+        var game = PlainGame();
+        var before = PlainFiles();
+        var error = await Assert.ThrowsAsync<InvalidOperationException>(() => installer.InstallAsync(game, PlainRoot, Dfc() with { DfcId = v2.Id }, null, default));
+        Assert.Equal(Installer.DfcNeedsNativeDlss("2.0.0"), error.Message);
+        Assert.Equal(before, PlainFiles());
+        await installer.InstallAsync(game, PlainRoot, Dfc(), null, default);
+        Assert.Equal(v4.Id, InstallManifest.Read(PlainRoot)!.DfcId);
+
+        // A pick that left the library is a clear error.
+        var gone = await Assert.ThrowsAnyAsync<Exception>(() => installer.InstallAsync(_game, _root, Dfc() with { DfcId = new string('0', 64) }, null, default));
+        Assert.Contains("no longer in the library", gone.Message);
+
+        await installer.InstallAsync(_game, _root, Dfc() with { DfcId = v4.Id }, null, default);
+        Assert.All(V4Set(), rel => Assert.True(File.Exists(G(rel)), rel));
+        File.WriteAllText(G(ComponentStore.DfcConfigFile), "tuned=1\n");
+
+        await installer.InstallAsync(_game, _root, Dfc() with { DfcId = v2.Id }, null, default);
+        Assert.Equal(v2.Id, FileUtil.Sha256(G(ComponentStore.DfcFile)));
+        Assert.Equal("BRIDGE", File.ReadAllText(G(ComponentStore.DfcBridgeFile)));
+        Assert.False(File.Exists(G(ComponentStore.DfcPresentSupportFile)));
+        Assert.False(Directory.Exists(G(ComponentStore.DfcNeuralDir)));
+        Assert.All(ExtraFiles, rel => Assert.False(File.Exists(G(rel)), rel));
+        Assert.Equal("tuned=1\n", File.ReadAllText(G(ComponentStore.DfcConfigFile)));
+        var m = InstallManifest.Read(_root)!;
+        Assert.Equal((v2.Id, v2.Tag), (m.DfcId, m.DfcTag));
+        Assert.Equal([ComponentStore.DfcBridgeFile, ComponentStore.DfcFile], m.DfcFiles.Order(StringComparer.OrdinalIgnoreCase));
+    }
+
+    [Fact]
+    public void GamePage_PickerListsTheBuilds_AndThePickDecidesWarningOptionsAndInstall()
+    {
+        var settings = new AppSettings { DefaultMode = InstallMode.ReShadeOnly };
+        _store.SelectedDfc = () => settings.DfcId;
+        var v2 = _store.ImportDfc(Release());
+        var v5 = _store.ImportDfc(Package(major: 5));
+        var root = Path.Combine(_tmp, "pick-game"); Directory.CreateDirectory(root);
+        var services = new DLSSUpdater.ViewModels.Services { Settings = settings, Store = _store, Installer = new Installer(_store) };
+        var vm = new DLSSUpdater.ViewModels.GameViewModel(new GameInfo { Id = root, Root = root, Name = "Pick game" }, services);
+        vm.RebuildAddonChoices();
+        vm.Components.First(c => c.Key == "dfc").Enabled = true;
+        vm.DetailTab = "Config";
+        DLSSUpdater.ViewModels.GameOptionViewModel Hud() => vm.DfcRows.Single(r => r.Label == "HUD protection");
+
+        Assert.Equal(["Default (5.0.0)", v5.Label, v2.Label], vm.DfcChoices.Select(c => c.Label));
+        Assert.Null(vm.DfcChoice!.Tag);
+        Assert.False(vm.HasDfcNoDlssWarning);
+        Assert.True(Hud().IsAvailable);
+
+        vm.DfcChoice = vm.DfcChoices.Single(c => c.Tag == v2.Id);
+        Assert.Equal(v2.Id, settings.Games[vm.Id].DfcId);
+        Assert.Equal(v2.Id, vm.BuildOptions(false, false).DfcId);
+        Assert.Equal(Installer.DfcNeedsNativeDlss("2.0.0"), vm.DfcNoDlssWarning);
+        Assert.False(Hud().IsAvailable); // the 2.x cfg has no output protection keys
+
+        vm.DfcChoice = vm.DfcChoices[0];
+        Assert.Null(settings.Games[vm.Id].DfcId);
+        Assert.Null(vm.BuildOptions(false, false).DfcId);
+        Assert.True(Hud().IsAvailable);
     }
 }
