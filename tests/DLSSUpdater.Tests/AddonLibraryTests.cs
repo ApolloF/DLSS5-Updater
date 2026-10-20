@@ -271,16 +271,16 @@ public sealed class AddonLibraryTests : IDisposable
     }
 
     [Fact]
-    public void Builds_AreListedOldestFirst_ByVersion_NotByImportTime()
+    public void Builds_AreListedNewestFirst_ByVersion_NotByImportTime()
     {
         var newer = Sf(new Version(0, 2026, 1016, 1704));
         var older = Sf(new Version(0, 2026, 928, 306));
-        Assert.Equal([older.Id, newer.Id], _store.RenoDxBuilds.Select(b => b.Id));
+        Assert.Equal([newer.Id, older.Id], _store.RenoDxBuilds.Select(b => b.Id));
 
         var release = LecramV11("v11.0.0", frameworkNoise: false);
         var beta = LecramV11("v11.0.0-beta.6");
         var old = LecramV11("v8.5.0-rc10-model-sdr1");
-        Assert.Equal([old.Id, beta.Id, release.Id], _store.LecramBuilds.Select(b => b.Id));
+        Assert.Equal([release.Id, beta.Id, old.Id], _store.LecramBuilds.Select(b => b.Id));
     }
 
     [Fact]
@@ -341,7 +341,7 @@ public sealed class AddonLibraryTests : IDisposable
 
         _store.MigrateAddons();
 
-        Assert.Equal([LecramGeneration.V11, LecramGeneration.V10], _store.LecramBuilds.Select(b => b.Generation!.Value));
+        Assert.Equal([LecramGeneration.V10, LecramGeneration.V11], _store.LecramBuilds.Select(b => b.Generation!.Value));
         Assert.False(File.Exists(Path.Combine(AppPaths.Components, V10File)));
         Assert.False(File.Exists(Path.Combine(AppPaths.Components, V11File)));
         Assert.Empty(_store.RenoDxBuilds);
@@ -444,7 +444,7 @@ public sealed class AddonLibraryTests : IDisposable
         var sf = Sf(new Version(0, 2026, 928, 306));
         _settings.RenoDxId = sf.Id;
         var vm = NewGame();
-        Assert.Equal($"Default ({sf.Label})", vm.RenoDxChoices[0].Label);
+        Assert.Equal($"Default ({sf.Name})", vm.RenoDxChoices[0].Label);
         Assert.Equal("Default (none imported)", vm.LecramChoices[0].Label);
         Assert.Equal(new string?[] { null, sf.Id }, vm.RenoDxChoices.Select(c => c.Tag));
 
@@ -464,11 +464,12 @@ public sealed class AddonLibraryTests : IDisposable
         var otherLecram = LecramV11();
         _settings.RenoDxId = sf.Id;
         _settings.LecramId = lecram.Id;
+        _settings.AllowSeveralNrAddons = true;
         var vm = NewGame();
         vm.Components.First(c => c.Key == "renodx").Enabled = true;
         vm.Components.First(c => c.Key == "lecram").Enabled = true;
         Assert.Equal(AddonPairStatus.Untested, vm.PairStatus);
-        Assert.Contains("none recorded", vm.SfLecramMessage);
+        Assert.Null(vm.SfLecramMessage);
         Assert.False(vm.IsPairCrashed);
         Assert.True(vm.MarkPairWorkingCommand.CanExecute(null));
         var changed = new List<string?>();
@@ -483,8 +484,7 @@ public sealed class AddonLibraryTests : IDisposable
         Assert.NotNull(saved.Marked);
 
         vm.RenoDxChoice = vm.RenoDxChoices.Single(c => c.Tag == newer.Id);
-        Assert.Contains("hasn't been tested", vm.SfLecramMessage);
-        Assert.Contains(sf.Label, vm.SfLecramMessage);
+        Assert.Null(vm.SfLecramMessage);
         vm.MarkPairCrashedCommand.Execute(null);
         Assert.True(vm.IsPairCrashed);
         Assert.Contains("crashed before (marked ", vm.SfLecramMessage);
@@ -608,5 +608,52 @@ public sealed class AddonLibraryTests : IDisposable
         vm.RebuildAddonChoices();
         vm.RefreshStatus();
         Assert.Equal(a.Name, row.Latest);
+    }
+
+    // ---------- one NR add-on per game ----------
+
+    private static bool On(GameViewModel vm, string key) => vm.Components.First(c => c.Key == key).Enabled;
+    private static void Turn(GameViewModel vm, string key, bool on) => vm.Components.First(c => c.Key == key).Enabled = on;
+
+    [Fact]
+    public void GameToggles_FollowTheSettingsRule()
+    {
+        var vm = NewGame();
+        Turn(vm, "renodx", true);
+        Turn(vm, "lecram", true);
+        Assert.False(On(vm, "renodx"));
+        Assert.True(On(vm, "lecram"));
+        Assert.Null(vm.NrAddonWarning);
+        Turn(vm, "dfc", true);
+        Assert.False(On(vm, "lecram"));
+        Turn(vm, "dfc", false);
+        Assert.DoesNotContain(vm.Components, c => c.Key is "renodx" or "lecram" or "uplift" or "dfc" && c.Enabled);
+
+        _settings.AllowSeveralNrAddons = true;
+        Turn(vm, "renodx", true);
+        Turn(vm, "lecram", true);
+        Assert.True(On(vm, "renodx") && On(vm, "lecram"));
+        Assert.Contains("NR runs twice", vm.NrAddonWarning);
+        Turn(vm, "uplift", true);
+        Assert.False(On(vm, "renodx") || On(vm, "lecram"));
+        Assert.Null(vm.NrAddonWarning);
+    }
+
+    [Fact]
+    public void GameWithBothInstalled_ShowsBoth_EvenWithoutTheOverride()
+    {
+        var root = Path.Combine(_tmp, "both-game");
+        Directory.CreateDirectory(root);
+        new InstallManifest { Mode = InstallMode.ReShadeOnly, ReShade = true, DlssNr = true, RenoDx = true, Lecram = true }.Save(root);
+        var vm = NewGameFor(root);
+        Assert.True(On(vm, "renodx") && On(vm, "lecram"));
+        Assert.NotNull(vm.NrAddonWarning);
+    }
+
+    [Fact]
+    public void EveryComponentRow_HasAHelpTopic()
+    {
+        var vm = NewGame();
+        Assert.All(vm.Components, c => Assert.NotNull(HelpTopics.Get(c.HelpTopic)));
     }
 }

@@ -17,6 +17,7 @@ public sealed partial class SettingsViewModel : ObservableObject
         _main = main;
         RenoDx = new AddonLibraryViewModel(main, AddonKind.RenoDx, AddonsChanged);
         Lecram = new AddonLibraryViewModel(main, AddonKind.Lecram, AddonsChanged);
+        Cleanup = new BuildCleanupViewModel(main);
         Overrides = new ObservableCollection<IniOverride>(Settings.IniOverrides);
         ReShadeOverrides = new ObservableCollection<IniOverride>(Settings.ReShadeOverrides);
         Folders = new ObservableCollection<FolderEntry>();
@@ -42,6 +43,7 @@ public sealed partial class SettingsViewModel : ObservableObject
 
     public AddonLibraryViewModel RenoDx { get; }
     public AddonLibraryViewModel Lecram { get; }
+    public BuildCleanupViewModel Cleanup { get; }
     public IReadOnlyList<string> ProxyNames => AppSettings.ProxyNames;
     public ObservableCollection<IniOverride> Overrides { get; }
     public ObservableCollection<IniOverride> ReShadeOverrides { get; }
@@ -251,9 +253,70 @@ public sealed partial class SettingsViewModel : ObservableObject
         {
             if (value is null || value.Repo == Settings.OptiSource) return;
             Settings.OptiSource = value.Repo;
+            // A default build of the other source would install that source; the new one follows its newest release.
+            if (Settings.OptiTag is { } tag && OptiSources.OfTag(tag) != value) Settings.OptiTag = null;
             Save();
+            ReloadReleaseChoices();
             OnPropertyChanged();
             _main.OptiSourceChanged();
+        }
+    }
+
+    // ---------- default OptiScaler and GITC Uplift builds ----------
+
+    public ObservableCollection<DlssChoice> OptiVersionChoices { get; } = [];
+    public ObservableCollection<DlssChoice> UpliftVersionChoices { get; } = [];
+    private bool _reloadingReleases;
+
+    /// <summary>The default OptiScaler build: the newest release of the selected source, or a kept build of either source.</summary>
+    public DlssChoice? SelectedOptiVersion
+    {
+        get => OptiVersionChoices.FirstOrDefault(c => c.Tag == Settings.OptiTag) ?? OptiVersionChoices.FirstOrDefault();
+        set
+        {
+            if (_reloadingReleases || value is null || value.Tag == Settings.OptiTag) return;
+            Settings.OptiTag = value.Tag;
+            // A build of the other source makes that source the selected one, so names, options and checks follow it.
+            if (value.Tag is { } tag && OptiSources.OfTag(tag) is var source && source != OptiBuild)
+            {
+                Settings.OptiSource = source.Repo;
+                OnPropertyChanged(nameof(OptiBuild));
+                _main.OptiSourceChanged();
+            }
+            Save();
+            _ = _main.RefreshLocalComponentsAsync();
+        }
+    }
+
+    public DlssChoice? SelectedUpliftVersion
+    {
+        get => UpliftVersionChoices.FirstOrDefault(c => c.Tag == Settings.UpliftTag) ?? UpliftVersionChoices.FirstOrDefault();
+        set
+        {
+            if (_reloadingReleases || value is null || value.Tag == Settings.UpliftTag) return;
+            Settings.UpliftTag = value.Tag;
+            Save();
+            _ = _main.RefreshLocalComponentsAsync();
+        }
+    }
+
+    /// <summary>"Newest (…)" first, then the kept builds newest first; a default whose build is gone stays listed so it can be changed.</summary>
+    public void ReloadReleaseChoices()
+    {
+        _reloadingReleases = true;
+        var store = _main.S.Store;
+        Fill(OptiVersionChoices, store.Library(LibraryKind.OptiScaler), GameViewModel.NewestOptiLabel(store), Settings.OptiTag);
+        Fill(UpliftVersionChoices, store.Library(LibraryKind.Uplift), GameViewModel.NewestUpliftLabel(store), Settings.UpliftTag);
+        _reloadingReleases = false;
+        OnPropertyChanged(nameof(SelectedOptiVersion));
+        OnPropertyChanged(nameof(SelectedUpliftVersion));
+
+        static void Fill(ObservableCollection<DlssChoice> list, IReadOnlyList<LibraryBuild> builds, string newest, string? chosen)
+        {
+            list.Clear();
+            list.Add(new DlssChoice(null, char.ToUpperInvariant(newest[0]) + newest[1..]));
+            foreach (var b in builds) list.Add(new DlssChoice(b.Id, b.Label));
+            if (chosen is not null && list.All(c => c.Tag != chosen)) list.Add(new DlssChoice(chosen, $"{chosen} · not downloaded"));
         }
     }
 
@@ -342,19 +405,48 @@ public sealed partial class SettingsViewModel : ObservableObject
     public bool InstallRenoDx
     {
         get => Settings.InstallRenoDx;
-        set { Settings.InstallRenoDx = value; Save(); }
+        set => SetNrAddon(NrAddon.RenoDx, value);
     }
 
     public bool InstallUplift
     {
         get => Settings.InstallUplift;
-        set { Settings.InstallUplift = value; Save(); }
+        set => SetNrAddon(NrAddon.Uplift, value);
     }
 
     public bool InstallLecram
     {
         get => Settings.InstallLecram;
-        set { Settings.InstallLecram = value; Save(); }
+        set => SetNrAddon(NrAddon.Lecram, value);
+    }
+
+    public bool AllowSeveralNrAddons
+    {
+        get => Settings.AllowSeveralNrAddons;
+        set
+        {
+            NrAddons.SetAllowSeveral(Settings, value);
+            Save();
+            NotifyNrAddons();
+        }
+    }
+
+    public string? NrAddonWarning => NrAddons.Warning(Settings.InstallRenoDx, Settings.InstallLecram);
+
+    private void SetNrAddon(NrAddon addon, bool on)
+    {
+        NrAddons.SetDefault(Settings, addon, on);
+        Save();
+        NotifyNrAddons();
+    }
+
+    private void NotifyNrAddons()
+    {
+        OnPropertyChanged(nameof(InstallRenoDx));
+        OnPropertyChanged(nameof(InstallUplift));
+        OnPropertyChanged(nameof(InstallLecram));
+        OnPropertyChanged(nameof(AllowSeveralNrAddons));
+        OnPropertyChanged(nameof(NrAddonWarning));
     }
 
     public string DlssNrInfo => Describe(_main.S.Store.DlssNrPath, _main.S.DlssNrSha, true);
@@ -374,13 +466,11 @@ public sealed partial class SettingsViewModel : ObservableObject
 
     public string? LecramMessage => _main.S.Store.SfLecramMessage(_main.S.Store.RenoDxImported, _main.S.Store.LecramImported, Settings.RenoDxId, Settings.LecramId);
     public bool HasLecramMessage => LecramMessage is not null;
-    public bool IsPairCrashed => _main.S.Store.PairTestFor(Settings.RenoDxId, Settings.LecramId)?.Status == AddonPairStatus.Crashed;
 
     public void RefreshAddonPairStatus()
     {
         OnPropertyChanged(nameof(LecramMessage));
         OnPropertyChanged(nameof(HasLecramMessage));
-        OnPropertyChanged(nameof(IsPairCrashed));
     }
 
     /// <summary>Hides the options the default Lecram build's generation doesn't have and switches the rest to its values.</summary>
@@ -492,6 +582,41 @@ public sealed partial class SettingsViewModel : ObservableObject
     }
 
     private void Save() => Settings.Save();
+
+    // ---------- first-run setup ----------
+
+    /// <summary>The open first-run setup; null while it is closed.</summary>
+    [ObservableProperty] private OnboardingViewModel? _onboarding;
+
+    /// <summary>Opens the setup on a fresh install (once the window is up).</summary>
+    public void ShowOnboardingIfDue()
+    {
+        if (OnboardingViewModel.ShouldShow(Settings, Demo.Active, Demo.ShowOnboarding)) RunSetup();
+    }
+
+    /// <summary>"Run setup again": the same steps, starting at the current settings.</summary>
+    [RelayCommand]
+    private void RunSetup()
+    {
+        if (Onboarding is not null) return;
+        var setup = new OnboardingViewModel(Settings);
+        setup.Closed += OnboardingClosed;
+        Onboarding = setup;
+    }
+
+    private void OnboardingClosed(OnboardingResult result)
+    {
+        Onboarding = null;
+        if (!result.Applied) return;
+        if (result.Build is { } build) OptiBuild = build;
+        OnPropertyChanged(nameof(DefaultMode));
+        NotifyNrAddons();
+        NotifyModShown();
+        Lecram.Reload();
+        _ = RefreshReShadeAsync();
+        _main.SelfUpdate.SettingsChanged();
+        Cleanup.SettingsChanged();
+    }
 
     /// <summary>Writes the override lists back to settings (called when the panel closes).</summary>
     public void Commit()
@@ -630,6 +755,7 @@ public sealed partial class SettingsViewModel : ObservableObject
             OnPropertyChanged(nameof(DfcInfo));
             OnPropertyChanged(nameof(DfcImported));
             OnPropertyChanged(nameof(SelectedNrHint));
+            if (fileName == ComponentStore.DlssNrFile) await _main.AutoCleanUpAfterImportAsync();
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or InvalidDataException)
         { Log.Error($"Import of {fileName} failed", ex); Views.Dialog.Show("Import failed", UserErrors.Message(ex)); }
@@ -673,6 +799,8 @@ public sealed partial class SettingsViewModel : ObservableObject
         if (Settings.DlssTag is { } t && DlssChoices.All(c => c.Tag != t)) DlssChoices.Add(new DlssChoice(t, t));
 
         ReloadAddons();
+        ReloadReleaseChoices();
+        _ = Cleanup.RefreshAsync();
         RefreshEditors();
         OnPropertyChanged(string.Empty);
     }

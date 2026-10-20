@@ -20,7 +20,12 @@ public static class Demo
 
     public const string LatestDlss = "v310.10.0";
     public const string LatestStreamline = "v2.14.1";
-    public const string LatestOpti = "v0.9.51";
+    // DLSSU_DEMO_OPTI_NR=1 pretends OptiScaler-NR (ShyVortex) is selected instead of the default F5 build, to check its labels.
+    private static bool OptiNr => Environment.GetEnvironmentVariable("DLSSU_DEMO_OPTI_NR") == "1";
+    // DLSSU_DEMO_ONBOARDING=1 opens the first-run setup at start, which the demo otherwise leaves out.
+    public static bool ShowOnboarding => Environment.GetEnvironmentVariable("DLSSU_DEMO_ONBOARDING") == "1";
+    public static string LatestOpti => OptiNr ? "v0.9.51" : "v0.1.32" + OptiSources.F5.TagSuffix;
+    private static string PreviousOpti => OptiNr ? "v0.9.47" : "v0.1.31" + OptiSources.F5.TagSuffix;
     public const string LatestMfg = "v1.4.0";
     public const string LatestUplift = "v1.4.2";
     public const string LatestReShade = "6.6.2";
@@ -94,6 +99,19 @@ public static class Demo
         PlaceNr(NrOriginalId, NrOriginalVersion);
         PlaceAddon("renodx-dlss", "renodx-dlss", ComponentStore.RenoDxFile, "0.2026.928.0", "0.2026.928", null);
         PlaceAddon("lecram-dlss5", "lecram-dlss5-v11", ComponentStore.Lecram11File, "", "v11.0.1", LecramGeneration.V11);
+        PlaceAddon("lecram-dlss5", "lecram-dlss5-beta48", ComponentStore.Lecram11File, "", "v11.0.0-beta.48", LecramGeneration.V11);
+        PlaceAddon("lecram-dlss5", "lecram-dlss5-beta45", ComponentStore.Lecram11File, "", "v11.0.0-beta.45", LecramGeneration.V11);
+        PlaceAddon("lecram-dlss5", "lecram-dlss5-v10", ComponentStore.Lecram10File, "8.5.0.0", "v8.5.0-rc10-model-sdr1", LecramGeneration.V10);
+        // Downloaded builds in the OptiScaler and GITC Uplift libraries; one more than the cleanup keeps.
+        PlaceRelease(Component.OptiScaler, LatestOpti, new DateTime(2026, 10, 18));
+        PlaceRelease(Component.OptiScaler, "v0.9.49", new DateTime(2026, 9, 30));
+        PlaceRelease(Component.OptiScaler, "v0.9.47", new DateTime(2026, 9, 12));
+        PlaceRelease(Component.OptiScaler, "v0.9.45", new DateTime(2026, 8, 20));
+        PlaceRelease(Component.OptiScaler, "v0.1.32" + OptiSources.F5.TagSuffix, new DateTime(2026, 10, 16));
+        PlaceRelease(Component.OptiScaler, "v0.1.30" + OptiSources.F5.TagSuffix, new DateTime(2026, 10, 2));
+        PlaceRelease(Component.Uplift, LatestUplift, new DateTime(2026, 10, 8));
+        PlaceRelease(Component.Uplift, "v1.3.0", new DateTime(2026, 9, 1));
+        PlaceRelease(Component.Uplift, "v1.2.0", new DateTime(2026, 7, 14));
 
         var dfc = Path.Combine(AppPaths.Components, "dfc");
         Directory.CreateDirectory(dfc);
@@ -112,6 +130,13 @@ public static class Demo
             FileUtil.AtomicWriteText(path, Placeholder(id));
             FileUtil.AtomicWriteText(Path.Combine(Path.GetDirectoryName(path)!, "version.json"), JsonSerializer.Serialize(record, JsonCtx.Default.NrVersion));
             Fakes[path] = (version, id);
+        }
+
+        void PlaceRelease(Component c, string tag, DateTime published)
+        {
+            var file = c == Component.OptiScaler ? "OptiScaler.dll" : ComponentStore.UpliftFile;
+            FileUtil.AtomicWriteText(Path.Combine(ComponentStore.TagDir(c, tag), "pkg", file), Placeholder($"{c} {tag}"));
+            ComponentStore.MarkComplete(c, Release(tag, DateTime.SpecifyKind(published, DateTimeKind.Utc)));
         }
 
         void PlaceAddon(string dir, string seed, string file, string fileVersion, string label, LecramGeneration? generation)
@@ -139,15 +164,13 @@ public static class Demo
         store.Dlss = Release(LatestDlss, today.AddDays(-4), "## Neural texture compression\n- DLSS Super Resolution 310.10 improves stability of the preset A transformer model.\n- Frame Generation fixes for dynamic multi frame generation.\n- Smaller memory footprint on RTX 40 and 50 GPUs.");
         store.DlssReleases = [store.Dlss, Release("v310.9.1", today.AddDays(-45)), Release("v310.4.0", today.AddDays(-150)), Release("v310.2.1", today.AddDays(-230)), Release("v3.7.10", today.AddDays(-400))];
         store.Streamline = Release(LatestStreamline, today.AddDays(-20));
-        // DLSSU_DEMO_F5=1 pretends the F5 build is selected, to check its labels.
-        var f5 = Environment.GetEnvironmentVariable("DLSSU_DEMO_F5") == "1";
-        if (f5) settings.OptiSource = OptiSources.F5.Repo;
-        store.Opti = Release(f5 ? "v0.1.32" + OptiSources.F5.TagSuffix : LatestOpti, today.AddDays(-2), "## Faster NR pass\n- DLSSNR runs about 15% faster with the small model.\n- New tonemap and HDR output options.\n- Fixes the flicker in games that resize their swap chain.");
+        if (OptiNr) settings.OptiSource = ComponentStore.OptiRepo;
+        store.Opti = Release(LatestOpti, today.AddDays(-2), "## Faster NR pass\n- DLSSNR runs about 15% faster with the small model.\n- New tonemap and HDR output options.\n- Fixes the flicker in games that resize their swap chain.");
         store.Mfg = Release(LatestMfg, today.AddDays(-30), "## MFG Unlock\n- Works with Streamline 2.14.\n- Fixes a crash on startup in some Unreal Engine 5 games.");
         store.Uplift = Release(LatestUplift, today.AddDays(-12), "## GITC Uplift\n- New mask editor.\n- Lower VRAM use with the performance preset.");
         store.ReShade = Release(LatestReShade, today.AddDays(-60));
         // The first two have a release the user has not looked at yet; they show the NEW dot.
-        settings.SeenReleases[nameof(Component.OptiScaler)] = "v0.9.47";
+        settings.SeenReleases[nameof(Component.OptiScaler)] = PreviousOpti;
         settings.SeenReleases[nameof(Component.Dlss)] = "v310.9.1";
         settings.LecramLastVersion = "v11.0.1";
         settings.LecramLastResult = "Up to date: v11.0.1.";
@@ -174,7 +197,7 @@ public static class Demo
         new("Ember Crown", "Steam", @"EmberCrown\Binaries\Win64", "EmberCrown-Win64-Shipping.exe", "310.2.1", "310.2.1", "310.2.1", "2.7.30", Installed: m =>
         {
             m.Opti = m.ReShade = m.Mfg = m.DlssNr = m.Dlss = m.Streamline = true;
-            m.OptiTag = "v0.9.47"; m.MfgTag = "v1.3.0"; m.DlssTag = "v310.2.1"; m.StreamlineTag = "v2.7.30";
+            m.OptiTag = PreviousOpti; m.MfgTag = "v1.3.0"; m.DlssTag = "v310.2.1"; m.StreamlineTag = "v2.7.30";
             m.DlssNrId = NrCompatId; m.Proxy = "dxgi.dll";
         }),
         // Not installed yet.

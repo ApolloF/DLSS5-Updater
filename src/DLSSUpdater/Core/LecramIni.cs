@@ -97,18 +97,13 @@ public static class LecramIni
     }
 }
 
-/// <summary>Information about a pair's recorded test result; build versions do not imply compatibility.</summary>
+/// <summary>The warning for a pair the user marked as crashed; build versions do not imply compatibility.</summary>
 public static class LecramCompat
 {
-    public static string? Message(bool renoDx, bool lecram, AddonPairTest? pair, string knownWorking)
+    public static string? Message(bool renoDx, bool lecram, AddonPairTest? pair)
     {
-        if (!renoDx || !lecram) return null;
-        return pair?.Status switch
-        {
-            AddonPairStatus.Works => null,
-            AddonPairStatus.Crashed => $"This ShortFuse + Lecram pair crashed before (marked {(pair.Marked is { } date ? date.ToLocalTime().ToString("yyyy-MM-dd", System.Globalization.CultureInfo.InvariantCulture) : "date unknown")}). Pick another pair or install only one of them.",
-            _ => "This ShortFuse + Lecram pair hasn't been tested together yet. Known working: " +
-                 (string.IsNullOrWhiteSpace(knownWorking) ? "none recorded" : knownWorking) + ".",
-        };
+        if (!renoDx || !lecram || pair?.Status != AddonPairStatus.Crashed) return null;
+        var marked = pair.Marked is { } date ? date.ToLocalTime().ToString("yyyy-MM-dd", System.Globalization.CultureInfo.InvariantCulture) : "date unknown";
+        return $"This ShortFuse + Lecram pair crashed before (marked {marked}). Pick another pair or install only one of them.";
     }
 }

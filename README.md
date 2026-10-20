@@ -38,8 +38,9 @@ Settings for all games. Every option has a short explanation, and the help butto
 
 | Component | What it is | Where it comes from |
 |---|---|---|
-| [OptiScaler-NR](https://github.com/ShyVortex/OptiScaler-DLSSNR-PreSR-Multipass) | A fork of OptiScaler that adds DLSS neural rendering (NR). The main install mode. | Downloaded from GitHub. |
-| [OptiScaler](https://github.com/optiscaler/OptiScaler) | Lets a game use DLSS, FSR or XeSS as its upscaler. | Parent project of the fork above. An experimental fork by janblade (OptiScaler F5) can be chosen in Settings. |
+| [OptiScaler F5](https://github.com/janblade/OptiScaler-F5-DLSSNR-Multipass) | janblade's fork of OptiScaler with DLSS neural rendering (NR). The default build for new installs. | Downloaded from GitHub. |
+| [OptiScaler-NR](https://github.com/ShyVortex/OptiScaler-DLSSNR-PreSR-Multipass) | ShyVortex's fork of OptiScaler with DLSS neural rendering. Can be chosen in Settings instead of F5. | Downloaded from GitHub. |
+| [OptiScaler](https://github.com/optiscaler/OptiScaler) | Lets a game use DLSS, FSR or XeSS as its upscaler. | Parent project of the forks above. |
 | [NVIDIA DLSS](https://github.com/NVIDIA/DLSS) | The DLSS runtime files for upscaling, ray reconstruction and frame generation. | Downloaded from NVIDIA's GitHub. |
 | [NVIDIA Streamline](https://github.com/NVIDIA-RTX/Streamline) | The layer between a game and DLSS frame generation. Optional. | Downloaded from NVIDIA's GitHub. |
 | [MFG Unlock](https://github.com/mavismmg/MFGAdaUnlock-RenoDx) | A ReShade add-on that unlocks multi frame generation on RTX 40 cards. | Downloaded from GitHub. |
@@ -49,7 +50,7 @@ Settings for all games. Every option has a short explanation, and the help butto
 | Lecram DLSS5 add-on | A ReShade add-on for neural rendering by Lecram. | You can import it. Newer builds can also be fetched from the author's public download folder. |
 | Deep Fried Chicken | A neural rendering add-on. Its licence allows personal use only. | You import the file yourself. |
 
-The app only replaces files in a game with files from the sources above or files you imported. Which of these you use is up to you. Most people only need OptiScaler-NR or **DLSS only**.
+The app only replaces files in a game with files from the sources above or files you imported. Which of these you use is up to you. Most people only need the OptiScaler mode or **DLSS only**.
 
 ## Requirements
 
@@ -62,14 +63,18 @@ You do not need to install .NET. The app brings what it needs.
 
 ## Download and install
 
-Get the latest version from the [releases page](https://github.com/ApolloF/dlss5updater/releases/latest). Each release has two files:
+Get the latest version from the [releases page](https://github.com/ApolloF/dlss5updater/releases/latest). Each release has two programs, plus `SHA256SUMS` with their checksums:
 
 - `DLSS5Updater-Setup-<version>.exe` is the installer. It installs for your user without administrator rights (or for all users if you choose), adds a Start menu entry, can add a desktop icon and has an uninstaller. To update the app, run a newer setup.
 - `DLSS5Updater.exe` is the portable version. It is a single file. Put it anywhere and run it.
 
+The app checks GitHub for a newer version of itself (at most every 6 hours, or with **Check now** in Settings) and shows **Update to vX.Y.Z** in the title bar. Updating downloads the setup or the portable exe, whichever you use, checks it against the release's `SHA256SUMS` and restarts the app. **Install updates automatically** (off by default) downloads in the background and installs when you close the app. It never updates while a task is running.
+
 Both versions keep settings and downloads in `%LocalAppData%\DLSS5Updater`, so you can switch between them without losing anything.
 
 ## First run
+
+On a fresh install a short setup opens over the window: a welcome, the default install mode (OptiScaler F5 or OptiScaler-NR, or ReShade + add-ons with one NR add-on), and update and download choices. **Skip** or Esc on any step keeps the defaults; Enter goes to the next step. Nothing is written until you finish. People upgrading from 1.x don't see it, but **Settings → General → Run setup again** opens it any time.
 
 1. Start the app. It scans your game libraries and lists the games it finds. To add a game it missed, use **Add game** (one game folder) or **Add library** (a folder whose subfolders are games) at the bottom of the list.
 2. Add `nvngx_dlssnr.dll` if you want to use neural rendering. This file belongs to NVIDIA, and its licence does not allow other people to share it, so this app does not include it and never downloads it. You supply your own copy. Put it next to `DLSS5Updater.exe` before the first start, or open **Settings** and import it under **Local components**. The app stores it in `%LocalAppData%\DLSS5Updater\components`. You can keep several versions side by side and pick a default.
@@ -80,7 +85,7 @@ Both versions keep settings and downloads in `%LocalAppData%\DLSS5Updater`, so y
 
 1. Pick a game in the list. The filters at the top (**All**, **DLSS**, **Installed**, **Updates**) help you find games.
 2. Choose how to install:
-   - **OptiScaler-NR** is the default. It installs OptiScaler as a proxy DLL (`dxgi.dll` unless you change it), plus ReShade, MFG Unlock and the DLSS files.
+   - **OptiScaler** is the default (the F5 build unless you pick OptiScaler-NR under **OptiScaler build** in Settings). It installs OptiScaler as a proxy DLL (`dxgi.dll` unless you change it), plus ReShade, MFG Unlock and the DLSS files.
    - **ReShade + add-ons** installs ReShade itself as the proxy, with MFG Unlock and the DLSS and Streamline updates, and without OptiScaler.
    - You can set the default mode in Settings and change it for a single game.
 3. Press **Install**. The button reads **Update** when a newer release is available and **Reinstall** when the game is current.
@@ -145,13 +150,13 @@ iscc /DAppVersion=2.0.0 installer\DLSSUpdater.iss
 
 Pushing a tag like `v2.0.0` that matches the version in the project file builds both files on GitHub Actions and attaches them to a release. If `docs/releases/v<version>.md` exists, it becomes the release text. Setting `DLSSU_INTEGRATION=1` turns on a test that downloads the real releases and installs them into a temporary folder.
 
-`DLSS5Updater.exe --demo` starts the app on a made-up game library in a temporary folder. It never scans your launchers, downloads anything or touches your games, so it is a safe way to look around. `--demo --screenshots <folder>` saves the screenshots used in this README to that folder and exits.
+`DLSS5Updater.exe --demo` starts the app on a made-up game library in a temporary folder. It never scans your launchers, downloads anything or touches your games, so it is a safe way to look around. `--demo --screenshots <folder>` saves the screenshots used in this README to that folder and exits. Setting `DLSSU_DEMO_ONBOARDING=1` opens the first-run setup in the demo, which it otherwise leaves out.
 
 ## Credits
 
 DLSS5 Updater installs the work of these projects and their authors. It downloads their files as released and does not change them.
 
-- [OptiScaler](https://github.com/optiscaler/OptiScaler) and the [OptiScaler-NR fork](https://github.com/ShyVortex/OptiScaler-DLSSNR-PreSR-Multipass) by ShyVortex.
+- [OptiScaler](https://github.com/optiscaler/OptiScaler), the [OptiScaler F5 fork](https://github.com/janblade/OptiScaler-F5-DLSSNR-Multipass) by janblade and the [OptiScaler-NR fork](https://github.com/ShyVortex/OptiScaler-DLSSNR-PreSR-Multipass) by ShyVortex.
 - [MFG Unlock](https://github.com/mavismmg/MFGAdaUnlock-RenoDx) by mavismmg.
 - [ReShade](https://reshade.me) by crosire.
 - [RenoDX](https://github.com/clshortfuse/renodx) and [openNR](https://github.com/clshortfuse/openNR) by ShortFuse.

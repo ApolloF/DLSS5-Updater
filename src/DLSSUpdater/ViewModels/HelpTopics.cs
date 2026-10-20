@@ -23,8 +23,8 @@ public static class HelpTopics
             "Preset B needs NR 310.9.16. NGX hooks Off is safe mode, Present only. Use D3D9Ex changes exclusive fullscreen to borderless. Mask blend values are undocumented."),
         // ---------- General ----------
         new("install-mode", "General", "Install mode",
-            "OptiScaler-NR (default) is the main use: OptiScaler is the proxy, loads ReShade and its add-ons, and runs the NR runtime. " +
-            "ReShade + add-ons installs ReShade itself as the proxy (dxgi.dll by default) with MFG Unlock, the DLSS and Streamline updates, and one NR route instead of OptiScaler-NR: the ShortFuse RenoDX DLSS add-on, the Lecram DLSS5 add-on (those two can run together), Deep Fried Chicken or GITC Uplift. Each needs an imported NR runtime. " +
+            "OptiScaler (default; the build chosen under OptiScaler build) is the main use: OptiScaler is the proxy, loads ReShade and its add-ons, and runs the NR runtime. " +
+            "ReShade + add-ons installs ReShade itself as the proxy (dxgi.dll by default) with MFG Unlock, the DLSS and Streamline updates, and one NR route instead of OptiScaler's: the ShortFuse RenoDX DLSS add-on, the Lecram DLSS5 add-on, Deep Fried Chicken or GITC Uplift. Turning one on turns the others off; ShortFuse and Lecram can run together only with Allow more than one NR add-on. Each needs an imported NR runtime. " +
             "Switching a game between the two removes the other mode's files and puts back what they replaced. Each game can use its own mode."),
         new("proxy", "General", "Proxy DLL name",
             "The file name the game loads the mod as: OptiScaler's in OptiScaler mode, ReShade's in ReShade + add-ons mode (dxgi.dll for DirectX 10-12, d3d9.dll for DirectX 9, opengl32.dll for OpenGL). dxgi.dll works for most DX12 games. " +
@@ -35,8 +35,8 @@ public static class HelpTopics
             "A pinned version is installed exactly, also downgrading, useful when a newer DLSS preset looks worse in a game. " +
             "Older SDKs lack files (before 310.4 no FG, 3.x only SR); missing ones are skipped. A game can pin its own version above its DLSS file list."),
         new("opti-build", "General", "OptiScaler build",
-            "Which fork of OptiScaler is installed. OptiScaler-NR (ShyVortex) is the default and what this app was built around. " +
-            "OptiScaler F5 (janblade) is an experimental fork with frequent releases; it needs its own open-source NGX forwarder (nvngx.dll_dlssnr.dll), which is installed next to OptiScaler and removed again when you switch back. " +
+            "Which fork of OptiScaler is installed. OptiScaler F5 (janblade) is the default for new installs; OptiScaler-NR (ShyVortex) is the fork this app was first built around. " +
+            "F5 is experimental and releases often; it needs its own open-source NGX forwarder (nvngx.dll_dlssnr.dll), which is installed next to OptiScaler and removed again when you switch back. " +
             "A few DLSSNR options it does not have are hidden. Games keep the build they have until you update them."),
         new("prereleases", "General", "Include prereleases",
             "The OptiScaler-NR fork only publishes prereleases, so turning this off usually means no OptiScaler updates. Applies to every source."),
@@ -93,7 +93,7 @@ public static class HelpTopics
             "There are two generations: v10 and older (renodx-dlss5.addon64, recognised by its version resource) and v11 and newer (dlss5-nr.addon64, recognised by strings in the file because it has no version resource). " +
             "Every import is kept as its own build, named by the highest vX.Y.Z string in the file or by you; a game only ever gets one file, because v11 goes inert when a renodx-dlss5.addon64 file sits next to it (from v11 beta.22 not when ReShade has that add-on disabled). Settings picks the default build and each game can pick its own, whose generation decides the options shown. " +
             "It needs ReShade + add-ons mode, ReShade 6+ with add-on support, a game with native DLSS and an imported nvngx_dlssnr.dll, and it replaces OptiScaler-NR and Deep Fried Chicken. " +
-            "It can run next to ShortFuse's RenoDX add-on: the app then sets ForeignNr=observe. The 0928 pair (ShortFuse 0.2026.0928 and Lecram v8.5.0-rc10) was tested working. Each exact pair of builds has a status (Works, Crashed or not tested together yet); only Crashed shows a warning. Mark the current build pair on the Install tab. " +
+            "It can run next to ShortFuse's RenoDX add-on when Allow more than one NR add-on is on (NR then runs twice): the app then sets ForeignNr=observe. The 0928 pair (ShortFuse 0.2026.0928 and Lecram v8.5.0-rc10) was tested working. Each exact pair of builds has a status (Works, Crashed or not tested together yet); only Crashed shows a warning. Mark the current build pair on the Install tab. " +
             "A copy of either Lecram file already in the game is moved to the backup folder and restored by Uninstall. Options that exist in only one generation are hidden for the other, following the build the game uses. " +
             "From v11 Patch 4 (beta.18) the author also ships its own installer (DLSS5 NR Setup). It finds the add-on in every game on every drive and its Update all replaces it there, games this app manages included, so manage a game with one of the two. " +
             "It keeps a shared nvngx_dlssnr.dll in %LOCALAPPDATA%\\DLSS5-NR\\runtime, which v11 also finds by itself."),
@@ -377,7 +377,52 @@ public static class HelpTopics
         new("hdr-compat", "MFG Unlock", "HDR compatibility",
             "Workarounds for HDR games where frame generation breaks the UI or colours. Native changes nothing. UI Composition handles the HUD separately. " +
             "Auto guard + UI adds automatic detection on top. Final color fallback is the most invasive, for games the others don't fix. Try in that order."),
+        // ---------- Components (the rows on a game's Install tab) ----------
+        new("comp-reshade", "Components", "ReShade",
+            "Post-processing tool and the loader for every add-on here (MFG Unlock and the NR add-ons). The app uses the add-on build from reshade.me, or the ReShade64.dll you imported. " +
+            "In OptiScaler mode OptiScaler loads it; in ReShade + add-ons mode it is the proxy itself and can't be turned off. " +
+            "Turn it off in OptiScaler mode if you don't use MFG Unlock or effects, or another ReShade is already in the game."),
+        new("comp-mfg", "Components", "MFG Unlock",
+            "ReShade add-on (renodx-mfgunlock.addon64, downloaded from mavismmg/MFGAdaUnlock-RenoDx) that unlocks 3x and 4x multi frame generation on RTX 40 cards. " +
+            "Needs ReShade and a game with DLSS frame generation through Streamline; other games are not affected. " +
+            "Turn it off on RTX 50 (it has MFG natively), on cards without frame generation, or when the game misbehaves with frame generation forced."),
+        new("comp-dlssnr", "Components", "NR runtime",
+            "NVIDIA's DLSS 5 neural rendering model, nvngx_dlssnr.dll. You import it in Settings, Local components; the app never downloads it. " +
+            "NVIDIA's original needs an RTX 50 card; for RTX 20/30/40 import ShortFuse's compat build. OptiScaler's NR and every NR add-on need it. " +
+            "Turn it off to install without neural rendering."),
+        new("comp-renodx", "Components", "ShortFuse RenoDX DLSS add-on",
+            "ShortFuse's ReShade add-on (renodx-dlss.addon64) that runs DLSS neural rendering itself. You import it; the dropdown picks which imported build this game gets. " +
+            "Needs ReShade + add-ons mode, ReShade 6+ with add-on support, a game with its own DLSS and the NR runtime. " +
+            "It is one NR route: turning it on turns Lecram, GITC Uplift and Deep Fried Chicken off, unless Allow more than one NR add-on lets Lecram run next to it."),
+        new("comp-lecram", "Components", "Lecram DLSS5 add-on",
+            "Lecram's ReShade add-on that runs DLSS neural rendering itself: renodx-dlss5.addon64 (v10 and older) or dlss5-nr.addon64 (v11). You import it or the app fetches v11 builds; the dropdown picks the build. " +
+            "Needs ReShade + add-ons mode, ReShade 6+ with add-on support, a game with its own DLSS and the NR runtime. " +
+            "It is one NR route: turning it on turns the others off. With Allow more than one NR add-on it can run next to ShortFuse's add-on, then NR runs twice."),
+        new("comp-dlss", "Components", "DLSS (SR · RR · FG)",
+            "NVIDIA's DLSS files from NVIDIA's GitHub: Super Resolution (nvngx_dlss.dll), Ray Reconstruction (nvngx_dlssd.dll) and Frame Generation (nvngx_dlssg.dll). The game's own files are backed up before they are replaced. " +
+            "Latest only ever upgrades; a pinned version is installed exactly. Restore DLSS puts the game's own files back. " +
+            "Turn it off to keep the game's DLSS, for example when a newer DLSS looks worse in that game."),
+        new("comp-streamline", "Components", "Streamline (for Dynamic MFG)",
+            "NVIDIA's Streamline files (sl.*.dll), the layer between the game and DLSS frame generation. Dynamic MFG needs FG 310.9.1 with Streamline 2.14.1, or 310.9.16 with 2.14.16. " +
+            "Only files the game already ships are replaced, always as one set; Restore DLSS puts them back. " +
+            "Off by default. Turn it on only for Dynamic MFG in a game with an older Streamline, and off again if frame generation breaks."),
     ];
+
+    /// <summary>The help topic behind the ⓘ button of a component row on the Install tab.</summary>
+    public static string ForComponent(string key) => key switch
+    {
+        "opti" => "opti-build",
+        "reshade" => "comp-reshade",
+        "mfg" => "comp-mfg",
+        "dlssnr" => "comp-dlssnr",
+        "renodx" => "comp-renodx",
+        "lecram" => "comp-lecram",
+        "uplift" => "uplift",
+        "dfc" => "dfc",
+        "dlss" => "comp-dlss",
+        "streamline" => "comp-streamline",
+        _ => throw new ArgumentOutOfRangeException(nameof(key), key, "No help topic for this component"),
+    };
 
     /// <summary>"Which should I pick" guidance shown in the guide under each topic.</summary>
     private static readonly Dictionary<string, string> Advice = new()
@@ -388,7 +433,7 @@ public static class HelpTopics
                     "Special K would be replaced, not loaded: OptiScaler's wiki describes a plugins folder and a LoadSpecialK setting for it, which this app does not set up.",
         ["dlss-version"] = "Keep Latest globally. Pin a game only when a new DLSS build looks worse there (ghosting, shimmer), or for Dynamic MFG pin 310.9.1 or 310.9.16 " +
                            "together with the Streamline swap.",
-        ["opti-build"] = "OptiScaler-NR (ShyVortex) unless you want to try the F5 fork.",
+        ["opti-build"] = "OptiScaler F5 (janblade). Switch to OptiScaler-NR (ShyVortex) if F5 misbehaves in a game.",
         ["prereleases"] = "Leave on: the OptiScaler-NR fork publishes nothing else.",
         ["streamline"] = "Only turn on for games where you want Dynamic MFG and the game ships an older Streamline (the DLSS files list shows the SL version). " +
                          "If FG disappears or the game crashes afterwards, use Restore DLSS on that game.",
@@ -462,7 +507,7 @@ public static class HelpTopics
         ["rdx-ui"] = "Add-on default; On if the HUD looks processed.",
         ["rdx-encoding"] = "Add-on default. In HDR games with wrong colours, try HDR10 or scRGB.",
         ["nr-enabled"] = "Automatic; toggle it in-game with the DLSSNR key to compare.",
-        ["install-mode"] = "OptiScaler-NR for everything it supports. ReShade + add-ons for games where OptiScaler causes trouble but you still want MFG Unlock or ReShade effects.",
+        ["install-mode"] = "OptiScaler for everything it supports. ReShade + add-ons for games where OptiScaler causes trouble but you still want MFG Unlock or ReShade effects.",
         ["presets"] = "Start from the upstream defaults and load the Recommended preset if you want the tuned setup; save your own variations as presets.",
         ["nr-before-sr"] = "On (cheaper, cleaner). Turn off if a game shows smeared detail or odd colours with RR, and compare.",
         ["nr-finished"] = "Off. Try on for games whose post-processing (bloom, grading) fights the model, and accept that the HUD may change.",

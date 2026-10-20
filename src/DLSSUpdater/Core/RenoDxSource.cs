@@ -35,7 +35,7 @@ public sealed partial class ComponentStore
         return build;
     }
 
-    /// <summary>Information for the exact chosen pair, or null when both add-ons are not selected.</summary>
+    /// <summary>The crashed-pair warning for the exact chosen pair, or null when it isn't marked crashed or both add-ons are not selected.</summary>
     public string? SfLecramMessage(bool renoDx, bool lecram, string? renoDxId, string? lecramId) =>
-        LecramCompat.Message(renoDx, lecram, PairTestFor(renoDxId, lecramId), KnownWorkingPairs);
+        LecramCompat.Message(renoDx, lecram, PairTestFor(renoDxId, lecramId));
 }

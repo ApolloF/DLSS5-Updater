@@ -17,6 +17,10 @@ public sealed class GameOverride
     public string? RenoDxId { get; set; }
     /// <summary>Lecram add-on build (library id) pinned for this game; null follows the global choice.</summary>
     public string? LecramId { get; set; }
+    /// <summary>OptiScaler build (app tag, either source) chosen for this game; null follows the default.</summary>
+    public string? OptiTag { get; set; }
+    /// <summary>GITC Uplift build (release tag) chosen for this game; null follows the default.</summary>
+    public string? UpliftTag { get; set; }
     /// <summary>Deep Fried Chicken in a game without its own DLSS: also place nvngx_dlssg.dll for its DLSS-G frame generation.</summary>
     public bool? DfcFrameGen { get; set; }
     /// <summary>Config preset used for this game; null uses the current settings.</summary>
@@ -77,12 +81,26 @@ public sealed class AppSettings
     public string? LecramLastVersion { get; set; }
     public string? LecramLastAssetHash { get; set; }
     public string? LecramLastBuildId { get; set; }
+    /// <summary>Look for a newer DLSS5 Updater on GitHub at start (at most every <see cref="AppUpdate.CheckInterval"/>).</summary>
+    public bool CheckAppUpdates { get; set; } = true;
+    /// <summary>Download a newer DLSS5 Updater in the background and install it when the app closes or next starts.</summary>
+    public bool AutoInstallAppUpdates { get; set; }
+    public DateTime? AppUpdateLastCheck { get; set; }
+    public string AppUpdateLastResult { get; set; } = "Not checked yet.";
+    /// <summary>Version and SHA-256 of a verified update waiting to be installed (automatic mode).</summary>
+    public string? AppUpdateStaged { get; set; }
+    public string? AppUpdateStagedSha256 { get; set; }
+    /// <summary>Version an automatic install was started for; if the app is still older on the next start, it isn't retried automatically.</summary>
+    public string? AppUpdateTried { get; set; }
     public bool InstallMfgUnlock { get; set; } = true;
     public bool InstallDlssNr { get; set; } = true;
     public bool InstallRenoDx { get; set; }
     public bool InstallUplift { get; set; }
     public bool InstallLecram { get; set; }
-    public string OptiSource { get; set; } = ComponentStore.OptiRepo;
+    /// <summary>Lets ShortFuse's and Lecram's add-ons be on together (NR then runs twice); off keeps one NR add-on per game (<see cref="NrAddons"/>).</summary>
+    public bool AllowSeveralNrAddons { get; set; }
+    /// <summary>The OptiScaler build's repo. New installs start on F5; a saved choice is always kept.</summary>
+    public string OptiSource { get; set; } = OptiSources.F5.Repo;
     public string? PreviousDlssNrId { get; set; }
     public bool AddMissingDlss { get; set; } = true;
     /// <summary>Legacy (1.0/1.1); false maps to IniMode "fresh".</summary>
@@ -142,6 +160,19 @@ public sealed class AppSettings
     /// <summary>Default Lecram add-on build (library id).</summary>
     public string? LecramId { get; set; }
     public List<AddonPairTest> AddonPairTests { get; set; } = [];
+    /// <summary>Default OptiScaler build (app tag, either source); null follows the newest release of the selected source.</summary>
+    public string? OptiTag { get; set; }
+    /// <summary>Default GITC Uplift build (release tag); null follows the newest release.</summary>
+    public string? UpliftTag { get; set; }
+    /// <summary>Library name (<see cref="LibraryKind"/>) -> how many of its newest builds the cleanup keeps; missing = 2.</summary>
+    public Dictionary<string, int> KeepBuilds { get; set; } = [];
+    /// <summary>Delete old builds after each download or import (off by default).</summary>
+    public bool AutoCleanBuilds { get; set; }
+
+    public int KeepBuildsFor(LibraryKind kind) =>
+        Math.Clamp(KeepBuilds.GetValueOrDefault(kind.ToString(), BuildCleanup.DefaultKeep), 1, BuildCleanup.MaxKeep);
+    /// <summary>First-run setup: false on a fresh install until it is finished or skipped. Missing (settings from 1.x) counts as done.</summary>
+    public bool? OnboardingDone { get; set; }
 
     public string? AddonId(AddonKind kind) => kind == AddonKind.RenoDx ? RenoDxId : LecramId;
 
@@ -166,6 +197,8 @@ public sealed class AppSettings
 
     public static AppSettings Load()
     {
+        // A fresh install: the first-run setup is due.
+        if (!File.Exists(AppPaths.SettingsFile)) return new AppSettings { OnboardingDone = false };
         try
         {
             if (File.Exists(AppPaths.SettingsFile))
@@ -180,7 +213,8 @@ public sealed class AppSettings
                     if (sourceMigrated) s.OptiSource = ComponentStore.OptiRepo;
                     s.Presets.RemoveAll(p => p.Name.Equals(ConfigProfile.RecommendedName, StringComparison.OrdinalIgnoreCase));
                     var renoDxMigrated = RenoDxIni.Migrate(s);
-                    if (s._legacyTokenRead || sourceMigrated || renoDxMigrated) s.Save();
+                    var addonsMigrated = NrAddons.Migrate(s);
+                    if (s._legacyTokenRead || sourceMigrated || renoDxMigrated || addonsMigrated) s.Save();
                     return s;
                 }
             }
@@ -244,6 +278,7 @@ public sealed class AppSettings
         ReShadeOverrides = ReShadeOverrides is null ? defaults.ReShadeOverrides : Overrides(ReShadeOverrides);
         Presets = PresetList(Presets);
         SeenReleases ??= [];
+        KeepBuilds ??= [];
         AnnouncedReleases ??= [];
         AddonPairTests = (AddonPairTests ?? []).Where(t => t is not null).ToList();
         DefaultProxy ??= defaults.DefaultProxy;
@@ -251,6 +286,7 @@ public sealed class AppSettings
         OptiSource ??= defaults.OptiSource;
         LecramFolderKey ??= defaults.LecramFolderKey;
         LecramLastResult ??= defaults.LecramLastResult;
+        AppUpdateLastResult ??= defaults.AppUpdateLastResult;
 
         static List<string> Strings(List<string>? list) => (list ?? []).Where(s => s is not null).ToList();
 
@@ -310,4 +346,5 @@ public sealed class AppSettings
 [JsonSerializable(typeof(NrVersion))]
 [JsonSerializable(typeof(AddonBuild))]
 [JsonSerializable(typeof(AddonPairTest))]
+[JsonSerializable(typeof(Dictionary<string, InstallRefs>))]
 internal partial class JsonCtx : JsonSerializerContext;

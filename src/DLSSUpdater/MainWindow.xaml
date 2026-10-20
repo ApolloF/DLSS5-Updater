@@ -330,6 +330,19 @@
                            Foreground="{StaticResource Muted}" Margin="6,0,0,0" />
             </StackPanel>
             <StackPanel Orientation="Horizontal" HorizontalAlignment="Right">
+                <!-- A newer DLSS5 Updater is out: release notes and the update, next to the caption buttons -->
+                <StackPanel Orientation="Horizontal" VerticalAlignment="Center" Margin="0,0,12,0" DataContext="{Binding SelfUpdate}"
+                            Visibility="{Binding HasUpdate, Converter={StaticResource BoolToVis}}">
+                    <Button Content="What's new" Command="{Binding ShowNotesCommand}" Style="{StaticResource BtnGhost}" Margin="0,0,6,0"
+                            WindowChrome.IsHitTestVisibleInChrome="True" ToolTip="Release notes of the new DLSS5 Updater version" />
+                    <Button Command="{Binding UpdateNowCommand}" Style="{StaticResource BtnPrimary}" WindowChrome.IsHitTestVisibleInChrome="True"
+                            AutomationProperties.Name="{Binding UpdateName}" ToolTip="Downloads and checks the new version, then DLSS5 Updater restarts">
+                        <StackPanel Orientation="Horizontal">
+                            <TextBlock Text="&#xE896;" Style="{StaticResource Icon}" Margin="0,0,8,0" />
+                            <TextBlock Text="{Binding UpdateText}" />
+                        </StackPanel>
+                    </Button>
+                </StackPanel>
                 <Button Style="{StaticResource CaptionBtn}" Content="&#xE946;" FontSize="13" ToolTip="About" AutomationProperties.Name="About"
                         Command="{Binding ToggleAboutCommand}" />
                 <Button Style="{StaticResource CaptionBtn}" Content="&#xE713;" FontSize="13" ToolTip="Settings" AutomationProperties.Name="Settings"
@@ -790,12 +803,9 @@
                                                      ToolTip="{Binding State, Converter={StaticResource StateToText}}"
                                                      AutomationProperties.Name="{Binding State, Converter={StaticResource StateToText}}" />
                                             <DockPanel Grid.Column="1" Margin="0,0,12,0">
-                                                <Button DockPanel.Dock="Right" Style="{StaticResource InfoBtn}" CommandParameter="uplift"
-                                                        Visibility="{Binding Key, Converter={StaticResource EqualsToVis}, ConverterParameter=uplift}"
-                                                        ToolTip="{Binding Source=uplift, Converter={StaticResource HelpTip}}" AutomationProperties.Name="About GITC Uplift" />
-                                                <Button DockPanel.Dock="Right" Style="{StaticResource InfoBtn}" CommandParameter="dfc"
-                                                        Visibility="{Binding Key, Converter={StaticResource EqualsToVis}, ConverterParameter=dfc}"
-                                                        ToolTip="{Binding Source=dfc, Converter={StaticResource HelpTip}}" AutomationProperties.Name="About Deep Fried Chicken" />
+                                                <Button DockPanel.Dock="Right" Style="{StaticResource InfoBtn}" CommandParameter="{Binding HelpTopic}"
+                                                        ToolTip="{Binding HelpTopic, Converter={StaticResource HelpTip}}"
+                                                        AutomationProperties.Name="{Binding Name, StringFormat='About {0}'}" />
                                                 <TextBlock Text="{Binding Name}" VerticalAlignment="Center" TextTrimming="CharacterEllipsis" ToolTip="{Binding Name}" />
                                             </DockPanel>
                                             <TextBlock Grid.Column="2" Text="{Binding Installed}" Style="{StaticResource Mono}" Foreground="{StaticResource Muted}" VerticalAlignment="Center" />
@@ -805,10 +815,23 @@
                                                         <Style.Triggers>
                                                             <DataTrigger Binding="{Binding Key}" Value="renodx"><Setter Property="Visibility" Value="Collapsed" /></DataTrigger>
                                                             <DataTrigger Binding="{Binding Key}" Value="lecram"><Setter Property="Visibility" Value="Collapsed" /></DataTrigger>
+                                                            <DataTrigger Binding="{Binding Key}" Value="opti"><Setter Property="Visibility" Value="Collapsed" /></DataTrigger>
+                                                            <DataTrigger Binding="{Binding Key}" Value="uplift"><Setter Property="Visibility" Value="Collapsed" /></DataTrigger>
                                                         </Style.Triggers>
                                                     </Style>
                                                 </TextBlock.Style>
                                             </TextBlock>
+                                            <!-- OptiScaler and GITC Uplift pick the downloaded build this game installs. -->
+                                            <ComboBox Grid.Column="3" Margin="0,0,8,0" MaxDropDownHeight="300"
+                                                      Visibility="{Binding Key, Converter={StaticResource EqualsToVis}, ConverterParameter=opti}"
+                                                      ItemsSource="{Binding DataContext.OptiChoices, RelativeSource={RelativeSource AncestorType=ItemsControl}}"
+                                                      SelectedItem="{Binding DataContext.OptiChoice, RelativeSource={RelativeSource AncestorType=ItemsControl}}"
+                                                      AutomationProperties.Name="OptiScaler version for this game" ToolTip="Which OptiScaler build this game installs; Default follows Settings" />
+                                            <ComboBox Grid.Column="3" Margin="0,0,8,0" MaxDropDownHeight="300"
+                                                      Visibility="{Binding Key, Converter={StaticResource EqualsToVis}, ConverterParameter=uplift}"
+                                                      ItemsSource="{Binding DataContext.UpliftChoices, RelativeSource={RelativeSource AncestorType=ItemsControl}}"
+                                                      SelectedItem="{Binding DataContext.UpliftChoice, RelativeSource={RelativeSource AncestorType=ItemsControl}}"
+                                                      AutomationProperties.Name="GITC Uplift version for this game" ToolTip="Which GITC Uplift build this game installs; Default follows Settings" />
                                             <!-- The add-on rows pick the imported build this game installs. -->
                                             <ComboBox Grid.Column="3" Margin="0,0,8,0" MaxDropDownHeight="300"
                                                       Visibility="{Binding Key, Converter={StaticResource EqualsToVis}, ConverterParameter=renodx}"
@@ -838,20 +861,13 @@
                                         <TextBlock Text="{Binding PairStatusText}" Style="{StaticResource MutedText}" Margin="0,2,0,0" />
                                     </StackPanel>
                                 </Grid>
+                                <TextBlock Text="{Binding NrAddonWarning}" Style="{StaticResource MutedText}" Foreground="{StaticResource Warn}" FontSize="11.5" TextWrapping="Wrap" Margin="18,4,0,0" />
                                 <WrapPanel Margin="18,6,0,0">
                                     <Button Content="Mark as working" Style="{StaticResource BtnGhost}" Command="{Binding MarkPairWorkingCommand}" Margin="0,0,8,0" />
                                     <Button Content="Mark as crashed" Style="{StaticResource BtnGhost}" Command="{Binding MarkPairCrashedCommand}" />
                                 </WrapPanel>
-                                <TextBlock Text="{Binding SfLecramMessage}" TextWrapping="Wrap" FontSize="12" Margin="18,8,0,0"
-                                           Visibility="{Binding HasSfLecramMessage, Converter={StaticResource BoolToVis}}">
-                                    <TextBlock.Style>
-                                        <Style TargetType="TextBlock" BasedOn="{StaticResource MutedText}">
-                                            <Style.Triggers>
-                                                <DataTrigger Binding="{Binding IsPairCrashed}" Value="True"><Setter Property="Foreground" Value="{StaticResource Warn}" /></DataTrigger>
-                                            </Style.Triggers>
-                                        </Style>
-                                    </TextBlock.Style>
-                                </TextBlock>
+                                <TextBlock Text="{Binding SfLecramMessage}" Style="{StaticResource MutedText}" TextWrapping="Wrap" FontSize="12" Margin="18,8,0,0" Foreground="{StaticResource Warn}"
+                                           Visibility="{Binding HasSfLecramMessage, Converter={StaticResource BoolToVis}}" />
                             </StackPanel>
                             <!-- Deep Fried Chicken in a game without its own DLSS: what changes, and the DLSS-G runtime for its frame generation. -->
                             <TextBlock Text="{Binding DfcNoDlssWarning}" Foreground="{StaticResource Warn}" TextWrapping="Wrap" FontSize="12" Margin="34,4,16,12"
@@ -1091,20 +1107,15 @@
                                                             <Button Content="Import…" Command="{Binding ImportReShadeCommand}" Margin="12,0,0,0" />
                                                         </StackPanel>
                                                     </Grid>
+                                                    <CheckBox IsChecked="{Binding AutoDownloadReShade}" Margin="0,0,0,10" AutomationProperties.Name="Download ReShade (add-on build) from reshade.me when none is imported">
+                                                        <TextBlock Text="Download ReShade (add-on build) from reshade.me when none is imported" TextWrapping="Wrap" />
+                                                    </CheckBox>
                                                     <Border Style="{StaticResource Divider}" />
                                                     <ContentControl Content="{Binding RenoDx}" ContentTemplate="{StaticResource AddonLibraryRow}" Margin="0,10" />
                                                     <Border Style="{StaticResource Divider}" />
                                                     <ContentControl Content="{Binding Lecram}" ContentTemplate="{StaticResource AddonLibraryRow}" Margin="0,10" />
-                                                    <TextBlock Text="{Binding LecramMessage}" TextWrapping="Wrap" FontSize="12" Margin="0,0,0,10"
-                                                               Visibility="{Binding HasLecramMessage, Converter={StaticResource BoolToVis}}">
-                                                        <TextBlock.Style>
-                                                            <Style TargetType="TextBlock" BasedOn="{StaticResource MutedText}">
-                                                                <Style.Triggers>
-                                                                    <DataTrigger Binding="{Binding IsPairCrashed}" Value="True"><Setter Property="Foreground" Value="{StaticResource Warn}" /></DataTrigger>
-                                                                </Style.Triggers>
-                                                            </Style>
-                                                        </TextBlock.Style>
-                                                    </TextBlock>
+                                                    <TextBlock Text="{Binding LecramMessage}" Style="{StaticResource MutedText}" TextWrapping="Wrap" FontSize="12" Margin="0,0,0,10" Foreground="{StaticResource Warn}"
+                                                               Visibility="{Binding HasLecramMessage, Converter={StaticResource BoolToVis}}" />
                                                     <Grid Margin="0,10">
                                                         <Grid.ColumnDefinitions>
                                                             <ColumnDefinition Width="*" />
@@ -1122,10 +1133,6 @@
                                                             <Button Content="Import…" Command="{Binding ImportDfcCommand}" Margin="12,0,0,0" />
                                                         </StackPanel>
                                                     </Grid>
-                                                    <Border Style="{StaticResource Divider}" />
-                                                    <CheckBox IsChecked="{Binding AutoDownloadReShade}" Margin="0,10" AutomationProperties.Name="Download ReShade (add-on build) from reshade.me when none is imported">
-                                                        <TextBlock Text="Download ReShade (add-on build) from reshade.me when none is imported" TextWrapping="Wrap" />
-                                                    </CheckBox>
                                                 </StackPanel>
                                             </Border>
                                             <TextBlock Text="Import each NR runtime you want to keep; they all stay in your library. NVIDIA's original needs an RTX 50 card. For RTX 20/30/40, download and extract ShortFuse's compat build (compat-fp16-310.9.16-cuda13.4.3) and import it. ReShade is downloaded from reshade.me."
@@ -1195,6 +1202,29 @@
                                                                   ItemsSource="{Binding OptiBuilds}" DisplayMemberPath="Label" SelectedItem="{Binding OptiBuild}"
                                                                   AutomationProperties.Name="OptiScaler build" />
                                                     </Grid>
+                                                    <Grid Margin="0,8">
+                                                        <Grid.ColumnDefinitions>
+                                                            <ColumnDefinition Width="*" />
+                                                            <ColumnDefinition Width="Auto" />
+                                                        </Grid.ColumnDefinitions>
+                                                        <StackPanel>
+                                                            <TextBlock Text="OptiScaler version" VerticalAlignment="Center" />
+                                                            <TextBlock Text="Newest follows each release. Pick a kept build to stay on it; each game can choose its own." Style="{StaticResource MutedText}" FontSize="11.5" TextWrapping="Wrap" Margin="0,2,0,0" />
+                                                        </StackPanel>
+                                                        <ComboBox Grid.Column="1" Width="250" Margin="16,0,0,0" VerticalAlignment="Center" MaxDropDownHeight="360"
+                                                                  ItemsSource="{Binding OptiVersionChoices}" SelectedItem="{Binding SelectedOptiVersion}"
+                                                                  AutomationProperties.Name="Default OptiScaler version" />
+                                                    </Grid>
+                                                    <Grid Margin="0,8">
+                                                        <Grid.ColumnDefinitions>
+                                                            <ColumnDefinition Width="*" />
+                                                            <ColumnDefinition Width="Auto" />
+                                                        </Grid.ColumnDefinitions>
+                                                        <TextBlock Text="GITC Uplift version" VerticalAlignment="Center" />
+                                                        <ComboBox Grid.Column="1" Width="250" Margin="16,0,0,0" VerticalAlignment="Center" MaxDropDownHeight="360"
+                                                                  ItemsSource="{Binding UpliftVersionChoices}" SelectedItem="{Binding SelectedUpliftVersion}"
+                                                                  AutomationProperties.Name="Default GITC Uplift version" />
+                                                    </Grid>
                                                     <CheckBox IsChecked="{Binding IncludePrereleases}" Margin="0,8">
                                                         <StackPanel Orientation="Horizontal">
                                                             <TextBlock Text="Include pre-releases" VerticalAlignment="Center" />
@@ -1212,9 +1242,15 @@
                                                     <CheckBox IsChecked="{Binding InstallUplift}" Margin="0,8" AutomationProperties.Name="Install GITC Uplift (ReShade + add-ons mode; exclusive NR route, 64-bit only; uses your imported NR runtime)">
                                                         <TextBlock Text="Install GITC Uplift (ReShade + add-ons mode; exclusive NR route, 64-bit only; uses your imported NR runtime)" TextWrapping="Wrap" />
                                                     </CheckBox>
-                                                    <CheckBox IsChecked="{Binding InstallLecram}" Margin="0,8" AutomationProperties.Name="Install Lecram DLSS5 add-on (ReShade + add-ons mode; runs its own NR, also next to ShortFuse's, then NR runs twice; needs ReShade 6+ and the NR runtime)">
-                                                        <TextBlock Text="Install Lecram DLSS5 add-on (ReShade + add-ons mode; runs its own NR, also next to ShortFuse's, then NR runs twice; needs ReShade 6+ and the NR runtime)" TextWrapping="Wrap" />
+                                                    <CheckBox IsChecked="{Binding InstallLecram}" Margin="0,8" AutomationProperties.Name="Install Lecram DLSS5 add-on (ReShade + add-ons mode; runs its own NR; needs ReShade 6+ and the NR runtime)">
+                                                        <TextBlock Text="Install Lecram DLSS5 add-on (ReShade + add-ons mode; runs its own NR; needs ReShade 6+ and the NR runtime)" TextWrapping="Wrap" />
                                                     </CheckBox>
+                                                    <CheckBox IsChecked="{Binding AllowSeveralNrAddons}" Margin="0,4,0,8"
+                                                              AutomationProperties.Name="Allow more than one NR add-on (only ShortFuse and Lecram can run together)">
+                                                        <TextBlock Text="Allow more than one NR add-on (only ShortFuse and Lecram can run together)" Style="{StaticResource MutedText}" FontSize="11.5" TextWrapping="Wrap" />
+                                                    </CheckBox>
+                                                    <TextBlock Text="{Binding NrAddonWarning}" Style="{StaticResource MutedText}" Foreground="{StaticResource Warn}" FontSize="11.5" TextWrapping="Wrap" Margin="0,0,0,8"
+                                                               Visibility="{Binding NrAddonWarning, Converter={StaticResource NullToVis}}" />
                                                     <CheckBox IsChecked="{Binding InstallDlssNr}" Margin="0,8" AutomationProperties.Name="Install NR runtime (nvngx_dlssnr.dll)">
                                                         <TextBlock Text="Install NR runtime (nvngx_dlssnr.dll)" TextWrapping="Wrap" />
                                                     </CheckBox>
@@ -1252,6 +1288,48 @@
                                                 </StackPanel>
                                             </Border>
 
+                                            <!-- Old builds of every library and download leftovers; what games need always stays. -->
+                                            <TextBlock Text="BUILD LIBRARY" Style="{StaticResource SectionTitle}" />
+                                            <Border Style="{StaticResource Card}" Padding="16,6" DataContext="{Binding Cleanup}">
+                                                <StackPanel>
+                                                    <TextBlock Text="Downloaded and imported builds stay so games can switch back. Cleanup keeps the newest builds of each library (per OptiScaler source) and always keeps defaults, builds chosen for a game, builds installed in one and the NR runtime a game can switch back to. Builds you imported only go when you clean up by hand."
+                                                               Style="{StaticResource MutedText}" FontSize="11.5" TextWrapping="Wrap" Margin="0,8,0,4" />
+                                                    <ItemsControl ItemsSource="{Binding Rows}" Focusable="False">
+                                                        <ItemsControl.ItemTemplate>
+                                                            <DataTemplate DataType="{x:Type vm:LibraryRowViewModel}">
+                                                                <Grid Margin="0,5">
+                                                                    <Grid.ColumnDefinitions>
+                                                                        <ColumnDefinition Width="190" />
+                                                                        <ColumnDefinition Width="*" />
+                                                                        <ColumnDefinition Width="Auto" />
+                                                                        <ColumnDefinition Width="Auto" />
+                                                                    </Grid.ColumnDefinitions>
+                                                                    <TextBlock Text="{Binding Title}" VerticalAlignment="Center" />
+                                                                    <TextBlock Grid.Column="1" Text="{Binding Summary}" Style="{StaticResource MutedText}" FontSize="12" VerticalAlignment="Center" TextTrimming="CharacterEllipsis" />
+                                                                    <TextBlock Grid.Column="2" Text="Keep newest" Style="{StaticResource MutedText}" FontSize="12" VerticalAlignment="Center" Margin="12,0,8,0" />
+                                                                    <ComboBox Grid.Column="3" Width="64" ItemsSource="{x:Static vm:LibraryRowViewModel.KeepChoices}" SelectedItem="{Binding Keep}"
+                                                                              AutomationProperties.Name="{Binding Title, StringFormat='Keep this many newest {0} builds'}" />
+                                                                </Grid>
+                                                            </DataTemplate>
+                                                        </ItemsControl.ItemTemplate>
+                                                    </ItemsControl>
+                                                    <CheckBox IsChecked="{Binding AutoClean}" Margin="0,10,0,4" AutomationProperties.Name="Delete old downloads automatically after each download">
+                                                        <TextBlock Text="Delete old downloads automatically after each download (imported builds always stay)" TextWrapping="Wrap" />
+                                                    </CheckBox>
+                                                    <TextBlock Text="{Binding AutoSkipped}" Style="{StaticResource MutedText}" FontSize="11.5" TextWrapping="Wrap" Margin="26,0,0,2"
+                                                               Visibility="{Binding AutoSkipped, Converter={StaticResource NullToVis}}" />
+                                                    <Grid Margin="0,6,0,8">
+                                                        <Grid.ColumnDefinitions>
+                                                            <ColumnDefinition Width="*" />
+                                                            <ColumnDefinition Width="Auto" />
+                                                        </Grid.ColumnDefinitions>
+                                                        <TextBlock Text="{Binding Freeable}" Style="{StaticResource MutedText}" FontSize="12" TextWrapping="Wrap" VerticalAlignment="Center" />
+                                                        <Button Grid.Column="1" Content="Clean up old builds…" Command="{Binding CleanCommand}" Margin="12,0,0,0"
+                                                                ToolTip="Shows what goes and how much space it frees, then asks before deleting" />
+                                                    </Grid>
+                                                </StackPanel>
+                                            </Border>
+
                                             <TextBlock Text="GAME FOLDERS" Style="{StaticResource SectionTitle}" />
                                             <Border Style="{StaticResource Card}" Padding="16,6">
                                                 <StackPanel>
@@ -1285,12 +1363,38 @@
                                                 </StackPanel>
                                             </Border>
 
+                                            <TextBlock Text="DLSS5 UPDATER UPDATES" Style="{StaticResource SectionTitle}" />
+                                            <Border Style="{StaticResource Card}" Padding="16,6"
+                                                    DataContext="{Binding DataContext.SelfUpdate, RelativeSource={RelativeSource AncestorType=Window}}">
+                                                <StackPanel>
+                                                    <CheckBox Content="Check for updates" IsChecked="{Binding CheckAppUpdates}" Margin="0,8" />
+                                                    <CheckBox IsChecked="{Binding AutoInstall}" Margin="0,8" AutomationProperties.Name="Install updates automatically">
+                                                        <StackPanel>
+                                                            <TextBlock Text="Install updates automatically" />
+                                                            <TextBlock Text="Downloads in the background, checks it against the release's SHA256SUMS and installs when DLSS5 Updater closes. Never during a running task."
+                                                                       Style="{StaticResource MutedText}" FontSize="11.5" TextWrapping="Wrap" Margin="0,2,0,0" />
+                                                        </StackPanel>
+                                                    </CheckBox>
+                                                    <TextBlock Text="{Binding LastResult}" Style="{StaticResource MutedText}" TextWrapping="Wrap" FontSize="12" Margin="0,6,0,0" />
+                                                    <TextBlock Text="{Binding KindText}" Style="{StaticResource MutedText}" TextWrapping="Wrap" FontSize="12" Margin="0,2,0,0" />
+                                                    <WrapPanel Margin="0,10,0,6">
+                                                        <Button Content="Check now" Command="{Binding CheckNowCommand}" Margin="0,0,8,0" />
+                                                        <Button Content="{Binding UpdateText}" Command="{Binding UpdateNowCommand}" Style="{StaticResource BtnPrimary}" Margin="0,0,8,0"
+                                                                Visibility="{Binding HasUpdate, Converter={StaticResource BoolToVis}}" />
+                                                        <Button Content="What's new" Command="{Binding ShowNotesCommand}" Style="{StaticResource BtnGhost}"
+                                                                Visibility="{Binding HasUpdate, Converter={StaticResource BoolToVis}}" />
+                                                    </WrapPanel>
+                                                </StackPanel>
+                                            </Border>
+
                                             <TextBlock Text="GITHUB TOKEN (OPTIONAL)" Style="{StaticResource SectionTitle}" />
                                             <TextBox Text="{Binding GitHubToken, UpdateSourceTrigger=LostFocus}" Tag="Only needed if update checks hit GitHub's request limit"
                                                      AutomationProperties.Name="GitHub token" />
 
                                             <StackPanel Orientation="Horizontal" Margin="0,28,0,0">
                                                 <Button Content="Open data folder" Style="{StaticResource BtnGhost}" Command="{Binding OpenDataFolderCommand}" />
+                                                <Button Content="Run setup again" Style="{StaticResource BtnGhost}" Command="{Binding RunSetupCommand}" Margin="8,0,0,0"
+                                                        ToolTip="Opens the first-run setup again; it starts at your current settings" />
                                             </StackPanel>
                                         </StackPanel>
 
@@ -1645,5 +1749,9 @@
                 </StackPanel>
             </Grid>
         </Grid>
+
+        <!-- ============ First-run setup (over everything but the title bar) ============ -->
+        <v:OnboardingView Grid.Row="1" Grid.RowSpan="4" DataContext="{Binding SettingsVm.Onboarding}"
+                          Visibility="{Binding Converter={StaticResource NullToVis}}" />
     </Grid>
 </Window>
