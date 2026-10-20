@@ -27,14 +27,19 @@ with headless Chrome (`--headless=new --dump-dom`, 90 s timeout) and looks for n
 a changed page or a failed fetch is a log line and one ntfy note asking to log in again (until it works again),
 never a failure or a parked change. The new sections go only into Claude's facts file on the review path, marked as
 paid content to paraphrase; the bot never puts their text in the repo, PRs, notices or release notes, or in its state.
-A section ends at the next heading or page region (comments, footer, sidebar) or at a line that looks like the comment
+A section ends at the next patch heading, a heading of the same or a higher level than its own (an `<h4>` inside an
+`<h3>` patch section stays in it), a page region (comments, footer, sidebar) or a line that looks like the comment
 box, so members' comments under the post never reach Claude. Before publishing, the bot checks Claude's diff and summary
 for any run of 8 words from the notes: a quoting diff is refused, a quoting summary is left out of the PR.
 
 ## Two paths
 **Auto path (no Claude).** Only when every new item is an OptiScaler build, no drop is pending, no bot PR is open,
-and `origin/main` is exactly the last release: the tag `v<main version>` exists and `git diff v<main version> origin/main`
-is empty outside `docs/`. An auto release ships all of main, so any unreleased work on main sends the change to review.
+and `origin/main` is exactly the last release: `gh release view v<main version>` shows a published full release (not
+a draft, not a prerelease, so a bot prerelease still in its 24 h window or one the owner holds back blocks the next
+bump), the tag `v<main version>` is fetched fresh from origin (the mirror's local copy is deleted first, and a failed
+fetch blocks), and `git diff v<main version> origin/main` is empty outside `docs/`. An auto release ships all of main,
+so any unreleased work on main sends the change to review. A gh error other than "not found" stops the run (machine
+failure). A tag push that fails is deleted from the mirror again.
 The bot proves the bump config-neutral by itself: the new tag is a plain `vX.Y.Z` in the same minor line, not a
 prerelease, has exactly one matching asset, and its `OptiScaler.ini` (in the repo at the tag and inside the release
 zip) and the zip's file list are identical to the tested build after normalising BOM, line ends and trailing
@@ -62,7 +67,9 @@ Claude's folder, whose `.git/config` Claude could have written), copies the chan
   fsmonitor and attribute files off. Any numstat `-` (binary), link, submodule, executable bit or file over 1 MB fails.
 - The owner's global git hooks run on the bot's commits and pushes (gitleaks, AI-trailer strip, `.prepush` gate). So
   they never run repo content, the bot refuses to make a worktree, commit or push when the tree has a `.prepush` or
-  the mirror has a repo hook, and it checks its own commit messages for AI trailers before every push.
+  the mirror has a repo hook, and it checks its own commit messages for AI trailers before every push. This fails
+  closed on purpose: once a `.prepush` is committed on `origin/main`, every bot worktree has it and every bot commit
+  and push is refused (each run fails with "not running git hooks over repo content") until it is removed from main.
 - Off limits: `.github/`, `tools/`, `.claude/`, `AGENTS.md`, `CLAUDE.md`, `.gitattributes`, `.gitignore`,
   `.editorconfig`, `Directory.Build.*`, `NuGet.config`, `global.json`, `*.props`, `*.targets`, scripts, and any
   `.csproj`/`.iss` change other than the app's version line. Allowed: `.cs`, `.xaml`, `.md`, `.txt`, `.ini`, `.cfg`
@@ -120,12 +127,24 @@ unless you pass `-UnsafeRunClaudeAsOwner`. `install.ps1 -Enable` without `-RunAs
    `claude setup-token` as that user (or as the owner, then store the token for the bot as `DLSS5_BOT_CLAUDE_TOKEN`).
 3. Write `%LocalAppData%\dlss5updater-releasebot\isolation.ps1` (owner side). The bot calls it as
    `& isolation.ps1 -User <name> -Exe <claude.exe> -ArgumentList <argv> -WorkingDirectory <sandbox\repo>
-   -Environment <hashtable> -Stdin <prompt> -TimeoutMinutes <n>` and expects `@{ ExitCode = <int>; Stdout = <string> }`.
-   It should copy the sandbox folder (repo clone, `in\`, `out\`) to a folder only that user and the owner can write,
-   start Claude there as that user (for example a scheduled task with that user's stored credentials, or
-   `Start-Process -Credential` with a secret from Credential Manager), wait, and copy the sandbox back. The bot (owner
-   context) then only reads files from it, as now: it never runs git or anything else from Claude's folder, and only
-   commits the checked files into its own clean worktree of the bare mirror.
+   -Environment <hashtable> -Stdin <prompt> -TimeoutMinutes <n> -Sandbox <sandbox>` and expects
+   `@{ ExitCode = <int>; Stdout = <string>; Sandbox = <the isolated copy> }`. It should:
+   - copy the `-Sandbox` folder (repo clone, `in\`, `out\`) to a fresh folder only that user and the owner can write,
+     and replace the `-Sandbox` path with that folder in `-ArgumentList`, `-Environment` values, `-Stdin` and
+     `-WorkingDirectory`;
+   - start Claude there as that user (for example a scheduled task with that user's stored credentials, or
+     `Start-Process -Credential` with a secret from Credential Manager) and wait;
+   - before it returns, stop every process still running as that user (`taskkill /F /FI "USERNAME eq <user>"`; dotnet
+     build servers linger), so nothing can change the folder while the bot reads it;
+   - **not** copy anything back itself, and return the folder as `Sandbox`.
+   The bot copies it back itself (`Copy-SandboxBack` in `ReleaseBot.psm1`). The isolated user could plant a junction
+   or symlink to the owner's files (`~\Notes`, `~\.claude`, `~\.ssh`) for a plain owner-side `Copy-Item -Recurse` to
+   follow into a public PR, so the bot first walks the whole tree without following links and aborts, copying nothing,
+   if any item (the folder itself included) has the `ReparsePoint` attribute; it checks each item again while
+   copying and leaves build output (`bin`, `obj`, ...) behind. Then, as before, it only reads files from the copy:
+   it never runs git or anything else from Claude's folder, rejects links again in the tree compare, and only commits
+   the checked files into its own clean worktree of the bare mirror. The user having no access to the owner's files
+   (step 1) also keeps it from hard-linking them.
 4. Point `Get-ClaudeEnv` paths (TEMP, APPDATA, `CLAUDE_CONFIG_DIR`, NUGET_PACKAGES) at that user's profile in the hook.
    It must not be able to read the bot's browser profile (`browser-profile\`, the owner's Buy Me a Coffee session).
    That user must not be able to write anything the owner side runs or trusts: `%LocalAppData%\dlss5updater-releasebot`

@@ -15,6 +15,7 @@ $ErrorActionPreference = 'Stop'
 $TaskName = 'DLSS5UpdaterReleaseBot'
 # The schedule starts the real Claude (a dry run does too): only as the isolated user. Checked before anything changes.
 if ($Enable -and -not $RunAs) { throw '-Enable needs -RunAs <isolated user>: without it headless Claude would run as you. See README, "Full isolation".' }
+if ($RunAs -match '["\r\n]') { throw '-RunAs must not contain quotes or line breaks' }
 
 if ($Remove) {
     Unregister-ScheduledTask -TaskName $TaskName -Confirm:$false -ErrorAction SilentlyContinue
@@ -32,7 +33,8 @@ Copy-Item -Force (Join-Path $PSScriptRoot 'release-bot.ps1'), (Join-Path $PSScri
 $script = Join-Path $bin 'release-bot.ps1'
 
 $pwsh = (Get-Command pwsh).Source
-$botArgs = "-NoProfile -ExecutionPolicy Bypass -File `"$script`"$(if ($DryRun) { ' -DryRun' })$(if ($RunAs) { " -RunAs $RunAs" })"
+$runAsArg = if ($RunAs) { ' -RunAs "' + $RunAs + '"' } else { '' }
+$botArgs = "-NoProfile -ExecutionPolicy Bypass -File `"$script`"$(if ($DryRun) { ' -DryRun' })$runAsArg"
 # conhost --headless keeps the console window from flashing up every run.
 $action = New-ScheduledTaskAction -Execute 'conhost.exe' -Argument "--headless `"$pwsh`" $botArgs"
 $start = (Get-Date).Date.AddHours([math]::Ceiling((Get-Date).TimeOfDay.TotalHours / $Hours) * $Hours)

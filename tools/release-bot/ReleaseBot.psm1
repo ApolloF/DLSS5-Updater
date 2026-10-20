@@ -66,6 +66,38 @@ function Get-UnreleasedReason([string]$gitDir, [string]$version, [string]$ref, [
     }
 }
 
+function Get-ReleaseStateReason($rel, [string]$version) {
+    # $rel: gh release view v<version> --json tagName,isDraft,isPrerelease, or $null when there is none. A tag alone
+    # is not a release: a prerelease still in its 24 h window, a draft or a deleted release with the tag kept all
+    # count as unreleased.
+    if (-not $rel) { return "no published release v$version" }
+    if ("$($rel.tagName)" -cne "v$version") { return "release v$version reads as $(Format-SafeText "$($rel.tagName)" 40)" }
+    if ($rel.isDraft -isnot [bool] -or $rel.isDraft) { return "release v$version is a draft" }
+    if ($rel.isPrerelease -isnot [bool] -or $rel.isPrerelease) { return "release v$version is still a prerelease" }
+    $null
+}
+
+function Sync-ReleaseTag([string]$gitDir, [string]$version, [string[]]$gitPrefix = @()) {
+    # The local tag is dropped first: a tag the mirror kept from its clone, an older fetch or a failed bot push must
+    # never stand in for origin's. $null when origin's v<version> is now the local one; otherwise why not.
+    $ref = "refs/tags/v$version"
+    git.exe @gitPrefix --git-dir $gitDir update-ref -d $ref 2>$null | Out-Null
+    git.exe @gitPrefix --git-dir $gitDir rev-parse --verify --quiet $ref 2>$null | Out-Null
+    if ($LASTEXITCODE -eq 0) { return "cannot drop the local tag v$version" }
+    git.exe @gitPrefix --git-dir $gitDir fetch --quiet --no-tags origin "+${ref}:$ref" 2>$null | Out-Null
+    if ($LASTEXITCODE -ne 0) { return "cannot fetch tag v$version from origin (missing or unreachable)" }
+    $null
+}
+
+function Get-ReleaseGateReason([string]$gitDir, [string]$version, [string]$ref, $rel, [string[]]$gitPrefix = @()) {
+    # $null only when v<version> is a published full release and $ref holds nothing beyond its tag except docs/.
+    if ($version -notmatch '^\d+\.\d+\.\d+$') { return "not a release version: $(Format-SafeText $version 40)" }
+    $r = Get-ReleaseStateReason $rel $version
+    if (-not $r) { $r = Sync-ReleaseTag $gitDir $version $gitPrefix }
+    if (-not $r) { $r = Get-UnreleasedReason $gitDir $version $ref $gitPrefix }
+    $r
+}
+
 function Find-PushBlockers([string]$worktree, [string]$gitDir) {
     # The owner's global pre-push hook runs the command in a repo's .prepush, and its hooks chain to the repo's own
     # hooks folder. Neither may run anything that came from the repo or a bot run.
@@ -380,6 +412,47 @@ function Get-TreeChanges([string]$base, [string]$work) {
     [pscustomobject]@{ Changes = @($changes | Sort-Object Path); Violations = @($bad) }
 }
 
+function Find-ReparsePoints([string]$root) {
+    # Every symlink or junction under $root (the root included), as relative paths. Links are never followed.
+    $found = [Collections.Generic.List[string]]::new()
+    $top = [IO.DirectoryInfo]::new($root)
+    if ($top.Attributes -band [IO.FileAttributes]::ReparsePoint) { $found.Add('.'); return @($found) }
+    $stack = [Collections.Generic.Stack[object]]::new(); $stack.Push(@($top, ''))
+    while ($stack.Count) {
+        $d, $prefix = $stack.Pop()
+        foreach ($i in $d.EnumerateFileSystemInfos()) {
+            $rel = "$prefix$($i.Name)"
+            if ($i.Attributes -band [IO.FileAttributes]::ReparsePoint) { $found.Add($rel) }
+            elseif ($i -is [IO.DirectoryInfo]) { $stack.Push(@($i, "$rel/")) }
+        }
+    }
+    @($found)
+}
+
+function Copy-SandboxBack([string]$from, [string]$to) {
+    # The owner side copies the isolated user's sandbox back. That user could plant a link to the owner's files
+    # (Notes, ~\.claude, ~\.ssh) for the owner's copy to follow into a public PR, so any link anywhere aborts the copy
+    # before a byte is copied, and every item is checked again as it is copied. Build output is left behind.
+    $links = @(Find-ReparsePoints $from)
+    if ($links.Count) { throw "the isolated sandbox has links ($(Format-SafeText ($links -join ', ') 200)); nothing copied back" }
+    if (Test-Path -LiteralPath $to) { throw "copy-back target $to already exists" }
+    $skip = '^(bin|obj|\.vs|TestResults|publish)$'
+    New-Item -ItemType Directory $to | Out-Null
+    $stack = [Collections.Generic.Stack[object]]::new(); $stack.Push(@([IO.DirectoryInfo]::new($from), $to))
+    while ($stack.Count) {
+        $d, $dest = $stack.Pop()
+        foreach ($i in $d.EnumerateFileSystemInfos()) {
+            if ($i.Attributes -band [IO.FileAttributes]::ReparsePoint) { throw "$($i.FullName) turned into a link during the copy-back; stopping" }
+            $target = Join-Path $dest $i.Name
+            if ($i -is [IO.DirectoryInfo]) {
+                if ($i.Name -match $skip) { continue }
+                New-Item -ItemType Directory $target | Out-Null
+                $stack.Push(@($i, $target))
+            } else { [IO.File]::Copy($i.FullName, $target, $false) }
+        }
+    }
+}
+
 # ---------- Lecram's members-only release notes (Buy Me a Coffee) ----------
 
 $script:BlockMark = '[[block]]'
@@ -402,8 +475,10 @@ function Test-ContainsPaidText([string]$text, [string[]]$notes, [int]$words = 8)
 function ConvertFrom-HtmlText([string]$html) {
     # Visible text of a dumped DOM, one block element per line.
     $t = $html -replace '(?is)<(script|style|noscript|svg|template)\b.*?</\1\s*>', ' '
-    # Headings and page regions (comments, footer, sidebar) start a new block: a patch section never runs past one.
-    $t = $t -replace '(?i)<(h[1-6]|footer|aside|form|section|nav|header|hr|dialog)\b|</article\s*>', "`n$($script:BlockMark)`n$&"
+    # Page regions (comments, footer, sidebar) start a new block: a patch section never runs past one. Headings get a
+    # level mark, so a section only ends at a heading of its own or a higher level.
+    $t = $t -replace '(?i)<(footer|aside|form|section|nav|header|hr|dialog)\b|</article\s*>', "`n$($script:BlockMark)`n$&"
+    $t = $t -replace '(?i)<h([1-6])\b', "`n[[h`$1]]`n$&"
     $t = $t -replace '(?i)<br\s*/?>', "`n" -replace '(?i)</(p|div|li|h[1-6]|tr|section|article|blockquote|pre)\s*>', "`n" -replace '(?i)<li\b[^>]*>', "`n- "
     $t = [Net.WebUtility]::HtmlDecode(($t -replace '(?s)<[^>]*>', ''))
     (($t -split "`n") | ForEach-Object { ($_ -replace '[\s ]+', ' ').Trim() } | Where-Object { $_ }) -join "`n"
@@ -411,17 +486,25 @@ function ConvertFrom-HtmlText([string]$html) {
 
 function Get-PatchSections([string]$text, [int]$maxChars = 4000) {
     # "v11 Patch 11" headings and the text under each, newest last. A heading is a line that starts with it. A section
-    # ends at the next heading or page region, or at a line that looks like the comments or the page around the post,
-    # so members' comments under the post never end up in a section.
+    # ends at the next patch heading, a heading of the same or a higher level (any heading when the patch heading wasn't
+    # one), a page region, or a line that looks like the comments or the page around the post, so members' comments
+    # under the post never end up in a section.
     $sections = [Collections.Generic.List[pscustomobject]]::new()
-    $cur = $null
+    $cur = $null; $level = $null
     foreach ($line in ($text -split "`n")) {
-        if ($line -eq $script:BlockMark -or $line -match $script:PageChrome) { $cur = $null; continue }
-        if ($line -match '^\s*v(\d+)\s+Patch\s+(\d+)\b') {
-            $cur = [pscustomobject]@{ Major = [int]$Matches[1]; Patch = [int]$Matches[2]; Key = "v$([int]$Matches[1]) Patch $([int]$Matches[2])"; Text = '' }
-            if (-not ($sections | Where-Object Key -EQ $cur.Key)) { $sections.Add($cur) } else { $cur = $null }
+        if ($line -eq $script:BlockMark -or $line -match $script:PageChrome) { $cur = $null; $level = $null; continue }
+        if ($line -match '^\[\[h([1-6])\]\]$') {
+            $level = [int]$Matches[1]
+            if ($cur -and $level -le $cur.Level) { $cur = $null }
             continue
         }
+        if ($line -match '^\s*v(\d+)\s+Patch\s+(\d+)\b') {
+            $cur = [pscustomobject]@{ Major = [int]$Matches[1]; Patch = [int]$Matches[2]; Key = "v$([int]$Matches[1]) Patch $([int]$Matches[2])"; Text = ''; Level = $level ?? 7 }
+            if (-not ($sections | Where-Object Key -EQ $cur.Key)) { $sections.Add($cur) } else { $cur = $null }
+            $level = $null
+            continue
+        }
+        $level = $null
         if ($cur -and $cur.Text.Length -lt $maxChars) { $cur.Text = ($cur.Text + "`n" + $line).TrimStart("`n") }
     }
     @($sections | Sort-Object Major, Patch)

@@ -382,6 +382,40 @@ Describe "Claude's tree vs the base" {
     }
 }
 
+Describe 'copy-back from the isolated sandbox (S3)' {
+    BeforeEach {
+        $from = Join-Path $TestDrive "iso-$([guid]::NewGuid().ToString('N').Substring(0, 6))"
+        $to = Join-Path $TestDrive "back-$([guid]::NewGuid().ToString('N').Substring(0, 6))"
+        New-Item -ItemType Directory -Force "$from/repo/src", "$from/repo/obj", "$from/out" | Out-Null
+        Set-Content "$from/repo/src/a.cs" 'code'; Set-Content "$from/repo/obj/x.dll" 'build'; Set-Content "$from/out/result.json" '{}'
+    }
+    It 'copies the files, without build output' {
+        Copy-SandboxBack $from $to
+        Get-Content "$to/repo/src/a.cs" | Should -Be 'code'
+        Test-Path "$to/out/result.json" | Should -BeTrue
+        Test-Path "$to/repo/obj" | Should -BeFalse
+    }
+    It 'aborts on a junction anywhere, before copying anything' {
+        $secret = Join-Path $TestDrive "private-$([guid]::NewGuid().ToString('N').Substring(0, 6))"
+        New-Item -ItemType Directory $secret | Out-Null; Set-Content "$secret/notes.md" 'private'
+        New-Item -ItemType Junction -Path "$from/repo/src/notes" -Target $secret | Out-Null
+        try {
+            { Copy-SandboxBack $from $to } | Should -Throw '*links (repo/src/notes)*'
+            Test-Path $to | Should -BeFalse
+            # Junctions inside build output count too.
+            (Get-Item "$from/repo/src/notes" -Force).Delete()
+            New-Item -ItemType Junction -Path "$from/repo/obj/j" -Target $secret | Out-Null
+            { Copy-SandboxBack $from $to } | Should -Throw '*repo/obj/j*'
+            Test-Path $to | Should -BeFalse
+        } finally { Get-ChildItem -Recurse -Force $from -Attributes ReparsePoint | ForEach-Object { $_.Delete() } }
+    }
+    It 'aborts when the sandbox folder itself is a link' {
+        $link = Join-Path $TestDrive "link-$([guid]::NewGuid().ToString('N').Substring(0, 6))"
+        New-Item -ItemType Junction -Path $link -Target $from | Out-Null
+        try { { Copy-SandboxBack $link $to } | Should -Throw '*links*' } finally { (Get-Item $link -Force).Delete() }
+    }
+}
+
 Describe "Lecram's release-note sections" {
     BeforeAll {
         # A made-up page in the shape of the post (no real post text).
@@ -434,6 +468,22 @@ Describe "Lecram's release-note sections" {
         $f = @(Get-PatchSections $flat)
         $f[0].Text | Should -Be 'New key Baz=2'
     }
+    It 'keeps lower headings inside a section and ends it at the next one of its level' {
+        $page = @'
+<html><body><article><h3>v11 Patch 11</h3><p>Intro</p><h4>New options</h4><ul><li>Key Foo=1</li></ul><h4>Fixed</h4><p>A hang</p>
+<h3>Older notes</h3><p>Not part of patch 11</p>
+<h2>v11 Patch 12</h2><h3>Changes</h3><p>Key Baz=2</p></article>
+<section class="comments"><h4>Thread</h4><p>member text</p></section></body></html>
+'@
+        $s = @(Get-PatchSections (ConvertFrom-HtmlText $page))
+        $s.Key | Should -Be @('v11 Patch 11', 'v11 Patch 12')
+        $s[0].Text | Should -Match 'Foo=1'
+        $s[0].Text | Should -Match 'A hang'
+        $s[0].Text | Should -Not -Match 'Not part'
+        $s[1].Text | Should -Match 'Baz=2'
+        $s[1].Text | Should -Not -Match 'member'
+        $s[1].Text | Should -Not -Match 'Thread'
+    }
     It 'spots the paid notes quoted in text that would be published (N4)' {
         $notes = @("#### v11 Patch 12`nThe new Sharpen Boost slider now goes up to 2.5 and defaults to 1.2 in every preset.")
         Test-ContainsPaidText 'Summary: the new sharpen boost slider now goes up to 2.5, and defaults to 1.2 in every preset!' $notes | Should -BeTrue
@@ -463,6 +513,12 @@ Describe 'gates (M1: Claude never as the owner by accident)' {
         Should -Invoke Register-ScheduledTask -Times 0 -Exactly
         Should -Invoke Copy-Item -Times 0 -Exactly
     }
+    It 'install.ps1 quotes -RunAs in the task command line' {
+        Mock Register-ScheduledTask {}; Mock Disable-ScheduledTask {}; Mock Copy-Item {}; Mock New-Item {}; Mock Write-Host {}
+        & (Join-Path $PSScriptRoot 'install.ps1') -RunAs 'dlss5 bot'
+        Should -Invoke Register-ScheduledTask -Times 1 -Exactly -ParameterFilter { $Action.Arguments -like '*-RunAs "dlss5 bot"*' }
+        { & (Join-Path $PSScriptRoot 'install.ps1') -RunAs 'x" -DryRun:$false "' } | Should -Throw '*quotes*'
+    }
 }
 
 Describe 'gates (M2: the auto path never releases unreleased work on main)' {
@@ -487,6 +543,46 @@ Describe 'gates (M2: the auto path never releases unreleased work on main)' {
         Get-UnreleasedReason $g '2.0.1' 'HEAD' | Should -Match 'unreleased'
         Get-UnreleasedReason $g '2.0.1' 'HEAD~1' | Should -BeNullOrEmpty
         Get-UnreleasedReason $g '2.0.2' 'HEAD' | Should -Match 'no tag v2.0.2'
+    }
+}
+
+Describe 'gates (S1/S2: released means a fresh tag from origin and a published full release)' {
+    BeforeAll {
+        $origin = New-TempRepo
+        [IO.File]::WriteAllText((Join-Path $origin 'a.cs'), 'one'); git -C $origin add -A; git -C $origin commit --quiet -m one
+        git -C $origin tag -a v3.0.1 -m 'v3.0.1'
+        $mirror = Join-Path $TestDrive 'mirror.git'
+        git clone --bare --quiet $origin $mirror
+        $full = '{"tagName":"v3.0.1","isDraft":false,"isPrerelease":false}' | ConvertFrom-Json
+    }
+    AfterAll { Remove-Item -Recurse -Force $origin -ErrorAction SilentlyContinue }
+    It 'allows a published full release whose tag origin still has' {
+        Get-ReleaseGateReason $mirror '3.0.1' 'HEAD' $full | Should -BeNullOrEmpty
+    }
+    It 'sends a prerelease, a draft, a missing or an unreadable release to review' {
+        Get-ReleaseStateReason ('{"tagName":"v3.0.1","isDraft":false,"isPrerelease":true}' | ConvertFrom-Json) '3.0.1' | Should -Match 'prerelease'
+        Get-ReleaseStateReason ('{"tagName":"v3.0.1","isDraft":true,"isPrerelease":false}' | ConvertFrom-Json) '3.0.1' | Should -Match 'draft'
+        Get-ReleaseStateReason ('{"tagName":"v3.0.1"}' | ConvertFrom-Json) '3.0.1' | Should -Not -BeNullOrEmpty
+        Get-ReleaseStateReason ('{"tagName":"v3.0.2","isDraft":false,"isPrerelease":false}' | ConvertFrom-Json) '3.0.1' | Should -Not -BeNullOrEmpty
+        Get-ReleaseStateReason $null '3.0.1' | Should -Match 'no published release'
+        Get-ReleaseGateReason $mirror '3.0.1' 'HEAD' $null | Should -Match 'no published release'
+        Get-ReleaseGateReason $mirror '3.0.1' 'HEAD' ('{"tagName":"v3.0.1","isDraft":false,"isPrerelease":true}' | ConvertFrom-Json) | Should -Match 'prerelease'
+    }
+    It 'refuses when origin deleted the tag, even though the mirror still has it' {
+        git -C $origin tag -d v3.0.1 | Out-Null
+        git --git-dir $mirror rev-parse --verify --quiet 'refs/tags/v3.0.1' | Should -Not -BeNullOrEmpty
+        Get-ReleaseGateReason $mirror '3.0.1' 'HEAD' $full | Should -Match 'cannot fetch tag'
+        git --git-dir $mirror rev-parse --verify --quiet 'refs/tags/v3.0.1' | Should -BeNullOrEmpty
+        Get-UnreleasedReason $mirror '3.0.1' 'HEAD' | Should -Match 'no tag'
+    }
+    It 'takes the tag from origin, not a stale local one' {
+        [IO.File]::WriteAllText((Join-Path $origin 'b.cs'), 'two'); git -C $origin add -A; git -C $origin commit --quiet -m two
+        git -C $origin tag -a v3.0.1 -m 'v3.0.1 again'
+        git --git-dir $mirror fetch --quiet --no-tags origin '+refs/heads/*:refs/heads/*'
+        git --git-dir $mirror tag -f -a v3.0.1 -m stale 'HEAD~1' | Out-Null
+        (git --git-dir $mirror rev-parse 'refs/tags/v3.0.1^{commit}') | Should -Be (git -C $origin rev-parse HEAD~1)
+        Get-ReleaseGateReason $mirror '3.0.1' 'HEAD' $full | Should -BeNullOrEmpty
+        (git --git-dir $mirror rev-parse 'refs/tags/v3.0.1^{commit}') | Should -Be (git -C $origin rev-parse HEAD)
     }
 }
 

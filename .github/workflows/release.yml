@@ -79,12 +79,11 @@ jobs:
           $kind = git for-each-ref "refs/tags/$t" --format='%(objecttype)'
           $subject = git for-each-ref "refs/tags/$t" --format='%(contents:subject)'
           $pre = $kind -eq 'tag' -and $subject -like 'release-bot prerelease*'
-          # A re-run after the bot (or the owner) promoted the release must not turn it back into a prerelease.
-          if ($pre) {
-            $existing = gh release view $t --json isPrerelease 2>$null
-            if ($LASTEXITCODE -eq 0 -and -not ($existing | ConvertFrom-Json).isPrerelease) { $pre = $false }
-            $global:LASTEXITCODE = 0  # no release yet is the normal case, not a failed step
-          }
+          # A re-run keeps the prerelease state the release already has, whoever set it (the bot's promotion, or the
+          # owner holding any tag back as a prerelease).
+          $existing = gh release view $t --json isPrerelease 2>$null
+          if ($LASTEXITCODE -eq 0) { $pre = [bool]($existing | ConvertFrom-Json).isPrerelease }
+          $global:LASTEXITCODE = 0  # no release yet is the normal case, not a failed step
           "prerelease=$(if ($pre) { 'true' } else { 'false' })" >> $env:GITHUB_OUTPUT
 
       - name: Release
