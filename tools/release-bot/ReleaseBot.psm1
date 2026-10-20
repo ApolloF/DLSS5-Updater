@@ -1,0 +1,360 @@
+# Decisions of the release bot that can be tested without network, git remotes or Claude (ReleaseBot.Tests.ps1).
+# release-bot.ps1 does the I/O and calls these. Everything here fails closed: unknown input means "not allowed".
+
+# ---------- versions ----------
+
+function ConvertTo-BotVersion([string]$s) {
+    # "v1.2.3", "1.2", "0.1.27.1" and "2.0.1-pre1" (suffix ignored) parse; anything else is $null.
+    if ($s -notmatch '^\s*v?(\d+)\.(\d+)(?:\.(\d+))?(?:\.(\d+))?(?:[-+][0-9A-Za-z.\-+]*)?\s*$') { return $null }
+    $build = if ($Matches[3]) { [int]$Matches[3] } else { 0 }
+    if ($Matches[4]) { [version]::new([int]$Matches[1], [int]$Matches[2], $build, [int]$Matches[4]) }
+    else { [version]::new([int]$Matches[1], [int]$Matches[2], $build) }
+}
+
+function Get-NextPatch([string]$v) {
+    $p = ConvertTo-BotVersion $v
+    if (-not $p) { throw "not a version: $v" }
+    "$($p.Major).$($p.Minor).$($p.Build + 1)"
+}
+
+function Test-PlainTag([string]$tag) { $tag -cmatch '^v\d+(\.\d+){2,3}$' }
+
+# ---------- text that leaves the machine ----------
+
+function Format-SafeText([string]$s, [int]$max = 120) {
+    # Upstream names (drop files, tags) end up in titles and notices: keep a plain subset and cap the length.
+    $t = ($s -replace '[^A-Za-z0-9 ._,:()/+#=-]', '' -replace '\s+', ' ').Trim()
+    if ($t.Length -gt $max) { $t = $t.Substring(0, $max) + '...' }
+    $t
+}
+
+function Format-Unreviewed([string]$s, [int]$max = 2000) {
+    # Claude's free text only goes into review PRs, quoted, without links or mentions that GitHub would act on.
+    $t = "$s" -replace '[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]', '' -replace '@', '(at)' -replace '://', ' : //' -replace '(?i)\bwww\.', 'www .' -replace '#(?=\d)', '# '
+    if ($t.Length -gt $max) { $t = $t.Substring(0, $max) + ' [cut]' }
+    (($t -split "`r?`n") | ForEach-Object { "> $_" }) -join "`n"
+}
+
+function Get-ClaudeVerdict($result) {
+    # Claude's config_changed is only ever a veto: anything but a real JSON false counts as a config change.
+    # Claude's output never auto-merges either way; this only picks the wording of the review PR.
+    if ($null -ne $result -and $result.config_changed -is [bool] -and $result.config_changed -eq $false) { 'claims-neutral' } else { 'config-change' }
+}
+
+# ---------- bot PRs ----------
+
+function Select-BotPr($prs, [string]$botLogin, [string]$prefix) {
+    # Only PRs from a branch of this repo, opened by the bot's account, count. A fork PR named release-bot/* is ignored.
+    @($prs) | Where-Object {
+        $_ -and $_.isCrossRepository -eq $false -and $_.author.login -eq $botLogin -and "$($_.headRefName)".StartsWith($prefix, [StringComparison]::Ordinal)
+    } | Sort-Object number | Select-Object -First 1
+}
+
+function Test-NeedsReviewLabel($pr) { [bool](@($pr.labels) | Where-Object { $_.name -eq 'needs-review' }) }
+
+function Test-AutoEligible($pr, $rec) {
+    # A PR may auto-merge only while it is exactly what the bot pushed on the auto path and never needed review.
+    [bool]($pr -and $rec -and $rec.mode -eq 'auto' -and $rec.needsReview -ne $true -and $pr.isCrossRepository -eq $false -and
+        $rec.head -and $pr.headRefOid -eq $rec.head -and -not (Test-NeedsReviewLabel $pr))
+}
+
+function Get-PendingDecision($pending, $pr, $rec, [string]$mergedPatchId) {
+    # What to do with the auto PR the bot is waiting on: wait, drop, tag, or refuse.
+    if (-not $pending) { return 'none' }
+    if (-not $pr) { return 'wait' }
+    if ($pr.state -eq 'CLOSED') { return 'closed' }
+    if ($pr.state -ne 'MERGED') { return 'wait' }
+    if (-not (Test-AutoEligible $pr $rec)) { return 'refuse' }
+    if ($rec.patchId -ne $pending.patchId -or -not $mergedPatchId -or $mergedPatchId -ne $pending.patchId) { return 'refuse' }
+    'tag'
+}
+
+# ---------- prereleases ----------
+
+function Get-ReleaseFingerprint($rel) {
+    $assets = @($rel.assets | ForEach-Object { "$($_.name)|$($_.size)|$($_.digest)" } | Sort-Object) -join ';'
+    $text = "$($rel.tagName)`n$($rel.name)`n$($rel.isPrerelease)`n$($rel.isDraft)`n$assets`n$($rel.body)"
+    [Convert]::ToHexString([Security.Cryptography.SHA256]::HashData([Text.Encoding]::UTF8.GetBytes($text))).ToLowerInvariant()
+}
+
+function Get-PromoteDecision($rel, $rec, [datetime]$now, [int]$hours = 24) {
+    # $rel: gh release view JSON or $null when there is no release. $rec: what the bot recorded when it tagged.
+    # release.yml needs a while to create the release, so "not found" only means deleted after 12 hours.
+    if (-not $rel) { return $(if (-not $rec.fingerprint -and ($now - [datetime]$rec.tagged).TotalHours -lt 12) { 'building' } else { 'gone' }) }
+    if ($rel.isDraft) { return 'edited' }
+    if (-not $rel.isPrerelease) { return 'already' }
+    if (@($rel.assets).Count -lt 3) { return 'building' }
+    $fp = Get-ReleaseFingerprint $rel
+    if (-not $rec.fingerprint) { return 'record' }
+    if ($rec.fingerprint -ne $fp) { return 'edited' }
+    if (($now - [datetime]$rec.tagged).TotalHours -lt $hours) { return 'wait' }
+    'promote'
+}
+
+# ---------- diffs ----------
+
+function ConvertFrom-GitDiffZ([string]$raw, [string]$numstat) {
+    # $raw: git diff --raw -z --no-renames; $numstat: git diff --numstat -z --no-renames (same range).
+    $entries = [ordered]@{}
+    $t = $raw -split "`0"
+    for ($i = 0; $i -lt $t.Count; $i++) {
+        if (-not $t[$i].StartsWith(':')) { continue }
+        $m = $t[$i] -split ' '
+        $path = $t[$i + 1]; $i++
+        $entries[$path] = [pscustomobject]@{ Path = $path; OldMode = $m[0].TrimStart(':'); NewMode = $m[1]; NewBlob = $m[3]; Status = $m[4]; Added = $null; Deleted = $null; Binary = $true }
+    }
+    foreach ($rec in ($numstat -split "`0")) {
+        if (-not $rec) { continue }
+        $p = $rec -split "`t", 3
+        if ($p.Count -ne 3) { continue }
+        $e = $entries[$p[2]]
+        if (-not $e) { continue }
+        $e.Binary = $p[0] -eq '-' -or $p[1] -eq '-'
+        if (-not $e.Binary) { $e.Added = [int]$p[0]; $e.Deleted = [int]$p[1] }
+    }
+    @($entries.Values)
+}
+
+function ConvertFrom-UnifiedZero([string]$patch) {
+    # Removed and added lines of one file's `git diff -U0` output.
+    $removed = [Collections.Generic.List[string]]::new(); $added = [Collections.Generic.List[string]]::new()
+    $inHunk = $false
+    foreach ($l in ($patch -split "`n")) {
+        $l = $l.TrimEnd("`r")
+        if ($l.StartsWith('@@')) { $inHunk = $true; continue }
+        if (-not $inHunk) { continue }
+        if ($l.StartsWith('-')) { $removed.Add($l.Substring(1)) }
+        elseif ($l.StartsWith('+')) { $added.Add($l.Substring(1)) }
+    }
+    [pscustomobject]@{ Removed = @($removed); Added = @($added) }
+}
+
+$script:VersionLines = @{
+    'src/DLSSUpdater/DLSSUpdater.csproj' = '^\s*<Version>\d+\.\d+\.\d+</Version>\s*$'
+    'installer/DLSSUpdater.iss' = '^;\s+iscc /DAppVersion=\d+\.\d+\.\d+ installer\\DLSSUpdater\.iss\s*$'
+    'README.md' = '^iscc /DAppVersion=\d+\.\d+\.\d+ installer\\DLSSUpdater\.iss\s*$'
+}
+$script:PinLine = '^\s+new Regex\(@"[^"]+", RegexOptions\.IgnoreCase\), "[a-z0-9-]*", "v\d+(?:\.\d+){2,3}"(?:, \[\], \[\]\);|,)\s*$'
+$script:PinFile = 'src/DLSSUpdater/Core/OptiSources.cs'
+
+function Test-LinePairs($hunk, [string]$pattern, [string]$token) {
+    # Every removed line has an added twin that matches the pattern and differs only in the version token.
+    if ($hunk.Removed.Count -ne $hunk.Added.Count -or $hunk.Removed.Count -eq 0) { return $false }
+    for ($i = 0; $i -lt $hunk.Removed.Count; $i++) {
+        $a = $hunk.Removed[$i]; $b = $hunk.Added[$i]
+        if ($a -notmatch $pattern -or $b -notmatch $pattern) { return $false }
+        if (($a -replace $token, 'X') -cne ($b -replace $token, 'X')) { return $false }
+    }
+    $true
+}
+
+function Test-DiffSafety($entries, $hunks, [hashtable]$sizes) {
+    # Rules for every diff the bot publishes, whoever wrote it. Returns the violations (empty = fine).
+    # $hunks: path -> ConvertFrom-UnifiedZero result; $sizes: path -> blob size in bytes.
+    $v = [Collections.Generic.List[string]]::new()
+    if (-not @($entries).Count) { $v.Add('empty diff') }
+    foreach ($e in @($entries)) {
+        $p = $e.Path
+        if ($e.Binary) { $v.Add("${p}: binary or attribute-mangled (numstat -)") }
+        if ($e.Status -notin 'A', 'M', 'D') { $v.Add("${p}: status $($e.Status)") }
+        if ($e.Status -ne 'D' -and $e.NewMode -ne '100644') { $v.Add("${p}: mode $($e.NewMode)") }
+        if ($p -match '(?i)nvngx') { $v.Add("${p}: nvngx") }
+        if ($p -match '[\\:*?"<>|]' -or $p -match '(^|/)\.\.?(/|$)' -or $p -match '[\x00-\x1F]') { $v.Add("${p}: odd path") }
+        if ($p -match '(?i)(^|/)(\.gitattributes|\.gitignore|\.gitmodules|\.editorconfig|Directory\.Build\.[^/]*|Directory\.Packages\.props|NuGet\.config|global\.json|AGENTS\.md|CLAUDE(\.local)?\.md)$' -or
+            $p -match '(?i)^(\.github|\.claude|\.config|\.vscode|\.devcontainer|tools)/' -or $p -match '(?i)\.(props|targets|sln|ps1|psm1|cmd|bat|sh)$') {
+            $v.Add("${p}: off-limits file")
+            continue
+        }
+        if ($e.Status -ne 'D' -and $sizes -and $sizes[$p] -gt 1MB) { $v.Add("${p}: over 1 MB") }
+        if ($script:VersionLines.ContainsKey($p) -and $p -ne 'README.md') {
+            if ($e.Status -ne 'M' -or -not (Test-LinePairs $hunks[$p] $script:VersionLines[$p] '\d+\.\d+\.\d+')) { $v.Add("${p}: only the version line may change") }
+            continue
+        }
+        if ($p -match '(?i)\.(csproj|iss)$') { $v.Add("${p}: only the app's version line may change"); continue }
+        $ok = $p -eq 'README.md' -or
+            ($p -match '^(src|tests|docs)/' -and $p -match '(?i)\.(cs|xaml|md|txt|ini|cfg)$') -or
+            ($p -match '^(tests|docs)/' -and $p -match '(?i)\.json$')
+        if (-not $ok) { $v.Add("${p}: not an allowed text file") }
+    }
+    @($v)
+}
+
+function Test-PinDiff($entries, $hunks, [string]$version, [string]$notesPath, [string]$notesExpected, [string]$notesActual) {
+    # The extra allowlist of the auto path: the bot's own pin bump and nothing else. Returns the violations.
+    $v = [Collections.Generic.List[string]]::new()
+    $allowed = @($script:VersionLines.Keys) + $script:PinFile + $notesPath
+    $seen = @{}
+    foreach ($e in @($entries)) {
+        $p = $e.Path; $seen[$p] = $true
+        if ($p -notin $allowed) { $v.Add("${p}: not on the auto-path allowlist"); continue }
+        if ($e.Binary) { $v.Add("${p}: binary"); continue }
+        if ($p -eq $notesPath) {
+            if ($e.Status -ne 'A') { $v.Add("${p}: release notes must be a new file") }
+            elseif ($notesActual -cne $notesExpected) { $v.Add("${p}: release notes differ from the template") }
+            continue
+        }
+        if ($e.Status -ne 'M') { $v.Add("${p}: status $($e.Status)"); continue }
+        $ok = if ($p -eq $script:PinFile) { Test-LinePairs $hunks[$p] $script:PinLine '"v\d+(?:\.\d+){2,3}"' }
+              else { Test-LinePairs $hunks[$p] $script:VersionLines[$p] '\d+\.\d+\.\d+' }
+        if (-not $ok) { $v.Add("${p}: a changed line is not a pin or version line") }
+    }
+    foreach ($p in @($script:VersionLines.Keys) + $script:PinFile + $notesPath) { if (-not $seen[$p]) { $v.Add("${p}: missing from the diff") } }
+    @($v)
+}
+
+# ---------- deterministic pin bump (OptiScaler builds) ----------
+
+function Get-PinnedTag([string]$text, [string]$assetLiteral) {
+    # The TestedTag on the one OptiSources.cs line that holds this build's asset regex.
+    $lines = @(($text -split "`n") | Where-Object { $_.Contains("@`"$assetLiteral`"") })
+    if ($lines.Count -ne 1) { return $null }
+    $m = [regex]::Matches($lines[0], '"(v\d+(?:\.\d+){2,3})"')
+    if ($m.Count -ne 1 -or $lines[0].TrimEnd("`r") -notmatch $script:PinLine) { return $null }
+    $m[0].Groups[1].Value
+}
+
+function Update-PinText([string]$text, [string]$assetLiteral, [string]$oldTag, [string]$newTag) {
+    if (-not (Test-PlainTag $newTag)) { throw "not a plain tag: $newTag" }
+    if ((Get-PinnedTag $text $assetLiteral) -cne $oldTag) { throw "pin for $assetLiteral is not $oldTag" }
+    $lines = $text -split "`n"
+    for ($i = 0; $i -lt $lines.Count; $i++) {
+        if ($lines[$i].Contains("@`"$assetLiteral`"")) { $lines[$i] = $lines[$i].Replace("`"$oldTag`"", "`"$newTag`"") }
+    }
+    $lines -join "`n"
+}
+
+function Update-VersionText([string]$path, [string]$text, [string]$old, [string]$new) {
+    # Exactly the lines Test-DiffSafety allows: <Version> in the csproj, the iscc example in the .iss and README.
+    $pattern = $script:VersionLines[$path]
+    if (-not $pattern) { throw "no version line in $path" }
+    $n = 0
+    $lines = $text -split "`n"
+    for ($i = 0; $i -lt $lines.Count; $i++) {
+        $l = $lines[$i].TrimEnd("`r")
+        if ($l -match $pattern -and $l.Contains($old)) { $lines[$i] = $lines[$i].Replace($old, $new); $n++ }
+    }
+    if ($n -ne 1) { throw "$path has $n version line(s) with $old, expected 1" }
+    $lines -join "`n"
+}
+
+function ConvertTo-NormalIni([string]$text) {
+    # Byte-for-byte after normalising: no BOM, LF line ends, no trailing whitespace, no trailing blank lines.
+    ((($text.TrimStart([char]0xFEFF) -replace "`r`n?", "`n") -split "`n" | ForEach-Object { $_.TrimEnd() }) -join "`n").TrimEnd("`n")
+}
+
+function Get-TextHash([string]$s) {
+    [Convert]::ToHexString([Security.Cryptography.SHA256]::HashData([Text.Encoding]::UTF8.GetBytes($s))).ToLowerInvariant()
+}
+
+function ConvertTo-EntryList([string[]]$names, [string]$tag) {
+    # Zip entry names, sorted, with the build's own version in folder names masked out.
+    $ver = $tag.TrimStart('v')
+    @($names | Where-Object { $_ -and -not $_.EndsWith('/') } | ForEach-Object {
+        ($_ -replace '\\', '/').ToLowerInvariant().Replace("v$ver", '{v}').Replace($ver, '{v}')
+    } | Sort-Object -Unique)
+}
+
+function Get-PinProof($old, $new) {
+    # $old/$new: @{ Tag; RawIni; ZipIni; Entries } facts of the tested and the new build (hashes or text).
+    # Returns the reasons it is NOT config-neutral; empty means proven.
+    $r = [Collections.Generic.List[string]]::new()
+    if (-not (Test-PlainTag $new.Tag)) { $r.Add("tag $($new.Tag) is not a plain vX.Y.Z tag") }
+    $ov = ConvertTo-BotVersion $old.Tag; $nv = ConvertTo-BotVersion $new.Tag
+    if (-not $ov -or -not $nv -or $nv -le $ov) { $r.Add("$($new.Tag) is not newer than $($old.Tag)") }
+    elseif ($nv.Major -ne $ov.Major -or $nv.Minor -ne $ov.Minor) { $r.Add("$($new.Tag) is a new minor line") }
+    if ($new.Prerelease -ne $false) { $r.Add('prerelease or unknown') }
+    foreach ($k in 'RawIni', 'ZipIni', 'Entries') {
+        if (-not $old[$k] -or -not $new[$k]) { $r.Add("$k unknown") }
+        elseif ($old[$k] -ne $new[$k]) { $r.Add("$k differs from $($old.Tag)") }
+    }
+    @($r)
+}
+
+function New-PinNotes([string]$version, $bumps) {
+    # $bumps: @{ Name; Old; New; Repo } per pin, all bot-known and validated. Template only, no upstream text.
+    $lines = @("Tested-version update made by the release bot.", "")
+    foreach ($b in $bumps) {
+        $lines += "- $($b.Name) $($b.New) is now the tested build (was $($b.Old)). Its OptiScaler.ini and the file list of its release zip are identical to $($b.Old), so no option changed. Release: https://github.com/$($b.Repo)/releases/tag/$($b.New)"
+    }
+    ($lines -join "`n") + "`n"
+}
+
+# ---------- Claude's tree vs the base ----------
+
+function Test-SafeRelPath([string]$rel) {
+    # A name Windows would rewrite (trailing dot or space, 8.3 short name) or anything git treats specially (.git*)
+    # could land somewhere else than it looks, for example on the bot worktree's .git file.
+    foreach ($part in $rel -split '/') {
+        if (-not $part -or $part -match '(?i)^\.git' -or $part -match '[. ]$' -or $part -match '~\d' -or $part -match '[\x00-\x1F:*?"<>|\\]') { return $false }
+    }
+    $true
+}
+
+function Get-TreeChanges([string]$base, [string]$work) {
+    # Files Claude added, changed or deleted, found by comparing the two folders (no git runs in Claude's folder).
+    # Reparse points (symlinks, junctions) anywhere and unsafe names among the changes are violations; links are never
+    # followed and nothing is copied when there is a violation.
+    $skip = '^(\.git|bin|obj|\.vs|TestResults|publish)$'
+    function List([string]$root, $bad) {
+        $map = @{}
+        # Relative paths are built from the raw names: path APIs would turn ".git." into ".git".
+        $stack = [Collections.Generic.Stack[object]]::new(); $stack.Push(@($root, ''))
+        while ($stack.Count) {
+            $d, $prefix = $stack.Pop()
+            foreach ($i in [IO.DirectoryInfo]::new($d).EnumerateFileSystemInfos()) {
+                $rel = "$prefix$($i.Name)"
+                if ($rel -ceq '.git') { continue }
+                if ($i.Attributes -band [IO.FileAttributes]::ReparsePoint) { $bad.Add("${rel}: link"); continue }
+                if ($i -is [IO.DirectoryInfo]) { if ($i.Name -notmatch $skip) { $stack.Push(@($i.FullName, "$rel/")) } }
+                else { $map[$rel] = $i }
+            }
+        }
+        $map
+    }
+    $bad = [Collections.Generic.List[string]]::new()
+    $a = List $base $bad; $b = List $work $bad
+    $changes = [Collections.Generic.List[pscustomobject]]::new()
+    foreach ($k in $b.Keys) {
+        if (-not $a.ContainsKey($k)) { $changes.Add([pscustomobject]@{ Path = $k; Kind = 'add' }) }
+        elseif ($a[$k].Length -ne $b[$k].Length -or (Get-FileHash -LiteralPath $a[$k].FullName).Hash -ne (Get-FileHash -LiteralPath $b[$k].FullName).Hash) {
+            $changes.Add([pscustomobject]@{ Path = $k; Kind = 'change' })
+        }
+    }
+    foreach ($k in $a.Keys) { if (-not $b.ContainsKey($k)) { $changes.Add([pscustomobject]@{ Path = $k; Kind = 'delete' }) } }
+    foreach ($c in $changes) { if (-not (Test-SafeRelPath $c.Path)) { $bad.Add("$($c.Path): unsafe name") } }
+    [pscustomobject]@{ Changes = @($changes | Sort-Object Path); Violations = @($bad) }
+}
+
+# ---------- Lecram's members-only release notes (Buy Me a Coffee) ----------
+
+function ConvertFrom-HtmlText([string]$html) {
+    # Visible text of a dumped DOM, one block element per line.
+    $t = $html -replace '(?is)<(script|style|noscript|svg|template)\b.*?</\1\s*>', ' '
+    $t = $t -replace '(?i)<br\s*/?>', "`n" -replace '(?i)</(p|div|li|h[1-6]|tr|section|article|blockquote|pre)\s*>', "`n" -replace '(?i)<li\b[^>]*>', "`n- "
+    $t = [Net.WebUtility]::HtmlDecode(($t -replace '(?s)<[^>]*>', ''))
+    (($t -split "`n") | ForEach-Object { ($_ -replace '[\s ]+', ' ').Trim() } | Where-Object { $_ }) -join "`n"
+}
+
+function Get-PatchSections([string]$text, [int]$maxChars = 4000) {
+    # "v11 Patch 11" headings and the text under each, newest last. A heading is a line that starts with it.
+    $sections = [Collections.Generic.List[pscustomobject]]::new()
+    $cur = $null
+    foreach ($line in ($text -split "`n")) {
+        if ($line -match '^\s*v(\d+)\s+Patch\s+(\d+)\b') {
+            $cur = [pscustomobject]@{ Major = [int]$Matches[1]; Patch = [int]$Matches[2]; Key = "v$([int]$Matches[1]) Patch $([int]$Matches[2])"; Text = '' }
+            if (-not ($sections | Where-Object Key -EQ $cur.Key)) { $sections.Add($cur) } else { $cur = $null }
+            continue
+        }
+        if ($cur -and $cur.Text.Length -lt $maxChars) { $cur.Text = ($cur.Text + "`n" + $line).TrimStart("`n") }
+    }
+    @($sections | Sort-Object Major, Patch)
+}
+
+function Select-NewPatchSections($sections, [string]$seen) {
+    # Sections after the one the bot saw last ("v11 Patch 10"); all of them when it never saw one.
+    if ($seen -notmatch '^v(\d+) Patch (\d+)$') { return @($sections) }
+    $m = [int]$Matches[1]; $p = [int]$Matches[2]
+    @($sections | Where-Object { $_.Major -gt $m -or ($_.Major -eq $m -and $_.Patch -gt $p) })
+}
+
+Export-ModuleMember -Function *
