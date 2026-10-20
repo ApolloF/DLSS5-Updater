@@ -40,12 +40,26 @@ jobs:
           & $iscc "/DAppVersion=${{ steps.version.outputs.version }}" installer\DLSSUpdater.iss
           if ($LASTEXITCODE -ne 0) { throw "ISCC failed" }
 
+      - name: Checksums
+        shell: pwsh
+        run: |
+          # The app's self-update refuses any download that isn't listed here with the right hash (Core/AppUpdate.cs).
+          $files = "DLSS5Updater.exe", "DLSS5Updater-Setup-${{ steps.version.outputs.version }}.exe"
+          $lines = foreach ($f in $files) {
+            $p = Join-Path publish $f
+            if (-not (Test-Path $p)) { throw "$f missing" }
+            "$((Get-FileHash $p -Algorithm SHA256).Hash.ToLowerInvariant())  $f"
+          }
+          [IO.File]::WriteAllText((Join-Path publish SHA256SUMS), ($lines -join "`n") + "`n")
+          Get-Content publish/SHA256SUMS
+
       - uses: actions/upload-artifact@v7
         with:
           name: DLSS5Updater
           path: |
             publish/DLSS5Updater.exe
             publish/DLSS5Updater-Setup-*.exe
+            publish/SHA256SUMS
 
       - name: Release notes
         id: notes
@@ -64,3 +78,4 @@ jobs:
           files: |
             publish/DLSS5Updater.exe
             publish/DLSS5Updater-Setup-*.exe
+            publish/SHA256SUMS

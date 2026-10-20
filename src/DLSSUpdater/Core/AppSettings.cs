@@ -77,6 +77,17 @@ public sealed class AppSettings
     public string? LecramLastVersion { get; set; }
     public string? LecramLastAssetHash { get; set; }
     public string? LecramLastBuildId { get; set; }
+    /// <summary>Look for a newer DLSS5 Updater on GitHub at start (at most every <see cref="AppUpdate.CheckInterval"/>).</summary>
+    public bool CheckAppUpdates { get; set; } = true;
+    /// <summary>Download a newer DLSS5 Updater in the background and install it when the app closes or next starts.</summary>
+    public bool AutoInstallAppUpdates { get; set; }
+    public DateTime? AppUpdateLastCheck { get; set; }
+    public string AppUpdateLastResult { get; set; } = "Not checked yet.";
+    /// <summary>Version and SHA-256 of a verified update waiting to be installed (automatic mode).</summary>
+    public string? AppUpdateStaged { get; set; }
+    public string? AppUpdateStagedSha256 { get; set; }
+    /// <summary>Version an automatic install was started for; if the app is still older on the next start, it isn't retried automatically.</summary>
+    public string? AppUpdateTried { get; set; }
     public bool InstallMfgUnlock { get; set; } = true;
     public bool InstallDlssNr { get; set; } = true;
     public bool InstallRenoDx { get; set; }
@@ -251,6 +262,7 @@ public sealed class AppSettings
         OptiSource ??= defaults.OptiSource;
         LecramFolderKey ??= defaults.LecramFolderKey;
         LecramLastResult ??= defaults.LecramLastResult;
+        AppUpdateLastResult ??= defaults.AppUpdateLastResult;
 
         static List<string> Strings(List<string>? list) => (list ?? []).Where(s => s is not null).ToList();
 

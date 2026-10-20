@@ -36,6 +36,7 @@ public sealed partial class MainViewModel : ObservableObject
         // Busy from the start: no command may take the gate before the startup scan and update check have run.
         _startup = _busy.TryEnter();
         SettingsVm = new SettingsViewModel(this);
+        SelfUpdate = new AppUpdateViewModel(this);
         store.PairStatusChanged += () =>
         {
             foreach (var game in Games) game.RefreshAddonPairStatus();
@@ -63,6 +64,8 @@ public sealed partial class MainViewModel : ObservableObject
     public Services S { get; }
     public GitHubClient Gh { get; }
     public SettingsViewModel SettingsVm { get; }
+    /// <summary>Updates of this app itself (title bar notice, Settings section).</summary>
+    public AppUpdateViewModel SelfUpdate { get; }
     public ObservableCollection<GameViewModel> Games { get; } = [];
     public ICollectionView GamesView { get; }
     public ObservableCollection<string> LogLines { get; } = [];
@@ -246,6 +249,7 @@ public sealed partial class MainViewModel : ObservableObject
         }, lease);
         if (UpdateCount > 0) Log.Info($"{UpdateCount} game(s) have updates available");
         if (!Demo.Active) await Task.Run(HashCache.Save);
+        await SelfUpdate.StartupAsync();
     }
 
     public async Task RefreshLocalComponentsAsync()
@@ -788,12 +792,15 @@ public sealed partial class MainViewModel : ObservableObject
 
     private void SaveGameCache() => GameScanner.SaveCache(Games.Select(g => g.Info).ToList());
 
-    private IProgress<TransferProgress> TransferProgress() => new Progress<TransferProgress>(p =>
+    internal IProgress<TransferProgress> TransferProgress() => new Progress<TransferProgress>(p =>
     {
         Status = p.Text;
         ProgressIndeterminate = p.Fraction is null;
         Progress = p.Fraction ?? 0;
     });
+
+    /// <summary>A run like any other for work outside this view model (the self-update download).</summary>
+    internal Task RunJob(string label, Func<CancellationToken, Task> work) => Run(label, work);
 
     /// <summary>Runs one operation with the busy state, progress and error handling. Skipped when another run is going.</summary>
     /// <param name="held">A lease the caller already holds (startup); otherwise one is taken here.</param>
