@@ -336,7 +336,7 @@ try {
 
     # Upstream checks. A source that fails (offline, rate limit) is skipped and checked again next run.
     $changes = [Collections.Generic.List[hashtable]]::new()
-    $checks = @($GhSources | ForEach-Object { $s = $_; @{ Key = $s.Key; Run = { Check-GhRelease $s $state }.GetNewClosure() } }) +
+    $checks = @($GhSources | ForEach-Object { $s = $_; @{ Key = $s.Id; Run = { Check-GhRelease $s $state }.GetNewClosure() } }) +
         @{ Key = 'reshade'; Run = { Check-ReShade $state } } + @{ Key = 'lecram'; Run = { Check-Lecram $state } }
     $current = @{}
     foreach ($c in $checks) {
