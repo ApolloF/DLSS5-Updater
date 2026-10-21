@@ -110,6 +110,13 @@ public static partial class GameInspector
         game.Dlss = game.Dlss.OrderBy(d => d.Path, StringComparer.OrdinalIgnoreCase).ToList();
         game.Streamline = game.Streamline.OrderBy(d => d.Path, StringComparer.OrdinalIgnoreCase).ToList();
         game.Exes = RankExes(root, exes, game.Name);
+        // The user's main exe leads, so the API, bitness and mod folder below are read from it.
+        if (game.Manual?.MainExe is { } main && File.Exists(main))
+        {
+            var known = game.Exes.FirstOrDefault(e => e.Equals(main, StringComparison.OrdinalIgnoreCase));
+            game.Exes = [known ?? FileUtil.Normalize(main), .. game.Exes.Where(e => !e.Equals(main, StringComparison.OrdinalIgnoreCase))];
+            if (known is null) exes.Insert(0, (game.Exes[0], new FileInfo(game.Exes[0]).Length));
+        }
         game.Tech = GameDetector.Detect(root, game.Exes, exes, signals, versionOf);
         game.Scanned = DateTime.UtcNow;
     }

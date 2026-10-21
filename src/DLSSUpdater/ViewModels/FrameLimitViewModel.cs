@@ -191,7 +191,7 @@ public sealed partial class FrameLimitViewModel(GameViewModel game, Services ser
         _needsUpdate = false;
         if (LimitMethods.ComponentOf(_effective.Method) is { } id && LimitMethods.IsAddon(_effective.Method))
         {
-            _resolution = LimiterResolution.Resolve(services.Store, id, LimiterFiles.ArchOf(game.Info.Tech.Is32Bit), CatalogLimiter(id), PinFor(id));
+            _resolution = LimiterResolution.Resolve(services.Store, id, LimiterFiles.ArchOf(game.Info.Effective.Is32Bit), CatalogLimiter(id), PinFor(id));
             _needsUpdate = _active == _effective.Method && _resolution.Found && ActiveRecord?.BuildId is { } have
                            && !have.Equals(_resolution.BuildId, StringComparison.OrdinalIgnoreCase);
         }
@@ -221,7 +221,7 @@ public sealed partial class FrameLimitViewModel(GameViewModel game, Services ser
                 [LimitMethod.ReLimiter] = Has(ComponentRegistry.ReLimiter),
                 [LimitMethod.DisplayCommander] = Has(ComponentRegistry.DisplayCommander),
             },
-            game.Info.Tech.IsUnreal && FrameLimitService.ResolveEngineIni(game.Info, hint) is not null);
+            game.Info.Effective.IsUnreal && FrameLimitService.ResolveEngineIni(game.Info, hint) is not null);
     }
 
     private void FillMethods()
@@ -245,7 +245,7 @@ public sealed partial class FrameLimitViewModel(GameViewModel game, Services ser
         BuildChoices.Clear();
         if (LimitMethods.ComponentOf(Method) is { } id && LimitMethods.IsAddon(Method) && _resolution is not null)
         {
-            var arch = LimiterFiles.ArchOf(game.Info.Tech.Is32Bit);
+            var arch = LimiterFiles.ArchOf(game.Info.Effective.Is32Bit);
             var auto = LimiterResolution.Resolve(services.Store, id, arch, CatalogLimiter(id), null);
             BuildChoices.Add(new DlssChoice(null, auto.Found ? $"Auto ({auto.Version})" : "Auto (nothing available yet)"));
             foreach (var b in LimiterResolution.Candidates(services.Store, id, arch))

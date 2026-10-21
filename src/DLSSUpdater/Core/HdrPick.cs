@@ -101,7 +101,7 @@ public sealed class HdrPicker
         if (game.AntiCheat is { } ac)
             return None($"{ac} anti-cheat: no add-on is installed in games with anti-cheat.");
 
-        var tech = game.Tech;
+        var tech = game.Effective;
         var bits = tech.Bits;
         var match = _matcher.Match(game);
         var mod = match.Mod;
@@ -187,7 +187,7 @@ public sealed class HdrPicker
             var file = g is null ? null : FileFor(g.Files, 64);
             if (file is null) return None(why + "The catalog has no Unreal Extended build right now.");
             if (entry?.Compat == "in-progress") notes.Add("Listed as in progress for Unreal Extended.");
-            var ue = UeSettings.For(game.Tech, entry);
+            var ue = UeSettings.For(game.Effective, entry);
             return new HdrChoice
             {
                 Kind = HdrKind.UeExtended, ModId = UeExtendedId, Title = g!.Name, File = file, EngineGame = entry, Ue = ue,

@@ -19,6 +19,6 @@ public static class ReShadeInstall
 
     /// <summary>The file name or layer ReShade takes in this game under the install options (the same rule the installer follows).</summary>
     public static ReShadeTarget TargetFor(GameInfo game, InstallOptions o) =>
-        o.ReShadeVulkan ? new(null, true, game.Tech.Bits == 32 ? 32 : 64, "Vulkan layer")
-        : ReShadeNaming.Resolve(game.Tech, optiScalerLoads: !o.ReShadeOnly, manualName: o.ReShadeOnly ? o.Proxy : null);
+        o.ReShadeVulkan ? new(null, true, game.Effective.Bits == 32 ? 32 : 64, "Vulkan layer")
+        : ReShadeNaming.Resolve(game.Effective, optiScalerLoads: !o.ReShadeOnly, manualName: o.ReShadeOnly ? o.Proxy : null);
 }

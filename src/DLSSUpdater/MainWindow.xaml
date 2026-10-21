@@ -1136,6 +1136,42 @@
                         </StackPanel>
                     </Border>
 
+                    <!-- Detection: what the scan found, each value overridable -->
+                    <StackPanel Visibility="{Binding Detection.Visible, Converter={StaticResource BoolToVis}}">
+                        <StackPanel Orientation="Horizontal">
+                            <TextBlock Text="DETECTION" Style="{StaticResource SectionTitle}" />
+                            <Button Style="{StaticResource InfoBtn}" CommandParameter="detection-override" Margin="4,18,0,0"
+                                    ToolTip="{Binding Source=detection-override, Converter={StaticResource HelpTip}}" AutomationProperties.Name="About the detection overrides" />
+                        </StackPanel>
+                        <Border Style="{StaticResource Card}" Padding="16,12">
+                            <StackPanel DataContext="{Binding Detection}">
+                                <TextBlock Text="{Binding Summary, StringFormat='Used now: {0}'}" TextWrapping="Wrap" />
+                                <ItemsControl ItemsSource="{Binding Rows}" Margin="0,4,0,0">
+                                    <ItemsControl.ItemTemplate>
+                                        <DataTemplate>
+                                            <StackPanel Margin="0,8,0,0" Visibility="{Binding Visible, Converter={StaticResource BoolToVis}}">
+                                                <TextBlock Text="{Binding Label}" Style="{StaticResource Caps}" />
+                                                <WrapPanel Margin="0,4,0,0">
+                                                    <ComboBox MinWidth="260" MaxDropDownHeight="300" Margin="0,0,8,4" ItemsSource="{Binding Choices}" SelectedItem="{Binding Selected}"
+                                                              AutomationProperties.Name="{Binding Label}" ToolTip="{Binding Hint}" />
+                                                    <TextBlock Text="{Binding StateText}" Style="{StaticResource MutedText}" VerticalAlignment="Center" Margin="0,0,8,4" />
+                                                    <Button Content="Reset to auto" Style="{StaticResource BtnGhost}" Margin="0,0,8,4" Command="{Binding ResetCommand}"
+                                                            Visibility="{Binding IsSet, Converter={StaticResource BoolToVis}}" AutomationProperties.Name="{Binding Label, StringFormat='Reset {0} to automatic'}" />
+                                                </WrapPanel>
+                                            </StackPanel>
+                                        </DataTemplate>
+                                    </ItemsControl.ItemTemplate>
+                                </ItemsControl>
+                                <WrapPanel Margin="0,12,0,0">
+                                    <Button Content="Other exe…" Style="{StaticResource BtnGhost}" Margin="0,0,8,4" Command="{Binding BrowseExeCommand}" AutomationProperties.Name="Choose another main executable" />
+                                    <Button Content="Other mod folder…" Style="{StaticResource BtnGhost}" Margin="0,0,8,4" Command="{Binding BrowseModFolderCommand}" AutomationProperties.Name="Choose another mod folder" />
+                                    <Button Content="Reset all to auto" Style="{StaticResource BtnGhost}" Margin="0,0,8,4" Command="{Binding ResetAllCommand}"
+                                            Visibility="{Binding AnySet, Converter={StaticResource BoolToVis}}" AutomationProperties.Name="Reset all detection values to automatic" />
+                                </WrapPanel>
+                            </StackPanel>
+                        </Border>
+                    </StackPanel>
+
                     <!-- RenoDX HDR: the catalog mod picked for this game -->
                     <StackPanel Visibility="{Binding Hdr.Visible, Converter={StaticResource BoolToVis}}">
                         <StackPanel Orientation="Horizontal">

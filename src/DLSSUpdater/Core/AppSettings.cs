@@ -39,6 +39,8 @@ public sealed partial class GameOverride
     public string? IniMode { get; set; }
     /// <summary>Presets that only this game can use.</summary>
     public List<ConfigPreset>? Presets { get; set; }
+    /// <summary>Detection values the user set by hand (graphics API, bitness, engine, main exe, mod folder); null = all automatic.</summary>
+    public TechOverride? Tech { get; set; }
     /// <summary>Fields this version doesn't know (written by a newer one); kept so saving doesn't drop them.</summary>
     [JsonExtensionData] public Dictionary<string, JsonElement>? Unknown { get; set; }
 }
@@ -372,6 +374,7 @@ public sealed partial class AppSettings
 [JsonSerializable(typeof(NrVersion))]
 [JsonSerializable(typeof(AddonBuild))]
 [JsonSerializable(typeof(HdrBuild))]
+[JsonSerializable(typeof(TechOverride))]
 [JsonSerializable(typeof(LimiterBuild))]
 [JsonSerializable(typeof(ReShadeBuild))]
 [JsonSerializable(typeof(AddonPairTest))]

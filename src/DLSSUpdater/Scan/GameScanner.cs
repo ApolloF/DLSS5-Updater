@@ -49,10 +49,11 @@ public static class GameScanner
 
     internal static List<string> InstallDirs(IEnumerable<GameEntry> entries) => entries.SelectMany(e => Inspect(e).Installs).ToList();
 
-    public static GameInfo Inspect(GameEntry entry)
+    public static GameInfo Inspect(GameEntry entry, TechOverride? manual = null)
     {
         var game = new GameInfo
         {
+            Manual = manual,
             Id = GameInfo.MakeId(entry.Root),
             Name = entry.Name,
             Source = entry.Source,
@@ -77,7 +78,7 @@ public static class GameScanner
             new ParallelOptions { MaxDegreeOfParallelism = 4, CancellationToken = ct },
             (i, _) =>
             {
-                results[i] = Inspect(entries[i]);
+                results[i] = Inspect(entries[i], settings.Games.GetValueOrDefault(GameInfo.MakeId(entries[i].Root))?.Tech);
                 progress?.Report(Interlocked.Increment(ref done) * 100 / Math.Max(entries.Count, 1));
                 return ValueTask.CompletedTask;
             });
