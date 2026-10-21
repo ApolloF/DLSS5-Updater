@@ -39,9 +39,25 @@ public static class ForeignDll
 {
     public const int ScanLimit = 64 * 1024 * 1024;
 
+    private static readonly System.Collections.Concurrent.ConcurrentDictionary<string, (long Length, DateTime Written, DllIdentity Found)> Seen = new(StringComparer.OrdinalIgnoreCase);
+
+    /// <summary>What the dll is. Remembered per file size and write time: the game page asks for every game on every refresh.</summary>
     public static DllIdentity Identify(string path)
     {
-        if (!File.Exists(path)) return new(DllKind.Missing, null, "");
+        var info = new FileInfo(path);
+        if (!info.Exists) return new(DllKind.Missing, null, "");
+        DllIdentity found;
+        if (Seen.TryGetValue(info.FullName, out var known) && known.Length == info.Length && known.Written == info.LastWriteTimeUtc) found = known.Found;
+        else Seen[info.FullName] = (info.Length, info.LastWriteTimeUtc, found = Scan(path));
+        // ENB's companion files are checked every time: they come and go without the dll changing.
+        var dir = info.DirectoryName!;
+        return found.Kind == DllKind.Unknown && (File.Exists(Path.Combine(dir, "enblocal.ini")) || File.Exists(Path.Combine(dir, "enbseries.ini")))
+            ? new(DllKind.Enb, found.Version, "enblocal.ini / enbseries.ini beside it")
+            : found;
+    }
+
+    private static DllIdentity Scan(string path)
+    {
         try
         {
             var info = FileVersionInfo.GetVersionInfo(path);
@@ -72,9 +88,6 @@ public static class ForeignDll
             if (Has(data, "OptiScaler.ini") && Has(data, "OptiScaler"))
                 return new(DllKind.OptiScaler, version, "OptiScaler strings");
 
-            var dir = Path.GetDirectoryName(Path.GetFullPath(path))!;
-            if (File.Exists(Path.Combine(dir, "enblocal.ini")) || File.Exists(Path.Combine(dir, "enbseries.ini")))
-                return new(DllKind.Enb, version, "enblocal.ini / enbseries.ini beside it");
             if (HasNoCase(data, "enbseries") || HasNoCase(data, "enblocal.ini"))
                 return new(DllKind.Enb, version, "ENB strings");
             return new(DllKind.Unknown, version, "no known mod found in it");

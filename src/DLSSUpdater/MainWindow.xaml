@@ -826,6 +826,7 @@
                                                             <DataTrigger Binding="{Binding Key}" Value="dfc"><Setter Property="Visibility" Value="Collapsed" /></DataTrigger>
                                                             <DataTrigger Binding="{Binding Key}" Value="opti"><Setter Property="Visibility" Value="Collapsed" /></DataTrigger>
                                                             <DataTrigger Binding="{Binding Key}" Value="uplift"><Setter Property="Visibility" Value="Collapsed" /></DataTrigger>
+                                                            <DataTrigger Binding="{Binding Key}" Value="reshade"><Setter Property="Visibility" Value="Collapsed" /></DataTrigger>
                                                         </Style.Triggers>
                                                     </Style>
                                                 </TextBlock.Style>
@@ -841,6 +842,11 @@
                                                       ItemsSource="{Binding DataContext.UpliftChoices, RelativeSource={RelativeSource AncestorType=ItemsControl}}"
                                                       SelectedItem="{Binding DataContext.UpliftChoice, RelativeSource={RelativeSource AncestorType=ItemsControl}}"
                                                       AutomationProperties.Name="GITC Uplift version for this game" ToolTip="Which GITC Uplift build this game installs; Default follows Settings" />
+                                            <ComboBox Grid.Column="3" Margin="0,0,8,0" MaxDropDownHeight="300"
+                                                      Visibility="{Binding Key, Converter={StaticResource EqualsToVis}, ConverterParameter=reshade}"
+                                                      ItemsSource="{Binding DataContext.ReShadeChoices, RelativeSource={RelativeSource AncestorType=ItemsControl}}"
+                                                      SelectedItem="{Binding DataContext.ReShadeChoice, RelativeSource={RelativeSource AncestorType=ItemsControl}}"
+                                                      AutomationProperties.Name="ReShade build for this game" ToolTip="Which ReShade build this game installs: Default follows Settings, or a channel (Stable, no add-ons, nightly) or one build from the library" />
                                             <!-- The add-on rows pick the imported build this game installs. -->
                                             <ComboBox Grid.Column="3" Margin="0,0,8,0" MaxDropDownHeight="300"
                                                       Visibility="{Binding Key, Converter={StaticResource EqualsToVis}, ConverterParameter=renodx}"
@@ -863,6 +869,15 @@
                                     </DataTemplate>
                                 </ItemsControl.ItemTemplate>
                             </ItemsControl>
+                            <StackPanel Margin="34,0,16,10">
+                                <DockPanel>
+                                    <Button DockPanel.Dock="Right" Style="{StaticResource InfoBtn}" CommandParameter="reshade-dll-name" VerticalAlignment="Top"
+                                            ToolTip="{Binding Source=reshade-dll-name, Converter={StaticResource HelpTip}}" AutomationProperties.Name="About the ReShade file name" />
+                                    <TextBlock Text="{Binding ReShadeTargetText, StringFormat='ReShade file: {0}'}" Style="{StaticResource MutedText}" FontSize="12" TextWrapping="Wrap" />
+                                </DockPanel>
+                                <TextBlock Text="{Binding ReShadeForeignWarning}" Foreground="{StaticResource Warn}" FontSize="12" TextWrapping="Wrap" Margin="0,4,0,0"
+                                           Visibility="{Binding HasReShadeForeignWarning, Converter={StaticResource BoolToVis}}" />
+                            </StackPanel>
                             <StackPanel Margin="16,4,16,12" Visibility="{Binding BothAddonsEnabled, Converter={StaticResource BoolToVis}}">
                                 <Grid>
                                     <Grid.ColumnDefinitions>
@@ -1109,25 +1124,6 @@
                                                         <Button Content="Switch default back" Command="{Binding UndoNrDefaultCommand}" HorizontalAlignment="Left" Margin="0,8,0,0" />
                                                     </StackPanel>
                                                     <Border Style="{StaticResource Divider}" />
-                                                    <Grid Margin="0,10">
-                                                        <Grid.ColumnDefinitions>
-                                                            <ColumnDefinition Width="160" />
-                                                            <ColumnDefinition Width="*" />
-                                                            <ColumnDefinition Width="Auto" />
-                                                        </Grid.ColumnDefinitions>
-                                                        <TextBlock Text="ReShade64.dll" Style="{StaticResource Mono}" VerticalAlignment="Center" />
-                                                        <TextBlock Grid.Column="1" Text="{Binding ReShadeInfo}" Style="{StaticResource MutedText}" TextWrapping="Wrap" FontSize="12" VerticalAlignment="Center" />
-                                                        <StackPanel Grid.Column="2" Orientation="Horizontal">
-                                                            <Button Content="Use download" Style="{StaticResource BtnGhost}" Command="{Binding UseReShadeDownloadCommand}" Margin="12,0,0,0"
-                                                                    Visibility="{Binding ReShadeImported, Converter={StaticResource BoolToVis}}"
-                                                                    ToolTip="Remove the imported ReShade64.dll and use the latest add-on build from reshade.me" />
-                                                            <Button Content="Import…" Command="{Binding ImportReShadeCommand}" Margin="12,0,0,0" />
-                                                        </StackPanel>
-                                                    </Grid>
-                                                    <CheckBox IsChecked="{Binding AutoDownloadReShade}" Margin="0,0,0,10" AutomationProperties.Name="Download ReShade (add-on build) from reshade.me when none is imported">
-                                                        <TextBlock Text="Download ReShade (add-on build) from reshade.me when none is imported" TextWrapping="Wrap" />
-                                                    </CheckBox>
-                                                    <Border Style="{StaticResource Divider}" />
                                                     <ContentControl Content="{Binding RenoDx}" ContentTemplate="{StaticResource AddonLibraryRow}" Margin="0,10" />
                                                     <Border Style="{StaticResource Divider}" />
                                                     <ContentControl Content="{Binding Lecram}" ContentTemplate="{StaticResource AddonLibraryRow}" Margin="0,10" />
@@ -1137,7 +1133,7 @@
                                                     <ContentControl Content="{Binding Dfc}" ContentTemplate="{StaticResource AddonLibraryRow}" Margin="0,10" />
                                                 </StackPanel>
                                             </Border>
-                                            <TextBlock Text="Import each NR runtime you want to keep; they all stay in your library. NVIDIA's original needs an RTX 50 card. For RTX 20/30/40, download and extract ShortFuse's compat build (compat-fp16-310.9.16-cuda13.4.3) and import it. ReShade is downloaded from reshade.me."
+                                            <TextBlock Text="Import each NR runtime you want to keep; they all stay in your library. NVIDIA's original needs an RTX 50 card. For RTX 20/30/40, download and extract ShortFuse's compat build (compat-fp16-310.9.16-cuda13.4.3) and import it. ReShade has its own library under ReShade add-ons."
                                                        Style="{StaticResource MutedText}" FontSize="11.5" TextWrapping="Wrap" Margin="0,8,0,0" />
 
                                             <Button Content="Import DLSS SR / RR / FG…" Command="{Binding ImportDlssCommand}" HorizontalAlignment="Left" Margin="0,8,0,0"
@@ -1429,6 +1425,72 @@
 
                                         <!-- ===== ReShade add-ons ===== -->
                                         <StackPanel Visibility="{Binding Tab, Converter={StaticResource EqualsToVis}, ConverterParameter=ReShade}">
+                                            <StackPanel Orientation="Horizontal">
+                                                <TextBlock Text="RESHADE BUILDS" Style="{StaticResource SectionTitle}" />
+                                                <Button Style="{StaticResource InfoBtn}" CommandParameter="reshade-library" Margin="4,18,0,0"
+                                                        ToolTip="{Binding Source=reshade-library, Converter={StaticResource HelpTip}}" AutomationProperties.Name="About ReShade builds" />
+                                            </StackPanel>
+                                            <Border Style="{StaticResource Card}" Padding="16">
+                                                <StackPanel DataContext="{Binding ReShade}">
+                                                    <TextBlock Text="Default build" Margin="0,0,0,6" />
+                                                    <ComboBox ItemsSource="{Binding DefaultChoices}" SelectedItem="{Binding DefaultChoice}" MaxDropDownHeight="300"
+                                                              AutomationProperties.Name="Default ReShade build" ToolTip="Games without their own pick install this: the newest build of a channel, or one build" />
+                                                    <TextBlock Text="{Binding Info}" Style="{StaticResource MutedText}" TextWrapping="Wrap" FontSize="12" Margin="0,6,0,0" />
+                                                    <CheckBox IsChecked="{Binding AutoDownload}" Margin="0,10,0,0" AutomationProperties.Name="Download the newest Stable ReShade from reshade.me when none is imported">
+                                                        <TextBlock Text="Download the newest Stable ReShade from reshade.me when none is imported" TextWrapping="Wrap" />
+                                                    </CheckBox>
+                                                    <Border Style="{StaticResource Divider}" Margin="0,10" />
+                                                    <WrapPanel>
+                                                        <Button Content="Import…" Command="{Binding ImportCommand}" Margin="0,0,8,0" ToolTip="Add ReShade64.dll / ReShade32.dll, a ReShade setup or a .zip to the library" />
+                                                        <Button Content="Folder…" Style="{StaticResource BtnGhost}" Command="{Binding ImportFolderCommand}" Margin="0,0,8,0" ToolTip="Add the folder holding ReShade64.dll and ReShade32.dll" />
+                                                        <Button Content="List older versions" Style="{StaticResource BtnGhost}" Command="{Binding ListOlderVersionsCommand}" Margin="0,0,8,0" ToolTip="Versions 6.0.0 and up that reshade.me still serves" />
+                                                        <ComboBox ItemsSource="{Binding LegacyVersions}" SelectedItem="{Binding SelectedLegacy}" Width="110" Margin="0,0,8,0" AutomationProperties.Name="Older ReShade version" />
+                                                        <Button Content="Download" Style="{StaticResource BtnGhost}" Command="{Binding DownloadLegacyCommand}" ToolTip="Download the chosen older version into the library" />
+                                                    </WrapPanel>
+                                                    <StackPanel Visibility="{Binding HasBuilds, Converter={StaticResource BoolToVis}}" Margin="0,10,0,0">
+                                                        <TextBlock Text="Library" Margin="0,0,0,6" />
+                                                        <ComboBox ItemsSource="{Binding BuildChoices}" SelectedItem="{Binding SelectedBuildChoice}" MaxDropDownHeight="300" AutomationProperties.Name="ReShade build in the library" />
+                                                        <Grid Margin="0,6,0,0">
+                                                            <Grid.ColumnDefinitions>
+                                                                <ColumnDefinition Width="*" />
+                                                                <ColumnDefinition Width="Auto" />
+                                                                <ColumnDefinition Width="Auto" />
+                                                            </Grid.ColumnDefinitions>
+                                                            <TextBox Text="{Binding LabelText, UpdateSourceTrigger=PropertyChanged}" Tag="Your own name for the selected build" AutomationProperties.Name="Name of the selected build" />
+                                                            <Button Grid.Column="1" Content="Save name" Command="{Binding RenameCommand}" Margin="12,0,0,0" ToolTip="Show this name instead of the detected one. Empty goes back to the detected name." />
+                                                            <Button Grid.Column="2" Content="Remove" Style="{StaticResource BtnGhost}" Command="{Binding RemoveCommand}" Margin="8,0,0,0" ToolTip="Remove the selected build from the library; games keep their copy" />
+                                                        </Grid>
+                                                    </StackPanel>
+                                                </StackPanel>
+                                            </Border>
+                                            <StackPanel Orientation="Horizontal">
+                                                <TextBlock Text="VULKAN LAYER" Style="{StaticResource SectionTitle}" />
+                                                <Button Style="{StaticResource InfoBtn}" CommandParameter="reshade-vulkan" Margin="4,18,0,0"
+                                                        ToolTip="{Binding Source=reshade-vulkan, Converter={StaticResource HelpTip}}" AutomationProperties.Name="About the Vulkan layer" />
+                                            </StackPanel>
+                                            <Border Style="{StaticResource Card}" Padding="16">
+                                                <StackPanel DataContext="{Binding ReShade}">
+                                                    <TextBlock Text="{Binding LayerText}" Style="{StaticResource MutedText}" TextWrapping="Wrap" FontSize="12" />
+                                                    <WrapPanel Margin="0,10,0,0">
+                                                        <Button Content="Install layer" Command="{Binding InstallLayerCommand}" Margin="0,0,8,0" ToolTip="Registers ReShade for Vulkan games on this PC; asks for administrator rights for this step only" />
+                                                        <Button Content="Remove layer" Style="{StaticResource BtnGhost}" Command="{Binding RemoveLayerCommand}" IsEnabled="{Binding LayerRemovable}" Margin="0,0,8,0" />
+                                                    </WrapPanel>
+                                                </StackPanel>
+                                            </Border>
+                                            <StackPanel Orientation="Horizontal">
+                                                <TextBlock Text="RESHADE.INI TEMPLATE" Style="{StaticResource SectionTitle}" />
+                                                <Button Style="{StaticResource InfoBtn}" CommandParameter="reshade-template" Margin="4,18,0,0"
+                                                        ToolTip="{Binding Source=reshade-template, Converter={StaticResource HelpTip}}" AutomationProperties.Name="About the ReShade.ini template" />
+                                            </StackPanel>
+                                            <Border Style="{StaticResource Card}" Padding="16">
+                                                <StackPanel DataContext="{Binding ReShade}">
+                                                    <TextBlock Text="{Binding TemplatePath}" Style="{StaticResource Mono}" Foreground="{StaticResource Muted}" FontSize="11" TextWrapping="Wrap" />
+                                                    <WrapPanel Margin="0,10,0,0">
+                                                        <Button Content="Edit template" Command="{Binding EditTemplateCommand}" Margin="0,0,8,0" ToolTip="Opens the file in your text editor" />
+                                                        <Button Content="Reset" Style="{StaticResource BtnGhost}" Command="{Binding ResetTemplateCommand}" ToolTip="Put the shipped template back" />
+                                                    </WrapPanel>
+                                                </StackPanel>
+                                            </Border>
                                             <StackPanel Orientation="Horizontal" Margin="0,18,0,0">
                                                 <TextBlock Text="SHOW DEFAULTS FOR" Style="{StaticResource Caps}" VerticalAlignment="Center" Margin="0,0,12,0" Width="140" />
                                                 <ComboBox Width="240" ItemsSource="{Binding ModChoices}" SelectedItem="{Binding ModSelection}"

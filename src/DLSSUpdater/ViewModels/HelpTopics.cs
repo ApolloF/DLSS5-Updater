@@ -82,8 +82,7 @@ public static class HelpTopics
             "Choose a default in Settings or a per-game version, then Switch NR. Switch back restores the previous build without changing other components."),
         new("local-components", "General", "Local components",
             "nvngx_dlssnr.dll (DLSS 5 neural rendering model) is always user-supplied. ShortFuse compat-fp16-310.9.16-cuda13.4.3 targets RTX 20/30/40. Each imported version is kept in your library " +
-            "and copied into each game. ReShade64.dll (add-on build) is taken from the official setup on reshade.me whenever a new version is out; an imported " +
-            "ReShade64.dll replaces the download until you press Use download. Import a newer file here and Update all rolls it out. " +
+            "and copied into each game. ReShade has its own library under Settings → ReShade add-ons. " +
             "ShortFuse's renodx-dlss.addon64 is imported the same way and only accepted when the file identifies itself as renodx-dlss.addon64; every import stays in a library of builds, with a default here, an optional pick per game and your own name per build. " +
             "Deep Fried Chicken is imported from its extracted release folder or its 64-bit folder (Folder…), from deep-fried-chicken.addon64 in that folder or from a .zip of the release (Import…); the NGX bridge deep-fried-chicken-nvngx.dll must be beside the add-on. From 4.x the whole 64-bit folder is taken, as the package's README asks. A .7z can't be read: extract it first. " +
             "Each import is kept as a build of its own, so several DFC versions sit side by side; importing the same add-on again replaces that build's files. The default is Newest unless you pick a build. " +
@@ -400,9 +399,24 @@ public static class HelpTopics
             "Auto guard + UI adds automatic detection on top. Final color fallback is the most invasive, for games the others don't fix. Try in that order."),
         // ---------- Components (the rows on a game's Install tab) ----------
         new("comp-reshade", "Components", "ReShade",
-            "Post-processing tool and the loader for every add-on here (MFG Unlock and the NR add-ons). The app uses the add-on build from reshade.me, or the ReShade64.dll you imported. " +
+            "Post-processing tool and the loader for every add-on here (MFG Unlock and the NR add-ons). The app keeps every ReShade build in a library (Settings → ReShade add-ons): the newest add-on build from reshade.me by default, or a build without add-ons, a nightly CI build, an older version or one you imported. Each game can pick its own. " +
             "In OptiScaler mode OptiScaler loads it; in ReShade + add-ons mode it is the proxy itself and can't be turned off. " +
             "Turn it off in OptiScaler mode if you don't use MFG Unlock or effects, or another ReShade is already in the game."),
+        new("reshade-library", "ReShade", "ReShade builds",
+            "Channels: Stable is the newest add-on build on reshade.me (the default). Stable without add-ons is the plain build. Nightly is crosire's CI build of the main branch, fetched through nightly.link and checked against the SHA-256 digest GitHub publishes for it; it can break. " +
+            "Older versions (6.0.0 and up) are downloaded from reshade.me on request. Imports (a ReShade64.dll or ReShade32.dll, both from a folder, a setup exe or a zip) are kept as they are. " +
+            "reshade.me publishes no digest and does not sign its add-on builds, so a download there is accepted because it came over HTTPS from the official site and passed the checks (right file type and bitness, ReShade in its version information); its SHA-256 is recorded and checked again at every install. " +
+            "Default follows Newest Stable; pick a build or a channel here or per game. A pick of a channel follows its newest build; a pick of one build stays on it. A removed build falls back to the default."),
+        new("reshade-dll-name", "ReShade", "ReShade file name",
+            "ReShade loads as a stand-in for a system dll, so its file name follows the graphics API the game uses: dxgi.dll for DirectX 10, 11 and 12, d3d9.dll for DirectX 9, d3d8.dll for DirectX 8, opengl32.dll for OpenGL. 32-bit games get ReShade32. " +
+            "With OptiScaler, OptiScaler owns the name and loads ReShade64.dll itself (LoadReshade). Vulkan games use the Vulkan layer instead and get no dll. You can choose another name for a game under Install location. " +
+            "Before ReShade replaces a dll that belongs to another mod (Special K, DXVK, ENB, OptiScaler or one this app doesn't recognise) you are asked; the original is backed up and comes back on uninstall."),
+        new("reshade-vulkan", "ReShade", "Vulkan layer",
+            "Vulkan games load ReShade through an implicit layer for the whole PC: ReShade64.dll / ReShade32.dll and a JSON manifest go to C:\\ProgramData\\ReShade and the manifest is registered under HKLM\\SOFTWARE\\Khronos\\Vulkan\\ImplicitLayers (32-bit: the WOW6432Node view). " +
+            "Windows asks for administrator rights for this one step; the app is never elevated as a whole. ReShade then starts only in games that have a ReShade.ini next to their exe, which the install writes. A layer installed by ReShade's own setup is left alone."),
+        new("reshade-template", "ReShade", "ReShade.ini template",
+            "A small ini you can edit (Edit template) whose keys are merged into each game's ReShade.ini at install or update: screenshot folder, overlay and screenshot keys, effect and texture search paths, disabled add-ons. " +
+            "A value the game's file already has is kept unless the game's Existing configs is set to apply settings. Sections of the add-ons (RenoDX, Lecram, Uplift, Deep Fried Chicken) are ignored here. Uninstalling puts the game's original ReShade.ini back."),
         new("comp-mfg", "Components", "MFG Unlock",
             "ReShade add-on (renodx-mfgunlock.addon64, downloaded from mavismmg/MFGAdaUnlock-RenoDx) that unlocks 3x and 4x multi frame generation on RTX 40 cards. " +
             "Needs ReShade and a game with DLSS frame generation through Streamline; other games are not affected. " +
