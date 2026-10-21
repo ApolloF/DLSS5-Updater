@@ -100,6 +100,8 @@ public sealed class InstallManifest
     public Dictionary<string, string> OptiIni { get; set; } = new(StringComparer.OrdinalIgnoreCase);
     public Dictionary<string, string> ReShadeIni { get; set; } = new(StringComparer.OrdinalIgnoreCase);
     public bool AntiCheatConfirmed { get; set; }
+    /// <summary>The clashes (<see cref="Installer.ConflictKey"/>) the user accepted for what is installed; kept until the selection changes them.</summary>
+    public string? ConfirmedConflict { get; set; }
 
     /// <summary>Files we placed: relative to the game root, or <see cref="InstallTag"/>\… relative to the install folder (see <see cref="Entry"/>).</summary>
     public List<string> Files { get; set; } = [];

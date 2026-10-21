@@ -657,6 +657,15 @@
                         </StackPanel>
                     </Border>
 
+                    <!-- Confirmed or not, a mix that clashes keeps its warning -->
+                    <Border Margin="0,12,0,0" Background="{StaticResource DangerSoft}" BorderBrush="{StaticResource Warn}" BorderThickness="2,0,0,0"
+                            Padding="14,10" Visibility="{Binding HasConflictWarning, Converter={StaticResource BoolToVis}}">
+                        <StackPanel Orientation="Horizontal">
+                            <TextBlock Text="&#xE7BA;" Style="{StaticResource Icon}" Foreground="{StaticResource Warn}" Margin="0,0,10,0" />
+                            <TextBlock Text="{Binding ConflictWarning}" TextWrapping="Wrap" />
+                        </StackPanel>
+                    </Border>
+
                     <Grid Margin="0,22,0,0">
                         <Border Style="{StaticResource Divider}" VerticalAlignment="Bottom" />
                         <StackPanel Orientation="Horizontal">
@@ -768,6 +777,8 @@
                         <StackPanel>
                             <TextBlock Text="{Binding AdviceBlocked}" Style="{StaticResource MutedText}" Foreground="{StaticResource Warn}" TextWrapping="Wrap"
                                        Visibility="{Binding HasAdviceBlocked, Converter={StaticResource BoolToVis}}" />
+                            <TextBlock Text="{Binding AdviceCaution}" Style="{StaticResource MutedText}" Foreground="{StaticResource Danger}" TextWrapping="Wrap" Margin="0,0,0,10"
+                                       Visibility="{Binding HasAdviceCaution, Converter={StaticResource BoolToVis}}" />
                             <ItemsControl ItemsSource="{Binding Methods}" Visibility="{Binding HasMethods, Converter={StaticResource BoolToVis}}">
                                 <ItemsControl.ItemTemplate>
                                     <DataTemplate>
@@ -791,6 +802,8 @@
                                                     </Border>
                                                 </StackPanel>
                                                 <TextBlock Text="{Binding Reason}" Style="{StaticResource MutedText}" FontSize="11.5" TextWrapping="Wrap" Margin="0,2,0,0" />
+                                                <TextBlock Text="{Binding Warning}" Style="{StaticResource MutedText}" FontSize="11.5" TextWrapping="Wrap" Margin="0,2,0,0"
+                                                           Foreground="{StaticResource Danger}" Visibility="{Binding HasWarning, Converter={StaticResource BoolToVis}}" />
                                                 <TextBlock Text="{Binding NeedsText}" Style="{StaticResource MutedText}" FontSize="11.5" TextWrapping="Wrap" Margin="0,2,0,0"
                                                            Foreground="{StaticResource Warn}" Visibility="{Binding HasNeeds, Converter={StaticResource BoolToVis}}" />
                                             </StackPanel>
@@ -1438,12 +1451,6 @@
                                                     <CheckBox IsChecked="{Binding InstallLecram}" Margin="0,8" AutomationProperties.Name="Install Lecram DLSS5 add-on (ReShade + add-ons mode; runs its own NR; needs ReShade 6+ and the NR runtime)">
                                                         <TextBlock Text="Install Lecram DLSS5 add-on (ReShade + add-ons mode; runs its own NR; needs ReShade 6+ and the NR runtime)" TextWrapping="Wrap" />
                                                     </CheckBox>
-                                                    <CheckBox IsChecked="{Binding AllowSeveralNrAddons}" Margin="0,4,0,8"
-                                                              AutomationProperties.Name="Allow more than one NR add-on (only ShortFuse and Lecram can run together)">
-                                                        <TextBlock Text="Allow more than one NR add-on (only ShortFuse and Lecram can run together)" Style="{StaticResource MutedText}" FontSize="11.5" TextWrapping="Wrap" />
-                                                    </CheckBox>
-                                                    <TextBlock Text="{Binding NrAddonWarning}" Style="{StaticResource MutedText}" Foreground="{StaticResource Warn}" FontSize="11.5" TextWrapping="Wrap" Margin="0,0,0,8"
-                                                               Visibility="{Binding NrAddonWarning, Converter={StaticResource NullToVis}}" />
                                                     <CheckBox IsChecked="{Binding InstallDlssNr}" Margin="0,8" AutomationProperties.Name="Install NR runtime (nvngx_dlssnr.dll)">
                                                         <TextBlock Text="Install NR runtime (nvngx_dlssnr.dll)" TextWrapping="Wrap" />
                                                     </CheckBox>

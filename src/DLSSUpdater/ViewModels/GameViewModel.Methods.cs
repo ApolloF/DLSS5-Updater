@@ -10,6 +10,8 @@ public sealed record MethodRow(MethodOption Option, bool IsTop)
 {
     public string Title => Option.Title;
     public string Reason => Option.Reason;
+    public bool HasWarning => Option.Warning is not null;
+    public string? Warning => Option.Warning;
     public string StateText => Option.Availability switch
     {
         Availability.Available => "Available",
@@ -31,14 +33,17 @@ public sealed partial class GameViewModel
     public ObservableCollection<MethodRow> Methods { get; } = [];
 
     [ObservableProperty] private string? _adviceBlocked;
+    [ObservableProperty] private string? _adviceCaution;
     [ObservableProperty] private string _adviceFooter = "";
     [ObservableProperty] private string _selectTopLabel = "";
 
     public bool HasAdviceBlocked => AdviceBlocked is not null;
+    public bool HasAdviceCaution => AdviceCaution is not null;
     public bool HasMethods => Methods.Count > 0;
     public bool CanSelectTop => Methods.Any(m => m.IsTop);
 
     partial void OnAdviceBlockedChanged(string? value) => OnPropertyChanged(nameof(HasAdviceBlocked));
+    partial void OnAdviceCautionChanged(string? value) => OnPropertyChanged(nameof(HasAdviceCaution));
 
     /// <summary>Component id -> the key of its row on the game page.</summary>
     private static readonly Dictionary<string, string> RowKeys = new(StringComparer.OrdinalIgnoreCase)
@@ -101,10 +106,12 @@ public sealed partial class GameViewModel
         if (dfc is not null) imported.Add(ComponentRegistry.Dfc);
         var shaders = Path.Combine(target, FeederLibrary.ShaderDir);
         var catalog = AdvisorCatalog.For(_s.Catalog?.Document);
+        var protectedInstall = MethodAdvisor.IsProtectedStoreInstall(Info);
         return new AdvisorInput(Info, _s.Gpu)
         {
             NativeDlss = Installer.HasNativeDlss(Info, Manifest, target),
-            ProtectedInstall = MethodAdvisor.IsProtectedStoreInstall(Info),
+            ProtectedInstall = protectedInstall,
+            StoreInstall = !protectedInstall && MethodAdvisor.IsStoreInstall(Info),
             OptiCompat = catalog.OptiCompat.Find(Info.Name),
             HudfixIncompatible = catalog.OptiCompat.IsHudfixIncompatible(Info.Name),
             RenoDxMod = catalog.RenoDx?.Match(Info).Mod,
@@ -129,6 +136,7 @@ public sealed partial class GameViewModel
         Methods.Clear();
         foreach (var m in advice.Methods) Methods.Add(new MethodRow(m, ReferenceEquals(m, top)));
         AdviceBlocked = advice.Blocked;
+        AdviceCaution = advice.Caution;
         SelectTopLabel = top is null ? "" : $"Select: {top.Title}";
         AdviceFooter = advice.Methods.Any(m => m.Method is Method.NeuralAddon or Method.OptiScalerNr or Method.Feeder)
             ? $"{_s.Gpu.Label}. Neural rendering is the leaked DLSS 5 build and needs community DLLs; the app never downloads nvngx_dlssnr.dll."

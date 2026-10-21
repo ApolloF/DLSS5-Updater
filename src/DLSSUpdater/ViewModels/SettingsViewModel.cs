@@ -461,19 +461,6 @@ public sealed partial class SettingsViewModel : ObservableObject
         set => SetNrAddon(NrAddon.Lecram, value);
     }
 
-    public bool AllowSeveralNrAddons
-    {
-        get => Settings.AllowSeveralNrAddons;
-        set
-        {
-            NrAddons.SetAllowSeveral(Settings, value);
-            Save();
-            NotifyNrAddons();
-        }
-    }
-
-    public string? NrAddonWarning => NrAddons.Warning(Settings.InstallRenoDx, Settings.InstallLecram);
-
     private void SetNrAddon(NrAddon addon, bool on)
     {
         NrAddons.SetDefault(Settings, addon, on);
@@ -486,8 +473,6 @@ public sealed partial class SettingsViewModel : ObservableObject
         OnPropertyChanged(nameof(InstallRenoDx));
         OnPropertyChanged(nameof(InstallUplift));
         OnPropertyChanged(nameof(InstallLecram));
-        OnPropertyChanged(nameof(AllowSeveralNrAddons));
-        OnPropertyChanged(nameof(NrAddonWarning));
     }
 
     public string DlssNrInfo => Describe(_main.S.Store.DlssNrPath, _main.S.DlssNrSha, true);
