@@ -32,6 +32,15 @@ public sealed partial class MainViewModel : ObservableObject
         var store = new ComponentStore(gh, () => settings.IncludePrereleases) { AutoReShade = () => settings.AutoDownloadReShade, SelectedDlssNr = () => settings.DlssNrId, SelectedRenoDx = () => settings.RenoDxId, SelectedLecram = () => settings.LecramId, SelectedDfc = () => settings.DfcId, SelectedReShade = () => settings.ReShadeId, PairTests = () => settings.AddonPairTests, OptiSourceRepo = () => settings.OptiSource };
         S = new Services { Settings = settings, Store = store, Installer = new Installer(store) };
         Gh = gh;
+        S.Extras = new ReShadeExtras(S.Installer, settings, new CatalogDownloader(gh), ct => new CatalogClient(gh).LoadAsync(ct));
+        S.RunJob = RunJob;
+        S.Progress = TransferProgress;
+        S.Rescan = RescanOne;
+        S.Extras.Changed += () =>
+        {
+            foreach (var game in Games) game.RefreshExtrasUpdate();
+            CountUpdates();
+        };
         _busy.Changed += () => IsBusy = _busy.IsBusy;
         // Busy from the start: no command may take the gate before the startup scan and update check have run.
         _startup = _busy.TryEnter();
@@ -331,6 +340,7 @@ public sealed partial class MainViewModel : ObservableObject
             Gh.Token = S.Settings.GitHubToken;
             await S.Store.RefreshAsync(ct);
             await CheckLecramAsync(ct);
+            await S.Extras!.LoadCatalogAsync(ct);
         }
         var s = S.Store;
         Online = new[] { s.Opti, s.Dlss, s.Mfg, s.Uplift }.Any(r => r is { FromCache: false, Stale: false });
@@ -409,18 +419,19 @@ public sealed partial class MainViewModel : ObservableObject
     private Task UpdateAll() => Run("Updating", async ct =>
     {
         var targets = Games.Where(g => g.NeedsUpdate && g.Manifest is not null).ToList();
+        var extrasOnly = (GameViewModel g) => !g.CoreNeedsUpdate;
         if (targets.Count == 0)
         {
             Log.Info("Everything is up to date");
             return;
         }
-        if (targets.Any(g => g.Manifest!.Opti) && !ConfirmCompat()) return;
+        if (targets.Any(g => g.CoreNeedsUpdate && g.Manifest!.Opti) && !ConfirmCompat()) return;
         var failed = 0;
         foreach (var g in targets)
         {
             var m = g.Manifest!;
             var o = g.UpdateOptions(m);
-            if (g.HasAntiCheat && g.NeedsInjection(o) && !m.AntiCheatConfirmed)
+            if (!extrasOnly(g) && g.HasAntiCheat && g.NeedsInjection(o) && !m.AntiCheatConfirmed)
             {
                 Log.Info($"{g.Name}: skipped because it has anti-cheat. Install it once from its own page to confirm.");
                 continue;
@@ -428,7 +439,14 @@ public sealed partial class MainViewModel : ObservableObject
             try
             {
                 Log.Info($"Updating {g.Name}");
-                await S.Installer.InstallAsync(g.Info, g.SelectedTarget!.Dir, o, TransferProgress(), ct);
+                if (!extrasOnly(g)) await S.Installer.InstallAsync(g.Info, g.SelectedTarget!.Dir, o, TransferProgress(), ct);
+                // The ReShade add-ons, shader packs and preset this game already has follow the catalog and Settings.
+                foreach (var r in await S.Extras!.UpdateAsync(g.Info, g.SelectedTarget!.Dir, TransferProgress(), ct))
+                {
+                    if (r.Ok) Log.Info($"{g.Name}: {r.Message}");
+                    else Log.Warn($"{g.Name}: {r.Message}");
+                    foreach (var n in r.Notes) Log.Info($"  {n}");
+                }
                 await RescanOne(g);
             }
             catch (NeedsAdminException ex) { failed++; Log.Error($"{g.Name}: {ex.Message}"); }

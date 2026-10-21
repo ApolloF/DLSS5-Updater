@@ -76,6 +76,9 @@ public sealed class ReShadeExtras
         Reload();
     }
 
+    /// <summary>Tells the lists that a selection changed (a game page and the settings show the same picks).</summary>
+    public void NotifyPicksChanged() => Changed?.Invoke();
+
     /// <summary>Picks up the user's imports (and a catalog set from outside).</summary>
     public void Reload(CatalogDocument? document = null)
     {

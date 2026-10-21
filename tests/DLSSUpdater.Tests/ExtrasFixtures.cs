@@ -137,7 +137,14 @@ public abstract class ExtrasTestBase : IDisposable
     protected const string Lilium = "lilium-hdr";
     protected const string Sweet = "sweetfx";
 
-    protected CatalogShaderPack LiliumPack(string fx = "LILIUM-A") => PackOf(Lilium,
+    protected CatalogShaderPack LiliumPack(string fx = "LILIUM-A")
+    {
+        var pack = LiliumPackOf(fx);
+        pack.Category = "hdr";
+        return pack;
+    }
+
+    private CatalogShaderPack LiliumPackOf(string fx) => PackOf(Lilium,
         Zip(("Repo-abc/Shaders/lilium__a.fx", fx), ("Repo-abc/Shaders/Lilium/b.fxh", "B"), ("Repo-abc/Shaders/evil.dll", "MZ"),
             ("Repo-abc/Shaders/.hidden", "h"), ("Repo-abc/Textures/n.png", "PNG"), ("Repo-abc/README.md", "readme")),
         "Repo-abc/Shaders/", "Repo-abc/Textures/", ["lilium__a.fx"], isDefault: true);
