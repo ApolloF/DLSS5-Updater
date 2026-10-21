@@ -19,6 +19,7 @@ public sealed partial class SettingsViewModel : ObservableObject
         Lecram = new AddonLibraryViewModel(main, AddonKind.Lecram, AddonsChanged);
         Dfc = new AddonLibraryViewModel(main, AddonKind.Dfc, AddonsChanged);
         ReShade = new ReShadeSettingsViewModel(main, AddonsChanged);
+        Extras = new ReShadeExtrasSettingsViewModel(main.S);
         FrameLimit = new FrameLimitSettingsViewModel(main, AddonsChanged);
         Feeder = new FeederSettingsViewModel(main, AddonsChanged);
         Cleanup = new BuildCleanupViewModel(main);
@@ -47,6 +48,7 @@ public sealed partial class SettingsViewModel : ObservableObject
 
     public AddonLibraryViewModel RenoDx { get; }
     public ReShadeSettingsViewModel ReShade { get; }
+    public ReShadeExtrasSettingsViewModel Extras { get; }
     public FrameLimitSettingsViewModel FrameLimit { get; }
     public FeederSettingsViewModel Feeder { get; }
     public AddonLibraryViewModel Lecram { get; }

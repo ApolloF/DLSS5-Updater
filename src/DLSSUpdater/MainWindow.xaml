@@ -250,6 +250,138 @@
             </StackPanel>
         </DataTemplate>
 
+        <!-- A ReShade add-on or shader pack with its tick (Settings and the game's Add-ons & shaders tab) -->
+        <DataTemplate x:Key="ExtrasItemRow" DataType="{x:Type vm:ExtrasItemViewModel}">
+            <Grid Margin="0,7">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="Auto" />
+                    <ColumnDefinition Width="*" />
+                </Grid.ColumnDefinitions>
+                <CheckBox VerticalAlignment="Top" Margin="0,2,12,0" IsChecked="{Binding Selected}" IsEnabled="{Binding Available}"
+                          AutomationProperties.Name="{Binding Name}" />
+                <StackPanel Grid.Column="1">
+                    <StackPanel Orientation="Horizontal">
+                        <TextBlock Text="{Binding Name}" TextTrimming="CharacterEllipsis" />
+                        <TextBlock Text="INSTALLED" Style="{StaticResource Caps}" Foreground="{StaticResource Accent}" Margin="10,0,0,0" VerticalAlignment="Center"
+                                   Visibility="{Binding Installed, Converter={StaticResource BoolToVis}}" />
+                    </StackPanel>
+                    <TextBlock Text="{Binding Detail}" Style="{StaticResource MutedText}" FontSize="11.5" TextWrapping="Wrap" />
+                    <TextBlock Text="{Binding Description}" Style="{StaticResource MutedText}" FontSize="11.5" TextWrapping="Wrap"
+                               Visibility="{Binding HasDescription, Converter={StaticResource BoolToVis}}" />
+                    <TextBlock Text="{Binding Note}" Foreground="{StaticResource Warn}" FontSize="11.5" TextWrapping="Wrap"
+                               Visibility="{Binding HasNote, Converter={StaticResource BoolToVis}}" />
+                </StackPanel>
+            </Grid>
+        </DataTemplate>
+
+        <!-- A game's ReShade add-ons, shader packs and preset -->
+        <DataTemplate x:Key="ExtrasPanel" DataType="{x:Type vm:ReShadeExtrasViewModel}">
+            <StackPanel>
+                <Border Background="{StaticResource WarnSoft}" BorderBrush="{StaticResource Warn}" BorderThickness="2,0,0,0" Padding="14,10" Margin="0,0,0,12"
+                        Visibility="{Binding IsBlocked, Converter={StaticResource BoolToVis}}">
+                    <TextBlock Text="{Binding Blocked}" TextWrapping="Wrap" />
+                </Border>
+                <TextBlock Style="{StaticResource MutedText}" FontSize="12" TextWrapping="Wrap" Margin="0,0,0,10"
+                           Text="The catalog isn't available (offline, and no earlier copy), so only your own imports are listed. Open Settings, Add-ons &amp; shaders to refresh it."
+                           Visibility="{Binding CatalogMissing, Converter={StaticResource BoolToVis}}" />
+                <Grid Margin="0,0,0,8" Visibility="{Binding UpdateAvailable, Converter={StaticResource BoolToVis}}">
+                    <TextBlock Text="Some of what is installed here differs from your selection or the catalog." Style="{StaticResource MutedText}" VerticalAlignment="Center" />
+                    <Button Content="Update" Style="{StaticResource BtnPrimary}" HorizontalAlignment="Right" Command="{Binding UpdateExtrasCommand}"
+                            ToolTip="Bring the installed add-ons, shader packs and preset to what the selection and the catalog say now" />
+                </Grid>
+
+                <StackPanel Orientation="Horizontal">
+                    <TextBlock Text="RESHADE ADD-ONS" Style="{StaticResource SectionTitle}" />
+                    <Button Style="{StaticResource InfoBtn}" CommandParameter="reshade-extras-addons" Margin="4,18,0,0"
+                            ToolTip="{Binding Source=reshade-extras-addons, Converter={StaticResource HelpTip}}" AutomationProperties.Name="About ReShade add-ons" />
+                </StackPanel>
+                <Border Style="{StaticResource Card}" Padding="16">
+                    <StackPanel>
+                        <Grid>
+                            <TextBlock Text="{Binding AddonsMode}" Style="{StaticResource MutedText}" VerticalAlignment="Center" TextWrapping="Wrap" Margin="0,0,120,0" />
+                            <Button Content="Reset to auto" Style="{StaticResource BtnGhost}" HorizontalAlignment="Right" Command="{Binding ResetAddonsCommand}"
+                                    Visibility="{Binding AddonsOwn, Converter={StaticResource BoolToVis}}" ToolTip="Follow the list in Settings again" />
+                        </Grid>
+                        <Grid Margin="0,10,0,0">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="Auto" />
+                                <ColumnDefinition Width="Auto" />
+                                <ColumnDefinition Width="*" />
+                            </Grid.ColumnDefinitions>
+                            <TextBlock Text="BITNESS" Style="{StaticResource Caps}" VerticalAlignment="Center" Margin="0,0,12,0" Width="80" />
+                            <ComboBox Grid.Column="1" Width="140" ItemsSource="{Binding BitsChoices}" SelectedItem="{Binding BitsChoice}"
+                                      AutomationProperties.Name="Add-on bitness" ToolTip="Which builds of the add-ons this game gets. Auto follows the game's exe." />
+                            <TextBlock Grid.Column="2" Text="{Binding BitsText}" Style="{StaticResource MutedText}" FontSize="11.5" VerticalAlignment="Center" Margin="12,0,0,0" TextWrapping="Wrap" />
+                        </Grid>
+                        <Border Style="{StaticResource Divider}" Margin="0,12" />
+                        <ItemsControl ItemsSource="{Binding Addons}" ItemTemplate="{StaticResource ExtrasItemRow}" />
+                        <TextBlock Text="{Binding AddonsInstalled}" Style="{StaticResource MutedText}" FontSize="12" Margin="0,10,0,0" />
+                        <WrapPanel Margin="0,10,0,0">
+                            <Button Content="Apply add-ons" Style="{StaticResource BtnPrimary}" Margin="0,0,8,0" Command="{Binding ApplyAddonsCommand}"
+                                    ToolTip="Install the ticked add-ons and remove the ones that are no longer ticked" />
+                            <Button Content="Remove all" Style="{StaticResource BtnGhost}" Command="{Binding RemoveAddonsCommand}"
+                                    Visibility="{Binding AddonsInstalledAny, Converter={StaticResource BoolToVis}}" />
+                        </WrapPanel>
+                    </StackPanel>
+                </Border>
+
+                <StackPanel Orientation="Horizontal">
+                    <TextBlock Text="SHADER PACKS" Style="{StaticResource SectionTitle}" />
+                    <Button Style="{StaticResource InfoBtn}" CommandParameter="reshade-extras-shaders" Margin="4,18,0,0"
+                            ToolTip="{Binding Source=reshade-extras-shaders, Converter={StaticResource HelpTip}}" AutomationProperties.Name="About shader packs" />
+                </StackPanel>
+                <Border Style="{StaticResource Card}" Padding="16">
+                    <StackPanel>
+                        <Grid>
+                            <TextBlock Text="{Binding PacksMode}" Style="{StaticResource MutedText}" VerticalAlignment="Center" TextWrapping="Wrap" Margin="0,0,120,0" />
+                            <Button Content="Reset to auto" Style="{StaticResource BtnGhost}" HorizontalAlignment="Right" Command="{Binding ResetPacksCommand}"
+                                    Visibility="{Binding PacksOwn, Converter={StaticResource BoolToVis}}" ToolTip="Follow the selection in Settings (or the HDR essentials) again" />
+                        </Grid>
+                        <Border Style="{StaticResource Divider}" Margin="0,12" />
+                        <ItemsControl ItemsSource="{Binding Packs}" ItemTemplate="{StaticResource ExtrasItemRow}" />
+                        <TextBlock Text="{Binding PacksInstalled}" Style="{StaticResource MutedText}" FontSize="12" Margin="0,10,0,0" />
+                        <WrapPanel Margin="0,10,0,0">
+                            <Button Content="Apply shader packs" Style="{StaticResource BtnPrimary}" Margin="0,0,8,0" Command="{Binding ApplyPacksCommand}"
+                                    ToolTip="Install the ticked packs and remove the ones that are no longer ticked" />
+                            <Button Content="Remove all" Style="{StaticResource BtnGhost}" Command="{Binding RemovePacksCommand}"
+                                    Visibility="{Binding PacksInstalledAny, Converter={StaticResource BoolToVis}}" />
+                        </WrapPanel>
+                    </StackPanel>
+                </Border>
+
+                <StackPanel Orientation="Horizontal">
+                    <TextBlock Text="PRESET" Style="{StaticResource SectionTitle}" />
+                    <Button Style="{StaticResource InfoBtn}" CommandParameter="reshade-extras-presets" Margin="4,18,0,0"
+                            ToolTip="{Binding Source=reshade-extras-presets, Converter={StaticResource HelpTip}}" AutomationProperties.Name="About presets" />
+                </StackPanel>
+                <Border Style="{StaticResource Card}" Padding="16">
+                    <StackPanel>
+                        <ComboBox Width="320" HorizontalAlignment="Left" ItemsSource="{Binding Presets}" SelectedValue="{Binding PresetPick}" SelectedValuePath="Value" DisplayMemberPath="Label"
+                                  AutomationProperties.Name="Preset for this game" ToolTip="A preset from the library (Settings, Add-ons &amp; shaders). Applying it copies it into the game and points ReShade at it." />
+                        <TextBlock Text="{Binding PresetInstalled}" Style="{StaticResource MutedText}" FontSize="12" Margin="0,10,0,0" />
+                        <TextBlock Text="{Binding PresetNeeds}" Foreground="{StaticResource Warn}" FontSize="12" TextWrapping="Wrap" Margin="0,8,0,0"
+                                   Visibility="{Binding PresetNeeds, Converter={StaticResource NullToVis}}" />
+                        <WrapPanel Margin="0,10,0,0">
+                            <Button Content="Apply preset" Style="{StaticResource BtnPrimary}" Margin="0,0,8,0" Command="{Binding ApplyPresetCommand}" />
+                            <Button Content="Add the packs it needs" Margin="0,0,8,0" Command="{Binding AddPresetPacksCommand}" Visibility="{Binding CanAddPresetPacks, Converter={StaticResource BoolToVis}}"
+                                    ToolTip="Tick the packs that hold the missing shaders for this game and install them" />
+                            <Button Content="Remove preset" Style="{StaticResource BtnGhost}" Command="{Binding RemovePresetCommand}"
+                                    Visibility="{Binding PresetInstalledAny, Converter={StaticResource BoolToVis}}" />
+                        </WrapPanel>
+                    </StackPanel>
+                </Border>
+
+                <TextBlock Text="{Binding Status}" Margin="0,16,0,0" TextWrapping="Wrap" Visibility="{Binding Status, Converter={StaticResource NullToVis}}" />
+                <ItemsControl ItemsSource="{Binding Notes}" Margin="0,4,0,0" Visibility="{Binding HasNotes, Converter={StaticResource BoolToVis}}">
+                    <ItemsControl.ItemTemplate>
+                        <DataTemplate>
+                            <TextBlock Text="{Binding}" Style="{StaticResource MutedText}" FontSize="12" TextWrapping="Wrap" Margin="0,2,0,0" />
+                        </DataTemplate>
+                    </ItemsControl.ItemTemplate>
+                </ItemsControl>
+            </StackPanel>
+        </DataTemplate>
+
         <DataTemplate x:Key="OptionRow" DataType="{x:Type vm:IniOptionViewModel}">
             <Grid Margin="0,9" Visibility="{Binding IsAvailable, Converter={StaticResource BoolToVis}}">
                 <Grid.ColumnDefinitions>
@@ -664,8 +796,10 @@
                                          IsChecked="{Binding DetailTab, Converter={StaticResource EqualsToBool}, ConverterParameter=Install}" />
                             <RadioButton Style="{StaticResource Segment}" Content="Game config" GroupName="{Binding Id}" Margin="0,0,24,0"
                                          IsChecked="{Binding DetailTab, Converter={StaticResource EqualsToBool}, ConverterParameter=Config}" />
-                            <RadioButton Style="{StaticResource Segment}" Content="NVIDIA profile" GroupName="{Binding Id}" Visibility="{Binding ShowDriverTab, Converter={StaticResource BoolToVis}}"
+                            <RadioButton Style="{StaticResource Segment}" Content="NVIDIA profile" GroupName="{Binding Id}" Margin="0,0,24,0" Visibility="{Binding ShowDriverTab, Converter={StaticResource BoolToVis}}"
                                          IsChecked="{Binding DetailTab, Converter={StaticResource EqualsToBool}, ConverterParameter=Nvidia}" />
+                            <RadioButton Style="{StaticResource Segment}" Content="Add-ons &amp; shaders" GroupName="{Binding Id}" Visibility="{Binding ShowExtrasTab, Converter={StaticResource BoolToVis}}"
+                                         IsChecked="{Binding DetailTab, Converter={StaticResource EqualsToBool}, ConverterParameter=Extras}" />
                         </StackPanel>
                     </Grid>
 
@@ -675,6 +809,11 @@
                                    Visibility="{Binding DriverExe, Converter={StaticResource NullToVis}, ConverterParameter=invert}" />
                         <TextBlock Style="{StaticResource MutedText}" FontSize="11.5" TextWrapping="Wrap" Margin="0,8,0,0"
                                    Text="Written only to this game's NVIDIA driver profile (matched on its exe); the global profile is never changed. 'Use global' shows the global value in brackets." />
+                    </StackPanel>
+
+                    <!-- ===== Add-ons & shaders ===== -->
+                    <StackPanel Visibility="{Binding DetailTab, Converter={StaticResource EqualsToVis}, ConverterParameter=Extras}" Margin="0,4,0,0">
+                        <ContentPresenter Content="{Binding Extras}" ContentTemplate="{StaticResource ExtrasPanel}" />
                     </StackPanel>
 
                     <!-- ===== Game config ===== -->
@@ -1222,6 +1361,8 @@
                                                          IsChecked="{Binding Tab, Converter={StaticResource EqualsToBool}, ConverterParameter=Keybinds}" />
                                             <RadioButton Style="{StaticResource Segment}" Content="ReShade add-ons" GroupName="st" Margin="0,0,24,0"
                                                          IsChecked="{Binding Tab, Converter={StaticResource EqualsToBool}, ConverterParameter=ReShade}" />
+                                            <RadioButton Style="{StaticResource Segment}" Content="Add-ons &amp; shaders" GroupName="st" Margin="0,0,24,0"
+                                                         IsChecked="{Binding Tab, Converter={StaticResource EqualsToBool}, ConverterParameter=Extras}" />
                                             <RadioButton Style="{StaticResource Segment}" Content="{Binding OptiName}" GroupName="st" Margin="0,0,24,0"
                                                          IsChecked="{Binding Tab, Converter={StaticResource EqualsToBool}, ConverterParameter=Nr}" />
                                             <RadioButton Style="{StaticResource Segment}" Content="Advanced" GroupName="st"
@@ -1686,6 +1827,108 @@
                                             </Border>
                                             <TextBlock Style="{StaticResource MutedText}" FontSize="11.5" TextWrapping="Wrap" Margin="0,8,0,0"
                                                        Text="Click a key, then press the new one (Esc cancels). ReShade keys may include Ctrl / Shift / Alt. Applied on the next install or update. Keys you changed in-game stay only when Existing configs is set to Keep game settings." />
+                                        </StackPanel>
+
+                                        <!-- ===== Add-ons & shaders (catalog lists, imports, presets) ===== -->
+                                        <StackPanel Visibility="{Binding Tab, Converter={StaticResource EqualsToVis}, ConverterParameter=Extras}">
+                                        <StackPanel DataContext="{Binding Extras}">
+                                            <Grid Margin="0,14,0,0">
+                                                <TextBlock Text="{Binding CatalogText}" Style="{StaticResource MutedText}" FontSize="12" TextWrapping="Wrap" VerticalAlignment="Center" Margin="0,0,130,0" />
+                                                <Button Content="Refresh catalog" Style="{StaticResource BtnGhost}" HorizontalAlignment="Right" Command="{Binding RefreshCatalogCommand}"
+                                                        ToolTip="Fetch the add-on and shader pack lists again" />
+                                            </Grid>
+                                            <TextBlock Style="{StaticResource MutedText}" FontSize="11.5" TextWrapping="Wrap" Margin="0,8,0,0"
+                                                       Text="Ticks here are the choice for every game. A game follows them until you give it its own list on its Add-ons &amp; shaders tab. Nothing changes in a game until you apply or update it there; games with anti-cheat are never touched." />
+                                            <TextBox Margin="0,14,0,0" Text="{Binding Filter, UpdateSourceTrigger=PropertyChanged}" AutomationProperties.Name="Search add-ons and shader packs"
+                                                     ToolTip="Search the names, descriptions, authors and licences below" />
+
+                                            <StackPanel Orientation="Horizontal">
+                                                <TextBlock Text="RESHADE ADD-ONS" Style="{StaticResource SectionTitle}" />
+                                                <Button Style="{StaticResource InfoBtn}" CommandParameter="reshade-extras-addons" Margin="4,18,0,0"
+                                                        ToolTip="{Binding Source=reshade-extras-addons, Converter={StaticResource HelpTip}}" AutomationProperties.Name="About ReShade add-ons" />
+                                            </StackPanel>
+                                            <Border Style="{StaticResource Card}" Padding="16">
+                                                <StackPanel>
+                                                    <TextBlock Text="{Binding AddonsSummary}" Style="{StaticResource MutedText}" FontSize="12" TextWrapping="Wrap" />
+                                                    <Border Style="{StaticResource Divider}" Margin="0,10" />
+                                                    <ItemsControl ItemsSource="{Binding Addons}" ItemTemplate="{StaticResource ExtrasItemRow}" />
+                                                </StackPanel>
+                                            </Border>
+
+                                            <StackPanel Orientation="Horizontal">
+                                                <TextBlock Text="SHADER PACKS" Style="{StaticResource SectionTitle}" />
+                                                <Button Style="{StaticResource InfoBtn}" CommandParameter="reshade-extras-shaders" Margin="4,18,0,0"
+                                                        ToolTip="{Binding Source=reshade-extras-shaders, Converter={StaticResource HelpTip}}" AutomationProperties.Name="About shader packs" />
+                                            </StackPanel>
+                                            <Border Style="{StaticResource Card}" Padding="16">
+                                                <StackPanel>
+                                                    <Grid>
+                                                        <TextBlock Text="{Binding PacksMode}" Style="{StaticResource MutedText}" FontSize="12" TextWrapping="Wrap" VerticalAlignment="Center" Margin="0,0,130,0" />
+                                                        <Button Content="Reset to auto" Style="{StaticResource BtnGhost}" HorizontalAlignment="Right" Command="{Binding ResetPacksCommand}"
+                                                                Visibility="{Binding PacksOwn, Converter={StaticResource BoolToVis}}" ToolTip="Go back to the HDR essentials" />
+                                                    </Grid>
+                                                    <ComboBox Width="220" HorizontalAlignment="Left" Margin="0,10,0,0" ItemsSource="{Binding PackCategories}" SelectedItem="{Binding PackCategory}"
+                                                              AutomationProperties.Name="Shader pack category" />
+                                                    <Border Style="{StaticResource Divider}" Margin="0,10" />
+                                                    <ItemsControl ItemsSource="{Binding Packs}" ItemTemplate="{StaticResource ExtrasItemRow}" />
+                                                </StackPanel>
+                                            </Border>
+
+                                            <StackPanel Orientation="Horizontal">
+                                                <TextBlock Text="YOUR OWN FILES" Style="{StaticResource SectionTitle}" />
+                                                <Button Style="{StaticResource InfoBtn}" CommandParameter="reshade-extras-import" Margin="4,18,0,0"
+                                                        ToolTip="{Binding Source=reshade-extras-import, Converter={StaticResource HelpTip}}" AutomationProperties.Name="About importing" />
+                                            </StackPanel>
+                                            <Border Style="{StaticResource Card}" Padding="16">
+                                                <StackPanel>
+                                                    <WrapPanel>
+                                                        <Button Content="Import add-on…" Margin="0,0,8,0" Command="{Binding ImportAddonCommand}" ToolTip="A .addon, .addon32 or .addon64 file, or a .zip that holds some" />
+                                                        <Button Content="Import shader folder…" Margin="0,0,8,0" Command="{Binding ImportPackFolderCommand}" ToolTip="A folder with a Shaders folder (and Textures) or .fx files" />
+                                                        <Button Content="Import shader .zip…" Command="{Binding ImportPackZipCommand}" ToolTip="A .zip with a Shaders folder (and Textures) or .fx files" />
+                                                    </WrapPanel>
+                                                    <ItemsControl ItemsSource="{Binding Imports}" Margin="0,10,0,0">
+                                                        <ItemsControl.ItemTemplate>
+                                                            <DataTemplate DataType="{x:Type vm:ExtrasItemViewModel}">
+                                                                <Grid Margin="0,4">
+                                                                    <TextBlock VerticalAlignment="Center" TextTrimming="CharacterEllipsis" Margin="0,0,90,0">
+                                                                        <Run Text="{Binding Name, Mode=OneWay}" />
+                                                                        <Run Text="{Binding Detail, Mode=OneWay}" Foreground="{StaticResource Muted}" />
+                                                                    </TextBlock>
+                                                                    <Button Content="Remove" Style="{StaticResource BtnGhost}" HorizontalAlignment="Right"
+                                                                            Command="{Binding DataContext.RemoveImportCommand, RelativeSource={RelativeSource AncestorType=ItemsControl}}" CommandParameter="{Binding}" />
+                                                                </Grid>
+                                                            </DataTemplate>
+                                                        </ItemsControl.ItemTemplate>
+                                                    </ItemsControl>
+                                                </StackPanel>
+                                            </Border>
+
+                                            <StackPanel Orientation="Horizontal">
+                                                <TextBlock Text="PRESETS" Style="{StaticResource SectionTitle}" />
+                                                <Button Style="{StaticResource InfoBtn}" CommandParameter="reshade-extras-presets" Margin="4,18,0,0"
+                                                        ToolTip="{Binding Source=reshade-extras-presets, Converter={StaticResource HelpTip}}" AutomationProperties.Name="About presets" />
+                                            </StackPanel>
+                                            <Border Style="{StaticResource Card}" Padding="16">
+                                                <StackPanel>
+                                                    <TextBlock Style="{StaticResource MutedText}" FontSize="12" TextWrapping="Wrap"
+                                                               Text="Presets you import are kept here. Pick one for a game on its Add-ons &amp; shaders tab." />
+                                                    <ListBox ItemsSource="{Binding Presets}" SelectedItem="{Binding SelectedPreset}" Margin="0,10,0,0" MaxHeight="220" AutomationProperties.Name="Preset library">
+                                                        <ListBox.ItemTemplate>
+                                                            <DataTemplate DataType="{x:Type vm:PresetRow}">
+                                                                <TextBlock>
+                                                                    <Run Text="{Binding Name, Mode=OneWay}" />
+                                                                    <Run Text="{Binding Detail, Mode=OneWay}" Foreground="{StaticResource Muted}" />
+                                                                </TextBlock>
+                                                            </DataTemplate>
+                                                        </ListBox.ItemTemplate>
+                                                    </ListBox>
+                                                    <WrapPanel Margin="0,10,0,0">
+                                                        <Button Content="Import preset…" Margin="0,0,8,0" Command="{Binding ImportPresetCommand}" ToolTip="A ReShade preset .ini (it needs a Techniques= line)" />
+                                                        <Button Content="Delete" Style="{StaticResource BtnGhost}" Command="{Binding DeletePresetCommand}" />
+                                                    </WrapPanel>
+                                                </StackPanel>
+                                            </Border>
+                                        </StackPanel>
                                         </StackPanel>
 
                                         <!-- ===== ReShade add-ons ===== -->
