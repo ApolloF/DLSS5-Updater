@@ -34,7 +34,7 @@ comments, file names, version resources) and what the app installs.
    start, the overlay's slot choice is not saved).
 4. Lecram v10: settings are read through clamp helpers, so default/min/max are immediates next to the key string xref.
    v11 is Rust: the `nr-settings` catalog carries a doc string per key (range, default, retired/dev-only).
-5. Diff against the previous build's table, then follow AGENTS.md: update options, help, advice and tests before
+5. Diff against the previous build's table, then update options, help, advice and tests before
    raising the tested version.
 
 Tooling: `tools/addon-probe/` (fake ReShade host that logs config reads/writes, plus the xref/clamp scripts).

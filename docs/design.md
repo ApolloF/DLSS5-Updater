@@ -1,8 +1,8 @@
 # Design guideline
 
 How every component in DLSS5 Updater is handled. New code follows this; code that doesn't is listed under "Known gaps"
-and is brought in line when it is touched. AGENTS.md has the commands and coding conventions; this file has the
-product rules they serve. When a rule here and the code disagree, fix the code or change the rule in the same PR.
+and is brought in line when it is touched. This file has the
+product rules. When a rule here and the code disagree, fix the code or change the rule in the same PR.
 
 ## 1. Principles
 
@@ -14,7 +14,7 @@ product rules they serve. When a rule here and the code disagree, fix the code o
   forbids redistribution, or the builds are paid, the component is import-only in public builds (the exceptions are in section 3).
 - **Say why.** When the app keeps, refuses, hides or skips something, the UI says why in one line.
 - **Facts, not guesses.** Options, labels and help text come from the mod's own docs, config comments and release
-  notes for that build. Undocumented values are marked undocumented (AGENTS.md, Conventions).
+  notes for that build. Undocumented values are marked undocumented.
 
 ## 2. The component model
 
@@ -49,8 +49,8 @@ Each component has exactly these parts. A part that doesn't apply is explicitly 
 - Owner-only conveniences that a public build must not have (today: fetching Lecram's paid builds from his channel)
   sit behind a compile-time switch (`-p:<Name>=true`, default off, `BuildFlags.<Name>`), are compiled in both variants
   and tested in both. Public releases build with the switch off; `tools/build-private.ps1` builds the private
-  variant; the release bot drops it on copyparty after each release (`tools/release-bot/README.md`).
-- `nvngx_dlssnr.dll` is never committed to this repo or bundled in the exe/installer; the app downloads it from the catalog mirror (AGENTS.md, Hard rules).
+  variant; the release bot drops it on copyparty after each release.
+- `nvngx_dlssnr.dll` is never committed to this repo or bundled in the exe/installer; the app downloads it from the catalog mirror.
 
 ## 4. Choosing builds
 
@@ -80,7 +80,7 @@ A new component, or a new version of one, ships in one PR with:
    tested build; `TestedVersion` raised only after the options match.
 3. Options, help topics and per-build variants for the new or changed config keys.
 4. Tests for import/download, install, uninstall, switching, config writing and version/compat detection.
-5. README table row, release notes entry, and the release bot's watch list (`tools/release-bot`) when there is an
+5. README table row, release notes entry, and the release bot's watch list when there is an
    upstream channel to watch.
 6. The check command (`dotnet build -warnaserror && dotnet test`, plus `-p:<Switch>=true` builds for each build
    switch) passing.
