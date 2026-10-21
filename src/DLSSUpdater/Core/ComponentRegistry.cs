@@ -48,6 +48,8 @@ public static class ComponentRegistry
     public const string Uplift = "gitc-uplift";
     /// <summary>RenoDX HDR mods per game (named, Unreal Extended, generic Unreal and Unity). Not the ShortFuse DLSS add-on, <see cref="RenoDx"/>.</summary>
     public const string RenoDxHdr = "renodx-hdr";
+    /// <summary>DLSS5-Feeder (MIT, downloaded): makes the DLSS calls for games without DLSS; recorded the generic way (<see cref="FeederLibrary"/>).</summary>
+    public const string Feeder = "dlss5-feeder";
     /// <summary>Not a component with files: the per-game record of what the app wrote into the NVIDIA driver profile (<see cref="NvidiaRecord"/>).</summary>
     public const string NvidiaDriver = "nvidia-driver";
 
@@ -73,6 +75,7 @@ public static class ComponentRegistry
         Register(new(Dlss, "DLSS") { Legacy = true, OwnedFiles = ComponentStore.DlssFiles });
         // Recorded the generic way. The wildcard also matches renodx-dlss.addon64, which is ShortFuse's other component.
         Register(new(RenoDxHdr, "RenoDX HDR") { Library = LibraryKind.RenoDxHdr, Label = "RenoDX HDR", OwnedFiles = ["renodx-*.addon64", "renodx-*.addon32"] });
+        Register(new(Feeder, "DLSS5-Feeder") { Library = LibraryKind.Feeder, Label = "Feeder", OwnedFiles = FeederLibrary.OwnedFiles });
     }
 
     /// <summary>

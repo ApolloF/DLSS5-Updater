@@ -238,6 +238,12 @@ public sealed partial class MainViewModel : ObservableObject
 
     // ---------- startup ----------
 
+    /// <summary>The method advice of every game, after the GPU or the catalog changed.</summary>
+    private void RefreshAdvice()
+    {
+        foreach (var g in Games) g.RefreshAdvice();
+    }
+
     public async Task InitializeAsync()
     {
         var lease = _startup;
@@ -265,6 +271,11 @@ public sealed partial class MainViewModel : ObservableObject
                 });
             }
             await RefreshLocalComponentsAsync();
+            if (!Demo.Active)
+            {
+                S.Gpu = await Task.Run(GpuDetector.Detect);
+                RefreshAdvice();
+            }
 
             var cached = GameScanner.LoadCache();
             if (cached.Count > 0) ApplyScan(cached);
@@ -344,6 +355,7 @@ public sealed partial class MainViewModel : ObservableObject
     private void CatalogChanged()
     {
         foreach (var g in Games) g.RefreshHdr();
+        RefreshAdvice();
         CountUpdates();
     }
 

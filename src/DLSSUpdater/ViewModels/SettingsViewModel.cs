@@ -19,6 +19,7 @@ public sealed partial class SettingsViewModel : ObservableObject
         Lecram = new AddonLibraryViewModel(main, AddonKind.Lecram, AddonsChanged);
         Dfc = new AddonLibraryViewModel(main, AddonKind.Dfc, AddonsChanged);
         ReShade = new ReShadeSettingsViewModel(main, AddonsChanged);
+        Feeder = new FeederSettingsViewModel(main, AddonsChanged);
         Cleanup = new BuildCleanupViewModel(main);
         Overrides = new ObservableCollection<IniOverride>(Settings.IniOverrides);
         ReShadeOverrides = new ObservableCollection<IniOverride>(Settings.ReShadeOverrides);
@@ -45,6 +46,7 @@ public sealed partial class SettingsViewModel : ObservableObject
 
     public AddonLibraryViewModel RenoDx { get; }
     public ReShadeSettingsViewModel ReShade { get; }
+    public FeederSettingsViewModel Feeder { get; }
     public AddonLibraryViewModel Lecram { get; }
     public AddonLibraryViewModel Dfc { get; }
     public BuildCleanupViewModel Cleanup { get; }
@@ -519,6 +521,7 @@ public sealed partial class SettingsViewModel : ObservableObject
         Lecram.Reload();
         Dfc.Reload();
         ReShade.Reload();
+        Feeder.Reload();
         ApplyLecramGeneration();
         ApplyDfcCompat();
         RefreshAddonPairStatus();

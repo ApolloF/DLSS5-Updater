@@ -28,6 +28,10 @@ public sealed class CachedComponent
     public bool Prerelease { get; set; }
     public DateTime? Published { get; set; }
     public DateTime Fetched { get; set; }
+    /// <summary>The user brought this build in (DLSS5-Feeder only so far): kept byte for byte and never removed by the automatic cleanup.</summary>
+    public bool Imported { get; set; }
+    /// <summary>The version of an imported build, as read from its files.</summary>
+    public string? Label { get; set; }
 }
 
 /// <summary>Resolves the latest releases, downloads them once per tag and holds the user-supplied files.</summary>
