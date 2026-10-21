@@ -297,13 +297,13 @@ public sealed class FeederImportTests : IDisposable
     }
 
     [Fact]
-    public void TheInstallerUsesThePickOverTheNewest_WithoutAskingGitHub()
+    public async Task TheInstallerUsesThePickOverTheNewest_WithoutAskingGitHub()
     {
         var a = FeederLibrary.Import(Folder("1.17.0"));
         FeederLibrary.Import(Folder("1.19.0"));
         var store = new ComponentStore(new GitHubClient(new ThrowingHandler()), () => false);
 
-        var chosen = store.EnsureFeederAsync(a.Id, null, default).GetAwaiter().GetResult();
+        var chosen = await store.EnsureFeederAsync(a.Id, null, default);
 
         Assert.Equal(a.Id, chosen.Id);
     }
