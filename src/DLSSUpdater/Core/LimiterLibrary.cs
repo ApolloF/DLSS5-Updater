@@ -114,6 +114,9 @@ public sealed partial class ComponentStore
 
     public LimiterBuild? LimiterBuildFor(string? id) => id is null ? null : LimiterBuilds.FirstOrDefault(b => b.Id.Equals(id, StringComparison.OrdinalIgnoreCase));
 
+    private LimiterBuild? LimiterBuildFor(string limiterId, string id) =>
+        LimiterBuilds.FirstOrDefault(b => b.LimiterId == limiterId && b.Id.Equals(id, StringComparison.OrdinalIgnoreCase));
+
     public static string LimiterPathOf(LimiterBuild build) => Path.Combine(LimiterRoot, build.LimiterId, build.Id, build.FileName);
 
     /// <summary>A build chosen by id: it is in the library, but the file is checked against its hash before it is placed.</summary>
@@ -146,7 +149,7 @@ public sealed partial class ComponentStore
 
         var dir = Path.Combine(LimiterRoot, limiter.Id, sha);
         var dest = Path.Combine(dir, file.Name);
-        if (LimiterBuildFor(sha) is { } have && File.Exists(dest) && FileUtil.Sha256(dest).Equals(sha, StringComparison.OrdinalIgnoreCase)) return have;
+        if (LimiterBuildFor(limiter.Id, sha) is { } have && File.Exists(dest) && FileUtil.Sha256(dest).Equals(sha, StringComparison.OrdinalIgnoreCase)) return have;
 
         Directory.CreateDirectory(dir);
         var result = await downloader.DownloadAsync(file, dest, progress, ct);
@@ -205,7 +208,7 @@ public sealed partial class ComponentStore
         var sha = FileUtil.Sha256(path);
         var dir = Path.Combine(LimiterRoot, spec.LimiterId, sha);
         var meta = Path.Combine(dir, BuildRecordFile);
-        var existing = LimiterBuildFor(sha);
+        var existing = LimiterBuildFor(spec.LimiterId, sha);
         if (existing is not null)
         {
             if (existing.Imported) return existing;
