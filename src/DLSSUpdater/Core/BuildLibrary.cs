@@ -6,7 +6,7 @@ namespace DLSSUpdater.Core;
 /// Every library of kept builds: the downloaded OptiScaler and GITC Uplift releases, the imported add-ons and the NR runtime.
 /// Each keeps several builds side by side; settings choose a default and each game may choose its own.
 /// </summary>
-public enum LibraryKind { OptiScaler, Uplift, Lecram, RenoDx, Dfc, DlssNr, RenoDxHdr, ReShade }
+public enum LibraryKind { OptiScaler, Uplift, Lecram, RenoDx, Dfc, DlssNr, RenoDxHdr, ReShade, FrameLimiter }
 
 /// <summary>
 /// One kept build as the lists and the cleanup see it. <see cref="Id"/> is what settings, game picks and install records name
@@ -174,6 +174,7 @@ public sealed partial class ComponentStore
         LibraryKind.OptiScaler => ReleaseBuilds(Component.OptiScaler),
         LibraryKind.Uplift => ReleaseBuilds(Component.Uplift),
         LibraryKind.RenoDxHdr => HdrLibraryBuilds(),
+        LibraryKind.FrameLimiter => LimiterLibraryBuilds(),
         LibraryKind.ReShade => ReShadeBuilds.Select(b => new LibraryBuild(kind, b.Id, b.Label, b.Version, b.Added, ReShadeBuildDir(b), Downloaded: b.Downloaded)).ToList(),
         _ when AddonOf(kind) is { } addon => AddonBuilds(addon)
             .Select(b => new LibraryBuild(kind, b.Id, b.Label, b.DetectedLabel, b.Imported, Path.Combine(AddonRoot(addon), b.Id), Downloaded: b.Downloaded))
@@ -460,6 +461,7 @@ public sealed partial class ComponentStore
         LibraryKind.Dfc => "Deep Fried Chicken",
         LibraryKind.DlssNr => "NR runtime",
         LibraryKind.ReShade => "ReShade",
+        LibraryKind.FrameLimiter => "Frame limiters",
         _ => ComponentRegistry.OfLibrary(kind).FirstOrDefault()?.Name ?? kind.ToString(),
     };
 
@@ -570,6 +572,7 @@ public sealed partial class ComponentStore
         ReleasesChanged();
         foreach (var kind in Enum.GetValues<AddonKind>()) ForgetAddons(kind);
         ForgetHdr();
+        ForgetLimiters();
         ForgetReShade();
         if (count > 0) Log.Info($"Cleanup freed {BuildCleanup.FormatBytes(freed)} ({count} item(s))");
         return freed;
