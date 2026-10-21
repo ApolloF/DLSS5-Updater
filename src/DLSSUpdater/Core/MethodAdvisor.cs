@@ -26,7 +26,7 @@ public enum Method
     Dx11Bridge,
     /// <summary>G, not in the app yet: a third-party upscaler mod for this game (REFramework PDUpscaler, ...).</summary>
     UpscalerMod,
-    /// <summary>G, not in the app yet: a Luma framework mod.</summary>
+    /// <summary>G: a Luma framework mod, installed from the Luma section of the game page (never picked for you, and not to be stacked with a RenoDX HDR mod).</summary>
     Luma,
     /// <summary>J, not in the app yet: a standalone all-in-one add-on.</summary>
     AioAddon,
@@ -88,6 +88,8 @@ public sealed record AdvisorInput(GameInfo Game, GpuInfo Gpu)
     public bool HudfixIncompatible { get; init; }
     /// <summary>The game's entry on RenoDX's list, when the catalog has one.</summary>
     public CatalogMod? RenoDxMod { get; init; }
+    /// <summary>What Luma would install in the game (the catalog's mod or the generic Unreal one); null or not offered = the Luma catalog has nothing for it.</summary>
+    public LumaChoice? Luma { get; init; }
     /// <summary>Component ids with a build in the app's library that the user imported: the NR runtime and the NR add-ons.</summary>
     public IReadOnlySet<string> Imported { get; init; } = new HashSet<string>();
     /// <summary>The newest Deep Fried Chicken build runs in games without their own DLSS (4.x or newer).</summary>
@@ -266,7 +268,7 @@ public static class MethodAdvisor
             rows.Add(10);
             list.Add(Feed(c, c.Is32 ? "beta" : null, "D3D9 and older games are translated to D3D11 first with dgVoodoo2 (freeware, not redistributable: you add it, Feeder's README has the settings); best motion vectors of all APIs.",
                 "dgVoodoo2 placed by hand (D3D9.dll and dgVoodoo.conf beside the exe)"));
-            list.Add(Opt(Method.Luma, Availability.Coming, "Some DX9 games have a Luma mod (Borderlands 2 and Pre-Sequel, BioShock) that needs dgVoodoo2 too; the app doesn't install Luma yet."));
+            if (LumaOffered(c) is { } luma) list.Add(luma);
             return;
         }
         if (api == GraphicsApis.Dx10)
@@ -318,7 +320,7 @@ public static class MethodAdvisor
             }
             if (c.In.OptiCompat is { List: "lumaUe" } && c.Api == GraphicsApis.Dx11)
             {
-                list.Add(Opt(Method.Luma, Availability.Coming, "Luma UE replaces this DX11 Unreal game's TAA with DLSS or DLAA (it is on OptiScaler's Luma UE list); the app doesn't install Luma yet."));
+                list.Add(LumaOffered(c) ?? NoLumaDownload("Luma UE replaces this DX11 Unreal game's TAA with DLSS or DLAA (it is on OptiScaler's Luma UE list)"));
                 list.Add(Opti(c, "OptiScaler on top of what Luma UE adds."));
             }
             list.Add(Feed(c, null, "Unreal game without an upscaler plugin: Feeder + Deep Fried Chicken adds NR. " + FeederCaveat, null));
@@ -402,13 +404,20 @@ public static class MethodAdvisor
                 $"{GraphicsApiInfo.Label(c.In.Game.Effective.PrimaryApi)} game with no HDR mod of its own: DXVK runs it on Vulkan, and the Lilium HDR build can output scRGB HDR (start with the Safest preset). Install it from the DXVK section on this page; it is never picked for you.");
             list.Add(c.In.Game.AntiCheat is { } ac ? dxvk with { Warning = AntiCheatCaution(ac) } : dxvk);
         }
-        // Row 16: OptiScaler's list also names the games that run a Luma mod; the Luma wiki itself isn't in the catalog yet.
-        if (c.In.OptiCompat is { } listed && list.All(m => m.Method != Method.Luma)
-            && (listed.List == "lumaUe" || (listed.List == "upscalerMods" && listed.Notes?.Contains("Luma", StringComparison.OrdinalIgnoreCase) == true)))
+        // Row 16: a Luma mod the app can install, or a game OptiScaler's list shows running one that the Luma catalog has no download for.
+        if (list.All(m => m.Method != Method.Luma))
         {
-            rows.Add(16);
-            list.Add(Opt(Method.Luma, Availability.Coming,
-                "OptiScaler's list shows this game running a Luma framework mod (DX11 only). Don't stack it with a RenoDX HDR mod; the app doesn't install Luma yet."));
+            if (LumaOffered(c) is { } luma)
+            {
+                rows.Add(16);
+                list.Add(luma);
+            }
+            else if (c.In.OptiCompat is { } listed
+                     && (listed.List == "lumaUe" || (listed.List == "upscalerMods" && listed.Notes?.Contains("Luma", StringComparison.OrdinalIgnoreCase) == true)))
+            {
+                rows.Add(16);
+                list.Add(NoLumaDownload("OptiScaler's list shows this game running a Luma framework mod (DX11 only)"));
+            }
         }
         if (c.In.HudfixIncompatible && list.Any(m => m.Method is Method.OptiScaler or Method.OptiScalerNr))
         {
@@ -441,6 +450,16 @@ public static class MethodAdvisor
     }
 
     // ---------- option builders ----------
+
+    /// <summary>Luma is advice only (installed from its own section, never picked for you): the game has a mod, or the generic Unreal one is listed for it.</summary>
+    private static MethodOption? LumaOffered(Ctx c) => c.In.Luma is { IsOffered: true } l
+        ? Opt(Method.Luma, Availability.Available,
+            $"Luma has a mod for this game ({l.Title}); install it from the Luma section on this page. Don't stack it with a RenoDX HDR mod (the app asks before it lets you)." +
+            (l.NeedsDgVoodoo ? " It needs dgVoodoo2, which you add yourself (the section lists the setup)." : ""))
+        : null;
+
+    private static MethodOption NoLumaDownload(string what) =>
+        Opt(Method.Luma, Availability.NotPossible, $"{what}, but the Luma catalog has no download for this game that the app can place. Don't stack a Luma mod with a RenoDX HDR mod.");
 
     private static MethodOption Opt(Method m, Availability a, string reason, IReadOnlyList<string>? components = null,
         IReadOnlyList<string>? needs = null, InstallMode? mode = null, bool unverified = false) =>

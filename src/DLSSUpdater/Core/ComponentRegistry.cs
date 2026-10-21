@@ -56,6 +56,8 @@ public static class ComponentRegistry
     public const string Feeder = "dlss5-feeder";
     /// <summary>DXVK (Direct3D 8-11 over Vulkan): stable, development and the Lilium HDR fork; recorded the generic way (<see cref="DxvkLibrary"/>).</summary>
     public const string Dxvk = "dxvk";
+    /// <summary>Luma Framework mods (Filoppi/Luma-Framework): a ReShade add-on plus its Luma\ folder, per game or the generic Unreal one (<see cref="LumaLibrary"/>).</summary>
+    public const string Luma = "luma";
     /// <summary>Not a component with files: the per-game record of what the app wrote into the NVIDIA driver profile (<see cref="NvidiaRecord"/>).</summary>
     public const string NvidiaDriver = "nvidia-driver";
     /// <summary>The ReShade add-on frame limiters (ids match the catalog's <c>managedBy</c>) and the Unreal Engine.ini cap; one is active per game.</summary>
@@ -98,6 +100,7 @@ public static class ComponentRegistry
         });
         Register(new(UnrealFrameCap, "Unreal frame cap") { Label = "UE frame cap" });
         Register(new(Dxvk, "DXVK") { Library = LibraryKind.Dxvk, Label = "DXVK", OwnedFiles = [.. DxvkDlls.All, DxvkConf.FileName] });
+        Register(new(Luma, "Luma") { Library = LibraryKind.Luma, Label = "Luma", OwnedFiles = [LumaFiles.TreeDir + @"\*", "Luma-*.addon", "Luma-*.addon64", "Luma-*.addon32"] });
         Register(new(Feeder, "DLSS5-Feeder") { Library = LibraryKind.Feeder, Label = "Feeder", OwnedFiles = FeederLibrary.OwnedFiles });
     }
 

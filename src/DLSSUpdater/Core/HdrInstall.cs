@@ -158,7 +158,7 @@ public sealed class HdrService(ComponentStore store, Installer installer, Catalo
     /// OptiScaler, where the user decides about ReShade.
     /// </summary>
     public async Task<HdrInstallResult> InstallAsync(GameInfo game, string targetDir, HdrChoice choice, int? peakNits, string? engineIniHint,
-        HdrReShade? reshade, IProgress<TransferProgress>? progress, CancellationToken ct, IReadOnlyList<HdrIniEdit>? userEdits = null)
+        HdrReShade? reshade, IProgress<TransferProgress>? progress, CancellationToken ct, IReadOnlyList<HdrIniEdit>? userEdits = null, bool lumaClashConfirmed = false)
     {
         if (game.AntiCheat is { } ac) throw new InvalidOperationException($"{game.Name} has {ac} anti-cheat: no add-on is installed in games with anti-cheat.");
         if (!choice.IsOffered) throw new InvalidOperationException(choice.Reason);
@@ -172,7 +172,8 @@ public sealed class HdrService(ComponentStore store, Installer installer, Catalo
         var plan = HdrPlanner.Build(game, targetDir, choice, build, ComponentStore.HdrPathOf(build), peakNits, engineIniHint, existing, userEdits);
         foreach (var w in plan.Warnings) Log.Warn($"{game.Name}: {w}");
         progress?.Report(new TransferProgress($"Installing {choice.Title} to {game.Name}", null));
-        var undo = await installer.InstallComponentAsync(game, targetDir, plan.Plan, ct);
+        var component = plan.Plan with { Extras = LumaConflict.WithMark(plan.Plan.Extras, lumaClashConfirmed) };
+        var undo = await installer.InstallComponentAsync(game, targetDir, component, ct);
         return new HdrInstallResult(build, plan, undo);
     }
 

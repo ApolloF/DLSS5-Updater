@@ -171,7 +171,7 @@ public sealed partial class HdrViewModel(GameViewModel game, Services services) 
     }
 
     /// <summary>Installs or updates the mod this game is picked for. Throws what the service throws (anti-cheat, Vulkan without the layer, offline).</summary>
-    internal async Task InstallAsync(IProgress<TransferProgress>? progress, CancellationToken ct)
+    internal async Task InstallAsync(IProgress<TransferProgress>? progress, CancellationToken ct, bool lumaClashConfirmed = false)
     {
         if (_choice is not { IsOffered: true } choice || game.SelectedTarget is not { } target || services.Hdr is not { } hdr)
             throw new InvalidOperationException(_choice?.Reason ?? "Nothing is offered for this game.");
@@ -180,7 +180,8 @@ public sealed partial class HdrViewModel(GameViewModel game, Services services) 
         var hint = EngineIniLocator.HintFor(over, services.Catalog?.Document?.Sections.Renodx?.Overrides.EngineIniPath(game.Info.SteamAppId, game.Info.Name));
         var reshade = new HdrReShade(game.ReShadeChoice?.Tag, settings.Games.GetValueOrDefault(game.Id)?.Proxy,
             GameConfig.EffectiveReShade(settings, game.Id), ReShadeIniTemplate.Load());
-        await hdr.InstallAsync(game.Info, target.Dir, choice, settings.HdrPeakNits, hint, reshade, progress, ct, over?.HdrIni);
+        await hdr.InstallAsync(game.Info, target.Dir, choice, settings.HdrPeakNits, hint, reshade, progress, ct, over?.HdrIni,
+            lumaClashConfirmed || LumaConflict.Confirmed(game.Manifest));
         Log.Info($"{game.Name}: {choice.Title} {choice.File!.Version} installed");
     }
 

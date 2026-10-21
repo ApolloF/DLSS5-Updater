@@ -74,6 +74,8 @@ public sealed class Services
     /// <summary>The mod catalog and the RenoDX HDR service; null switches the HDR section off (tests build Services without them).</summary>
     public CatalogState? Catalog { get; init; }
     public HdrService? Hdr { get; init; }
+    /// <summary>The Luma component's installer; null hides the Luma section.</summary>
+    public LumaService? Luma { get; init; }
     /// <summary>The frame limiters (driver, add-ons, Unreal cap); null hides the Frame limit section.</summary>
     public FrameLimitService? FrameLimit { get; init; }
     /// <summary>DXVK and its Lilium HDR build; null hides the DXVK section.</summary>
@@ -96,6 +98,7 @@ public sealed partial class GameViewModel : ObservableObject
         Detection = new TechOverrideViewModel(this, services);
         FrameLimit = new FrameLimitViewModel(this, services);
         Dxvk = new DxvkViewModel(this, services);
+        Luma = new LumaViewModel(this, services);
         _modChoices = ModPicker.Available(false, SelectedBuild.Name);
         Components =
         [
@@ -141,6 +144,7 @@ public sealed partial class GameViewModel : ObservableObject
     public TechOverrideViewModel Detection { get; }
     public FrameLimitViewModel FrameLimit { get; }
     public DxvkViewModel Dxvk { get; }
+    public LumaViewModel Luma { get; }
     public string Id => Info.Id;
     public string Name => Info.Name;
     public string Source => Info.Source;
@@ -633,6 +637,7 @@ public sealed partial class GameViewModel : ObservableObject
     public bool NeedsHdrUpdate => Hdr.NeedsUpdate;
     public bool NeedsFrameLimitUpdate => FrameLimit.NeedsUpdate;
     public bool NeedsDxvkUpdate => Dxvk.NeedsUpdate;
+    public bool NeedsLumaUpdate => Luma.NeedsUpdate;
 
     public string Subtitle => Info.MainExe is { } exe ? Path.GetFileName(exe) : "No executable found";
 
@@ -1010,6 +1015,8 @@ public sealed partial class GameViewModel : ObservableObject
         OnPropertyChanged(nameof(NeedsFrameLimitUpdate));
         Dxvk.Refresh();
         OnPropertyChanged(nameof(NeedsDxvkUpdate));
+        Luma.Refresh();
+        OnPropertyChanged(nameof(NeedsLumaUpdate));
     }
 
     private static bool IsTracked(InstallManifest m, string key) => key switch

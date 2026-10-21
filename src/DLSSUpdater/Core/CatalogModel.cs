@@ -24,6 +24,7 @@ public sealed class CatalogSections
     public CatalogNeural? Neural { get; set; }
     /// <summary>ReLimiter and Display Commander add-on files (ReLimiter mirrored, Display Commander pinned to the author's URL).</summary>
     public CatalogFrameLimiters? FrameLimiters { get; set; }
+    public CatalogLuma? Luma { get; set; }
 }
 
 public sealed class CatalogFrameLimiters

@@ -34,7 +34,7 @@ public sealed partial class MainViewModel : ObservableObject
         S = new Services
         {
             Settings = settings, Store = store, Installer = installer,
-            Catalog = new CatalogState(new CatalogClient(gh)), Hdr = new HdrService(store, installer, new CatalogDownloader(gh)),
+            Catalog = new CatalogState(new CatalogClient(gh)), Hdr = new HdrService(store, installer, new CatalogDownloader(gh)), Luma = new LumaService(store, installer, new CatalogDownloader(gh)),
             FrameLimit = new FrameLimitService(store, installer, new CatalogDownloader(gh), NvidiaProfile.Real),
             Dxvk = new DxvkService(installer, gh, NvidiaProfile.Real),
         };
@@ -175,7 +175,7 @@ public sealed partial class MainViewModel : ObservableObject
     [ObservableProperty]
     [NotifyCanExecuteChangedFor(nameof(InstallCommand), nameof(DlssOnlyCommand), nameof(UninstallCommand),
         nameof(RestoreDlssCommand), nameof(SwitchNrCommand), nameof(UndoNrCommand), nameof(UpdateAllCommand), nameof(CheckUpdatesCommand), nameof(RescanCommand),
-        nameof(AddGameFolderCommand), nameof(AddLibraryRootCommand), nameof(RemoveGameCommand), nameof(InstallHdrCommand), nameof(RemoveHdrCommand), nameof(ApplyFrameLimitCommand), nameof(RemoveFrameLimitCommand), nameof(ApplyDxvkCommand), nameof(RemoveDxvkCommand))]
+        nameof(AddGameFolderCommand), nameof(AddLibraryRootCommand), nameof(RemoveGameCommand), nameof(InstallHdrCommand), nameof(RemoveHdrCommand), nameof(InstallLumaCommand), nameof(RemoveLumaCommand), nameof(ApplyFrameLimitCommand), nameof(RemoveFrameLimitCommand), nameof(ApplyDxvkCommand), nameof(RemoveDxvkCommand))]
     private bool _isBusy;
 
     // component chips
@@ -505,11 +505,11 @@ public sealed partial class MainViewModel : ObservableObject
     }
 
     /// <summary>A game has something to update: its main install, its RenoDX HDR mod or its frame limiter add-on.</summary>
-    internal static bool HasUpdate(GameViewModel g) => g.NeedsUpdate || g.NeedsHdrUpdate || g.NeedsFrameLimitUpdate || g.NeedsDxvkUpdate;
+    internal static bool HasUpdate(GameViewModel g) => g.NeedsUpdate || g.NeedsHdrUpdate || g.NeedsFrameLimitUpdate || g.NeedsDxvkUpdate || g.NeedsLumaUpdate;
 
     /// <summary>What Update all works through: games with a main update and an install record, and games whose HDR mod has an update.</summary>
     internal static List<GameViewModel> UpdateTargets(IEnumerable<GameViewModel> games) =>
-        games.Where(g => (g.NeedsUpdate && g.Manifest is not null) || g.NeedsHdrUpdate || g.NeedsFrameLimitUpdate || g.NeedsDxvkUpdate).ToList();
+        games.Where(g => (g.NeedsUpdate && g.Manifest is not null) || g.NeedsHdrUpdate || g.NeedsFrameLimitUpdate || g.NeedsDxvkUpdate || g.NeedsLumaUpdate).ToList();
 
     private void CountUpdates() => UpdateCount = Games.Count(HasUpdate);
 
@@ -526,6 +526,11 @@ public sealed partial class MainViewModel : ObservableObject
             CountUpdates();
             if (ReferenceEquals(g, SelectedGame)) NotifyHdrCommands();
         };
+        g.Luma.Changed += () =>
+        {
+            CountUpdates();
+            if (ReferenceEquals(g, SelectedGame)) NotifyHdrCommands();
+        };
         return g;
     }
 
@@ -537,6 +542,8 @@ public sealed partial class MainViewModel : ObservableObject
         RemoveFrameLimitCommand.NotifyCanExecuteChanged();
         ApplyDxvkCommand.NotifyCanExecuteChanged();
         RemoveDxvkCommand.NotifyCanExecuteChanged();
+        InstallLumaCommand.NotifyCanExecuteChanged();
+        RemoveLumaCommand.NotifyCanExecuteChanged();
     }
 
     [RelayCommand(CanExecute = nameof(CanRun))]
@@ -599,6 +606,19 @@ public sealed partial class MainViewModel : ObservableObject
                     {
                         Log.Info($"Updating the frame limiter add-on in {g.Name}");
                         await g.FrameLimit.ApplyAsync(TransferProgress(), ct, update: true);
+                        await RescanOne(g);
+                    }
+                }
+                if (g.NeedsLumaUpdate)
+                {
+                    if (g.HasAntiCheat)
+                        Log.Info($"{g.Name}: the Luma mod was skipped because it has anti-cheat.");
+                    else if (g.Luma.ClashBlocksUpdate)
+                        Log.Info($"{g.Name}: the Luma mod was skipped because it clashes with RenoDX HDR and the warning isn't confirmed. Install it once from its own page to confirm.");
+                    else
+                    {
+                        Log.Info($"Updating the Luma mod in {g.Name}");
+                        await g.Luma.InstallAsync(TransferProgress(), ct);
                         await RescanOne(g);
                     }
                 }
@@ -815,9 +835,15 @@ public sealed partial class MainViewModel : ObservableObject
     {
         var g = SelectedGame;
         if (g?.SelectedTarget is null || !g.Hdr.CanInstall) return;
+        var lumaConfirmed = false;
+        if (LumaConflict.ForRenoDx(g.Manifest) is { } clash && !LumaConflict.Confirmed(g.Manifest))
+        {
+            if (!Dialog.Confirm("Luma is already here", clash, "Install anyway", danger: true)) return;
+            lumaConfirmed = true;
+        }
         await Run($"Installing the HDR mod to {g.Name}", async ct =>
         {
-            await g.Hdr.InstallAsync(TransferProgress(), ct);
+            await g.Hdr.InstallAsync(TransferProgress(), ct, lumaConfirmed);
             // The install may have put ReShade into a game that had none.
             await RescanOne(g);
             await AutoCleanUpAsync();
@@ -832,6 +858,41 @@ public sealed partial class MainViewModel : ObservableObject
         await Run($"Removing the HDR mod from {g.Name}", async ct =>
         {
             await g.Hdr.RemoveAsync(ct);
+            await RescanOne(g);
+        });
+    }
+
+    private bool CanRunLuma() => !IsBusy && SelectedGame?.Luma is { CanInstall: true };
+    private bool CanRemoveLuma() => !IsBusy && SelectedGame?.Luma is { CanRemove: true };
+
+    /// <summary>Installs or updates the Luma mod picked for the selected game. Next to a RenoDX HDR mod it asks first: the warning can be confirmed past.</summary>
+    [RelayCommand(CanExecute = nameof(CanRunLuma))]
+    private async Task InstallLuma()
+    {
+        var g = SelectedGame;
+        if (g?.SelectedTarget is null || !g.Luma.CanInstall) return;
+        var confirmed = false;
+        if (g.Luma.NeedsClashConfirm)
+        {
+            if (!Dialog.Confirm("RenoDX HDR is already here", LumaConflict.Message, "Install anyway", danger: true)) return;
+            confirmed = true;
+        }
+        await Run($"Installing the Luma mod to {g.Name}", async ct =>
+        {
+            await g.Luma.InstallAsync(TransferProgress(), ct, confirmed);
+            await RescanOne(g);
+            await AutoCleanUpAsync();
+        });
+    }
+
+    [RelayCommand(CanExecute = nameof(CanRemoveLuma))]
+    private async Task RemoveLuma()
+    {
+        var g = SelectedGame;
+        if (g?.SelectedTarget is null || !g.Luma.CanRemove) return;
+        await Run($"Removing the Luma mod from {g.Name}", async ct =>
+        {
+            await g.Luma.RemoveAsync(ct);
             await RescanOne(g);
         });
     }
