@@ -187,7 +187,13 @@ public sealed class DxvkService(Installer installer, GitHubClient github, Nvidia
             nvidia.RestoreLiliumPresentMethod(r.Driver);
             return [];
         }
-        var result = nvidia.SetLiliumPresentMethod(r.Driver);
+        NvidiaResult result;
+        try { result = nvidia.SetLiliumPresentMethod(r.Driver); }
+        catch (NvApiException ex)
+        {
+            // The write is one session saved at the end, so a refusal leaves the profile as it was.
+            return [$"The NVIDIA driver refused the present method settings ({ex.Message}), so they were not set. DXVK is installed without them."];
+        }
         if (result.Verified) return ["The NVIDIA driver profile of this game now presents Vulkan layered on the DXGI swap chain and treats DXVK as native (put back when DXVK is removed)."];
         nvidia.RestoreLiliumPresentMethod(r.Driver);
         return ["The NVIDIA driver didn't keep the present method settings, so they were put back. DXVK is installed without them."];

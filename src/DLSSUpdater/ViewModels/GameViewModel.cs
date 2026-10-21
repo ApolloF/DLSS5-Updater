@@ -76,6 +76,8 @@ public sealed class Services
     public HdrService? Hdr { get; init; }
     /// <summary>The frame limiters (driver, add-ons, Unreal cap); null hides the Frame limit section.</summary>
     public FrameLimitService? FrameLimit { get; init; }
+    /// <summary>DXVK and its Lilium HDR build; null hides the DXVK section.</summary>
+    public DxvkService? Dxvk { get; init; }
     /// <summary>The primary display's refresh rate for the frame-limit hint; 0 = unknown.</summary>
     public Func<int> RefreshHz { get; init; } = DisplayRefresh.Hz;
     /// <summary>The graphics card, read once at startup; the method advisor judges the games against it.</summary>
@@ -93,6 +95,7 @@ public sealed partial class GameViewModel : ObservableObject
         Hdr = new HdrViewModel(this, services);
         Detection = new TechOverrideViewModel(this, services);
         FrameLimit = new FrameLimitViewModel(this, services);
+        Dxvk = new DxvkViewModel(this, services);
         _modChoices = ModPicker.Available(false, SelectedBuild.Name);
         Components =
         [
@@ -137,6 +140,7 @@ public sealed partial class GameViewModel : ObservableObject
     public HdrViewModel Hdr { get; }
     public TechOverrideViewModel Detection { get; }
     public FrameLimitViewModel FrameLimit { get; }
+    public DxvkViewModel Dxvk { get; }
     public string Id => Info.Id;
     public string Name => Info.Name;
     public string Source => Info.Source;
@@ -628,6 +632,7 @@ public sealed partial class GameViewModel : ObservableObject
     /// <summary>The RenoDX HDR mod in this game has a newer catalog build, another pick or changed settings to apply.</summary>
     public bool NeedsHdrUpdate => Hdr.NeedsUpdate;
     public bool NeedsFrameLimitUpdate => FrameLimit.NeedsUpdate;
+    public bool NeedsDxvkUpdate => Dxvk.NeedsUpdate;
 
     public string Subtitle => Info.MainExe is { } exe ? Path.GetFileName(exe) : "No executable found";
 
@@ -1003,6 +1008,8 @@ public sealed partial class GameViewModel : ObservableObject
         OnPropertyChanged(nameof(NeedsHdrUpdate));
         FrameLimit.Refresh();
         OnPropertyChanged(nameof(NeedsFrameLimitUpdate));
+        Dxvk.Refresh();
+        OnPropertyChanged(nameof(NeedsDxvkUpdate));
     }
 
     private static bool IsTracked(InstallManifest m, string key) => key switch

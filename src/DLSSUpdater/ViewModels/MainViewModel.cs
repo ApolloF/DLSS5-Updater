@@ -36,6 +36,7 @@ public sealed partial class MainViewModel : ObservableObject
             Settings = settings, Store = store, Installer = installer,
             Catalog = new CatalogState(new CatalogClient(gh)), Hdr = new HdrService(store, installer, new CatalogDownloader(gh)),
             FrameLimit = new FrameLimitService(store, installer, new CatalogDownloader(gh), NvidiaProfile.Real),
+            Dxvk = new DxvkService(installer, gh, NvidiaProfile.Real),
         };
         Gh = gh;
         gh.RateLimitChanged += () =>
@@ -174,7 +175,7 @@ public sealed partial class MainViewModel : ObservableObject
     [ObservableProperty]
     [NotifyCanExecuteChangedFor(nameof(InstallCommand), nameof(DlssOnlyCommand), nameof(UninstallCommand),
         nameof(RestoreDlssCommand), nameof(SwitchNrCommand), nameof(UndoNrCommand), nameof(UpdateAllCommand), nameof(CheckUpdatesCommand), nameof(RescanCommand),
-        nameof(AddGameFolderCommand), nameof(AddLibraryRootCommand), nameof(RemoveGameCommand), nameof(InstallHdrCommand), nameof(RemoveHdrCommand), nameof(ApplyFrameLimitCommand), nameof(RemoveFrameLimitCommand))]
+        nameof(AddGameFolderCommand), nameof(AddLibraryRootCommand), nameof(RemoveGameCommand), nameof(InstallHdrCommand), nameof(RemoveHdrCommand), nameof(ApplyFrameLimitCommand), nameof(RemoveFrameLimitCommand), nameof(ApplyDxvkCommand), nameof(RemoveDxvkCommand))]
     private bool _isBusy;
 
     // component chips
@@ -499,11 +500,11 @@ public sealed partial class MainViewModel : ObservableObject
     }
 
     /// <summary>A game has something to update: its main install, its RenoDX HDR mod or its frame limiter add-on.</summary>
-    internal static bool HasUpdate(GameViewModel g) => g.NeedsUpdate || g.NeedsHdrUpdate || g.NeedsFrameLimitUpdate;
+    internal static bool HasUpdate(GameViewModel g) => g.NeedsUpdate || g.NeedsHdrUpdate || g.NeedsFrameLimitUpdate || g.NeedsDxvkUpdate;
 
     /// <summary>What Update all works through: games with a main update and an install record, and games whose HDR mod has an update.</summary>
     internal static List<GameViewModel> UpdateTargets(IEnumerable<GameViewModel> games) =>
-        games.Where(g => (g.NeedsUpdate && g.Manifest is not null) || g.NeedsHdrUpdate || g.NeedsFrameLimitUpdate).ToList();
+        games.Where(g => (g.NeedsUpdate && g.Manifest is not null) || g.NeedsHdrUpdate || g.NeedsFrameLimitUpdate || g.NeedsDxvkUpdate).ToList();
 
     private void CountUpdates() => UpdateCount = Games.Count(HasUpdate);
 
@@ -529,6 +530,8 @@ public sealed partial class MainViewModel : ObservableObject
         RemoveHdrCommand.NotifyCanExecuteChanged();
         ApplyFrameLimitCommand.NotifyCanExecuteChanged();
         RemoveFrameLimitCommand.NotifyCanExecuteChanged();
+        ApplyDxvkCommand.NotifyCanExecuteChanged();
+        RemoveDxvkCommand.NotifyCanExecuteChanged();
     }
 
     [RelayCommand(CanExecute = nameof(CanRun))]
@@ -593,6 +596,12 @@ public sealed partial class MainViewModel : ObservableObject
                         await g.FrameLimit.ApplyAsync(TransferProgress(), ct, update: true);
                         await RescanOne(g);
                     }
+                }
+                if (g.NeedsDxvkUpdate)
+                {
+                    Log.Info($"Updating DXVK in {g.Name}");
+                    await g.Dxvk.ApplyAsync(TransferProgress(), ct, update: true);
+                    await RescanOne(g);
                 }
             }
             catch (NeedsAdminException ex) { failed++; Log.Error($"{g.Name}: {ex.Message}"); }
@@ -843,6 +852,42 @@ public sealed partial class MainViewModel : ObservableObject
             // An add-on may have put ReShade into a game that had none.
             await RescanOne(g);
             await AutoCleanUpAsync();
+        });
+    }
+
+    private bool CanApplyDxvk() => !IsBusy && SelectedGame?.Dxvk is { CanApply: true };
+    private bool CanRemoveDxvk() => !IsBusy && SelectedGame?.Dxvk is { CanRemove: true };
+
+    /// <summary>Installs DXVK in the selected game, or updates it. The warnings (anti-cheat, a dll that belongs to another mod, ReShade moving to its Vulkan layer) are shown first.</summary>
+    [RelayCommand(CanExecute = nameof(CanApplyDxvk))]
+    private async Task ApplyDxvk()
+    {
+        var g = SelectedGame;
+        if (g?.SelectedTarget is null || !g.Dxvk.CanApply) return;
+        var confirmed = false;
+        if (g.Dxvk.NeedsConfirm)
+        {
+            if (!Dialog.Confirm(g.AntiCheat is { } ac ? $"{ac} detected" : "Before DXVK goes in", g.Dxvk.Warnings, "Install anyway", danger: true)) return;
+            confirmed = true;
+        }
+        await Run($"Installing DXVK in {g.Name}", async ct =>
+        {
+            await g.Dxvk.ApplyAsync(TransferProgress(), ct, confirmed: confirmed);
+            // ReShade may have moved to its Vulkan layer.
+            await RescanOne(g);
+            await AutoCleanUpAsync();
+        });
+    }
+
+    [RelayCommand(CanExecute = nameof(CanRemoveDxvk))]
+    private async Task RemoveDxvk()
+    {
+        var g = SelectedGame;
+        if (g?.SelectedTarget is null || !g.Dxvk.CanRemove) return;
+        await Run($"Removing DXVK from {g.Name}", async ct =>
+        {
+            await g.Dxvk.RemoveAsync(ct);
+            await RescanOne(g);
         });
     }
 

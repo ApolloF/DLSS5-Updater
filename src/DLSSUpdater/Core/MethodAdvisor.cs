@@ -32,6 +32,8 @@ public enum Method
     AioAddon,
     /// <summary>Row 15: the game's RenoDX HDR mod, installed from the HDR section of the game page (not a component of the methods).</summary>
     RenoDxHdr,
+    /// <summary>Advice only: DXVK (Direct3D 8 to 11 over Vulkan), with the Lilium HDR fork for an HDR output the game lacks. Installed from the DXVK section of the game page.</summary>
+    Dxvk,
 }
 
 public enum Availability
@@ -118,6 +120,7 @@ public static class MethodAdvisor
         Method.UpscalerMod => "Upscaler mod for this game",
         Method.Luma => "Luma framework mod",
         Method.AioAddon => "All-in-one add-on",
+        Method.Dxvk => "DXVK (Vulkan translation, Lilium HDR)",
         _ => "RenoDX HDR mod",
     };
 
@@ -391,6 +394,13 @@ public static class MethodAdvisor
         {
             rows.Add(15);
             list.Add(Opt(Method.RenoDxHdr, Availability.Available, $"RenoDX has an HDR mod for this game ({mod.Name}); install it from the HDR section on this page. It works next to the methods above."));
+        }
+        // Not a table row: older Direct3D games with no RenoDX HDR mod can still get HDR output from the Lilium build of DXVK. Advice only (no components), so auto never picks it.
+        if (DxvkDlls.Applies(c.In.Game.Effective.PrimaryApi) && c.In.RenoDxMod is null)
+        {
+            var dxvk = Opt(Method.Dxvk, Availability.Available,
+                $"{GraphicsApiInfo.Label(c.In.Game.Effective.PrimaryApi)} game with no HDR mod of its own: DXVK runs it on Vulkan, and the Lilium HDR build can output scRGB HDR (start with the Safest preset). Install it from the DXVK section on this page; it is never picked for you.");
+            list.Add(c.In.Game.AntiCheat is { } ac ? dxvk with { Warning = AntiCheatCaution(ac) } : dxvk);
         }
         // Row 16: OptiScaler's list also names the games that run a Luma mod; the Luma wiki itself isn't in the catalog yet.
         if (c.In.OptiCompat is { } listed && list.All(m => m.Method != Method.Luma)

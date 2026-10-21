@@ -286,33 +286,33 @@ public sealed partial class DxvkLibrary(GitHubClient github)
 
     private static string Norm(string path) => path.Replace('\\', '/').TrimStart('.', '/');
 
-    /// <summary>Calls <paramref name="visit"/> for every file of an archive or folder with its path and a way to read it (valid only during the call).</summary>
-    private static void Walk(string source, Action<string, Func<Stream>> visit)
+    /// <summary>Calls <paramref name="visit"/> for every file of an archive or folder with its path and a way to write it out to a file (valid only during the call).</summary>
+    private static void Walk(string source, Action<string, Action<string>> visit)
     {
         if (Directory.Exists(source))
         {
             var options = new EnumerationOptions { RecurseSubdirectories = true, MaxRecursionDepth = 4, AttributesToSkip = FileAttributes.ReparsePoint, IgnoreInaccessible = true };
             foreach (var file in Directory.EnumerateFiles(source, "*", options))
-                visit(Norm(Path.GetRelativePath(source, file)), () => File.OpenRead(file));
+                visit(Norm(Path.GetRelativePath(source, file)), dest => File.Copy(file, dest, true));
             return;
         }
         var name = source.ToLowerInvariant();
         if (name.EndsWith(".zip"))
         {
             using var zip = ZipFile.OpenRead(source);
-            foreach (var e in zip.Entries.Where(e => e.Name.Length > 0)) visit(Norm(e.FullName), e.Open);
+            foreach (var e in zip.Entries.Where(e => e.Name.Length > 0)) visit(Norm(e.FullName), dest => e.ExtractToFile(dest, true));
         }
         else if (name.EndsWith(".tar.gz") || name.EndsWith(".tgz"))
         {
             using var gz = new GZipStream(File.OpenRead(source), CompressionMode.Decompress);
             using var tar = new TarReader(gz);
             while (tar.GetNextEntry() is { } e)
-                if (e.EntryType is TarEntryType.RegularFile or TarEntryType.V7RegularFile && e.DataStream is { } data) visit(Norm(e.Name), () => data);
+                if (e.EntryType is TarEntryType.RegularFile or TarEntryType.V7RegularFile) visit(Norm(e.Name), dest => e.ExtractToFile(dest, true));
         }
         else if (name.EndsWith(".7z"))
         {
             using var archive = ArchiveFactory.OpenArchive(source);
-            foreach (var e in archive.Entries.Where(e => !e.IsDirectory && e.Key is not null)) visit(Norm(e.Key!), e.OpenEntryStream);
+            foreach (var e in archive.Entries.Where(e => !e.IsDirectory && e.Key is not null)) visit(Norm(e.Key!), dest => CopyTo(e.OpenEntryStream(), dest));
         }
         else throw new InvalidDataException($"{Path.GetFileName(source)} isn't a folder, .zip, .tar.gz or .7z.");
     }
@@ -339,17 +339,21 @@ public sealed partial class DxvkLibrary(GitHubClient github)
                 ? $"No DXVK dlls found in {Path.GetFileName(source)} (expected x32 and x64 folders with d3d8, d3d9, d3d10core, d3d11 and dxgi)."
                 : $"{Path.GetFileName(source)} doesn't hold all of d3d8, d3d9, d3d10core, d3d11 and dxgi for both x32 and x64, so it isn't what this app expects.");
         var paths = complete.ToDictionary(c => c.Path, c => c, StringComparer.OrdinalIgnoreCase);
-        Walk(source, (path, open) =>
+        Walk(source, (path, write) =>
         {
             if (!paths.TryGetValue(path, out var c)) return;
             var dest = Path.Combine(pkg, c.Arch, c.Dll);
             Directory.CreateDirectory(Path.GetDirectoryName(dest)!);
-            using var input = open();
-            using var output = File.Create(dest);
-            input.CopyTo(output);
+            write(dest);
         });
         foreach (var (arch, dll) in wanted)
             if (!File.Exists(Path.Combine(pkg, arch, dll))) throw new InvalidDataException($"{dll} ({arch}) could not be read from {Path.GetFileName(source)}.");
+    }
+
+    private static void CopyTo(Stream input, string dest)
+    {
+        using (input)
+        using (var output = File.Create(dest)) input.CopyTo(output);
     }
 
     // ---------- import ----------
