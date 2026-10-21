@@ -331,15 +331,17 @@ public sealed class MethodAdvisorTests
     // ---------- row 15-18: additive rules ----------
 
     [Fact]
-    public void Row15_GameOnTheRenoDxList_OffersTheHdrModAsComing()
+    public void Row15_GameOnTheRenoDxList_PointsToTheHdrSection()
     {
         var input = Input(Game(dlss: true)) with { RenoDxMod = new CatalogMod { Id = "x", Name = "Hades" } };
 
         var a = MethodAdvisor.Advise(input);
 
         Assert.Equal([1, 15], a.Rows);
-        Assert.Equal(Availability.Coming, Option(a, Method.RenoDxHdr).Availability);
+        Assert.Equal(Availability.Available, Option(a, Method.RenoDxHdr).Availability);
+        Assert.False(Option(a, Method.RenoDxHdr).Selectable);
         Assert.Contains("Hades", Option(a, Method.RenoDxHdr).Reason);
+        Assert.Contains("HDR section", Option(a, Method.RenoDxHdr).Reason);
     }
 
     [Fact]

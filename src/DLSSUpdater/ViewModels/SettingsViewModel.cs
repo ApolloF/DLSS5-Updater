@@ -18,6 +18,8 @@ public sealed partial class SettingsViewModel : ObservableObject
         RenoDx = new AddonLibraryViewModel(main, AddonKind.RenoDx, AddonsChanged);
         Lecram = new AddonLibraryViewModel(main, AddonKind.Lecram, AddonsChanged);
         Dfc = new AddonLibraryViewModel(main, AddonKind.Dfc, AddonsChanged);
+        ReShade = new ReShadeSettingsViewModel(main, AddonsChanged);
+        Feeder = new FeederSettingsViewModel(main, AddonsChanged);
         Cleanup = new BuildCleanupViewModel(main);
         Overrides = new ObservableCollection<IniOverride>(Settings.IniOverrides);
         ReShadeOverrides = new ObservableCollection<IniOverride>(Settings.ReShadeOverrides);
@@ -43,6 +45,8 @@ public sealed partial class SettingsViewModel : ObservableObject
     }
 
     public AddonLibraryViewModel RenoDx { get; }
+    public ReShadeSettingsViewModel ReShade { get; }
+    public FeederSettingsViewModel Feeder { get; }
     public AddonLibraryViewModel Lecram { get; }
     public AddonLibraryViewModel Dfc { get; }
     public BuildCleanupViewModel Cleanup { get; }
@@ -404,6 +408,39 @@ public sealed partial class SettingsViewModel : ObservableObject
         SelectedNr = NrChoices.FirstOrDefault(c => c.Tag == id);
     }
 
+    /// <summary>Per update check: fetch ShortFuse's DLSS add-on from the catalog when it has a newer build.</summary>
+    public bool AutoDownloadRenoDx
+    {
+        get => Settings.AutoDownloadRenoDx;
+        set { Settings.AutoDownloadRenoDx = value; Save(); }
+    }
+
+    /// <summary>The HDR peak brightness as typed: empty = off, else a number of nits kept between the limits the mod takes.</summary>
+    public string HdrPeakText
+    {
+        get => Settings.HdrPeakNits?.ToString() ?? "";
+        set
+        {
+            if (TryParsePeak(value, out var nits))
+            {
+                Settings.HdrPeakNits = nits;
+                Save();
+            }
+            OnPropertyChanged();
+        }
+    }
+
+    /// <summary>"" = off (null). A number is clamped to 80..10000; anything else is rejected and the old value stays.</summary>
+    internal static bool TryParsePeak(string? text, out int? nits)
+    {
+        nits = null;
+        text = text?.Trim();
+        if (string.IsNullOrEmpty(text)) return true;
+        if (!int.TryParse(text, System.Globalization.NumberStyles.None, System.Globalization.CultureInfo.InvariantCulture, out var n)) return false;
+        nits = HdrIni.ClampPeak(n);
+        return true;
+    }
+
     public bool InstallRenoDx
     {
         get => Settings.InstallRenoDx;
@@ -452,20 +489,6 @@ public sealed partial class SettingsViewModel : ObservableObject
     }
 
     public string DlssNrInfo => Describe(_main.S.Store.DlssNrPath, _main.S.DlssNrSha, true);
-    public string ReShadeInfo
-    {
-        get
-        {
-            var store = _main.S.Store;
-            if (store.ReShadeImported) return "Imported  ·  " + Describe(store.ReShadePath, _main.S.ReShadeSha, false);
-            if (!AutoDownloadReShade) return "Not imported";
-            if (store.CurrentReShadePath is { } path) return "Downloaded from reshade.me (add-on build)  ·  " + Describe(path, _main.S.ReShadeSha, false);
-            return store.ReShade is { } r ? $"Downloaded from reshade.me on first install (add-on build {r.Tag})" : "Downloaded from reshade.me on first install";
-        }
-    }
-
-    public bool ReShadeImported => _main.S.Store.ReShadeImported;
-
     public string? LecramMessage => _main.S.Store.SfLecramMessage(_main.S.Store.RenoDxImported, _main.S.Store.LecramImported, Settings.RenoDxId, Settings.LecramId);
     public bool HasLecramMessage => LecramMessage is not null;
 
@@ -497,6 +520,8 @@ public sealed partial class SettingsViewModel : ObservableObject
         RenoDx.Reload();
         Lecram.Reload();
         Dfc.Reload();
+        ReShade.Reload();
+        Feeder.Reload();
         ApplyLecramGeneration();
         ApplyDfcCompat();
         RefreshAddonPairStatus();
@@ -508,38 +533,6 @@ public sealed partial class SettingsViewModel : ObservableObject
         var missing = _main.S.Store.DfcCompat(DfcOptions.Select(o => o.Key))?.MissingKeys ?? [];
         foreach (var o in DfcOptions)
             o.IsAvailable = !missing.Contains(o.Key, StringComparer.OrdinalIgnoreCase);
-    }
-
-    public bool AutoDownloadReShade
-    {
-        get => Settings.AutoDownloadReShade;
-        set
-        {
-            Settings.AutoDownloadReShade = value;
-            Save();
-            _ = RefreshReShadeAsync();
-        }
-    }
-
-    /// <summary>Drops the imported ReShade64.dll so installs use the automatic download again.</summary>
-    [RelayCommand]
-    private async Task UseReShadeDownload()
-    {
-        try
-        {
-            File.Delete(_main.S.Store.ReShadePath);
-            Log.Info("Removed imported ReShade64.dll; installs use the reshade.me download");
-        }
-        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) { Log.Error("Could not remove the imported ReShade64.dll", ex); }
-        await RefreshReShadeAsync();
-    }
-
-    private async Task RefreshReShadeAsync()
-    {
-        await _main.RefreshLocalComponentsAsync();
-        OnPropertyChanged(nameof(ReShadeInfo));
-        OnPropertyChanged(nameof(ReShadeImported));
-        OnPropertyChanged(nameof(AutoDownloadReShade));
     }
 
     private static string Describe(string path, string? sha, bool known)
@@ -583,7 +576,7 @@ public sealed partial class SettingsViewModel : ObservableObject
         NotifyNrAddons();
         NotifyModShown();
         Lecram.Reload();
-        _ = RefreshReShadeAsync();
+        ReShade.Reload();
         _main.SelfUpdate.SettingsChanged();
         Cleanup.SettingsChanged();
     }
@@ -698,9 +691,6 @@ public sealed partial class SettingsViewModel : ObservableObject
         { Log.Error("DLSS import failed", ex); Views.Dialog.Show("Import failed", UserErrors.Message(ex)); }
     }
 
-    [RelayCommand]
-    private Task ImportReShade() => Import(ComponentStore.ReShadeFile, "ReShade (add-on build)|ReShade64.dll;dxgi.dll;*.dll");
-
     private async Task Import(string fileName, string filter)
     {
         var dlg = new OpenFileDialog { Filter = filter, Title = $"Select {fileName}" };
@@ -721,8 +711,6 @@ public sealed partial class SettingsViewModel : ObservableObject
             Reload();
             await _main.RefreshLocalComponentsAsync();
             OnPropertyChanged(nameof(DlssNrInfo));
-            OnPropertyChanged(nameof(ReShadeInfo));
-            OnPropertyChanged(nameof(ReShadeImported));
             OnPropertyChanged(nameof(SelectedNrHint));
             if (fileName == ComponentStore.DlssNrFile) await _main.AutoCleanUpAfterImportAsync();
         }

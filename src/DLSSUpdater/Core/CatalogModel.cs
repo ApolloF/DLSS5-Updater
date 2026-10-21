@@ -14,6 +14,24 @@ public sealed class CatalogSections
 {
     public CatalogRenodx? Renodx { get; set; }
     public CatalogOptiCompat? OptiscalerCompat { get; set; }
+    /// <summary>ShortFuse's renodx-dlss add-on: hash-pinned builds, never mirrored (licence unknown).</summary>
+    public CatalogRenodxDlss? RenodxDlss { get; set; }
+}
+
+public sealed class CatalogRenodxDlss
+{
+    public string? Updated { get; set; }
+    /// <summary>Newest first.</summary>
+    public List<CatalogDlssBuild> Builds { get; set; } = [];
+}
+
+/// <summary>One release of the add-on. <see cref="File"/> is a zip that holds <c>renodx-dlss.addon64</c>.</summary>
+public sealed class CatalogDlssBuild
+{
+    public string Tag { get; set; } = "";
+    public string Version { get; set; } = "";
+    public string? Published { get; set; }
+    public CatalogBinary File { get; set; } = new();
 }
 
 /// <summary>OptiScaler's own compatibility list (its wiki), as the catalog copied it: facts and a pointer back to the wiki page.</summary>
@@ -131,6 +149,29 @@ public sealed class CatalogEngineGame
     public string Name { get; set; } = "";
     public string? Compat { get; set; }
     public string? Notes { get; set; }
+    /// <summary>Unreal Extended only: "native", "ini" or "upgrade", read from the wiki notes; null when they don't say.</summary>
+    public string? Method { get; set; }
+    /// <summary>Unreal Extended, upgrade method: the render-target formats to upgrade and how.</summary>
+    public List<CatalogUpgrade> Upgrades { get; set; } = [];
+    /// <summary>Unreal Extended: false when the notes say to switch "Upgrade Copy Destinations" off.</summary>
+    public bool? CopyDestinations { get; set; }
+    /// <summary>Unreal Extended: Engine.ini keys the notes name for this game; they replace the standard HDR keys.</summary>
+    public List<CatalogEngineIniKey> EngineIni { get; set; } = [];
+}
+
+public sealed class CatalogUpgrade
+{
+    /// <summary>A DXGI format as in the add-on's Upgrade_ keys, e.g. B8G8R8A8_TYPELESS.</summary>
+    public string Format { get; set; } = "";
+    /// <summary>"output-size", "output-ratio" or "any-size".</summary>
+    public string Mode { get; set; } = "";
+}
+
+public sealed class CatalogEngineIniKey
+{
+    public string Section { get; set; } = "SystemSettings";
+    public string Key { get; set; } = "";
+    public string Value { get; set; } = "";
 }
 
 /// <summary>The hand-maintained overrides of the catalog repository, as published in the catalog.</summary>

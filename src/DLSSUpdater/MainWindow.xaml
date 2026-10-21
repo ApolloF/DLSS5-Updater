@@ -882,6 +882,8 @@
                                                             <DataTrigger Binding="{Binding Key}" Value="dfc"><Setter Property="Visibility" Value="Collapsed" /></DataTrigger>
                                                             <DataTrigger Binding="{Binding Key}" Value="opti"><Setter Property="Visibility" Value="Collapsed" /></DataTrigger>
                                                             <DataTrigger Binding="{Binding Key}" Value="uplift"><Setter Property="Visibility" Value="Collapsed" /></DataTrigger>
+                                                            <DataTrigger Binding="{Binding Key}" Value="feeder"><Setter Property="Visibility" Value="Collapsed" /></DataTrigger>
+                                                            <DataTrigger Binding="{Binding Key}" Value="reshade"><Setter Property="Visibility" Value="Collapsed" /></DataTrigger>
                                                         </Style.Triggers>
                                                     </Style>
                                                 </TextBlock.Style>
@@ -897,6 +899,11 @@
                                                       ItemsSource="{Binding DataContext.UpliftChoices, RelativeSource={RelativeSource AncestorType=ItemsControl}}"
                                                       SelectedItem="{Binding DataContext.UpliftChoice, RelativeSource={RelativeSource AncestorType=ItemsControl}}"
                                                       AutomationProperties.Name="GITC Uplift version for this game" ToolTip="Which GITC Uplift build this game installs; Default follows Settings" />
+                                            <ComboBox Grid.Column="3" Margin="0,0,8,0" MaxDropDownHeight="300"
+                                                      Visibility="{Binding Key, Converter={StaticResource EqualsToVis}, ConverterParameter=reshade}"
+                                                      ItemsSource="{Binding DataContext.ReShadeChoices, RelativeSource={RelativeSource AncestorType=ItemsControl}}"
+                                                      SelectedItem="{Binding DataContext.ReShadeChoice, RelativeSource={RelativeSource AncestorType=ItemsControl}}"
+                                                      AutomationProperties.Name="ReShade build for this game" ToolTip="Which ReShade build this game installs: Default follows Settings, or a channel (Stable, no add-ons, nightly) or one build from the library" />
                                             <!-- The add-on rows pick the imported build this game installs. -->
                                             <ComboBox Grid.Column="3" Margin="0,0,8,0" MaxDropDownHeight="300"
                                                       Visibility="{Binding Key, Converter={StaticResource EqualsToVis}, ConverterParameter=renodx}"
@@ -913,12 +920,31 @@
                                                       ItemsSource="{Binding DataContext.DfcChoices, RelativeSource={RelativeSource AncestorType=ItemsControl}}"
                                                       SelectedItem="{Binding DataContext.DfcChoice, RelativeSource={RelativeSource AncestorType=ItemsControl}}"
                                                       AutomationProperties.Name="Deep Fried Chicken version for this game" ToolTip="Which imported Deep Fried Chicken build this game installs; it decides the files, the default cfg and whether games without DLSS work" />
+                                            <DockPanel Grid.Column="3" Margin="0,0,8,0" Visibility="{Binding Key, Converter={StaticResource EqualsToVis}, ConverterParameter=feeder}">
+                                                <Button DockPanel.Dock="Right" Content="Reset to auto" Style="{StaticResource BtnGhost}" Margin="6,0,0,0" Padding="8,0"
+                                                        Command="{Binding DataContext.ResetFeederToAutoCommand, RelativeSource={RelativeSource AncestorType=ItemsControl}}"
+                                                        Visibility="{Binding DataContext.FeederIsManual, RelativeSource={RelativeSource AncestorType=ItemsControl}, Converter={StaticResource BoolToVis}}"
+                                                        ToolTip="Follow Auto again for this game" />
+                                                <ComboBox MaxDropDownHeight="300"
+                                                          ItemsSource="{Binding DataContext.FeederChoices, RelativeSource={RelativeSource AncestorType=ItemsControl}}"
+                                                          SelectedItem="{Binding DataContext.FeederChoice, RelativeSource={RelativeSource AncestorType=ItemsControl}}"
+                                                          AutomationProperties.Name="DLSS5-Feeder version for this game" ToolTip="Auto installs the newest build; pick one to keep this game on it" />
+                                            </DockPanel>
                                             <CheckBox Grid.Column="4" IsChecked="{Binding Enabled}" IsEnabled="{Binding Editable}" HorizontalAlignment="Right" ToolTip="Include in install"
                                                       AutomationProperties.Name="{Binding Name, StringFormat='Install {0}'}" />
                                         </Grid>
                                     </DataTemplate>
                                 </ItemsControl.ItemTemplate>
                             </ItemsControl>
+                            <StackPanel Margin="34,0,16,10">
+                                <DockPanel>
+                                    <Button DockPanel.Dock="Right" Style="{StaticResource InfoBtn}" CommandParameter="reshade-dll-name" VerticalAlignment="Top"
+                                            ToolTip="{Binding Source=reshade-dll-name, Converter={StaticResource HelpTip}}" AutomationProperties.Name="About the ReShade file name" />
+                                    <TextBlock Text="{Binding ReShadeTargetText, StringFormat='ReShade file: {0}'}" Style="{StaticResource MutedText}" FontSize="12" TextWrapping="Wrap" />
+                                </DockPanel>
+                                <TextBlock Text="{Binding ReShadeForeignWarning}" Foreground="{StaticResource Warn}" FontSize="12" TextWrapping="Wrap" Margin="0,4,0,0"
+                                           Visibility="{Binding HasReShadeForeignWarning, Converter={StaticResource BoolToVis}}" />
+                            </StackPanel>
                             <StackPanel Margin="16,4,16,12" Visibility="{Binding BothAddonsEnabled, Converter={StaticResource BoolToVis}}">
                                 <Grid>
                                     <Grid.ColumnDefinitions>
@@ -955,6 +981,58 @@
                             </StackPanel>
                         </StackPanel>
                     </Border>
+
+                    <!-- RenoDX HDR: the catalog mod picked for this game -->
+                    <StackPanel Visibility="{Binding Hdr.Visible, Converter={StaticResource BoolToVis}}">
+                        <StackPanel Orientation="Horizontal">
+                            <TextBlock Text="HDR (RENODX)" Style="{StaticResource SectionTitle}" />
+                            <Button Style="{StaticResource InfoBtn}" CommandParameter="hdr-renodx" Margin="4,18,0,0"
+                                    ToolTip="{Binding Source=hdr-renodx, Converter={StaticResource HelpTip}}" AutomationProperties.Name="About HDR (RenoDX)" />
+                        </StackPanel>
+                        <Border Style="{StaticResource Card}" Padding="16,12">
+                            <StackPanel DataContext="{Binding Hdr}">
+                                <TextBlock Text="{Binding PickedText}" TextWrapping="Wrap" Visibility="{Binding HasPickedText, Converter={StaticResource BoolToVis}}" />
+                                <TextBlock Text="{Binding Notes}" Style="{StaticResource MutedText}" Foreground="{StaticResource Warn}" FontSize="11.5" TextWrapping="Wrap" Margin="0,6,0,0"
+                                           Visibility="{Binding HasNotes, Converter={StaticResource BoolToVis}}" />
+                                <WrapPanel Margin="0,12,0,0">
+                                    <StackPanel Margin="0,0,32,0">
+                                        <TextBlock Text="INSTALLED" Style="{StaticResource Caps}" />
+                                        <TextBlock Text="{Binding InstalledVersion}" Style="{StaticResource Mono}" Foreground="{StaticResource Muted}" Margin="0,2,0,0" />
+                                    </StackPanel>
+                                    <StackPanel>
+                                        <TextBlock Text="LATEST" Style="{StaticResource Caps}" />
+                                        <TextBlock Text="{Binding LatestVersion}" Style="{StaticResource Mono}" Margin="0,2,0,0" />
+                                    </StackPanel>
+                                </WrapPanel>
+                                <TextBlock Text="{Binding StatusLine}" Style="{StaticResource MutedText}" TextWrapping="Wrap" Margin="0,8,0,0"
+                                           Visibility="{Binding HasStatusLine, Converter={StaticResource BoolToVis}}" />
+                                <StackPanel Margin="0,12,0,0" Visibility="{Binding ShowBuildChoices, Converter={StaticResource BoolToVis}}">
+                                    <TextBlock Text="BUILD FOR THIS GAME" Style="{StaticResource Caps}" />
+                                    <ComboBox Margin="0,4,0,0" HorizontalAlignment="Left" MinWidth="260" MaxDropDownHeight="300"
+                                              ItemsSource="{Binding BuildChoices}" SelectedItem="{Binding BuildChoice}"
+                                              AutomationProperties.Name="RenoDX HDR build for this game" ToolTip="Which downloaded build of this mod the game installs; Default follows the catalog" />
+                                </StackPanel>
+                                <StackPanel Margin="0,12,0,0" Visibility="{Binding ShowUeToggle, Converter={StaticResource BoolToVis}}">
+                                    <CheckBox IsChecked="{Binding UeExtended}" AutomationProperties.Name="Use Unreal Extended">
+                                        <TextBlock Text="Use Unreal Extended" TextWrapping="Wrap" />
+                                    </CheckBox>
+                                    <TextBlock Text="{Binding UeHintText}" Style="{StaticResource MutedText}" FontSize="11.5" TextWrapping="Wrap" Margin="26,2,0,0" />
+                                </StackPanel>
+                                <WrapPanel Margin="0,12,0,0">
+                                    <Button Style="{StaticResource BtnPrimary}" Padding="22,9" MinWidth="110" Margin="0,0,8,4" AutomationProperties.Name="{Binding ActionText, StringFormat='{}{0} the HDR mod'}"
+                                            Command="{Binding DataContext.InstallHdrCommand, RelativeSource={RelativeSource AncestorType=Window}}"
+                                            IsEnabled="{Binding CanInstall}">
+                                        <TextBlock Text="{Binding ActionText}" />
+                                    </Button>
+                                    <Button Content="Remove" Padding="16,9" Margin="0,0,8,4" AutomationProperties.Name="Remove the HDR mod" ToolTip="Remove the HDR add-on and undo the config changes it made"
+                                            Command="{Binding DataContext.RemoveHdrCommand, RelativeSource={RelativeSource AncestorType=Window}}"
+                                            IsEnabled="{Binding CanRemove}" />
+                                    <Button Content="Mod page" Style="{StaticResource BtnGhost}" Margin="0,0,8,4" AutomationProperties.Name="Open the mod page" ToolTip="{Binding Link}"
+                                            Command="{Binding OpenLinkCommand}" Visibility="{Binding HasLink, Converter={StaticResource BoolToVis}}" />
+                                </WrapPanel>
+                            </StackPanel>
+                        </Border>
+                    </StackPanel>
 
                     <TextBlock Text="NR RUNTIME VERSION" Style="{StaticResource SectionTitle}" />
                     <Border Style="{StaticResource Card}" Padding="16">
@@ -1165,26 +1243,18 @@
                                                         <Button Content="Switch default back" Command="{Binding UndoNrDefaultCommand}" HorizontalAlignment="Left" Margin="0,8,0,0" />
                                                     </StackPanel>
                                                     <Border Style="{StaticResource Divider}" />
-                                                    <Grid Margin="0,10">
-                                                        <Grid.ColumnDefinitions>
-                                                            <ColumnDefinition Width="160" />
-                                                            <ColumnDefinition Width="*" />
-                                                            <ColumnDefinition Width="Auto" />
-                                                        </Grid.ColumnDefinitions>
-                                                        <TextBlock Text="ReShade64.dll" Style="{StaticResource Mono}" VerticalAlignment="Center" />
-                                                        <TextBlock Grid.Column="1" Text="{Binding ReShadeInfo}" Style="{StaticResource MutedText}" TextWrapping="Wrap" FontSize="12" VerticalAlignment="Center" />
-                                                        <StackPanel Grid.Column="2" Orientation="Horizontal">
-                                                            <Button Content="Use download" Style="{StaticResource BtnGhost}" Command="{Binding UseReShadeDownloadCommand}" Margin="12,0,0,0"
-                                                                    Visibility="{Binding ReShadeImported, Converter={StaticResource BoolToVis}}"
-                                                                    ToolTip="Remove the imported ReShade64.dll and use the latest add-on build from reshade.me" />
-                                                            <Button Content="Import…" Command="{Binding ImportReShadeCommand}" Margin="12,0,0,0" />
-                                                        </StackPanel>
-                                                    </Grid>
-                                                    <CheckBox IsChecked="{Binding AutoDownloadReShade}" Margin="0,0,0,10" AutomationProperties.Name="Download ReShade (add-on build) from reshade.me when none is imported">
-                                                        <TextBlock Text="Download ReShade (add-on build) from reshade.me when none is imported" TextWrapping="Wrap" />
-                                                    </CheckBox>
-                                                    <Border Style="{StaticResource Divider}" />
                                                     <ContentControl Content="{Binding RenoDx}" ContentTemplate="{StaticResource AddonLibraryRow}" Margin="0,10" />
+                                                    <CheckBox IsChecked="{Binding AutoDownloadRenoDx}" Margin="0,0,0,10" AutomationProperties.Name="Download ShortFuse's DLSS add-on from the catalog">
+                                                        <StackPanel>
+                                                            <StackPanel Orientation="Horizontal">
+                                                                <TextBlock Text="Download ShortFuse's DLSS add-on from the catalog" TextWrapping="Wrap" VerticalAlignment="Center" />
+                                                                <Button Style="{StaticResource InfoBtn}" CommandParameter="hdr-catalog-addon"
+                                                                        ToolTip="{Binding Source=hdr-catalog-addon, Converter={StaticResource HelpTip}}" />
+                                                            </StackPanel>
+                                                            <TextBlock Text="Each build is checked against its SHA-256 before it joins the library. You can still import one by hand."
+                                                                       Style="{StaticResource MutedText}" FontSize="11.5" TextWrapping="Wrap" Margin="0,2,0,0" />
+                                                        </StackPanel>
+                                                    </CheckBox>
                                                     <Border Style="{StaticResource Divider}" />
                                                     <ContentControl Content="{Binding Lecram}" ContentTemplate="{StaticResource AddonLibraryRow}" Margin="0,10" />
                                                     <TextBlock Text="{Binding LecramMessage}" Style="{StaticResource MutedText}" TextWrapping="Wrap" FontSize="12" Margin="0,0,0,10" Foreground="{StaticResource Warn}"
@@ -1193,7 +1263,7 @@
                                                     <ContentControl Content="{Binding Dfc}" ContentTemplate="{StaticResource AddonLibraryRow}" Margin="0,10" />
                                                 </StackPanel>
                                             </Border>
-                                            <TextBlock Text="Import each NR runtime you want to keep; they all stay in your library. NVIDIA's original needs an RTX 50 card. For RTX 20/30/40, download and extract ShortFuse's compat build (compat-fp16-310.9.16-cuda13.4.3) and import it. ReShade is downloaded from reshade.me."
+                                            <TextBlock Text="Import each NR runtime you want to keep; they all stay in your library. NVIDIA's original needs an RTX 50 card. For RTX 20/30/40, download and extract ShortFuse's compat build (compat-fp16-310.9.16-cuda13.4.3) and import it. ReShade has its own library under ReShade add-ons."
                                                        Style="{StaticResource MutedText}" FontSize="11.5" TextWrapping="Wrap" Margin="0,8,0,0" />
 
                                             <Button Content="Import DLSS SR / RR / FG…" Command="{Binding ImportDlssCommand}" HorizontalAlignment="Left" Margin="0,8,0,0"
@@ -1343,6 +1413,20 @@
                                                         <ComboBox Grid.Column="1" Width="210" Margin="16,0,0,0" ItemsSource="{Binding IniModes}" SelectedItem="{Binding IniMode}"
                                                                   ItemContainerStyle="{StaticResource DescribedItem}" AutomationProperties.Name="Existing game configs" />
                                                     </Grid>
+                                                    <Grid Margin="0,8">
+                                                        <Grid.ColumnDefinitions>
+                                                            <ColumnDefinition Width="*" />
+                                                            <ColumnDefinition Width="Auto" />
+                                                        </Grid.ColumnDefinitions>
+                                                        <StackPanel Orientation="Horizontal">
+                                                            <TextBlock Text="HDR peak brightness (nits)" VerticalAlignment="Center" />
+                                                            <Button Style="{StaticResource InfoBtn}" CommandParameter="hdr-peak"
+                                                                    ToolTip="{Binding Source=hdr-peak, Converter={StaticResource HelpTip}}" />
+                                                        </StackPanel>
+                                                        <TextBox Grid.Column="1" Width="100" Margin="16,0,0,0" Text="{Binding HdrPeakText, UpdateSourceTrigger=LostFocus}"
+                                                                 Tag="Off (80 to 10000)" AutomationProperties.Name="HDR peak brightness in nits; empty leaves the mod's own value"
+                                                                 ToolTip="Empty leaves the mod's own value. Otherwise 80 to 10000." />
+                                                    </Grid>
                                                 </StackPanel>
                                             </Border>
 
@@ -1485,6 +1569,103 @@
 
                                         <!-- ===== ReShade add-ons ===== -->
                                         <StackPanel Visibility="{Binding Tab, Converter={StaticResource EqualsToVis}, ConverterParameter=ReShade}">
+                                            <StackPanel Orientation="Horizontal">
+                                                <TextBlock Text="RESHADE BUILDS" Style="{StaticResource SectionTitle}" />
+                                                <Button Style="{StaticResource InfoBtn}" CommandParameter="reshade-library" Margin="4,18,0,0"
+                                                        ToolTip="{Binding Source=reshade-library, Converter={StaticResource HelpTip}}" AutomationProperties.Name="About ReShade builds" />
+                                            </StackPanel>
+                                            <Border Style="{StaticResource Card}" Padding="16">
+                                                <StackPanel DataContext="{Binding ReShade}">
+                                                    <TextBlock Text="Default build" Margin="0,0,0,6" />
+                                                    <ComboBox ItemsSource="{Binding DefaultChoices}" SelectedItem="{Binding DefaultChoice}" MaxDropDownHeight="300"
+                                                              AutomationProperties.Name="Default ReShade build" ToolTip="Games without their own pick install this: the newest build of a channel, or one build" />
+                                                    <TextBlock Text="{Binding Info}" Style="{StaticResource MutedText}" TextWrapping="Wrap" FontSize="12" Margin="0,6,0,0" />
+                                                    <CheckBox IsChecked="{Binding AutoDownload}" Margin="0,10,0,0" AutomationProperties.Name="Download the newest Stable ReShade from reshade.me when none is imported">
+                                                        <TextBlock Text="Download the newest Stable ReShade from reshade.me when none is imported" TextWrapping="Wrap" />
+                                                    </CheckBox>
+                                                    <Border Style="{StaticResource Divider}" Margin="0,10" />
+                                                    <WrapPanel>
+                                                        <Button Content="Import…" Command="{Binding ImportCommand}" Margin="0,0,8,0" ToolTip="Add ReShade64.dll / ReShade32.dll, a ReShade setup or a .zip to the library" />
+                                                        <Button Content="Folder…" Style="{StaticResource BtnGhost}" Command="{Binding ImportFolderCommand}" Margin="0,0,8,0" ToolTip="Add the folder holding ReShade64.dll and ReShade32.dll" />
+                                                        <Button Content="List older versions" Style="{StaticResource BtnGhost}" Command="{Binding ListOlderVersionsCommand}" Margin="0,0,8,0" ToolTip="Versions 6.0.0 and up that reshade.me still serves" />
+                                                        <ComboBox ItemsSource="{Binding LegacyVersions}" SelectedItem="{Binding SelectedLegacy}" Width="110" Margin="0,0,8,0" AutomationProperties.Name="Older ReShade version" />
+                                                        <Button Content="Download" Style="{StaticResource BtnGhost}" Command="{Binding DownloadLegacyCommand}" ToolTip="Download the chosen older version into the library" />
+                                                    </WrapPanel>
+                                                    <StackPanel Visibility="{Binding HasBuilds, Converter={StaticResource BoolToVis}}" Margin="0,10,0,0">
+                                                        <TextBlock Text="Library" Margin="0,0,0,6" />
+                                                        <ComboBox ItemsSource="{Binding BuildChoices}" SelectedItem="{Binding SelectedBuildChoice}" MaxDropDownHeight="300" AutomationProperties.Name="ReShade build in the library" />
+                                                        <Grid Margin="0,6,0,0">
+                                                            <Grid.ColumnDefinitions>
+                                                                <ColumnDefinition Width="*" />
+                                                                <ColumnDefinition Width="Auto" />
+                                                                <ColumnDefinition Width="Auto" />
+                                                            </Grid.ColumnDefinitions>
+                                                            <TextBox Text="{Binding LabelText, UpdateSourceTrigger=PropertyChanged}" Tag="Your own name for the selected build" AutomationProperties.Name="Name of the selected build" />
+                                                            <Button Grid.Column="1" Content="Save name" Command="{Binding RenameCommand}" Margin="12,0,0,0" ToolTip="Show this name instead of the detected one. Empty goes back to the detected name." />
+                                                            <Button Grid.Column="2" Content="Remove" Style="{StaticResource BtnGhost}" Command="{Binding RemoveCommand}" Margin="8,0,0,0" ToolTip="Remove the selected build from the library; games keep their copy" />
+                                                        </Grid>
+                                                    </StackPanel>
+                                                </StackPanel>
+                                            </Border>
+                                            <StackPanel Orientation="Horizontal">
+                                                <TextBlock Text="DLSS5-FEEDER BUILDS" Style="{StaticResource SectionTitle}" />
+                                                <Button Style="{StaticResource InfoBtn}" CommandParameter="feeder" Margin="4,18,0,0"
+                                                        ToolTip="{Binding Source=feeder, Converter={StaticResource HelpTip}}" AutomationProperties.Name="About DLSS5-Feeder" />
+                                            </StackPanel>
+                                            <Border Style="{StaticResource Card}" Padding="16">
+                                                <StackPanel DataContext="{Binding Feeder}">
+                                                    <TextBlock Text="Default build" Margin="0,0,0,6" />
+                                                    <DockPanel>
+                                                        <Button DockPanel.Dock="Right" Content="Reset to auto" Style="{StaticResource BtnGhost}" Margin="8,0,0,0" Command="{Binding ResetToAutoCommand}"
+                                                                Visibility="{Binding IsManual, Converter={StaticResource BoolToVis}}" ToolTip="Follow the newest build again" />
+                                                        <ComboBox ItemsSource="{Binding DefaultChoices}" SelectedItem="{Binding DefaultChoice}" MaxDropDownHeight="300"
+                                                                  AutomationProperties.Name="Default DLSS5-Feeder build" ToolTip="Games without their own pick install this: Auto is the newest build" />
+                                                    </DockPanel>
+                                                    <TextBlock Text="{Binding Info}" Style="{StaticResource MutedText}" TextWrapping="Wrap" FontSize="12" Margin="0,6,0,0" />
+                                                    <Border Style="{StaticResource Divider}" Margin="0,10" />
+                                                    <WrapPanel>
+                                                        <Button Content="Import…" Command="{Binding ImportCommand}" Margin="0,0,8,0" ToolTip="Add a DLSS5-Feeder release .zip or dlss5-feed.addon64 to the library" />
+                                                        <Button Content="Folder…" Style="{StaticResource BtnGhost}" Command="{Binding ImportFolderCommand}" Margin="0,0,8,0" ToolTip="Add the extracted DLSS5-Feeder release folder" />
+                                                        <Button Content="Download newest" Style="{StaticResource BtnGhost}" Command="{Binding DownloadCommand}" ToolTip="Download the newest release from GitHub now; its SHA-256 is checked against GitHub's" />
+                                                    </WrapPanel>
+                                                    <StackPanel Visibility="{Binding HasBuilds, Converter={StaticResource BoolToVis}}" Margin="0,10,0,0">
+                                                        <TextBlock Text="Library" Margin="0,0,0,6" />
+                                                        <DockPanel>
+                                                            <Button DockPanel.Dock="Right" Content="Remove" Style="{StaticResource BtnGhost}" Command="{Binding RemoveCommand}" Margin="8,0,0,0" ToolTip="Remove the selected build from the library" />
+                                                            <ComboBox ItemsSource="{Binding BuildChoices}" SelectedItem="{Binding SelectedBuildChoice}" MaxDropDownHeight="300" AutomationProperties.Name="DLSS5-Feeder build in the library" />
+                                                        </DockPanel>
+                                                    </StackPanel>
+                                                    <TextBlock Text="{Binding Status}" Style="{StaticResource MutedText}" TextWrapping="Wrap" FontSize="12" Margin="0,8,0,0" />
+                                                </StackPanel>
+                                            </Border>
+                                            <StackPanel Orientation="Horizontal">
+                                                <TextBlock Text="VULKAN LAYER" Style="{StaticResource SectionTitle}" />
+                                                <Button Style="{StaticResource InfoBtn}" CommandParameter="reshade-vulkan" Margin="4,18,0,0"
+                                                        ToolTip="{Binding Source=reshade-vulkan, Converter={StaticResource HelpTip}}" AutomationProperties.Name="About the Vulkan layer" />
+                                            </StackPanel>
+                                            <Border Style="{StaticResource Card}" Padding="16">
+                                                <StackPanel DataContext="{Binding ReShade}">
+                                                    <TextBlock Text="{Binding LayerText}" Style="{StaticResource MutedText}" TextWrapping="Wrap" FontSize="12" />
+                                                    <WrapPanel Margin="0,10,0,0">
+                                                        <Button Content="Install layer" Command="{Binding InstallLayerCommand}" Margin="0,0,8,0" ToolTip="Registers ReShade for Vulkan games on this PC; asks for administrator rights for this step only" />
+                                                        <Button Content="Remove layer" Style="{StaticResource BtnGhost}" Command="{Binding RemoveLayerCommand}" IsEnabled="{Binding LayerRemovable}" Margin="0,0,8,0" />
+                                                    </WrapPanel>
+                                                </StackPanel>
+                                            </Border>
+                                            <StackPanel Orientation="Horizontal">
+                                                <TextBlock Text="RESHADE.INI TEMPLATE" Style="{StaticResource SectionTitle}" />
+                                                <Button Style="{StaticResource InfoBtn}" CommandParameter="reshade-template" Margin="4,18,0,0"
+                                                        ToolTip="{Binding Source=reshade-template, Converter={StaticResource HelpTip}}" AutomationProperties.Name="About the ReShade.ini template" />
+                                            </StackPanel>
+                                            <Border Style="{StaticResource Card}" Padding="16">
+                                                <StackPanel DataContext="{Binding ReShade}">
+                                                    <TextBlock Text="{Binding TemplatePath}" Style="{StaticResource Mono}" Foreground="{StaticResource Muted}" FontSize="11" TextWrapping="Wrap" />
+                                                    <WrapPanel Margin="0,10,0,0">
+                                                        <Button Content="Edit template" Command="{Binding EditTemplateCommand}" Margin="0,0,8,0" ToolTip="Opens the file in your text editor" />
+                                                        <Button Content="Reset" Style="{StaticResource BtnGhost}" Command="{Binding ResetTemplateCommand}" ToolTip="Put the shipped template back" />
+                                                    </WrapPanel>
+                                                </StackPanel>
+                                            </Border>
                                             <StackPanel Orientation="Horizontal" Margin="0,18,0,0">
                                                 <TextBlock Text="SHOW DEFAULTS FOR" Style="{StaticResource Caps}" VerticalAlignment="Center" Margin="0,0,12,0" Width="140" />
                                                 <ComboBox Width="240" ItemsSource="{Binding ModChoices}" SelectedItem="{Binding ModSelection}"

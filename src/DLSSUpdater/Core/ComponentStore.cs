@@ -28,6 +28,10 @@ public sealed class CachedComponent
     public bool Prerelease { get; set; }
     public DateTime? Published { get; set; }
     public DateTime Fetched { get; set; }
+    /// <summary>The user brought this build in (DLSS5-Feeder only so far): kept byte for byte and never removed by the automatic cleanup.</summary>
+    public bool Imported { get; set; }
+    /// <summary>The version of an imported build, as read from its files.</summary>
+    public string? Label { get; set; }
 }
 
 /// <summary>Resolves the latest releases, downloads them once per tag and holds the user-supplied files.</summary>
@@ -155,19 +159,18 @@ public sealed partial class ComponentStore
     public Func<string?> OptiSourceRepo { get; set; } = () => null;
     public OptiSource OptiSource => OptiSources.For(OptiSourceRepo());
     public string DlssNrPath => DlssNrFor(SelectedDlssNr());
-    /// <summary>A ReShade64.dll the user imported; it wins over the automatic download.</summary>
+    /// <summary>Where 2.x kept a ReShade64.dll the user imported; <see cref="MigrateReShade"/> moves it into the ReShade library.</summary>
     public string ReShadePath => Path.Combine(AppPaths.Components, ReShadeFile);
-    public bool ReShadeImported => File.Exists(ReShadePath);
+    /// <summary>The user has imported a ReShade build (or still has the old single file).</summary>
+    public bool ReShadeImported => File.Exists(ReShadePath) || ReShadeBuilds.Any(b => b.Channel == ReShadeChannel.Custom);
 
-    /// <summary>The ReShade64.dll installs use right now: the imported one, else the downloaded one (null when not cached yet).</summary>
+    /// <summary>The ReShade64.dll installs use right now: the default build's (null when the library has none).</summary>
     public string? CurrentReShadePath
     {
         get
         {
-            if (ReShadeImported) return ReShadePath;
-            if (!AutoReShade() || ReShade is not { } r || !IsCached(Component.ReShade, r.Tag)) return null;
-            var path = Path.Combine(TagDir(Component.ReShade, r.Tag), ReShadeFile);
-            return File.Exists(path) ? path : null;
+            if (File.Exists(ReShadePath)) return ReShadePath;
+            return DefaultReShadeBuild() is { Has64: true } build ? ReShadeFilePath(build, 64) : null;
         }
     }
 
@@ -312,7 +315,12 @@ public sealed partial class ComponentStore
     private async Task<ReleaseInfo?> ResolveReShadeAsync(CancellationToken ct)
     {
         string? version = null;
-        try { version = ParseReShadePage(await _gh.GetStringAsync(ReShadeSite, ct)); }
+        try
+        {
+            var (addon, plain) = ReShadeSource.ParseSitePage(await _gh.GetStringAsync(ReShadeSite, ct));
+            version = addon;
+            ReShadeNoAddonsVersion = plain ?? ReShadeNoAddonsVersion;
+        }
         catch (Exception ex) when (!ct.IsCancellationRequested && ex is HttpRequestException or TaskCanceledException)
         { Log.Info($"reshade.me unreachable ({ex.Message}), trying GitHub tags"); }
 
@@ -552,35 +560,6 @@ public sealed partial class ComponentStore
         finally { _locks[Component.Streamline].Release(); }
     }
 
-    /// <summary>The ReShade64.dll to install: the imported one, else the latest add-on build from reshade.me (downloaded once per version).</summary>
-    public async Task<string> EnsureReShadeFileAsync(IProgress<TransferProgress>? progress, CancellationToken ct)
-    {
-        if (ReShadeImported) return ReShadePath;
-        if (!AutoReShade())
-            throw new FileNotFoundException("ReShade64.dll has not been imported and automatic download is off (Settings → Local components).");
-        var r = ReShade ?? throw new InvalidOperationException("ReShade release unknown (offline and nothing cached). Import ReShade64.dll under Settings → Local components.");
-        var dir = TagDir(Component.ReShade, r.Tag);
-        var dll = Path.Combine(dir, ReShadeFile);
-        await _locks[Component.ReShade].WaitAsync(ct);
-        try
-        {
-            if (IsCached(Component.ReShade, r.Tag)) return dll;
-            if (r.FromCache) throw new InvalidOperationException("Cached ReShade is incomplete.");
-
-            var (name, url, _) = r.Files[0];
-            var setup = Path.Combine(dir, name);
-            await _gh.DownloadAsync(url, setup, $"ReShade {r.Tag}", progress, ct);
-            progress?.Report(new TransferProgress("Extracting ReShade", null));
-            await Task.Run(() => ExtractReShade(setup, dll), ct);
-            File.Delete(setup);
-
-            MarkComplete(Component.ReShade, r);
-            Log.Info($"Cached ReShade {r.Tag} (add-on build)");
-            return dll;
-        }
-        finally { _locks[Component.ReShade].Release(); }
-    }
-
     /// <summary>ReShade's setup is an exe with a zip appended; ReShade64.dll is one of its entries.</summary>
     internal static void ExtractReShade(string setupExe, string destDll)
     {
@@ -637,7 +616,8 @@ public sealed partial class ComponentStore
         if (fileName == RenoDxFile) { ImportRenoDx(source); return; }
         if (LecramFiles.Contains(fileName)) { ImportLecram(source); return; }
         if (fileName == DfcFile) { ImportDfc(source); return; }
-        if (fileName != ReShadeFile && fileName != MfgFile) throw new ArgumentException("Unsupported component.", nameof(fileName));
+        if (fileName == ReShadeFile) { ImportReShade(source); return; }
+        if (fileName != MfgFile) throw new ArgumentException("Unsupported component.", nameof(fileName));
         Directory.CreateDirectory(AppPaths.Components);
         FileUtil.AtomicCopy(source, Path.Combine(AppPaths.Components, fileName));
         Log.Info($"Imported {fileName} from {source}");
@@ -649,13 +629,14 @@ public sealed partial class ComponentStore
         MigrateDlssNr();
         MigrateAddons();
         MigrateDfc();
+        MigrateReShade();
         MigrateReleaseLibraries();
         var dirs = new[] { Path.GetDirectoryName(Environment.ProcessPath), AppContext.BaseDirectory, Environment.CurrentDirectory }
             .Where(d => !string.IsNullOrEmpty(d)).Distinct(StringComparer.OrdinalIgnoreCase);
         foreach (var file in new[] { DlssNrFile, ReShadeFile, MfgFile, RenoDxFile, DfcFile })
         {
             if (File.Exists(Path.Combine(AppPaths.Components, file)) || (file == DlssNrFile && DlssNrVersions.Count > 0)
-                || (file == RenoDxFile && RenoDxImported) || (file == DfcFile && DfcImported)) continue;
+                || (file == RenoDxFile && RenoDxImported) || (file == DfcFile && DfcImported) || (file == ReShadeFile && ReShadeImported)) continue;
             var src = dirs.Select(d => Path.Combine(d!, file))
                 .FirstOrDefault(f => File.Exists(f) && (file != DfcFile || File.Exists(Path.Combine(Path.GetDirectoryName(f)!, DfcBridgeFile))));
             if (src is null) continue;

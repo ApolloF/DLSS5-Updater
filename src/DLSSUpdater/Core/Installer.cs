@@ -55,6 +55,12 @@ public sealed record InstallOptions
     public string Proxy { get; init; } = "dxgi.dll";
     public IReadOnlyList<IniOverride> Overrides { get; init; } = [];
     public IReadOnlyList<IniOverride> ReShadeOverrides { get; init; } = [];
+    /// <summary>ReShade build for this game: a library id or "channel:..." (see <see cref="ReShadePick"/>); null = the default.</summary>
+    public string? ReShadeBuildPick { get; init; }
+    /// <summary>The user's ReShade.ini template (<see cref="ReShadeIniTemplate"/>), merged under <see cref="ReShadeOverrides"/>.</summary>
+    public IReadOnlyList<IniOverride> ReShadeTemplate { get; init; } = [];
+    /// <summary>ReShade loads through the Vulkan implicit layer: no dll goes into the game, its ReShade.ini switches ReShade on there.</summary>
+    public bool ReShadeVulkan { get; init; }
     public bool AntiCheatConfirmed { get; init; }
     /// <summary>OptiScaler-NR release to install from the cache; null = the newest.</summary>
     public string? OptiTag { get; init; }
@@ -96,6 +102,9 @@ public sealed class GameRunningException(string exe)
 
 public sealed partial class Installer(ComponentStore store)
 {
+    /// <summary>The machine's Vulkan layer registration, read to see whether a Vulkan install can work; tests substitute a fake.</summary>
+    public IVulkanLayerHost VulkanHost { get; init; } = new WindowsVulkanLayerHost();
+
     private static readonly string[] LegacyFiles =
         ["OptiScaler.asi", "nvngx.dll_dlssnr.dll", "Remove OptiScaler.bat", "Remove_OptiScaler.bat", "OptiScaler.dll"];
 
@@ -207,7 +216,15 @@ public sealed partial class Installer(ComponentStore store)
         var swapSl = o.Streamline || mfgPlan?.SwapStreamline == true;
         var sl = swapSl && game.Streamline.Count > 0 ? await store.EnsureStreamlineAsync(progress, ct) : null;
         if (o.Streamline && game.Streamline.Count == 0) Log.Info($"{game.Name}: no Streamline files in this game, skipped");
-        var reshade = o.ReShade ? await store.EnsureReShadeFileAsync(progress, ct) : null;
+        // ReShade32.dll for a 32-bit game when ReShade is the proxy; beside OptiScaler it is always the 64-bit ReShade64.dll it loads.
+        var reshadeFile = o.ReShade ? await store.EnsureReShadeAsync(o.ReShadeBuildPick, o.ReShadeOnly && game.Tech.Bits == 32 ? 32 : 64, progress, ct) : null;
+        var reshade = reshadeFile?.Path;
+        if (o.ReShade && o.ReShadeVulkan)
+        {
+            if (!o.ReShadeOnly) throw new InvalidOperationException("The Vulkan layer route needs ReShade + add-ons mode: OptiScaler loads ReShade64.dll itself.");
+            if (!VulkanLayer.Status(VulkanHost).IsInstalled)
+                throw new InvalidOperationException("This game uses Vulkan, so ReShade loads through its Vulkan layer. Install the layer first (Settings → ReShade → Vulkan layer; one administrator prompt).");
+        }
         if (o.RenoDx && (reshade is null || FileUtil.ReadVersion(reshade) is not { Major: >= 6 }))
             throw new InvalidOperationException("RenoDX needs ReShade 6 or newer with full add-on support.");
         if (o.Lecram && (reshade is null || FileUtil.ReadVersion(reshade) is not { Major: >= 6 }))
@@ -252,7 +269,7 @@ public sealed partial class Installer(ComponentStore store)
                     if (reshade is null) { m.ReShade = false; m.ReShadeSha = null; }
                 }
                 // One proxy per install: a new name takes ours out under the old one and puts back what it replaced.
-                if ((o.ReShadeOnly || pkg is not null) && m.Proxy is { } oldProxy && !oldProxy.Equals(o.Proxy, StringComparison.OrdinalIgnoreCase))
+                if ((o.ReShadeOnly || pkg is not null) && m.Proxy is { } oldProxy && (!oldProxy.Equals(o.Proxy, StringComparison.OrdinalIgnoreCase) || (o.ReShadeVulkan && reshade is not null)))
                     RemoveOwned(ctx, Path.Combine(targetDir, oldProxy));
                 if (o.ReShadeOnly || pkg is not null || reshade is not null) m.Mode = o.Mode;
 
@@ -278,15 +295,30 @@ public sealed partial class Installer(ComponentStore store)
                 {
                     WriteReShadeIni(ctx, o, addonEffects: uplift is not null || (dfc is not null && ComponentStore.DfcInstallFiles(dfc).Any(f => f.StartsWith(ComponentStore.DfcShaderDir + "\\", StringComparison.OrdinalIgnoreCase))),
                         lecram: lecram?.Build);
-                    // ReShade-only: ReShade itself is the proxy the game loads; otherwise OptiScaler loads ReShade64.dll.
-                    Place(ctx, reshade, Path.Combine(targetDir, o.ReShadeOnly ? o.Proxy : ComponentStore.ReShadeFile));
-                    if (o.ReShadeOnly)
+                    if (o.ReShadeVulkan)
                     {
-                        m.Proxy = o.Proxy;
-                        Log.Info($"  {o.Proxy} ← ReShade");
+                        // The layer in ProgramData carries ReShade; the game only gets the ReShade.ini that switches it on.
+                        m.Proxy = null;
+                        Log.Info("  ReShade loads through the Vulkan layer (ReShade.ini written, no dll placed)");
+                    }
+                    else
+                    {
+                        // ReShade-only: ReShade itself is the proxy the game loads; otherwise OptiScaler loads ReShade64.dll.
+                        var proxyName = o.ReShadeOnly ? o.Proxy : ComponentStore.ReShadeFile;
+                        var proxyPath = Path.Combine(targetDir, proxyName);
+                        if (!m.Owns(ctx.Rel(proxyPath)) && ForeignDll.Warning(proxyName, ForeignDll.Identify(proxyPath)) is { } foreign)
+                            Log.Warn($"{game.Name}: {foreign}");
+                        Place(ctx, reshade, proxyPath);
+                        if (o.ReShadeOnly)
+                        {
+                            m.Proxy = o.Proxy;
+                            Log.Info($"  {o.Proxy} ← ReShade {reshadeFile!.Build.Version}");
+                        }
                     }
                     m.ReShade = true;
                     m.ReShadeSha = HashCache.Get(reshade);
+                    m.ReShadeId = reshadeFile!.Build.Id;
+                    m.ReShadeVulkan = o.ReShadeVulkan;
                 }
                 if (mfg is not null)
                 {
@@ -493,7 +525,7 @@ public sealed partial class Installer(ComponentStore store)
         var rel = ctx.Rel(path);
         var exists = File.Exists(path);
         var original = exists ? File.ReadAllText(path) : null;
-        var profile = o.ReShadeOverrides
+        var profile = ConfigProfile.Layer(o.ReShadeVulkan ? [.. o.ReShadeTemplate, .. ReShadeIniTemplate.VulkanExtras] : o.ReShadeTemplate, o.ReShadeOverrides)
             .Where(x => o.RenoDx || !RenoDxIni.IsRenoDx(x))
             .Where(x => !LecramIni.IsLecram(x) || o.Lecram && LecramIni.IsAvailable(x.Key.Trim(), lecramGen, lecram?.DetectedLabel))
             .Where(x => o.Uplift || !UpliftConfig.IsUplift(x))

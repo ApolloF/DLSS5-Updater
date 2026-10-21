@@ -44,7 +44,7 @@ Settings for all games. Every option has a short explanation, and the help butto
 | [NVIDIA DLSS](https://github.com/NVIDIA/DLSS) | The DLSS runtime files for upscaling, ray reconstruction and frame generation. | Downloaded from NVIDIA's GitHub. |
 | [NVIDIA Streamline](https://github.com/NVIDIA-RTX/Streamline) | The layer between a game and DLSS frame generation. Optional. | Downloaded from NVIDIA's GitHub. |
 | [MFG Unlock](https://github.com/mavismmg/MFGAdaUnlock-RenoDx) | A ReShade add-on that unlocks multi frame generation on RTX 40 cards. | Downloaded from GitHub. |
-| [ReShade](https://reshade.me) | Post-processing and add-on loader. | Downloaded from reshade.me (the add-on build). |
+| [ReShade](https://reshade.me) | Post-processing and add-on loader. | Downloaded from reshade.me (add-on build, build without add-ons, older versions) or from crosire's CI (nightly), or imported. Every build is kept in a library; the file name follows the game's graphics API and Vulkan games use the Vulkan layer. |
 | [GITC Uplift](https://github.com/ghostinthecamera/GITC-Uplift) | A ReShade add-on that runs DLSS neural rendering. Replaces the other neural rendering routes. | Downloaded from GitHub. |
 | [RenoDX DLSS add-on](https://github.com/clshortfuse/renodx) | ShortFuse's ReShade add-on for neural rendering. | You import the file yourself. |
 | Lecram DLSS5 add-on | A ReShade add-on for neural rendering by Lecram. | You import it yourself. The builds are available to supporters on the author's Buy Me a Coffee. |
@@ -80,7 +80,7 @@ On a fresh install a short setup opens over the window: a welcome, the default i
 1. Start the app. It scans your game libraries and lists the games it finds. To add a game it missed, use **Add game** (one game folder) or **Add library** (a folder whose subfolders are games) at the bottom of the list.
 2. Add `nvngx_dlssnr.dll` if you want to use neural rendering. This file belongs to NVIDIA, and its licence does not allow other people to share it, so this app does not include it and never downloads it. You supply your own copy. Put it next to `DLSS5Updater.exe` before the first start, or open **Settings** and import it under **Local components**. The app stores it in `%LocalAppData%\DLSS5Updater\components`. You can keep several versions side by side and pick a default.
 3. You can skip step 2 if you only want newer DLSS files. **DLSS only** does not need it.
-4. ReShade is downloaded the first time an install needs it. If you prefer your own `ReShade64.dll`, import it under **Local components**. **Use download** switches back.
+4. ReShade is downloaded the first time an install needs it. Pick another build, channel or your own import under **Settings → ReShade add-ons**; each game can pick its own.
 
 ## Everyday use
 

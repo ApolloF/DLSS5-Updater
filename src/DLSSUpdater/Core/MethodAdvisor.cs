@@ -30,7 +30,7 @@ public enum Method
     Luma,
     /// <summary>J, not in the app yet: a standalone all-in-one add-on.</summary>
     AioAddon,
-    /// <summary>Row 15, not in the app yet: the game's RenoDX HDR mod.</summary>
+    /// <summary>Row 15: the game's RenoDX HDR mod, installed from the HDR section of the game page (not a component of the methods).</summary>
     RenoDxHdr,
 }
 
@@ -351,7 +351,7 @@ public static class MethodAdvisor
         if (c.In.RenoDxMod is { Blocked: false } mod)
         {
             rows.Add(15);
-            list.Add(Opt(Method.RenoDxHdr, Availability.Coming, $"RenoDX has an HDR mod for this game ({mod.Name}); it works next to the methods above. The app doesn't install it yet."));
+            list.Add(Opt(Method.RenoDxHdr, Availability.Available, $"RenoDX has an HDR mod for this game ({mod.Name}); install it from the HDR section on this page. It works next to the methods above."));
         }
         // Row 16: OptiScaler's list also names the games that run a Luma mod; the Luma wiki itself isn't in the catalog yet.
         if (c.In.OptiCompat is { } listed && list.All(m => m.Method != Method.Luma)

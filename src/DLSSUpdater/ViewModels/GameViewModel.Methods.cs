@@ -56,6 +56,38 @@ public sealed partial class GameViewModel
         [ComponentRegistry.Feeder] = "feeder",
     };
 
+    // ---------- the Feeder build: Auto, or the user's own pick ----------
+
+    public ObservableCollection<DlssChoice> FeederChoices { get; } = [];
+    [ObservableProperty] private DlssChoice? _feederChoice;
+
+    /// <summary>True when the game pins a Feeder build instead of following Auto.</summary>
+    public bool FeederIsManual => FeederChoice?.Tag is not null;
+
+    /// <summary>"Auto (1.19.0)" first, then every build in the library; a pin the library lost stays visible.</summary>
+    private void FillFeederChoices(GameOverride? over)
+    {
+        var pin = over?.BuildPick(ComponentRegistry.Feeder);
+        FeederChoices.Clear();
+        FeederChoices.Add(new DlssChoice(null, FeederLibrary.AutoLabel(_s.Settings.DefaultBuild(ComponentRegistry.Feeder))));
+        foreach (var b in FeederLibrary.Builds()) FeederChoices.Add(new DlssChoice(b.Id, b.Label));
+        if (pin is not null && FeederChoices.All(c => c.Tag != pin)) FeederChoices.Add(new DlssChoice(pin, $"{pin} · not in the library"));
+        FeederChoice = FeederChoices.FirstOrDefault(c => c.Tag == pin) ?? FeederChoices[0];
+    }
+
+    partial void OnFeederChoiceChanged(DlssChoice? value)
+    {
+        OnPropertyChanged(nameof(FeederIsManual));
+        if (_loading || value is null) return;
+        _s.Settings.For(Id).SetBuildPick(ComponentRegistry.Feeder, value.Tag);
+        _s.Settings.Save();
+        RefreshStatus();
+    }
+
+    /// <summary>Back to following Auto for this game.</summary>
+    [RelayCommand]
+    private void ResetFeederToAuto() => FeederChoice = FeederChoices.FirstOrDefault();
+
     /// <summary>What the advisor needs to know about this game right now.</summary>
     public AdvisorInput AdviceInput()
     {
@@ -68,13 +100,14 @@ public sealed partial class GameViewModel
         var dfc = store.DfcBuildFor(EffectiveDfcId);
         if (dfc is not null) imported.Add(ComponentRegistry.Dfc);
         var shaders = Path.Combine(target, FeederLibrary.ShaderDir);
+        var catalog = AdvisorCatalog.For(_s.Catalog?.Document);
         return new AdvisorInput(Info, _s.Gpu)
         {
             NativeDlss = Installer.HasNativeDlss(Info, Manifest, target),
             ProtectedInstall = MethodAdvisor.IsProtectedStoreInstall(Info),
-            OptiCompat = _s.OptiCompat.Find(Info.Name),
-            HudfixIncompatible = _s.OptiCompat.IsHudfixIncompatible(Info.Name),
-            RenoDxMod = _s.RenoDxMatcher?.Match(Info).Mod,
+            OptiCompat = catalog.OptiCompat.Find(Info.Name),
+            HudfixIncompatible = catalog.OptiCompat.IsHudfixIncompatible(Info.Name),
+            RenoDxMod = catalog.RenoDx?.Match(Info).Mod,
             Imported = imported,
             DfcRunsWithoutDlss = dfc is null || ComponentStore.DfcSupportsNonDlssGames(dfc),
             InstalledRoutes = NrAddons.PresentIn(target, Manifest),

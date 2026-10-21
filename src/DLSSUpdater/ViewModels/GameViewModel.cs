@@ -64,12 +64,11 @@ public sealed class Services
     public required Installer Installer { get; init; }
     public string? DlssNrSha { get; set; }
     public string? ReShadeSha { get; set; }
+    /// <summary>The mod catalog and the RenoDX HDR service; null switches the HDR section off (tests build Services without them).</summary>
+    public CatalogState? Catalog { get; init; }
+    public HdrService? Hdr { get; init; }
     /// <summary>The graphics card, read once at startup; the method advisor judges the games against it.</summary>
     public GpuInfo Gpu { get; set; } = GpuInfo.Unknown;
-    /// <summary>OptiScaler's compatibility list from the catalog (empty until the catalog is loaded).</summary>
-    public OptiCompatIndex OptiCompat { get; set; } = new(null);
-    /// <summary>Matches games to RenoDX's list from the catalog; null until the catalog is loaded.</summary>
-    public GameMatcher? RenoDxMatcher { get; set; }
 }
 
 public sealed partial class GameViewModel : ObservableObject
@@ -80,6 +79,7 @@ public sealed partial class GameViewModel : ObservableObject
     public GameViewModel(GameInfo info, Services services)
     {
         _s = services;
+        Hdr = new HdrViewModel(this, services);
         _modChoices = ModPicker.Available(false, SelectedBuild.Name);
         Components =
         [
@@ -127,6 +127,7 @@ public sealed partial class GameViewModel : ObservableObject
     }
 
     public GameInfo Info { get; private set; }
+    public HdrViewModel Hdr { get; }
     public string Id => Info.Id;
     public string Name => Info.Name;
     public string Source => Info.Source;
@@ -165,7 +166,7 @@ public sealed partial class GameViewModel : ObservableObject
     {
         ApplyModeToRows();
         if (IsReShadeOnly && !On("renodx") && !On("lecram") && !On("dfc") && !On("uplift")) Components.First(c => c.Key == "dlssnr").Enabled = false;
-        if (!ProxyNames.Contains(Proxy, StringComparer.OrdinalIgnoreCase)) Proxy = "dxgi.dll";
+        if (!ProxyNames.Contains(Proxy, StringComparer.OrdinalIgnoreCase)) Proxy = IsReShadeOnly ? AutoReShadeProxy : "dxgi.dll";
         RefreshModPick();
         if (_loading) return;
         _s.Settings.For(Id).Mode = value == _s.Settings.DefaultMode ? null : value;
@@ -210,6 +211,39 @@ public sealed partial class GameViewModel : ObservableObject
     public string? EffectiveDfcId => DfcChoice?.Tag ?? _s.Settings.DfcId;
     /// <summary>Generation of the Lecram build this game uses; it decides which Lecram options apply.</summary>
     public LecramGeneration? EffectiveLecramGeneration => _s.Store.LecramBuildFor(EffectiveLecramId)?.Generation;
+
+    [ObservableProperty] private DlssChoice? _reShadeChoice;
+    public ObservableCollection<DlssChoice> ReShadeChoices { get; } = [];
+
+    /// <summary>Where ReShade goes in this game: the proxy name (from the API, or the file name chosen here) or the Vulkan layer.</summary>
+    public ReShadeTarget ReShadeTargetNow
+    {
+        get
+        {
+            var over = _s.Settings.Games.GetValueOrDefault(Id);
+            var manual = IsReShadeOnly && Manifest?.ReShadeVulkan != true ? Manifest?.Proxy ?? over?.Proxy : null;
+            return ReShadeNaming.Resolve(Info.Tech, optiScalerLoads: !IsReShadeOnly, manual);
+        }
+    }
+
+    /// <summary>"dxgi.dll · 64-bit · DX12 games load ReShade as dxgi.dll", under the ReShade row.</summary>
+    public string ReShadeTargetText
+    {
+        get
+        {
+            var t = ReShadeTargetNow;
+            return $"{t.Display} · {t.Bits}-bit · {t.Reason}";
+        }
+    }
+
+    /// <summary>One line when the dll ReShade would replace belongs to another mod (Special K, DXVK, ENB ...); null otherwise.</summary>
+    public string? ReShadeForeignWarning =>
+        SelectedTarget is null || Demo.Active || !On("reshade") || ReShadeTargetNow.DllName is not { } name ? null
+            : ReShadeInstall.ForeignWarning(Info, SelectedTarget.Dir, name, Manifest);
+
+    public bool HasReShadeForeignWarning => ReShadeForeignWarning is not null;
+
+    private string AutoReShadeProxy => ReShadeNaming.ForApi(Info.Tech.PrimaryApi) ?? ReShadeNaming.Default;
 
     [ObservableProperty] private DlssChoice? _optiChoice;
     [ObservableProperty] private DlssChoice? _upliftChoice;
@@ -538,6 +572,9 @@ public sealed partial class GameViewModel : ObservableObject
 
     [ObservableProperty] private bool _needsUpdate;
 
+    /// <summary>The RenoDX HDR mod in this game has a newer catalog build, another pick or changed settings to apply.</summary>
+    public bool NeedsHdrUpdate => Hdr.NeedsUpdate;
+
     public string ActionText => Manifest is null ? "Install" : NeedsUpdate ? "Update" : "Reinstall";
     public string Subtitle => Info.Exes.Count == 0 ? "No executable found" : Path.GetFileName(Info.Exes[0]);
 
@@ -609,8 +646,10 @@ public sealed partial class GameViewModel : ObservableObject
         RenoDxChoice = FillAddonChoices(RenoDxChoices, AddonKind.RenoDx, over?.RenoDxId);
         LecramChoice = FillAddonChoices(LecramChoices, AddonKind.Lecram, over?.LecramId);
         DfcChoice = FillAddonChoices(DfcChoices, AddonKind.Dfc, over?.DfcId);
+        ReShadeChoice = FillReShadeChoices(over?.ReShadeId);
         OptiChoice = FillBuildChoices(OptiChoices, _s.Store.Library(LibraryKind.OptiScaler), _s.Settings.OptiTag, _s.Store.Opti?.Tag, over?.OptiTag);
         UpliftChoice = FillBuildChoices(UpliftChoices, _s.Store.Library(LibraryKind.Uplift), _s.Settings.UpliftTag, _s.Store.Uplift?.Tag, over?.UpliftTag);
+        FillFeederChoices(over);
         _loading = loading;
         OnPropertyChanged(nameof(EffectiveLecramGeneration));
         RefreshAddonPairStatus();
@@ -634,6 +673,28 @@ public sealed partial class GameViewModel : ObservableObject
         foreach (var b in builds) list.Add(new DlssChoice(b.Id, b.Label));
         if (pin is not null && list.All(c => c.Tag != pin)) list.Add(new DlssChoice(pin, $"{pin} · not downloaded"));
         return list.FirstOrDefault(c => c.Tag == pin) ?? list[0];
+    }
+
+    /// <summary>"Default (...)" naming what the default installs, the moving channels, then every build in the library.</summary>
+    private DlssChoice FillReShadeChoices(string? pin)
+    {
+        var store = _s.Store;
+        ReShadeChoices.Clear();
+        var follows = store.ReShadeBuildFor(null);
+        ReShadeChoices.Add(new DlssChoice(null, $"Default ({follows?.Label ?? (store.ReShade is { } r ? r.Tag + " · not downloaded yet" : "none yet")})"));
+        foreach (var c in new[] { ReShadeChannel.Stable, ReShadeChannel.StableNoAddons, ReShadeChannel.Nightly })
+            ReShadeChoices.Add(new DlssChoice(ReShadePick.ForChannel(c), "Newest " + ReShadeBuild.ChannelLabel(c).ToLowerInvariant()));
+        foreach (var b in store.ReShadeBuilds) ReShadeChoices.Add(new DlssChoice(b.Id, b.Label));
+        if (pin is not null && ReShadeChoices.All(c => c.Tag != pin)) ReShadeChoices.Add(new DlssChoice(pin, "Missing ReShade build · import again"));
+        return ReShadeChoices.FirstOrDefault(c => c.Tag == pin) ?? ReShadeChoices[0];
+    }
+
+    partial void OnReShadeChoiceChanged(DlssChoice? value)
+    {
+        if (_loading) return;
+        _s.Settings.For(Id).ReShadeId = value?.Tag;
+        _s.Settings.Save();
+        RefreshStatus();
     }
 
     private DlssChoice FillAddonChoices(ObservableCollection<DlssChoice> list, AddonKind kind, string? pin)
@@ -761,7 +822,7 @@ public sealed partial class GameViewModel : ObservableObject
         Manifest = SelectedTarget is null ? null : Demo.Active ? Demo.ManifestAt(SelectedTarget.Dir) : InstallManifest.Load(SelectedTarget.Dir);
         var over = _s.Settings.Games.GetValueOrDefault(Id);
         Mode = Manifest is { } im && (im.Opti || im.ReShade) ? im.Mode : over?.Mode ?? _s.Settings.DefaultMode;
-        Proxy = Manifest?.Proxy ?? _s.Settings.Games.GetValueOrDefault(Id)?.Proxy ?? ExistingOptiProxy() ?? _s.Settings.DefaultProxy;
+        Proxy = Manifest?.Proxy ?? _s.Settings.Games.GetValueOrDefault(Id)?.Proxy ?? ExistingOptiProxy() ?? (IsReShadeOnly ? AutoReShadeProxy : _s.Settings.DefaultProxy);
 
         var m = Manifest;
         Set("opti", m?.Opti ?? true);
@@ -797,7 +858,11 @@ public sealed partial class GameViewModel : ObservableObject
         // The row names the build actually installed (the manifest tag carries it); without an install it names the selected one.
         Components.First(c => c.Key == "opti").Name = (m?.Opti == true && m.OptiTag is not null ? OptiSources.OfTag(m.OptiTag) : SelectedBuild).Name;
         Row("opti", m?.Opti == true ? m.OptiTag : null, EffectiveOptiTag ?? store.Opti?.Tag, true);
-        Row("reshade", m?.ReShade == true ? InstalledVersion(ReShadeInstalledName(m)) : null, ReShadeLatest(), ReShadeCurrent(m));
+        Row("reshade", m?.ReShade == true ? (m.ReShadeVulkan ? "Vulkan layer" : InstalledVersion(ReShadeInstalledName(m))) : null, ReShadeLatest(), ReShadeCurrent(m));
+        OnPropertyChanged(nameof(ReShadeTargetNow));
+        OnPropertyChanged(nameof(ReShadeTargetText));
+        OnPropertyChanged(nameof(ReShadeForeignWarning));
+        OnPropertyChanged(nameof(HasReShadeForeignWarning));
         Row("mfg", m?.Mfg == true ? m.MfgTag : null, store.Mfg?.Tag, true);
         if (!Info.Streamline.Any(d => d.Name.Equals("sl.dlss_g.dll", StringComparison.OrdinalIgnoreCase)) && m?.Mfg != true)
         {
@@ -870,6 +935,14 @@ public sealed partial class GameViewModel : ObservableObject
         OnPropertyChanged(nameof(DlssOutdated));
         OnPropertyChanged(nameof(DlssOutdatedTip));
         OnPropertyChanged(nameof(DlssBadgeText));
+        RefreshHdr();
+    }
+
+    /// <summary>Recomputes the HDR section; Update all and the Updates filter read <see cref="NeedsHdrUpdate"/>.</summary>
+    public void RefreshHdr()
+    {
+        Hdr.Refresh();
+        OnPropertyChanged(nameof(NeedsHdrUpdate));
     }
 
     private static bool IsTracked(InstallManifest m, string key) => key switch
@@ -902,14 +975,21 @@ public sealed partial class GameViewModel : ObservableObject
     private string? ReShadeLatest()
     {
         var store = _s.Store;
-        if (store.CurrentReShadePath is { } path) return FileUtil.Format(Trim3(FileUtil.ReadVersion(path)));
+        if (store.ReShadeBuildFor(ReShadeChoice?.Tag) is { } build) return build.Version;
         return _s.Settings.AutoDownloadReShade && store.ReShade is { } r ? r.Tag : null;
     }
 
     private bool ReShadeCurrent(InstallManifest? m)
     {
         if (m?.ReShade != true) return true;
-        if (_s.Store.ReShadeImported || _s.Store.CurrentReShadePath is not null) return m.ReShadeSha == _s.ReShadeSha;
+        if (_s.Store.ReShadeBuildFor(ReShadeChoice?.Tag) is { } want)
+        {
+            var same = want.Matches(m.ReShadeId) || (m.ReShadeId is null && (want.Sha64 == m.ReShadeSha || want.Sha32 == m.ReShadeSha));
+            // The default follows the newest Stable build: one reshade.me has but the library doesn't yet is newer than what's installed.
+            var newerOnline = ReShadePick.ChannelOf(_s.Store.EffectiveReShadePick(ReShadeChoice?.Tag)) == ReShadeChannel.Stable
+                              && _s.Store.ReShade?.Version is { } online && want.ParsedVersion is { } have && Trim(have) < Trim(online);
+            return same && !newerOnline;
+        }
         // Auto download not fetched yet: compare the installed file with the release version.
         var installed = SelectedTarget is null ? null : FileUtil.ReadVersion(Path.Combine(SelectedTarget.Dir, ReShadeInstalledName(m)));
         return installed is null || _s.Store.ReShade?.Version is not { } latest || Trim(installed) >= Trim(latest);
@@ -955,9 +1035,12 @@ public sealed partial class GameViewModel : ObservableObject
         DlssTag = EffectiveDlssTag,
         Streamline = On("streamline") && HasStreamline,
         ReShadeOverrides = GameConfig.EffectiveReShade(_s.Settings, Id),
+        ReShadeBuildPick = ReShadeChoice?.Tag,
+        ReShadeTemplate = dlssOnly ? [] : ReShadeIniTemplate.Load(),
+        ReShadeVulkan = IsReShadeOnly && ReShadeTargetNow.VulkanLayer,
         CarryOverIni = IniMode != "fresh",
         OverwriteIni = IniMode == "apply",
-        Proxy = Proxy,
+        Proxy = IsReShadeOnly && ReShadeTargetNow.DllName is { } autoName ? autoName : Proxy,
         Overrides = GameConfig.EffectiveOpti(_s.Settings, Id),
         AntiCheatConfirmed = acConfirmed,
         OptiTag = EffectiveOptiTag,
@@ -988,6 +1071,8 @@ public sealed partial class GameViewModel : ObservableObject
         DlssTag = EffectiveDlssTag,
         Streamline = m.Streamline && HasStreamline,
         ReShadeOverrides = GameConfig.EffectiveReShade(_s.Settings, Id),
+        ReShadeBuildPick = ReShadeChoice?.Tag,
+        ReShadeVulkan = m.ReShadeVulkan,
         CarryOverIni = IniMode != "fresh",
         OverwriteIni = IniMode == "apply",
         Proxy = m.Proxy ?? Proxy,

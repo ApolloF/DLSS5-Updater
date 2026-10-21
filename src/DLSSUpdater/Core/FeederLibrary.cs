@@ -91,8 +91,9 @@ public sealed partial class FeederLibrary(GitHubClient github)
                 {
                     if (JsonSerializer.Deserialize(File.ReadAllText(marker), JsonCtx.Default.CachedComponent) is not { } meta || string.IsNullOrWhiteSpace(meta.Tag)
                         || !Path.GetFileName(dir).Equals(SafeName(meta.Tag), StringComparison.OrdinalIgnoreCase)) continue;
-                    found.Add(new LibraryBuild(LibraryKind.Feeder, meta.Tag, meta.Tag.TrimStart('v', 'V') + (PreTag().IsMatch(meta.Tag) ? " beta" : ""),
-                        meta.Tag, meta.Published ?? meta.Fetched, dir, Downloaded: true));
+                    var version = meta.Label ?? meta.Tag.TrimStart('v', 'V');
+                    found.Add(new LibraryBuild(LibraryKind.Feeder, meta.Tag, version + (meta.Imported ? " (imported)" : PreTag().IsMatch(meta.Tag) ? " beta" : ""),
+                        version, meta.Published ?? meta.Fetched, dir, Downloaded: !meta.Imported));
                 }
                 catch (Exception ex) when (ex is IOException or JsonException or UnauthorizedAccessException)
                 { Log.Error($"Could not read DLSS5-Feeder record {marker}", ex); }
@@ -108,6 +109,109 @@ public sealed partial class FeederLibrary(GitHubClient github)
     }
 
     public static string PackageOf(LibraryBuild build) => Path.Combine(build.Dir, PackageDir);
+
+    /// <summary>"Auto (1.19.0)" for the pickers: what the default installs now. The newest release is fetched on the first install when the library is empty.</summary>
+    public static string AutoLabel(string? defaultPick) => $"Auto ({Choose(defaultPick)?.Label ?? "the newest release, downloaded on install"})";
+
+    // ---------- import ----------
+
+    private const string ReadMe = "READ-ME-FIRST.txt";
+
+    /// <summary>
+    /// Adds a build the user got themselves: a release .zip, the extracted release folder (or a folder holding it), or
+    /// <c>dlss5-feed.addon64</c> in it. The four package files are copied byte for byte; the build's id is the SHA-256 of the 64-bit
+    /// add-on, so importing the same add-on again replaces that build's set. Imports are never removed by the automatic cleanup and
+    /// are not checked against GitHub's digest: the user chose the files.
+    /// </summary>
+    public static LibraryBuild Import(string source)
+    {
+        var staging = Root + ".new";
+        if (Directory.Exists(staging)) FileUtil.DeleteDirectory(staging);
+        try
+        {
+            var pkg = Path.Combine(staging, PackageDir);
+            var readme = source.EndsWith(".zip", StringComparison.OrdinalIgnoreCase) ? ExtractZip(source, pkg) : CopyFolder(source, pkg);
+            var id = FileUtil.Sha256(Path.Combine(pkg, Addon64));
+            var version = VersionOf(readme) ?? "imported " + id[..8];
+            var meta = new CachedComponent { Tag = id, Fetched = DateTime.UtcNow, Imported = true, Label = version };
+            FileUtil.AtomicWriteText(Path.Combine(staging, CompleteMarker), JsonSerializer.Serialize(meta, JsonCtx.Default.CachedComponent));
+            var dir = DirOf(id);
+            if (Directory.Exists(dir)) FileUtil.DeleteDirectory(dir);
+            Directory.CreateDirectory(Root);
+            Directory.Move(staging, dir);
+            Log.Info($"Imported DLSS5-Feeder {version}");
+            return Builds().First(b => b.Id.Equals(id, StringComparison.OrdinalIgnoreCase));
+        }
+        finally
+        {
+            if (Directory.Exists(staging)) FileUtil.DeleteDirectory(staging);
+        }
+    }
+
+    /// <summary>The package files out of a zip whose files are at its top or one folder down; returns line 1 of its READ-ME-FIRST.txt.</summary>
+    private static string? ExtractZip(string zip, string pkg)
+    {
+        using var archive = ZipFile.OpenRead(zip);
+        string Norm(ZipArchiveEntry e) => e.FullName.Replace('\\', '/');
+        var prefix = archive.Entries.Select(Norm)
+            .Where(n => n.EndsWith(Addon64, StringComparison.OrdinalIgnoreCase) && n.Count(c => c == '/') <= 1 && (n.Length == Addon64.Length || n[^(Addon64.Length + 1)] == '/'))
+            .Select(n => n[..^Addon64.Length]).OrderBy(n => n.Length).FirstOrDefault()
+            ?? throw new InvalidDataException($"{Addon64} isn't in {Path.GetFileName(zip)}. Choose the DLSS5-Feeder release zip.");
+        foreach (var (inZip, rel) in PackageFiles)
+        {
+            var entry = archive.Entries.FirstOrDefault(e => Norm(e).Equals(prefix + inZip, StringComparison.OrdinalIgnoreCase))
+                ?? throw new InvalidDataException($"DLSS5-Feeder: {inZip} is missing from {Path.GetFileName(zip)}.");
+            var dest = Path.Combine(pkg, rel);
+            Directory.CreateDirectory(Path.GetDirectoryName(dest)!);
+            entry.ExtractToFile(dest, true);
+        }
+        var note = archive.Entries.FirstOrDefault(e => Norm(e).Equals(prefix + ReadMe, StringComparison.OrdinalIgnoreCase));
+        if (note is null) return null;
+        using var reader = new StreamReader(note.Open());
+        return reader.ReadLine();
+    }
+
+    private static string? CopyFolder(string source, string pkg)
+    {
+        var folder = ReleaseFolder(source) ?? throw new InvalidDataException(
+            $"{Addon64} not found in {source}. Choose the extracted DLSS5-Feeder release folder, {Addon64} or the release zip.");
+        foreach (var (inZip, rel) in PackageFiles)
+        {
+            var from = Path.Combine(folder, inZip.Replace('/', Path.DirectorySeparatorChar));
+            if (!File.Exists(from)) throw new InvalidDataException($"DLSS5-Feeder: {inZip} is missing from {folder}.");
+            FileUtil.AtomicCopy(from, Path.Combine(pkg, rel));
+        }
+        var note = Path.Combine(folder, ReadMe);
+        return File.Exists(note) ? File.ReadLines(note).FirstOrDefault() : null;
+    }
+
+    /// <summary>"DLSS5-Feeder 1.19.0" (line 1 of the release's READ-ME-FIRST.txt) -> "1.19.0".</summary>
+    internal static string? VersionOf(string? readmeLine) =>
+        readmeLine is not null && Regex.Match(readmeLine, @"^\s*DLSS5-Feeder\s+(\S+)", RegexOptions.IgnoreCase) is { Success: true } m ? m.Groups[1].Value : null;
+
+    /// <summary>The folder holding <c>dlss5-feed.addon64</c>: the one chosen, the folder of the file chosen, or a single subfolder of it.</summary>
+    private static string? ReleaseFolder(string source)
+    {
+        if (File.Exists(source)) source = Path.GetDirectoryName(Path.GetFullPath(source))!;
+        if (!Directory.Exists(source)) return null;
+        if (File.Exists(Path.Combine(source, Addon64))) return source;
+        var inner = Directory.EnumerateDirectories(source).Where(d => File.Exists(Path.Combine(d, Addon64))).Take(2).ToList();
+        return inner.Count == 1 ? inner[0] : null;
+    }
+
+    /// <summary>
+    /// Takes a build out of the library. A default or game pick on it goes back to Auto, never to another build
+    /// (docs/design.md section 4); the caller saves the settings.
+    /// </summary>
+    public static void Remove(LibraryBuild build, AppSettings settings)
+    {
+        if (FileUtil.IsUnder(Path.GetFullPath(build.Dir), Root)) FileUtil.DeleteDirectory(build.Dir);
+        if (settings.DefaultBuild(ComponentRegistry.Feeder)?.Equals(build.Id, StringComparison.OrdinalIgnoreCase) == true)
+            settings.SetDefaultBuild(ComponentRegistry.Feeder, null);
+        foreach (var game in settings.Games.Values)
+            if (game.BuildPick(ComponentRegistry.Feeder)?.Equals(build.Id, StringComparison.OrdinalIgnoreCase) == true)
+                game.SetBuildPick(ComponentRegistry.Feeder, null);
+    }
 
     /// <summary>
     /// Downloads <paramref name="release"/> into the library unless it is there already: the zip is hashed against GitHub's digest
