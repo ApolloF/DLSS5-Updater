@@ -4,7 +4,7 @@ using System.Text.Json.Serialization;
 
 namespace DLSSUpdater.Core;
 
-/// <summary>The import-only add-ons that keep a library of builds, like the NR library does for nvngx_dlssnr.dll.</summary>
+/// <summary>The add-ons (downloaded from the catalog or imported) that keep a library of builds, like the NR library does for nvngx_dlssnr.dll.</summary>
 public enum AddonKind { RenoDx, Lecram, Dfc }
 
 /// <summary>

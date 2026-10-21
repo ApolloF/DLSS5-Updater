@@ -106,7 +106,7 @@
                                 <StackPanel>
                                     <TextBlock Text="nvngx_dlssnr.dll" Style="{StaticResource Mono}" />
                                     <TextBlock TextWrapping="Wrap" LineHeight="19" Foreground="{StaticResource Muted}" Margin="0,4,0,0"
-                                               Text="The DLSS 5 neural rendering runtime isn't included: NVIDIA's licence doesn't allow sharing it. Import your own copy in Settings → General → Local components." />
+                                               Text="The DLSS 5 neural rendering runtime isn't built into the app. It is downloaded and installed automatically; you can import your own copy in Settings → General → Local components." />
                                 </StackPanel>
                             </Border>
                         </StackPanel>

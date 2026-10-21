@@ -11,7 +11,7 @@ product rules they serve. When a rule here and the code disagree, fix the code o
 - **Never surprise the game.** Every file placed in a game is recorded; every file replaced is backed up; uninstall
   and switching leave the game as it was. Nothing changes in a game without a user action (install, update, update all).
 - **Respect the authors.** Download only from a source the author publishes openly for that purpose. If the licence
-  forbids redistribution, or the builds are paid, the component is import-only in public builds.
+  forbids redistribution, or the builds are paid, the component is import-only in public builds (the exceptions are in section 3).
 - **Say why.** When the app keeps, refuses, hides or skips something, the UI says why in one line.
 - **Facts, not guesses.** Options, labels and help text come from the mod's own docs, config comments and release
   notes for that build. Undocumented values are marked undocumented (AGENTS.md, Conventions).
@@ -22,7 +22,7 @@ Each component has exactly these parts. A part that doesn't apply is explicitly 
 
 | Part | Rule |
 |---|---|
-| Source | `Download` (official public source, or the catalog's hash-pinned or mirrored copy, verified), `Import` (user-supplied), or both. Import-only when the licence or a paywall requires it (section 3; one documented exception). |
+| Source | `Download` (official public source, or the catalog's hash-pinned or mirrored copy, verified), `Import` (user-supplied), or both. Import-only when the licence or a paywall requires it (section 3). |
 | Library | Every build the app has is kept in that component's library under `components\<component>\<build id>\`, with a `version.json` (id, label, detected version, source = downloaded/imported, date, user label). One build = one folder holding the whole set of files. No single-file "current import" slots. |
 | Build id | SHA-256 of the build's main file (downloads may use the release tag when the release publishes digests). Duplicate imports dedupe by id. |
 | Order | Newest first by the component's version (tag, version resource or detected label; one `BuildOrder` implementation). Ties: newer date first. |
@@ -41,19 +41,16 @@ Each component has exactly these parts. A part that doesn't apply is explicitly 
 - Licence forbids redistribution, or builds are paid: **import-only** in the public build. The app accepts the files
   the user got from the author (the release folder, the main file, or a .zip of the release) and copies them byte for
   byte. No probes or reverse engineering where the licence forbids it (see `docs/addons/README.md`).
-- **Exception, ShortFuse's DLSS add-on (user decision 2026-10-21):** `renodx-dlss.addon64` has no licence we can find and no
-  official channel, but it is auto-pulled in the public build too, through the catalog. The catalog only **pins** it (the
-  author's release URL plus the SHA-256 of each build, never a mirror copy); the app downloads the zip, refuses a hash mismatch,
-  and takes the add-on out of it like an import (version resource checked, kept in the library). It is the project owner's decision
-  that this add-on should arrive without a manual import, in the public build too: its builds appear every few days and the only
-  channel is a community release list. Imports stay possible, a Settings switch turns the download off, and if the author objects
-  or a licence appears, it is a catalog edit, not an app release. It is the only component that is both unlicensed and
-  auto-downloaded.
+- **Downloaded and installed automatically from the catalog mirror:** ShortFuse's `renodx-dlss.addon64`, Lecram's DLSS5 add-on
+  and NVIDIA's `nvngx_dlssnr.dll`. They have no official channel the app can use, so the catalog hosts each build (`renodxDlss`
+  and `neural` sections). The app downloads from the mirror (the author's URL is the fallback for ShortFuse's add-on), refuses a
+  size or SHA-256 mismatch, checks it is a PE file, and keeps it in the library like an import. Imports stay possible and a
+  Settings switch turns each download off. If the source ever has to change, it is a catalog edit, not an app release.
 - Owner-only conveniences that a public build must not have (today: fetching Lecram's paid builds from his channel)
   sit behind a compile-time switch (`-p:<Name>=true`, default off, `BuildFlags.<Name>`), are compiled in both variants
   and tested in both. Public releases build with the switch off; `tools/build-private.ps1` builds the private
   variant; the release bot drops it on copyparty after each release (`tools/release-bot/README.md`).
-- NVIDIA's `nvngx_dlssnr.dll` is never bundled, uploaded or downloaded (AGENTS.md, Hard rules).
+- `nvngx_dlssnr.dll` is never committed to this repo or bundled in the exe/installer; the app downloads it from the catalog mirror (AGENTS.md, Hard rules).
 
 ## 4. Choosing builds
 

@@ -18,8 +18,10 @@ public sealed class CatalogSections
     /// <summary>Shader repositories pinned to a release or commit (see <see cref="CatalogShaderPack"/>).</summary>
     public CatalogShaderPacks? ShaderPacks { get; set; }
     public CatalogOptiCompat? OptiscalerCompat { get; set; }
-    /// <summary>ShortFuse's renodx-dlss add-on: hash-pinned builds, never mirrored (licence unknown).</summary>
+    /// <summary>ShortFuse's renodx-dlss add-on: hash-checked builds, downloaded from the catalog mirror (the author's URL is the fallback).</summary>
     public CatalogRenodxDlss? RenodxDlss { get; set; }
+    /// <summary>nvngx_dlssnr.dll and Lecram's DLSS5 add-on: raw binaries in the catalog mirror, downloaded and installed automatically.</summary>
+    public CatalogNeural? Neural { get; set; }
     /// <summary>ReLimiter and Display Commander add-on files (ReLimiter mirrored, Display Commander pinned to the author's URL).</summary>
     public CatalogFrameLimiters? FrameLimiters { get; set; }
 }
@@ -49,6 +51,52 @@ public sealed class CatalogLimiter
     /// <summary>The label shown for a file of this release: the tag without its "v", else the file's own first-seen version.</summary>
     public string VersionOf(CatalogBinary file) =>
         Release.Equals("latest", StringComparison.OrdinalIgnoreCase) || string.IsNullOrWhiteSpace(Release) ? file.Version ?? file.Sha256?[..12] ?? "?" : Release.TrimStart('v', 'V');
+}
+
+public sealed class CatalogNeural
+{
+    public string? Updated { get; set; }
+    public CatalogNeuralLine? Dlssnr { get; set; }
+    public CatalogNeuralLine? Lecram { get; set; }
+}
+
+/// <summary>One binary's builds: the newest in <see cref="Current"/>, older ones (newest first) in <see cref="History"/>.</summary>
+public sealed class CatalogNeuralLine
+{
+    public CatalogNeuralBuild? Current { get; set; }
+    public List<CatalogNeuralBuild> History { get; set; } = [];
+
+    /// <summary>Newest first.</summary>
+    public IEnumerable<CatalogNeuralBuild> All => Current is null ? History : [Current, .. History];
+
+    /// <summary>The version, plus the short hash when another build of the line carries the same version (variants share a PE version).</summary>
+    public string LabelOf(CatalogNeuralBuild build) =>
+        All.Count(b => string.Equals(b.Version, build.Version, StringComparison.OrdinalIgnoreCase)) > 1
+            ? $"{build.Version} · {build.ShortHash}"
+            : build.Version;
+}
+
+/// <summary>A raw binary (not a zip) in the mirror. Builds are told apart by <see cref="Sha256"/>, never by version.</summary>
+public sealed class CatalogNeuralBuild
+{
+    public string Name { get; set; } = "";
+    public string Version { get; set; } = "";
+    public string Sha256 { get; set; } = "";
+    public long Size { get; set; }
+    public string? FirstSeen { get; set; }
+    public string? MirrorUrl { get; set; }
+    /// <summary>Where the mirror's copy came from; only a fallback.</summary>
+    public string? Url { get; set; }
+    /// <summary>Lecram only: "v10" or "v11".</summary>
+    public string? Generation { get; set; }
+
+    public string ShortHash => Sha256.Length >= 8 ? Sha256[..8] : Sha256;
+
+    public CatalogBinary ToBinary() => new()
+    {
+        Name = Name, Sha256 = Sha256, Size = Size, Version = Version, FirstSeen = FirstSeen,
+        MirrorUrl = MirrorUrl, Url = Url ?? "",
+    };
 }
 
 public sealed class CatalogRenodxDlss

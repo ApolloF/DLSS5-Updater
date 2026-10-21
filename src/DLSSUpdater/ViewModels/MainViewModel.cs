@@ -182,7 +182,7 @@ public sealed partial class MainViewModel : ObservableObject
     [ObservableProperty] private string _dlssVersion = "—";
     [ObservableProperty] private string _upliftVersion = "\u2014";
     [ObservableProperty] private string _mfgVersion = "—";
-    [ObservableProperty] private string _dlssNrText = "not imported";
+    [ObservableProperty] private string _dlssNrText = "not downloaded yet";
     [ObservableProperty] private string _reShadeText = "not imported";
     [ObservableProperty] private bool _dlssNrOk;
     [ObservableProperty] private bool _reShadeOk;
@@ -343,7 +343,7 @@ public sealed partial class MainViewModel : ObservableObject
         S.ReShadeSha = rs;
 
         DlssNrOk = nr is not null;
-        DlssNrText = nr is null ? "not imported"
+        DlssNrText = nr is null ? "not downloaded yet"
             : FileUtil.Format(FileUtil.ReadVersion(store.DlssNrPath)) +
               (ComponentStore.KnownDlssNr.TryGetValue(nr, out var variant) ? $" · {variant.Split(" · ")[0]}" : " · unverified");
         var auto = S.Settings.AutoDownloadReShade && !store.ReShadeImported;
@@ -369,8 +369,8 @@ public sealed partial class MainViewModel : ObservableObject
     });
 
     /// <summary>
-    /// Refreshes the mod catalog, then downloads ShortFuse's DLSS add-on from it when it has a newer build. Offline or refused
-    /// downloads are logged and change nothing.
+    /// Refreshes the mod catalog, then downloads what it has newer: ShortFuse's DLSS add-on, nvngx_dlssnr.dll and (public build)
+    /// Lecram's add-on. Offline or refused downloads are logged and change nothing.
     /// </summary>
     private async Task CheckCatalogAsync(CancellationToken ct)
     {
@@ -378,8 +378,13 @@ public sealed partial class MainViewModel : ObservableObject
         try
         {
             await catalog.RefreshAsync(ct);
-            var build = await S.Store.CheckRenoDxCatalogAsync(S.Settings, catalog.Document?.Sections.RenodxDlss, new CatalogDownloader(Gh), TransferProgress(), ct);
-            if (build is null) return;
+            var fetch = new CatalogDownloader(Gh);
+            var sections = catalog.Document?.Sections;
+            var build = await S.Store.CheckRenoDxCatalogAsync(S.Settings, sections?.RenodxDlss, fetch, TransferProgress(), ct);
+            var nr = await S.Store.CheckDlssNrCatalogAsync(S.Settings, sections?.Neural?.Dlssnr, fetch, TransferProgress(), ct);
+            // The private build keeps its own MediaFire channel for Lecram.
+            var lecram = BuildFlags.LecramChannel ? null : await S.Store.CheckLecramCatalogAsync(S.Settings, sections?.Neural?.Lecram, fetch, TransferProgress(), ct);
+            if (build is null && nr is null && lecram is null) return;
             S.Settings.Save();
             await RefreshLocalComponentsAsync();
             SettingsVm.Reload();

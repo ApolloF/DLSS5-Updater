@@ -153,7 +153,7 @@ public sealed partial class Installer(ComponentStore store)
     {
         if (o.Uplift)
         {
-            if (!o.DlssNr) throw new InvalidOperationException("GITC Uplift needs an imported NR runtime.");
+            if (!o.DlssNr) throw new InvalidOperationException("GITC Uplift needs the NR runtime (downloaded automatically, or import it in Settings).");
             o = o with { ReShade = true };
             var exe = game.Exes.FirstOrDefault(f => string.Equals(Path.GetDirectoryName(f), targetDir, StringComparison.OrdinalIgnoreCase))
                 ?? game.MainExe
@@ -174,17 +174,17 @@ public sealed partial class Installer(ComponentStore store)
         var dlssNr = o.DlssNr;
         var nrPath = dlssNr ? store.VerifiedDlssNrPath(o.DlssNrId ?? store.SelectedDlssNr()) : null;
         if (o.RenoDx && (!o.ReShade || !dlssNr))
-            throw new InvalidOperationException("RenoDX needs ReShade with add-on support and an imported NR runtime.");
+            throw new InvalidOperationException("RenoDX needs ReShade with add-on support and the NR runtime (downloaded automatically, or import it in Settings).");
         // DLSS files an earlier install of ours added (for DFC or OptiScaler) don't make the game a DLSS game.
         var nativeDlss = (o.RenoDx || o.Lecram || o.Dfc) && HasNativeDlss(game, InstallManifest.Read(targetDir), targetDir);
         if (o.RenoDx && !nativeDlss)
             throw new InvalidOperationException("RenoDX needs a game with native DLSS.");
         if (o.Lecram && (!o.ReShade || !dlssNr))
-            throw new InvalidOperationException("Lecram's DLSS5 add-on needs ReShade with add-on support and an imported NR runtime.");
+            throw new InvalidOperationException("Lecram's DLSS5 add-on needs ReShade with add-on support and the NR runtime (downloaded automatically, or import it in Settings).");
         if (o.Lecram && !nativeDlss)
             throw new InvalidOperationException("Lecram's DLSS5 add-on needs a game with native DLSS.");
         if (o.Dfc && (!o.ReShade || !dlssNr))
-            throw new InvalidOperationException("Deep Fried Chicken needs ReShade with add-on support and an imported NR runtime.");
+            throw new InvalidOperationException("Deep Fried Chicken needs ReShade with add-on support and the NR runtime (downloaded automatically, or import it in Settings).");
         var renoDx = o.RenoDx ? store.RequireAddon(AddonKind.RenoDx, o.RenoDxId) : null;
         var lecram = o.Lecram ? store.RequireAddon(AddonKind.Lecram, o.LecramId) : null;
         var dfc = o.Dfc ? store.RequireAddon(AddonKind.Dfc, o.DfcId).Build : null;

@@ -450,7 +450,7 @@ public static class MethodAdvisor
         Opt(Method.DlssUpdate, Availability.Available, reason, [ComponentRegistry.Dlss], null, null, unverified);
 
     private static string? NrRuntimeNeed(Ctx c) =>
-        c.Has(ComponentRegistry.DlssNr) ? null : "Import nvngx_dlssnr.dll (the app never downloads it)";
+        c.Has(ComponentRegistry.DlssNr) ? null : "nvngx_dlssnr.dll (downloaded automatically at the next update check, or import it)";
 
     private static MethodOption Neural(Ctx c, string reason, string? extraNeed, bool unverified = false, string? unverifiedWhy = null)
     {

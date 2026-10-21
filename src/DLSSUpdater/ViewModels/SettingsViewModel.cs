@@ -491,7 +491,16 @@ public sealed partial class SettingsViewModel : ObservableObject
     public string? NrAddonDefaultsWarning => NrAddons.DefaultConflicts(Settings) is { Count: > 0 } c ? string.Join(Environment.NewLine, c) : null;
     public bool HasNrAddonDefaultsWarning => NrAddonDefaultsWarning is not null;
 
-    public string DlssNrInfo => Describe(_main.S.Store.DlssNrPath, _main.S.DlssNrSha, true);
+    public string DlssNrInfo => _main.S.DlssNrSha is null && !File.Exists(_main.S.Store.DlssNrPath)
+        ? "Not in the library yet; it is downloaded at the next update check."
+        : Describe(_main.S.Store.DlssNrPath, _main.S.DlssNrSha, true);
+
+    /// <summary>Per update check: download nvngx_dlssnr.dll from the catalog when it has a build the library lacks.</summary>
+    public bool AutoDownloadDlssNr
+    {
+        get => Settings.AutoDownloadDlssNr;
+        set { Settings.AutoDownloadDlssNr = value; Save(); }
+    }
     public string? LecramMessage => _main.S.Store.SfLecramMessage(_main.S.Store.RenoDxImported, _main.S.Store.LecramImported, Settings.RenoDxId, Settings.LecramId);
     public bool HasLecramMessage => LecramMessage is not null;
 

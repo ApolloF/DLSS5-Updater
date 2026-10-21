@@ -139,7 +139,7 @@ public sealed partial class GameViewModel
         AdviceCaution = advice.Caution;
         SelectTopLabel = top is null ? "" : $"Select: {top.Title}";
         AdviceFooter = advice.Methods.Any(m => m.Method is Method.NeuralAddon or Method.OptiScalerNr or Method.Feeder)
-            ? $"{_s.Gpu.Label}. Neural rendering is the leaked DLSS 5 build and needs community DLLs; the app never downloads nvngx_dlssnr.dll."
+            ? $"{_s.Gpu.Label}. Neural rendering is the leaked DLSS 5 build and needs community DLLs; the app downloads and installs nvngx_dlssnr.dll automatically."
             : _s.Gpu.IsKnown ? _s.Gpu.Label : "";
         OnPropertyChanged(nameof(HasMethods));
         OnPropertyChanged(nameof(CanSelectTop));

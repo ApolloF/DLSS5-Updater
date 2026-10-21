@@ -1560,6 +1560,13 @@
                                                         <TextBlock Grid.Column="1" Text="{Binding DlssNrInfo}" Style="{StaticResource MutedText}" TextWrapping="Wrap" FontSize="12" VerticalAlignment="Center" />
                                                         <Button Grid.Column="2" Content="Import…" Command="{Binding ImportDlssNrCommand}" Margin="12,0,0,0" />
                                                     </Grid>
+                                                    <CheckBox IsChecked="{Binding AutoDownloadDlssNr}" Margin="0,0,0,10" AutomationProperties.Name="Download the NR runtime automatically">
+                                                        <StackPanel>
+                                                            <TextBlock Text="Download the NR runtime automatically" TextWrapping="Wrap" />
+                                                            <TextBlock Text="Each build is checked against its SHA-256 before it joins the library. You can still import one by hand."
+                                                                       Style="{StaticResource MutedText}" FontSize="11.5" TextWrapping="Wrap" Margin="0,2,0,0" />
+                                                        </StackPanel>
+                                                    </CheckBox>
                                                     <StackPanel Margin="0,0,0,12">
                                                         <TextBlock Text="Default NR runtime" Margin="0,0,0,6" />
                                                         <ComboBox ItemsSource="{Binding NrChoices}" SelectedItem="{Binding SelectedNr}" MaxDropDownHeight="300"
@@ -1588,7 +1595,7 @@
                                                     <ContentControl Content="{Binding Dfc}" ContentTemplate="{StaticResource AddonLibraryRow}" Margin="0,10" />
                                                 </StackPanel>
                                             </Border>
-                                            <TextBlock Text="Import each NR runtime you want to keep; they all stay in your library. NVIDIA's original needs an RTX 50 card. For RTX 20/30/40, download and extract ShortFuse's compat build (compat-fp16-310.9.16-cuda13.4.3) and import it. ReShade has its own library under ReShade add-ons."
+                                            <TextBlock Text="The NR runtime is downloaded automatically; every build you import or download stays in your library. NVIDIA's original needs an RTX 50 card. For RTX 20/30/40 use a compat build (import it if it isn't in the library). ReShade has its own library under ReShade add-ons."
                                                        Style="{StaticResource MutedText}" FontSize="11.5" TextWrapping="Wrap" Margin="0,8,0,0" />
 
                                             <Button Content="Import DLSS SR / RR / FG…" Command="{Binding ImportDlssCommand}" HorizontalAlignment="Left" Margin="0,8,0,0"
@@ -1692,8 +1699,8 @@
                                                     <CheckBox IsChecked="{Binding InstallRenoDx}" Margin="0,8" AutomationProperties.Name="Install ShortFuse RenoDX DLSS add-on (ReShade + add-ons mode; runs its own NR; needs ReShade 6+ and the NR runtime)">
                                                         <TextBlock Text="Install ShortFuse RenoDX DLSS add-on (ReShade + add-ons mode; runs its own NR; needs ReShade 6+ and the NR runtime)" TextWrapping="Wrap" />
                                                     </CheckBox>
-                                                    <CheckBox IsChecked="{Binding InstallUplift}" Margin="0,8" AutomationProperties.Name="Install GITC Uplift (ReShade + add-ons mode; exclusive NR route, 64-bit only; uses your imported NR runtime)">
-                                                        <TextBlock Text="Install GITC Uplift (ReShade + add-ons mode; exclusive NR route, 64-bit only; uses your imported NR runtime)" TextWrapping="Wrap" />
+                                                    <CheckBox IsChecked="{Binding InstallUplift}" Margin="0,8" AutomationProperties.Name="Install GITC Uplift (ReShade + add-ons mode; exclusive NR route, 64-bit only; uses your NR runtime)">
+                                                        <TextBlock Text="Install GITC Uplift (ReShade + add-ons mode; exclusive NR route, 64-bit only; uses your NR runtime)" TextWrapping="Wrap" />
                                                     </CheckBox>
                                                     <CheckBox IsChecked="{Binding InstallLecram}" Margin="0,8" AutomationProperties.Name="Install Lecram DLSS5 add-on (ReShade + add-ons mode; runs its own NR; needs ReShade 6+ and the NR runtime)">
                                                         <TextBlock Text="Install Lecram DLSS5 add-on (ReShade + add-ons mode; runs its own NR; needs ReShade 6+ and the NR runtime)" TextWrapping="Wrap" />
