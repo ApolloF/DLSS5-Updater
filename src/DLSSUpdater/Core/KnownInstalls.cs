@@ -22,12 +22,16 @@ public sealed record InstallRefs
     public string? StreamlineTag { get; set; }
     /// <summary>Serial number of the volume the install folder was last read from; tells a deleted folder from another device on the same drive letter.</summary>
     public uint? VolumeSerial { get; set; }
+    /// <summary>Component id -> build id, for the components the record keeps the generic way (<see cref="InstallManifest.Components"/>).</summary>
+    public Dictionary<string, string>? Components { get; set; }
 
     public static InstallRefs From(InstallManifest m) => new()
     {
         OptiTag = m.OptiTag, UpliftTag = m.UpliftTag, DlssNrId = m.DlssNrId, PreviousDlssNrId = m.PreviousDlssNrId,
         RenoDxId = m.RenoDxId, RenoDxTag = m.RenoDxTag, LecramId = m.LecramId, LecramTag = m.LecramTag, DfcId = m.DfcId, DfcTag = m.DfcTag,
         MfgTag = m.MfgTag, DlssTag = m.DlssTag, StreamlineTag = m.StreamlineTag,
+        Components = m.Components.Where(c => c.BuildId is not null).GroupBy(c => c.Id, StringComparer.OrdinalIgnoreCase)
+            .ToDictionary(g => g.Key, g => g.First().BuildId!, StringComparer.OrdinalIgnoreCase) is { Count: > 0 } builds ? builds : null,
     };
 
     /// <summary>A record holding only the references, which is all <see cref="ComponentStore.PlanCleanup"/> reads.</summary>
@@ -36,6 +40,7 @@ public sealed record InstallRefs
         Dir = dir, OptiTag = OptiTag, UpliftTag = UpliftTag, DlssNrId = DlssNrId, PreviousDlssNrId = PreviousDlssNrId,
         RenoDxId = RenoDxId, RenoDxTag = RenoDxTag, LecramId = LecramId, LecramTag = LecramTag, DfcId = DfcId, DfcTag = DfcTag,
         MfgTag = MfgTag, DlssTag = DlssTag, StreamlineTag = StreamlineTag,
+        Components = Components?.Select(c => new InstalledComponent { Id = c.Key, BuildId = c.Value }).ToList() ?? [],
     };
 
     /// <summary>The libraries these references point into.</summary>
@@ -47,7 +52,26 @@ public sealed record InstallRefs
         if (RenoDxId is not null || RenoDxTag is not null) yield return LibraryKind.RenoDx;
         if (LecramId is not null || LecramTag is not null) yield return LibraryKind.Lecram;
         if (DfcId is not null || DfcTag is not null) yield return LibraryKind.Dfc;
+        foreach (var id in Components?.Keys ?? Enumerable.Empty<string>())
+            if (ComponentRegistry.Find(id)?.Library is { } library) yield return library;
     }
+
+    // Records compare their dictionary by reference; two reads of the same install must compare equal, or every scan saves.
+    public bool Equals(InstallRefs? other) =>
+        other is not null
+        && OptiTag == other.OptiTag && UpliftTag == other.UpliftTag && DlssNrId == other.DlssNrId && PreviousDlssNrId == other.PreviousDlssNrId
+        && RenoDxId == other.RenoDxId && RenoDxTag == other.RenoDxTag && LecramId == other.LecramId && LecramTag == other.LecramTag
+        && DfcId == other.DfcId && DfcTag == other.DfcTag && MfgTag == other.MfgTag && DlssTag == other.DlssTag
+        && StreamlineTag == other.StreamlineTag && VolumeSerial == other.VolumeSerial
+        && SameBuilds(Components, other.Components);
+
+    private static bool SameBuilds(Dictionary<string, string>? a, Dictionary<string, string>? b)
+    {
+        if ((a?.Count ?? 0) != (b?.Count ?? 0)) return false;
+        return a is null || a.All(p => b!.FirstOrDefault(q => q.Key.Equals(p.Key, StringComparison.OrdinalIgnoreCase)) is { Key: not null } q && q.Value == p.Value);
+    }
+
+    public override int GetHashCode() => HashCode.Combine(OptiTag, DlssNrId, RenoDxId, LecramId, DfcId, VolumeSerial, Components?.Count ?? 0);
 }
 
 /// <summary>

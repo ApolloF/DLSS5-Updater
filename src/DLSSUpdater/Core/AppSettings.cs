@@ -6,7 +6,7 @@ using DLSSUpdater.Scan;
 
 namespace DLSSUpdater.Core;
 
-public sealed class GameOverride
+public sealed partial class GameOverride
 {
     public string? TargetDir { get; set; }
     public string? Proxy { get; set; }
@@ -51,7 +51,7 @@ public sealed class ConfigPreset
     [JsonIgnore] public bool BuiltIn { get; init; }
 }
 
-public sealed class AppSettings
+public sealed partial class AppSettings
 {
     public static readonly string[] ProxyNames =
         ["dxgi.dll", "winmm.dll", "version.dll", "dbghelp.dll", "d3d12.dll", "wininet.dll", "winhttp.dll"];

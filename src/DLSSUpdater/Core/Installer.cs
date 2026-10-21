@@ -89,7 +89,7 @@ public sealed class GameFileInUseException(string gameName, Exception inner)
 public sealed class GameRunningException(string exe)
     : Exception($"{Path.GetFileName(exe)} is running. Close the game first.");
 
-public sealed class Installer(ComponentStore store)
+public sealed partial class Installer(ComponentStore store)
 {
     private static readonly string[] LegacyFiles =
         ["OptiScaler.asi", "nvngx.dll_dlssnr.dll", "Remove OptiScaler.bat", "Remove_OptiScaler.bat", "OptiScaler.dll"];
@@ -1226,9 +1226,26 @@ public sealed class Installer(ComponentStore store)
         {
             // Every step is recorded as soon as it is done, so a retry after a failure part-way (a locked file)
             // carries on where it stopped and never deletes an original that was already put back.
+            foreach (var c in Enumerable.Reverse(m.Components).ToList()) UndoComponent(ctx, c);
+            // Files of the components kept the old way whose placed version is known (ReShade, the NR runtime).
+            var placed = LegacyComponents.Project(m).SelectMany(c => c.Files).Where(f => f.Sha256 is not null)
+                .GroupBy(f => f.Path, StringComparer.OrdinalIgnoreCase).ToDictionary(g => g.Key, g => g.First().Sha256!, StringComparer.OrdinalIgnoreCase);
             foreach (var rel in m.Files.ToList())
             {
                 var full = ctx.Full(rel);
+                if (placed.TryGetValue(rel, out var sha) && File.Exists(full) && !FileUtil.Sha256(full).Equals(sha, StringComparison.OrdinalIgnoreCase))
+                {
+                    // Changed by the user or the game since: it stays, and the original it replaced is not put back over it.
+                    Log.Warn($"  {rel}: changed since it was installed (by you or the game), left in place");
+                    if (m.BackupOf(rel) is { } stale)
+                    {
+                        FileUtil.DeleteFile(Path.Combine(ctx.BackupDir, stale.Backup));
+                        m.Backups.Remove(stale);
+                    }
+                    m.Files.Remove(rel);
+                    m.Save(targetDir);
+                    continue;
+                }
                 TryDelete(full);
                 // Only below the install folder: folders a file of ours needed (DFC's neural folder, reshade-shaders) go when empty.
                 if (FileUtil.IsUnder(full, targetDir)) DeleteEmptyDirs(ctx, Path.GetDirectoryName(full)!);
@@ -1271,8 +1288,10 @@ public sealed class Installer(ComponentStore store)
                 m.Backups.Remove(b);
             }
             // The runtimes placed for DFC are part of that install, not a DLSS update: they leave with DFC.
+            // So are files a component recorded the generic way placed: they leave with that component.
             foreach (var rel in m.Files.Where(f => ComponentStore.DlssFiles.Contains(Path.GetFileName(f), StringComparer.OrdinalIgnoreCase)
-                                                   && !m.DfcRuntimes.Contains(f, StringComparer.OrdinalIgnoreCase)).ToList())
+                                                   && !m.DfcRuntimes.Contains(f, StringComparer.OrdinalIgnoreCase)
+                                                   && !m.Components.Any(c => c.FileAt(f) is not null)).ToList())
             {
                 TryDelete(ctx.Full(rel));
                 m.Files.Remove(rel);

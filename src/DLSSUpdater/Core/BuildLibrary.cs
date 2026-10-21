@@ -354,7 +354,7 @@ public sealed partial class ComponentStore
                 }
                 if (addon == AddonKind.Lecram) Add(s.LecramLastBuildId, "last downloaded Lecram build");
                 break;
-            default:
+            case LibraryKind.DlssNr:
                 Add(s.DlssNrId, Default);
                 Add(Path.GetFileName(Path.GetDirectoryName(DlssNrPath)), Default);
                 Add(s.PreviousDlssNrId, SwitchBack);
@@ -365,6 +365,13 @@ public sealed partial class ComponentStore
                     Add(m.PreviousDlssNrId, SwitchBack);
                 }
                 break;
+        }
+        // Components recorded the generic way: their default, every game's pick and what is installed, by component id.
+        foreach (var def in ComponentRegistry.OfLibrary(kind).Where(d => !d.Legacy))
+        {
+            Add(s.DefaultBuild(def.Id), Default);
+            foreach (var (id, g) in s.Games) Add(g.BuildPick(def.Id), PickedFor(id));
+            foreach (var m in installed) Add(m.Component(def.Id)?.BuildId, InstalledIn(m));
         }
         return found;
     }
@@ -440,7 +447,8 @@ public sealed partial class ComponentStore
         LibraryKind.Lecram => "Lecram DLSS5",
         LibraryKind.RenoDx => "ShortFuse RenoDX DLSS",
         LibraryKind.Dfc => "Deep Fried Chicken",
-        _ => "NR runtime",
+        LibraryKind.DlssNr => "NR runtime",
+        _ => ComponentRegistry.OfLibrary(kind).FirstOrDefault()?.Name ?? kind.ToString(),
     };
 
     /// <summary>
