@@ -1034,6 +1034,71 @@
                         </Border>
                     </StackPanel>
 
+                    <!-- Frame limit: one method and one cap per game -->
+                    <StackPanel Visibility="{Binding FrameLimit.Visible, Converter={StaticResource BoolToVis}}">
+                        <StackPanel Orientation="Horizontal">
+                            <TextBlock Text="FRAME LIMIT" Style="{StaticResource SectionTitle}" />
+                            <Button Style="{StaticResource InfoBtn}" CommandParameter="frame-limit" Margin="4,18,0,0"
+                                    ToolTip="{Binding Source=frame-limit, Converter={StaticResource HelpTip}}" AutomationProperties.Name="About the frame limit" />
+                        </StackPanel>
+                        <Border Style="{StaticResource Card}" Padding="16,12">
+                            <StackPanel DataContext="{Binding FrameLimit}">
+                                <TextBlock Text="METHOD" Style="{StaticResource Caps}" />
+                                <WrapPanel Margin="0,4,0,0">
+                                    <ComboBox MinWidth="260" MaxDropDownHeight="300" Margin="0,0,8,4"
+                                              ItemsSource="{Binding MethodChoices}" SelectedItem="{Binding MethodChoice}"
+                                              AutomationProperties.Name="Frame limit method for this game" ToolTip="Auto picks the NVIDIA driver limiter on NVIDIA cards; choose a method to override it for this game" />
+                                    <Button Content="Reset to auto" Style="{StaticResource BtnGhost}" Margin="0,0,8,4" Command="{Binding ResetMethodCommand}"
+                                            Visibility="{Binding IsManual, Converter={StaticResource BoolToVis}}" AutomationProperties.Name="Reset the frame limit method to automatic" />
+                                    <Button Style="{StaticResource InfoBtn}" CommandParameter="frame-limit-method" Margin="0,0,0,4"
+                                            ToolTip="{Binding Source=frame-limit-method, Converter={StaticResource HelpTip}}" AutomationProperties.Name="About the frame limit methods" />
+                                </WrapPanel>
+                                <TextBlock Text="{Binding MethodDescription}" Style="{StaticResource MutedText}" FontSize="11.5" TextWrapping="Wrap" />
+                                <TextBlock Text="{Binding Note}" Style="{StaticResource MutedText}" Foreground="{StaticResource Warn}" FontSize="11.5" TextWrapping="Wrap" Margin="0,6,0,0"
+                                           Visibility="{Binding HasNote, Converter={StaticResource BoolToVis}}" />
+                                <StackPanel Margin="0,12,0,0">
+                                    <TextBlock Text="CAP (FPS)" Style="{StaticResource Caps}" />
+                                    <TextBox Margin="0,4,0,0" HorizontalAlignment="Left" Width="90" Text="{Binding FpsText, UpdateSourceTrigger=LostFocus}"
+                                             Tag="{Binding FpsHint}" AutomationProperties.Name="Frame limit in frames per second" ToolTip="{Binding FpsHint}" />
+                                </StackPanel>
+                                <TextBlock Text="{Binding HintText}" Style="{StaticResource MutedText}" FontSize="11.5" TextWrapping="Wrap" Margin="0,6,0,0"
+                                           Visibility="{Binding HasHint, Converter={StaticResource BoolToVis}}" />
+                                <CheckBox IsChecked="{Binding Osd}" IsThreeState="True" Margin="0,12,0,0" Visibility="{Binding ShowOsd, Converter={StaticResource BoolToVis}}"
+                                          AutomationProperties.Name="Show the ReLimiter on-screen display; the dash leaves the add-on's own setting"
+                                          ToolTip="Writes osd_enabled to relimiter.ini. The dash leaves the add-on's own setting alone.">
+                                    <TextBlock Text="Show the ReLimiter on-screen display" TextWrapping="Wrap" />
+                                </CheckBox>
+                                <StackPanel Margin="0,12,0,0" Visibility="{Binding ShowBuildChoices, Converter={StaticResource BoolToVis}}">
+                                    <TextBlock Text="BUILD FOR THIS GAME" Style="{StaticResource Caps}" />
+                                    <ComboBox Margin="0,4,0,0" HorizontalAlignment="Left" MinWidth="260" MaxDropDownHeight="300"
+                                              ItemsSource="{Binding BuildChoices}" SelectedItem="{Binding BuildChoice}"
+                                              AutomationProperties.Name="Frame limiter build for this game" ToolTip="Auto follows the catalog's newest build; pick an imported or older build to keep it" />
+                                </StackPanel>
+                                <StackPanel Margin="0,12,0,0" Visibility="{Binding ShowIniLines, Converter={StaticResource BoolToVis}}">
+                                    <StackPanel Orientation="Horizontal">
+                                        <TextBlock Text="EXTRA INI LINES" Style="{StaticResource Caps}" />
+                                        <Button Style="{StaticResource InfoBtn}" CommandParameter="frame-limit-ini" Margin="4,0,0,0"
+                                                ToolTip="{Binding Source=frame-limit-ini, Converter={StaticResource HelpTip}}" AutomationProperties.Name="About the extra ini lines" />
+                                    </StackPanel>
+                                    <TextBox Margin="0,4,0,0" MinHeight="48" MaxHeight="140" AcceptsReturn="True" TextWrapping="Wrap" VerticalScrollBarVisibility="Auto"
+                                             Text="{Binding IniText, UpdateSourceTrigger=LostFocus}" AutomationProperties.Name="Extra ini lines for the frame limiter" ToolTip="{Binding IniHint}" />
+                                    <TextBlock Text="{Binding IniHint}" Style="{StaticResource MutedText}" FontSize="11.5" TextWrapping="Wrap" Margin="0,4,0,0" />
+                                </StackPanel>
+                                <TextBlock Text="{Binding StatusLine}" Style="{StaticResource MutedText}" TextWrapping="Wrap" Margin="0,12,0,0" />
+                                <WrapPanel Margin="0,12,0,0">
+                                    <Button Style="{StaticResource BtnPrimary}" Padding="22,9" MinWidth="110" Margin="0,0,8,4" AutomationProperties.Name="{Binding ApplyText, StringFormat='{}{0} the frame limit'}"
+                                            Command="{Binding DataContext.ApplyFrameLimitCommand, RelativeSource={RelativeSource AncestorType=Window}}"
+                                            IsEnabled="{Binding CanApply}">
+                                        <TextBlock Text="{Binding ApplyText}" />
+                                    </Button>
+                                    <Button Content="Remove" Padding="16,9" Margin="0,0,8,4" AutomationProperties.Name="Remove the frame limiter" ToolTip="Remove the limiter and put back what it changed"
+                                            Command="{Binding DataContext.RemoveFrameLimitCommand, RelativeSource={RelativeSource AncestorType=Window}}"
+                                            IsEnabled="{Binding CanRemove}" />
+                                </WrapPanel>
+                            </StackPanel>
+                        </Border>
+                    </StackPanel>
+
                     <TextBlock Text="NR RUNTIME VERSION" Style="{StaticResource SectionTitle}" />
                     <Border Style="{StaticResource Card}" Padding="16">
                         <StackPanel>
@@ -1427,6 +1492,62 @@
                                                                  Tag="Off (80 to 10000)" AutomationProperties.Name="HDR peak brightness in nits; empty leaves the mod's own value"
                                                                  ToolTip="Empty leaves the mod's own value. Otherwise 80 to 10000." />
                                                     </Grid>
+                                                </StackPanel>
+                                            </Border>
+
+                                            <!-- Frame limit: the default for games without a choice of their own, and the limiter add-ons' library. -->
+                                            <TextBlock Text="FRAME LIMIT" Style="{StaticResource SectionTitle}" />
+                                            <Border Style="{StaticResource Card}" Padding="16,12" DataContext="{Binding FrameLimit}">
+                                                <StackPanel>
+                                                    <TextBlock Text="{Binding Explanation}" Style="{StaticResource MutedText}" FontSize="11.5" TextWrapping="Wrap" />
+                                                    <Grid Margin="0,12,0,0">
+                                                        <Grid.ColumnDefinitions>
+                                                            <ColumnDefinition Width="*" />
+                                                            <ColumnDefinition Width="Auto" />
+                                                        </Grid.ColumnDefinitions>
+                                                        <StackPanel Orientation="Horizontal">
+                                                            <TextBlock Text="Default method" VerticalAlignment="Center" />
+                                                            <Button Style="{StaticResource InfoBtn}" CommandParameter="frame-limit-method"
+                                                                    ToolTip="{Binding Source=frame-limit-method, Converter={StaticResource HelpTip}}" AutomationProperties.Name="About the frame limit methods" />
+                                                        </StackPanel>
+                                                        <ComboBox Grid.Column="1" Width="300" Margin="16,0,0,0" ItemsSource="{Binding MethodChoices}" SelectedItem="{Binding MethodChoice}"
+                                                                  AutomationProperties.Name="Default frame limit method" />
+                                                    </Grid>
+                                                    <Grid Margin="0,8">
+                                                        <Grid.ColumnDefinitions>
+                                                            <ColumnDefinition Width="*" />
+                                                            <ColumnDefinition Width="Auto" />
+                                                        </Grid.ColumnDefinitions>
+                                                        <TextBlock Text="Default cap (FPS)" VerticalAlignment="Center" />
+                                                        <TextBox Grid.Column="1" Width="100" Margin="16,0,0,0" Text="{Binding FpsText, UpdateSourceTrigger=LostFocus}"
+                                                                 Tag="{Binding FpsHint}" AutomationProperties.Name="Default frame limit in frames per second" ToolTip="{Binding FpsHint}" />
+                                                    </Grid>
+
+                                                    <TextBlock Text="LIMITER ADD-ONS" Style="{StaticResource Caps}" Margin="0,12,0,0" />
+                                                    <StackPanel DataContext="{Binding ReLimiter}" Margin="0,8,0,0">
+                                                        <TextBlock Text="{Binding Title}" FontWeight="SemiBold" />
+                                                        <TextBlock Text="{Binding Info}" Style="{StaticResource MutedText}" FontSize="11.5" TextWrapping="Wrap" Margin="0,2,0,0" />
+                                                        <WrapPanel Margin="0,6,0,0">
+                                                            <ComboBox MinWidth="220" Margin="0,0,8,4" ItemsSource="{Binding Choices}" SelectedItem="{Binding Selected}"
+                                                                      Visibility="{Binding HasBuilds, Converter={StaticResource BoolToVis}}" AutomationProperties.Name="{Binding AutomationName}" />
+                                                            <Button Content="Import…" Margin="0,0,8,4" Padding="14,6" Command="{Binding ImportCommand}" ToolTip="A limiter add-on file or a .zip of the release" AutomationProperties.Name="Import the add-on" />
+                                                            <Button Content="Folder…" Margin="0,0,8,4" Padding="14,6" Command="{Binding ImportFolderCommand}" ToolTip="A folder that holds the add-on file" AutomationProperties.Name="Import the add-on from a folder" />
+                                                            <Button Content="Remove" Margin="0,0,8,4" Padding="14,6" Command="{Binding RemoveCommand}" Visibility="{Binding HasBuilds, Converter={StaticResource BoolToVis}}"
+                                                                    ToolTip="Remove the selected build from the library; games that have it keep their copy" AutomationProperties.Name="Remove the selected build" />
+                                                        </WrapPanel>
+                                                    </StackPanel>
+                                                    <StackPanel DataContext="{Binding DisplayCommander}" Margin="0,12,0,0">
+                                                        <TextBlock Text="{Binding Title}" FontWeight="SemiBold" />
+                                                        <TextBlock Text="{Binding Info}" Style="{StaticResource MutedText}" FontSize="11.5" TextWrapping="Wrap" Margin="0,2,0,0" />
+                                                        <WrapPanel Margin="0,6,0,0">
+                                                            <ComboBox MinWidth="220" Margin="0,0,8,4" ItemsSource="{Binding Choices}" SelectedItem="{Binding Selected}"
+                                                                      Visibility="{Binding HasBuilds, Converter={StaticResource BoolToVis}}" AutomationProperties.Name="{Binding AutomationName}" />
+                                                            <Button Content="Import…" Margin="0,0,8,4" Padding="14,6" Command="{Binding ImportCommand}" ToolTip="A limiter add-on file or a .zip of the release" AutomationProperties.Name="Import the add-on" />
+                                                            <Button Content="Folder…" Margin="0,0,8,4" Padding="14,6" Command="{Binding ImportFolderCommand}" ToolTip="A folder that holds the add-on file" AutomationProperties.Name="Import the add-on from a folder" />
+                                                            <Button Content="Remove" Margin="0,0,8,4" Padding="14,6" Command="{Binding RemoveCommand}" Visibility="{Binding HasBuilds, Converter={StaticResource BoolToVis}}"
+                                                                    ToolTip="Remove the selected build from the library; games that have it keep their copy" AutomationProperties.Name="Remove the selected build" />
+                                                        </WrapPanel>
+                                                    </StackPanel>
                                                 </StackPanel>
                                             </Border>
 

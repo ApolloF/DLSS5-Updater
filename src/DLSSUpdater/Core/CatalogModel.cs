@@ -16,6 +16,35 @@ public sealed class CatalogSections
     public CatalogOptiCompat? OptiscalerCompat { get; set; }
     /// <summary>ShortFuse's renodx-dlss add-on: hash-pinned builds, never mirrored (licence unknown).</summary>
     public CatalogRenodxDlss? RenodxDlss { get; set; }
+    /// <summary>ReLimiter and Display Commander add-on files (ReLimiter mirrored, Display Commander pinned to the author's URL).</summary>
+    public CatalogFrameLimiters? FrameLimiters { get; set; }
+}
+
+public sealed class CatalogFrameLimiters
+{
+    public string? Updated { get; set; }
+    public List<CatalogLimiter> Limiters { get; set; } = [];
+
+    public CatalogLimiter? For(string id) => Limiters.FirstOrDefault(l => l.Id.Equals(id, StringComparison.OrdinalIgnoreCase));
+}
+
+/// <summary>One limiter's add-on files of one release; a 32-bit file is absent when the release has none.</summary>
+public sealed class CatalogLimiter
+{
+    /// <summary>"relimiter" or "display-commander".</summary>
+    public string Id { get; set; } = "";
+    public string Name { get; set; } = "";
+    public string? Repository { get; set; }
+    /// <summary>The release tag the files came from; Display Commander republishes "latest", so its version is the file's first-seen version.</summary>
+    public string Release { get; set; } = "";
+    public string? License { get; set; }
+    public List<CatalogBinary> Files { get; set; } = [];
+
+    public CatalogBinary? File(string arch) => Files.FirstOrDefault(f => f.Arch.Equals(arch, StringComparison.OrdinalIgnoreCase));
+
+    /// <summary>The label shown for a file of this release: the tag without its "v", else the file's own first-seen version.</summary>
+    public string VersionOf(CatalogBinary file) =>
+        Release.Equals("latest", StringComparison.OrdinalIgnoreCase) || string.IsNullOrWhiteSpace(Release) ? file.Version ?? file.Sha256?[..12] ?? "?" : Release.TrimStart('v', 'V');
 }
 
 public sealed class CatalogRenodxDlss
