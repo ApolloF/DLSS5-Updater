@@ -1055,6 +1055,8 @@ public sealed partial class MainViewModel : ObservableObject
         await Run($"Uninstalling from {g.Name}", async ct =>
         {
             await S.Installer.UninstallAsync(g.Info, g.SelectedTarget.Dir, ct);
+            if (g.DriverExe is { } exe)
+                await Task.Run(() => UninstallDriverRestore.Run(NvidiaProfile.Real, new NvidiaGame(exe, g.Name, S.Settings.For(g.Id)), S.Settings.Save));
             var dir = g.SelectedTarget.Dir;
             await Task.Run(() => KnownInstalls.Forget([dir]));
             await RescanOne(g);
