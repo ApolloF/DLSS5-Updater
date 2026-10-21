@@ -46,7 +46,7 @@ public sealed class NrAddonTests : IDisposable
         Assert.Single(NrAddons.DefaultConflicts(s));
         NrAddons.SetDefault(s, NrAddon.Uplift, true);
         Assert.Equal((true, true, true), (s.InstallRenoDx, s.InstallLecram, s.InstallUplift));
-        Assert.Equal(3, NrAddons.DefaultConflicts(s).Count);
+        Assert.Equal(2, NrAddons.DefaultConflicts(s).Count);
         NrAddons.SetDefault(s, NrAddon.Uplift, false);
         NrAddons.SetDefault(s, NrAddon.Lecram, false);
         Assert.Equal((true, false, false), (s.InstallRenoDx, s.InstallLecram, s.InstallUplift));

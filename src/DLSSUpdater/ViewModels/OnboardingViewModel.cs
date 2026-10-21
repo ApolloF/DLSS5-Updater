@@ -164,13 +164,12 @@ public sealed partial class OnboardingViewModel : ObservableObject
         return new OnboardingResult(true, build);
     }
 
-    /// <summary>An unchanged pick leaves the add-ons alone (a kept ShortFuse + Lecram pair stays); a new one goes through the exclusivity rule.</summary>
+    /// <summary>An unchanged pick leaves the add-ons alone (a kept ShortFuse + Lecram pair stays); a new one replaces them (the page offers a single pick).</summary>
     private void ApplyAddon(AppSettings s)
     {
         if (Addon.Value == _initialAddon) return;
+        foreach (var a in NrAddons.Defaults(s).ToList()) NrAddons.SetDefault(s, a, false);
         if (Addon.Value is { } addon) NrAddons.SetDefault(s, addon, true);
-        else
-            foreach (var a in NrAddons.Defaults(s).ToList()) NrAddons.SetDefault(s, a, false);
     }
 
     private bool _closed;
