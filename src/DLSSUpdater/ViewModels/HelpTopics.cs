@@ -335,33 +335,69 @@ public static class HelpTopics
             "Presets for features the game doesn't have are moved under 'settings this game doesn't use', since the driver override can't add them. " +
             "OptiScaler counts as DLSS Super Resolution once it has nvngx_dlss.dll. Games that fetch DLSS only through NVIDIA's OTA updates can't be detected from files."),
         new("nv-sr-preset", "NVIDIA", "DLSS Super Resolution preset",
-            "Tells the driver which DLSS SR model preset to use for this game, whatever the game asks for (like the NVIDIA App's DLSS Override - Model Presets). " +
-            "The preset and the SR override switch are written together, as the NVIDIA App stores them; Off writes both as off; Use global removes both. " +
+            "Tells the driver which DLSS SR model preset to use for this game, whatever the game asks for (DRS setting 0x10E41DF3, 'DLSS - Forced Preset Letter'). " +
+            "Recommended (0xFFFFFF) lets DLSS pick per quality mode. Off writes 0, which Profile Inspector lists as N/A. Use global removes the game's own value. " +
+            "Only the preset is written: the 'use latest DLL' switch is a separate setting. Works on every RTX GPU and a driver that has the setting (it is hidden otherwise). " +
             "OptiScaler has its own preset override (RenderPresetOverride in the profile); if both are set, OptiScaler's wins in games it handles."),
+        new("nv-latest-dll", "NVIDIA", "Use latest DLSS DLL (SR / RR / FG)",
+            "Profile Inspector's 'Enable DLL Override' for DLSS Super Resolution (0x10E41E01), Ray Reconstruction (0x10E41E02) and Frame Generation (0x10E41E03): " +
+            "On makes the driver use the newest DLSS DLL it has installed instead of the one in the game folder. Off uses the game's own DLL. " +
+            "This is the driver's own DLL store and the NVIDIA App's DLSS override; it does not touch the game's files, and the DLSS tab here still manages the game's own DLLs. " +
+            "Which GPUs and driver versions support it isn't documented by Profile Inspector."),
         new("nv-sr-mode", "NVIDIA", "DLSS render resolution",
-            "Forces the internal render resolution DLSS upscales from, independent of the game's quality menu. Custom uses an exact percentage per axis."),
+            "Forces the internal render resolution DLSS upscales from, independent of the game's quality menu (0x10AFB768 'Forced Quality Level', values Performance 0, Balanced 1, Quality 2, DLAA 4, Ultra Performance 5, Custom 6; 3 is listed as N/A). " +
+            "Custom also writes the scaling ratio (0x10E41DF5), a percentage per axis from 33 to 100; the ratio setting needs driver 572.83 or newer. A ratio set elsewhere shows as Custom."),
         new("nv-rr-preset", "NVIDIA", "DLSS Ray Reconstruction preset",
-            "Model preset for Ray Reconstruction (the DLSS denoiser in path-traced games). Only matters in games that use RR. Current presets are D and F (A–C were removed)."),
+            "Model preset for Ray Reconstruction (the DLSS denoiser in path-traced games), setting 0x10E41DF7. Only matters in games that use RR. " +
+            "Profile Inspector names D and E 'Transformer Gen 1' and F 'Transformer Gen 2'; A to C are CNN. This list offers D and F, plus Recommended."),
         new("nv-fg-preset", "NVIDIA", "DLSS Frame Generation preset",
-            "Which DLSS FG model the driver loads, together with the FG override switch. NVIDIA default is what the NVIDIA App calls 'Default'; A and B are the presets drivers currently offer."),
-        new("nv-mfg", "NVIDIA", "Multi frame generation",
-            "Driver-side multiplier override for DLSS FG (the NVIDIA App's 'Multi Frame Generation' override). Native 3x/4x needs an RTX 50 card; " +
-            "on RTX 40 use MFG Unlock instead."),
+            "Which DLSS FG model the driver loads (setting 0x10E41DF1). NVIDIA default (0xFFFFFE) is the recommended one; A is named 'Default Preset' and B 'UI Focus' in Profile Inspector, which also lists C 'Performance Focus' that this list does not offer."),
+        new("nv-mfg-mode", "NVIDIA", "Multi frame generation mode",
+            "Profile Inspector's 'DLSS-FG - Forced Mode' (0x10308298): Fixed (2) or Dynamic (4); Off writes 0, listed as N/A. " +
+            "Multi frame generation is an RTX 50 feature. How the mode combines with the factor and dynamic settings isn't documented beyond their names: " +
+            "Fixed goes with the fixed generation factor, Dynamic with the dynamic maximum and target frame rate."),
+        new("nv-mfg", "NVIDIA", "Fixed generation factor",
+            "'DLSS-MFG - Fixed Frame Generation Count' (0x104D6667): 2x to 6x (values 1 to 5); Game setting writes 0 (N/A). " +
+            "Native 3x and above needs an RTX 50 card; RTX 40 owners use MFG Unlock in the ReShade add-ons tab instead."),
+        new("nv-mfg-dynamic", "NVIDIA", "Dynamic multi frame generation maximum",
+            "'DLSS-MFG - Dynamic Frame Generation Count' (0x10562D0F): the highest multiplier dynamic mode may use, up to 2x to up to 6x. Needs driver 595.97 or newer, otherwise it is not shown. " +
+            "There is no 'off' value here: Use global removes the setting."),
+        new("nv-mfg-dynamic-fps", "NVIDIA", "Dynamic target frame rate",
+            "'DLSS-MFG - Target Dynamic Frame Rate' (0x10CF4125): Max refresh rate (0x01000000) or a frame rate from 60. Needs driver 595.97 or newer, otherwise it is not shown. " +
+            "The list offers common rates; a rate set elsewhere shows as Custom."),
         new("nv-smooth-motion", "NVIDIA", "Smooth Motion",
-            "Driver-level frame generation that works in games without DLSS FG (DX11, DX12, Vulkan). Needs RTX 40/50 and driver 571.86+. " +
-            "Don't combine with in-game FG."),
+            "Driver-level frame generation that works in games without DLSS FG (setting 0xB0D384C0). Needs RTX 40/50 and driver 571.86+. " +
+            "Don't combine with in-game FG. Keep it off for Vulkan games that run the neural-rendering add-ons; for those use the API list below to leave Vulkan out. " +
+            "Writing it may need administrator rights on some systems; the app then offers to restart elevated."),
+        new("nv-smooth-motion-apis", "NVIDIA", "Smooth Motion graphics APIs",
+            "'Smooth Motion - Enabled APIs' (0xB0CC0875) is a bit mask: 1 DX12, 2 DX11, 4 Vulkan (the driver default is 7, all). " +
+            "Choose DX12 + DX11 to keep Smooth Motion off Vulkan, which the neural-rendering add-ons need."),
+        new("nv-rtx-hdr-allow", "NVIDIA", "RTX HDR allowed",
+            "'RTX HDR Allow' (0x1077A11A, 0 Disallow, 1 Allow) comes from the driver's predefined settings list. Community tools set it together with RTX HDR enable. " +
+            "What it does beyond its name isn't documented."),
         new("nv-rtx-hdr", "NVIDIA", "RTX HDR",
-            "AI conversion of SDR games to HDR. Needs Windows HDR on. If it doesn't kick in, enable RTX HDR once in the NVIDIA App so its global flags exist. " +
-            "Doesn't work together with DLDSR or some overlays."),
+            "AI conversion of SDR games to HDR (setting 0x00DD48FB). Needs an RTX GPU and Windows HDR on. If it doesn't kick in, enable RTX HDR once in the NVIDIA App so its global flags exist. " +
+            "Doesn't work together with DLDSR or some overlays. Peak brightness, middle grey, contrast and saturation are not offered: Profile Inspector names their ids but documents no values."),
+        new("nv-rtx-hdr-debanding", "NVIDIA", "RTX HDR debanding",
+            "Profile Inspector's 'RTX HDR - Driver Flags' (0x00432F84). Any non-zero flag makes the driver apply HDR itself instead of the NVIDIA overlay, which then cannot change brightness, contrast or saturation. " +
+            "Offered: 0x06 no debanding, 0x0A medium, 0x02 very high. The values with the on-screen indicator (0x03) and debug bars (0x23) are not offered."),
         new("nv-vibrance", "NVIDIA", "RTX Dynamic Vibrance",
-            "AI saturation / clarity boost for SDR output. The SDR counterpart of RTX HDR; not used when RTX HDR is on."),
+            "AI saturation / clarity boost for SDR output (setting 0x00980880). The SDR counterpart of RTX HDR; not used when RTX HDR is on."),
         new("nv-fps", "NVIDIA", "Max frame rate",
-            "Driver FPS limiter. Values a few frames under refresh keep G-Sync active; with frame generation the cap applies to the output frame rate."),
+            "Driver FPS limiter, 'Frame Rate Limiter V3' (0x10835002, driver 441.87+): 0 is off, otherwise 20 to 1000. Values a few frames under refresh keep G-Sync active; with frame generation the cap applies to the output frame rate. " +
+            "Use only one limiter per game: the driver limiter, an in-game one or a ReShade add-on limiter. Works for every graphics API. A cap set elsewhere shows as Custom."),
         new("nv-vsync", "NVIDIA", "Vertical sync",
-            "Driver VSync override, written as the NVIDIA Control Panel stores it (VSync mode + tear control). With G-Sync / VRR the usual setup is On here, " +
-            "in-game VSync off, and an FPS cap a few frames under refresh."),
+            "Driver VSync override, written as the NVIDIA Control Panel stores it: VSync mode (0x00A879CF) plus tear control (0x005A375C, Standard or Adaptive). " +
+            "With G-Sync / VRR the usual setup is On here, in-game VSync off, and an FPS cap a few frames under refresh."),
+        new("nv-low-latency", "NVIDIA", "Low latency mode",
+            "Control Panel's low latency mode as two settings: state (0x0005F543: Off 0, On 1, Ultra 2) and the Ultra flag (0x10835000, 0 or 1). " +
+            "Ultra writes both on; On writes the state only. Profile Inspector doesn't document how the two relate, so this pairing follows the Control Panel's three names. " +
+            "The research notes say writing it can need administrator rights."),
         new("nv-power", "NVIDIA", "Power management",
-            "How the GPU manages clocks. Prefer max performance keeps clocks high, avoiding clock-change stutter in light games at the cost of power."),
+            "How the GPU manages clocks (0x1057EB71: Adaptive 0, Prefer maximum performance 1, Optimal 5). Prefer max performance keeps clocks high, avoiding clock-change stutter in light games at the cost of power."),
+        new("nv-not-offered", "NVIDIA", "NVIDIA settings not offered",
+            "These ids appear in Profile Inspector but are left out because their values aren't documented. " + string.Join(" ", NvidiaProfileCatalog.NotOffered) +
+            " Settings the installed driver doesn't define are hidden and counted in the tab."),
 
         // ---------- MFG Unlock ----------
         new("force-multiplier", "MFG Unlock", "Force frame multiplier",
@@ -552,15 +588,23 @@ public static class HelpTopics
         ["hdr-force"] = "Off. Only with an HDR mod that expects OptiScaler to make the swapchain HDR.",
         ["hdr-10"] = "Off (scRGB, more precision). On if your capture tool or display chain works better with HDR10.",
         ["nv-sr-preset"] = "Use global for most games. Recommended lets DLSS pick per quality mode. Force K for Quality / DLAA, M for Performance, L for Ultra Performance; Off stops the driver override for that game.",
+        ["nv-latest-dll"] = "Off unless you want the driver's newest DLSS in a game that won't take a swapped DLL. Not needed if this app already updated the game's DLLs.",
         ["nv-sr-mode"] = "Use the game's setting. DLAA if you have headroom; Performance with an L/M preset at 4K looks close to Quality with older presets.",
         ["nv-rr-preset"] = "Use global or F. Try D only if F shows smearing in a specific game.",
         ["nv-fg-preset"] = "Use global or NVIDIA default. Try A or B only when a game shows FG artifacts that a different model fixes.",
+        ["nv-mfg-mode"] = "Leave it to the game unless you want dynamic MFG on an RTX 50 card.",
         ["nv-mfg"] = "Leave it to the game unless it only offers 2x; RTX 40 owners use MFG Unlock in the ReShade add-ons tab instead.",
+        ["nv-mfg-dynamic"] = "Only with the dynamic mode; set it to what your display can show.",
+        ["nv-mfg-dynamic-fps"] = "Max refresh rate unless you cap the frame rate lower.",
         ["nv-smooth-motion"] = "Per game, for titles without DLSS FG and a base frame rate above ~50 FPS.",
+        ["nv-smooth-motion-apis"] = "DX12 + DX11 for Vulkan games with the neural-rendering add-ons; otherwise leave it.",
+        ["nv-rtx-hdr-allow"] = "Allow only in SDR games on an HDR display.",
         ["nv-rtx-hdr"] = "Per game for SDR-only titles on an HDR monitor. Off for games with native HDR or a RenoDX HDR mod.",
+        ["nv-rtx-hdr-debanding"] = "Off, so the NVIDIA App keeps control of brightness and contrast.",
         ["nv-vibrance"] = "Taste. Per game for dull-looking SDR games; off when using RTX HDR.",
         ["nv-fps"] = "Use global (set a cap 3–4 FPS under your refresh in the NVIDIA App, e.g. 237 for 240 Hz). Per game for a lower cap, e.g. 117 for a game that can't hold 140+.",
         ["nv-vsync"] = "Use global. With G-Sync: On plus an FPS cap under refresh. Without VRR: Adaptive avoids stutter below refresh; Off for the lowest latency.",
+        ["nv-low-latency"] = "Use global. Ultra for competitive DX11 games when the GPU is the bottleneck.",
         ["nv-power"] = "Use global. Prefer max performance for a game that stutters when the GPU clocks down.",
         ["hdr-skip"] = "Off. On only if colours look wrong while another HDR mod is active.",
     };

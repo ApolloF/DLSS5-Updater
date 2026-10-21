@@ -193,6 +193,9 @@
 
 
         <DataTemplate x:Key="NvOptionRow" DataType="{x:Type vm:NvOptionViewModel}">
+            <StackPanel>
+            <TextBlock Text="{Binding GroupTitle}" Style="{StaticResource SectionTitle}" Margin="0,14,0,2"
+                       Visibility="{Binding ShowGroupHeader, Converter={StaticResource BoolToVis}}" />
             <Grid Margin="0,9">
                 <Grid.ColumnDefinitions>
                     <ColumnDefinition Width="*" />
@@ -215,14 +218,17 @@
                 <ComboBox Grid.Column="1" Width="220" VerticalAlignment="Center" ItemsSource="{Binding DisplayChoices}" SelectedItem="{Binding Selected}"
                           ItemContainerStyle="{StaticResource DescribedItem}" MaxDropDownHeight="480" AutomationProperties.Name="{Binding Label}" />
             </Grid>
+            </StackPanel>
         </DataTemplate>
 
         <!-- Driver profile panel, shared by the global tab and the per-game view -->
         <DataTemplate x:Key="DriverPanel" DataType="{x:Type vm:DriverProfileViewModel}">
             <StackPanel>
                 <Grid Margin="0,4,0,10">
-                    <TextBlock Text="{Binding Status}" Style="{StaticResource MutedText}" FontSize="12" VerticalAlignment="Center" TextWrapping="Wrap" Margin="0,0,200,0" />
+                    <TextBlock Text="{Binding Status}" Style="{StaticResource MutedText}" FontSize="12" VerticalAlignment="Center" TextWrapping="Wrap" Margin="0,0,320,0" />
                     <StackPanel Orientation="Horizontal" HorizontalAlignment="Right">
+                        <Button Content="Reset to previous" Style="{StaticResource BtnGhost}" Command="{Binding ResetCommand}" Visibility="{Binding CanReset, Converter={StaticResource BoolToVis}}" Margin="0,0,8,0"
+                                ToolTip="Put back the values this app replaced in the game's driver profile" />
                         <Button Content="Revert" Style="{StaticResource BtnGhost}" Command="{Binding RevertCommand}" IsEnabled="{Binding IsDirty}" Margin="0,0,8,0" />
                         <Button Content="Apply to driver" Style="{StaticResource BtnPrimary}" Command="{Binding ApplyCommand}" IsEnabled="{Binding IsDirty}" />
                     </StackPanel>
@@ -230,6 +236,8 @@
                 <ProgressBar IsIndeterminate="True" Visibility="{Binding Busy, Converter={StaticResource BoolToVis}}" Margin="0,0,0,8" />
                 <TextBlock Text="{Binding FeatureSummary}" Style="{StaticResource MutedText}" FontSize="12" TextWrapping="Wrap" Margin="0,0,0,10"
                            Visibility="{Binding FeatureSummary, Converter={StaticResource NullToVis}}" />
+                <TextBlock Text="{Binding HiddenNote}" Style="{StaticResource MutedText}" FontSize="12" TextWrapping="Wrap" Margin="0,0,0,10"
+                           Visibility="{Binding HiddenNote, Converter={StaticResource NullToVis}}" />
                 <Border Style="{StaticResource Card}" Padding="16,4" Visibility="{Binding Loaded, Converter={StaticResource BoolToVis}}">
                     <StackPanel>
                         <ItemsControl ItemsSource="{Binding Relevant}" ItemTemplate="{StaticResource NvOptionRow}" />

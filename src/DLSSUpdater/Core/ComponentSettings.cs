@@ -39,6 +39,21 @@ internal static class ComponentPicks
         if (pick.IsEmpty) map!.Remove(map!.Keys.First(k => k.Equals(id, StringComparison.OrdinalIgnoreCase)));
         return map is { Count: 0 } ? null : map;
     }
+
+    /// <summary>Replaces the option values of <paramref name="id"/> in <paramref name="map"/> (created when needed); an emptied entry goes.</summary>
+    public static Dictionary<string, ComponentPick>? SetOptions(Dictionary<string, ComponentPick>? map, string id, Dictionary<string, string>? options)
+    {
+        var pick = Get(map, id);
+        if (pick is null)
+        {
+            if (options is not { Count: > 0 }) return map;
+            map ??= new Dictionary<string, ComponentPick>(StringComparer.OrdinalIgnoreCase);
+            map[id] = pick = new ComponentPick();
+        }
+        pick.Options = options is { Count: > 0 } ? options : null;
+        if (pick.IsEmpty) map!.Remove(map!.Keys.First(k => k.Equals(id, StringComparison.OrdinalIgnoreCase)));
+        return map is { Count: 0 } ? null : map;
+    }
 }
 
 public sealed partial class GameOverride
@@ -76,6 +91,9 @@ public sealed partial class GameOverride
 
     /// <summary>This game's choices for a component in the map (on/off, options); null when it has none.</summary>
     public ComponentPick? PickOf(string id) => ComponentPicks.Get(Components, id);
+
+    /// <summary>Replaces this game's option values for a component in the map; null or empty removes them.</summary>
+    public void SetPickOptions(string id, Dictionary<string, string>? options) => Components = ComponentPicks.SetOptions(Components, id, options);
 }
 
 public sealed partial class AppSettings

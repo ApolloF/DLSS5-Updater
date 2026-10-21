@@ -8,19 +8,40 @@ using DLSSUpdater.Scan;
 namespace DLSSUpdater.ViewModels;
 
 /// <summary>
-/// One driver setting of a game profile. Choice values are "ID=VALUE;ID=VALUE" (hex) and are written as a block,
-/// the way the NVIDIA App writes a preset together with its override switch. The first choice (Value null)
-/// removes every id in <see cref="Ids"/> from the game profile so the global / NVIDIA default applies again.
+/// One driver setting of a game profile (the choices come from <see cref="NvidiaProfileCatalog"/>). Choice values are
+/// "ID=VALUE;ID=VALUE" (hex) and are written as a block. The first choice (Value null) removes every id of the option
+/// from the game profile so the global / NVIDIA default applies again.
 /// </summary>
-public sealed partial class NvOptionViewModel(string label, string hint, string topic, uint[] ids, OptionChoice[] choices) : ObservableObject
+public sealed partial class NvOptionViewModel : ObservableObject
 {
-    public string Label { get; } = label;
-    public string Hint { get; } = hint;
-    public string Topic { get; } = topic;
-    public uint[] Ids { get; } = ids;
-    public OptionChoice[] Choices { get; } = choices;
+    private readonly NvOptionDef _def;
+
+    public NvOptionViewModel(NvOptionDef def)
+    {
+        _def = def;
+        Choices = [new OptionChoice("Use global", null, "No per-game value."), .. def.Choices.Select(c => new OptionChoice(c.Label, Encode(c), c.Description))];
+        DisplayChoices = new(Choices);
+    }
+
+    public string Label => _def.Label;
+    public string Hint => _def.MayNeedAdmin ? $"{_def.Hint} Some systems need administrator rights to save this." : _def.Hint;
+    public string Topic => _def.Topic;
+    public uint[] Ids => _def.Ids;
+    public OptionChoice[] Choices { get; }
+    public NvGroup Group => _def.Group;
+    public string GroupTitle => Group switch
+    {
+        NvGroup.Dlss => "DLSS overrides",
+        NvGroup.FrameGeneration => "Multi frame generation",
+        NvGroup.SmoothMotion => "Smooth Motion",
+        NvGroup.RtxHdr => "RTX HDR",
+        NvGroup.Sync => "Sync and latency",
+        _ => "Other",
+    };
+    /// <summary>First row of its group in the list it is shown in.</summary>
+    [ObservableProperty] private bool _showGroupHeader;
     /// <summary>Game feature this driver setting acts on; None = applies to every game.</summary>
-    public GameFeatures Requires { get; init; }
+    public GameFeatures Requires => _def.Requires;
     /// <summary>Whether the game uses the feature (false moves the option into "not used by this game").</summary>
     public bool Relevant { get; private set; } = true;
     /// <summary>Why the option is (or isn't) worth changing for this game.</summary>
@@ -36,14 +57,14 @@ public sealed partial class NvOptionViewModel(string label, string hint, string 
                 GameFeatures.FG => "Frame Generation",
                 _ => Requires.ToString(),
             }} files, so this has no effect."
-            : Topic == "nv-smooth-motion"
+            : _def.Key == "smooth-motion"
                 ? features.HasFlag(GameFeatures.FG) ? "The game has DLSS Frame Generation; use that instead." : "Recommended here: the game has no DLSS Frame Generation."
             : null;
     }
     public OptionChoice? Loaded { get; private set; }
 
     /// <summary>Stable list for the dropdown (rebuilt only on load, so the ComboBox never resets the selection).</summary>
-    public ObservableCollection<OptionChoice> DisplayChoices { get; } = new(choices);
+    public ObservableCollection<OptionChoice> DisplayChoices { get; }
 
     private OptionChoice? _selected;
 
@@ -60,6 +81,8 @@ public sealed partial class NvOptionViewModel(string label, string hint, string 
     }
 
     public bool IsDirty => Selected is not null && Loaded is not null && !Equals(Selected, Loaded);
+
+    private static string Encode(NvChoice c) => string.Join(";", c.Writes.Select(w => $"{w.Id:X}={w.Value:X}"));
 
     public static IEnumerable<(uint Id, uint Value)> Pairs(string? value) =>
         (value ?? "").Split(';', StringSplitOptions.RemoveEmptyEntries)
@@ -108,17 +131,30 @@ public sealed partial class NvOptionViewModel(string label, string hint, string 
     }
 }
 
-/// <summary>Editor for one game's NVIDIA driver profile. The global profile is only read, never written.</summary>
+/// <summary>
+/// Editor for one game's NVIDIA driver profile. Options this driver doesn't define are hidden. What the app writes is recorded
+/// per game (<see cref="NvidiaRecord"/>) so Reset puts the profile back exactly as it was. The global profile is only read, never written.
+/// </summary>
 public sealed partial class DriverProfileViewModel : ObservableObject
 {
+    private readonly NvidiaGame _game;
     private readonly string _exePath;
     private readonly string _gameName;
+    private readonly NvidiaProfile _profile;
+    private readonly Action _saveSettings;
 
     /// <param name="features">What the game ships (null = unknown: every option is shown as relevant).</param>
-    public DriverProfileViewModel(string exePath, string gameName, GameFeatures? features = null, Version? fgVersion = null)
+    /// <param name="settings">The game's settings, where the record of written values is kept (null = not kept, for tests and the demo).</param>
+    /// <param name="saveSettings">Called after the record changed.</param>
+    /// <param name="profile">The driver access; defaults to the real NVIDIA driver.</param>
+    public DriverProfileViewModel(string exePath, string gameName, GameFeatures? features = null, Version? fgVersion = null,
+        GameOverride? settings = null, Action? saveSettings = null, NvidiaProfile? profile = null)
     {
         _exePath = exePath;
         _gameName = gameName;
+        _game = new NvidiaGame(exePath, gameName, settings ?? new GameOverride());
+        _saveSettings = saveSettings ?? (() => { });
+        _profile = profile ?? NvidiaProfile.Real;
         Features = features;
         Options = new(NvSettings.Create());
         foreach (var o in Options)
@@ -129,17 +165,17 @@ public sealed partial class DriverProfileViewModel : ObservableObject
                 if (e.PropertyName == nameof(NvOptionViewModel.IsDirty)) OnPropertyChanged(nameof(IsDirty));
             };
         }
-        Relevant = Options.Where(o => o.Relevant).ToList();
-        Other = Options.Where(o => !o.Relevant).ToList();
+        ShowOptions(Options);
         FeatureSummary = features is { } g ? Summarize(g, fgVersion) : null;
+        CanReset = !NvidiaRecord.Load(_game.Settings).IsEmpty;
     }
 
     public GameFeatures? Features { get; }
     public ObservableCollection<NvOptionViewModel> Options { get; }
     /// <summary>Options for features the game uses (or that apply to every game).</summary>
-    public IReadOnlyList<NvOptionViewModel> Relevant { get; }
+    public ObservableCollection<NvOptionViewModel> Relevant { get; } = [];
     /// <summary>Options for DLSS features the game doesn't ship; collapsed by default.</summary>
-    public IReadOnlyList<NvOptionViewModel> Other { get; }
+    public ObservableCollection<NvOptionViewModel> Other { get; } = [];
     public bool HasOther => Other.Count > 0;
     public string OtherLabel => $"{(ShowOther ? "Hide" : "Show")} {Other.Count} setting{(Other.Count == 1 ? "" : "s")} this game doesn't use";
     public string? FeatureSummary { get; }
@@ -148,8 +184,35 @@ public sealed partial class DriverProfileViewModel : ObservableObject
     [NotifyPropertyChangedFor(nameof(OtherLabel))]
     private bool _showOther;
 
+    /// <summary>One line when the driver doesn't define some options (they are not shown); null when it knows all.</summary>
+    [ObservableProperty] private string? _hiddenNote;
+
+    /// <summary>The app has written settings to this game's profile that Reset can put back.</summary>
+    [ObservableProperty] private bool _canReset;
+
     [RelayCommand]
     private void ToggleOther() => ShowOther = !ShowOther;
+
+    private void ShowOptions(IEnumerable<NvOptionViewModel> visible)
+    {
+        var shown = visible.ToList();
+        Fill(Relevant, shown.Where(o => o.Relevant));
+        Fill(Other, shown.Where(o => !o.Relevant));
+        OnPropertyChanged(nameof(HasOther));
+        OnPropertyChanged(nameof(OtherLabel));
+    }
+
+    private static void Fill(ObservableCollection<NvOptionViewModel> list, IEnumerable<NvOptionViewModel> options)
+    {
+        list.Clear();
+        NvOptionViewModel? last = null;
+        foreach (var o in options)
+        {
+            o.ShowGroupHeader = last is null || last.Group != o.Group;
+            list.Add(o);
+            last = o;
+        }
+    }
 
     internal static string Summarize(GameFeatures f, Version? fgVersion)
     {
@@ -168,39 +231,10 @@ public sealed partial class DriverProfileViewModel : ObservableObject
     [ObservableProperty] private bool _loaded;
     [ObservableProperty] private bool _busy;
 
-    private sealed record Snapshot(string Status, Dictionary<uint, uint?> User, Dictionary<uint, uint?> Fallback, HashSet<uint> GameDefaults);
-
-    private Snapshot ReadAll()
-    {
-        using var drs = NvDrs.Open();
-        var baseProfile = drs.BaseProfile();
-        var profile = drs.FindProfileForExe(_exePath);
-        var ids = Options.SelectMany(o => o.Ids).Distinct().ToList();
-        var user = new Dictionary<uint, uint?>();
-        var fallback = new Dictionary<uint, uint?>();
-        var gameDefaults = new HashSet<uint>();
-        foreach (var id in ids)
-        {
-            var global = drs.Read(baseProfile, id)?.Value;
-            var own = profile is { } p ? drs.Read(p, id) : null;
-            if (own is { IsUserValue: true } u) user[id] = u.Value;
-            if (own is { Location: 0, Predefined: true } pre)
-            {
-                fallback[id] = pre.Value;
-                gameDefaults.Add(id);
-            }
-            else fallback[id] = global;
-        }
-        var status = profile is { } gp
-            ? $"Driver profile: {drs.ProfileName(gp)}"
-            : $"No NVIDIA profile for {Path.GetFileName(_exePath)} yet. Apply creates one.";
-        return new Snapshot(status, user, fallback, gameDefaults);
-    }
-
     [RelayCommand]
     public async Task Load()
     {
-        if (!NvDrs.Available)
+        if (!_profile.Available)
         {
             Status = "No NVIDIA driver found.";
             return;
@@ -208,9 +242,15 @@ public sealed partial class DriverProfileViewModel : ObservableObject
         Busy = true;
         try
         {
-            var snap = await Task.Run(ReadAll);
-            foreach (var o in Options) o.SetLoaded(snap.User, snap.Fallback, o.Ids.Any(snap.GameDefaults.Contains));
+            var ids = Options.SelectMany(o => o.Ids).Distinct().ToList();
+            var snap = await Task.Run(() => _profile.Read(_exePath, ids));
+            var known = Options.Where(o => o.Ids.All(snap.Known.Contains)).ToList();
+            foreach (var o in known) o.SetLoaded(snap.User, snap.Fallback, o.Ids.Any(snap.GameDefaults.Contains));
+            ShowOptions(known);
+            var hidden = Options.Count - known.Count;
+            HiddenNote = hidden == 0 ? null : $"{hidden} setting{(hidden == 1 ? "" : "s")} not shown: this driver doesn't define {(hidden == 1 ? "it" : "them")}. Updating the NVIDIA driver may add them.";
             Status = snap.Status;
+            CanReset = !NvidiaRecord.Load(_game.Settings).IsEmpty;
             Loaded = true;
         }
         catch (Exception ex) when (ex is NvApiException or InvalidOperationException or EntryPointNotFoundException)
@@ -241,33 +281,45 @@ public sealed partial class DriverProfileViewModel : ObservableObject
             else foreach (var (id, v) in NvOptionViewModel.Pairs(o.Selected.Value)) expected[id] = v;
         }
 
+        var result = await Write(() => _profile.Apply(_game, expected));
+        if (result is null) return;
+        Log.Info($"NVIDIA profile {_gameName}: {string.Join(", ", changed.Select(o => $"{o.Label} = {o.Selected!.Label}"))}");
+        var labels = string.Join(", ", changed.Where(o => o.Ids.Any(id => result.Mismatches.Any(w => w.Id == id))).Select(o => o.Label));
+        ReportMismatches(result, labels);
+        await Load();
+    }
+
+    /// <summary>Puts every setting the app wrote back to what this game's profile held before.</summary>
+    [RelayCommand]
+    private async Task Reset()
+    {
+        var count = NvidiaRecord.Load(_game.Settings).Previous.Count;
+        if (count == 0) return;
+        if (!Views.Dialog.Confirm("Reset NVIDIA profile", $"Put the {count} driver setting{(count == 1 ? "" : "s")} this app changed for {_gameName} back to what {(count == 1 ? "it was" : "they were")} before?", "Reset")) return;
+        var result = await Write(() => _profile.Reset(_game));
+        if (result is null) return;
+        Log.Info($"NVIDIA profile {_gameName}: reset {count} setting(s) to their previous values");
+        ReportMismatches(result, "the reset settings");
+        await Load();
+    }
+
+    private void ReportMismatches(NvidiaResult result, string labels)
+    {
+        if (result.Verified) return;
+        var detail = string.Join(", ", result.Mismatches.Select(w => $"0x{w.Id:X8} expected {(w.Wanted is { } v ? $"0x{v:X}" : "unset")}, got {(w.Got is { } g ? $"0x{g:X}" : "unset")}"));
+        Log.Error($"NVIDIA profile {_gameName}: verification mismatch: {detail}");
+        Views.Dialog.Show("NVIDIA profile", $"The driver didn't keep these settings: {labels}. Try again or check the profile in the NVIDIA App.");
+    }
+
+    /// <summary>Runs a write on a background thread and keeps the record; null when it failed (the user has been told).</summary>
+    private async Task<NvidiaResult?> Write(Func<NvidiaResult> write)
+    {
         Busy = true;
         try
         {
-            await Task.Run(() =>
-            {
-                using var drs = NvDrs.Open();
-                var profile = drs.GetOrCreateProfileForExe(_exePath, _gameName);
-                foreach (var (id, value) in expected)
-                {
-                    if (value is { } v) drs.Set(profile, id, v);
-                    else drs.Delete(profile, id);
-                }
-                drs.Save();
-            });
-
-            var after = await Task.Run(ReadAll);
-            var wrong = expected.Where(e => after.User.GetValueOrDefault(e.Key) != e.Value).ToList();
-            Log.Info($"NVIDIA profile {_gameName}: {string.Join(", ", changed.Select(o => $"{o.Label} = {o.Selected!.Label}"))}");
-            if (wrong.Count > 0)
-            {
-                var detail = string.Join(", ", wrong.Select(w => $"0x{w.Key:X8} expected {(w.Value is { } v ? $"0x{v:X}" : "unset")}, got {(after.User.GetValueOrDefault(w.Key) is { } g ? $"0x{g:X}" : "unset")}"));
-                Log.Error($"NVIDIA profile {_gameName}: verification mismatch: {detail}");
-                var labels = string.Join(", ", changed.Where(o => o.Ids.Any(id => wrong.Any(w => w.Key == id))).Select(o => o.Label));
-                Views.Dialog.Show("NVIDIA profile", $"The driver didn't keep these settings: {labels}. Try Apply again or check the profile in the NVIDIA App.");
-            }
-            Busy = false;
-            await Load();
+            var result = await Task.Run(write);
+            _saveSettings();
+            return result;
         }
         catch (NvApiException ex) when (ex.NeedsAdmin)
         {
@@ -288,6 +340,7 @@ public sealed partial class DriverProfileViewModel : ObservableObject
         {
             Busy = false;
         }
+        return null;
     }
 
     [RelayCommand]
@@ -298,116 +351,8 @@ public sealed partial class DriverProfileViewModel : ObservableObject
     }
 }
 
-/// <summary>
-/// Driver settings in the per-game NVIDIA tab. Ids are from NVIDIA's NvApiDriverSettings.h (Smooth Motion, RTX HDR and
-/// Vibrance from Profile Inspector's CustomSettingNames.xml). Preset choices write the preset and its override switch
-/// together, matching what the NVIDIA App stores per game.
-/// </summary>
+/// <summary>Driver settings in the per-game NVIDIA tab; the list itself is <see cref="NvidiaProfileCatalog"/>.</summary>
 public static class NvSettings
 {
-    private const uint SrPreset = 0x10E41DF3, RrPreset = 0x10E41DF7, FgPreset = 0x10E41DF1;
-    private const uint SrOverride = 0x10E41E01, RrOverride = 0x10E41E02, FgOverride = 0x10E41E03;
-    private const uint SrMode = 0x10AFB768, SrRatio = 0x10E41DF5, MfgCount = 0x104D6667;
-    private const uint VsyncMode = 0x00A879CF, VsyncTear = 0x005A375C, TearOff = 0x96861077, TearOn = 0x99941284;
-
-    private static OptionChoice C(string label, string? value, string description) => new(label, value, description);
-    private static string W(uint id, uint value) => $"{id:X}={value:X}";
-    private static string W(uint id, uint value, uint id2, uint value2) => $"{W(id, value)};{W(id2, value2)}";
-
-    private static OptionChoice Preset(uint presetId, uint overrideId, char letter, string description) =>
-        C(letter.ToString(), W(presetId, (uint)(letter - 'A' + 1), overrideId, 1), description);
-
-    private static OptionChoice Inherit => C("Use global", null, "No per-game value.");
-
-    public static NvOptionViewModel[] Create() =>
-    [
-        new("DLSS Super Resolution preset", "Force a DLSS SR model preset (with the SR override switch, as the NVIDIA App does).", "nv-sr-preset", [SrPreset, SrOverride],
-        [
-            Inherit,
-            C("Off", W(SrPreset, 0, SrOverride, 0), "No SR override for this game, even if the global profile has one."),
-            C("Recommended", W(SrPreset, 0xFFFFFF, SrOverride, 1), "DLSS picks per quality mode: K for DLAA / Quality / Balanced, M for Performance, L for Ultra Performance."),
-            Preset(SrPreset, SrOverride, 'K', "Default for DLAA, Quality and Balanced. Best image quality, highest cost."),
-            Preset(SrPreset, SrOverride, 'J', "Like K with slightly less ghosting but more flicker; NVIDIA recommends K over J."),
-            Preset(SrPreset, SrOverride, 'M', "Default for Performance mode."),
-            Preset(SrPreset, SrOverride, 'L', "Default for Ultra Performance mode."),
-        ]) { Requires = GameFeatures.SR },
-        new("DLSS render resolution", "Override the game's DLSS quality mode.", "nv-sr-mode", [SrMode, SrRatio],
-        [
-            Inherit,
-            C("Game setting", W(SrMode, 3), "Explicitly let the game choose (what the NVIDIA App stores by default)."),
-            C("DLAA", W(SrMode, 4), "Native resolution, DLSS only as anti-aliasing. Highest cost."),
-            C("Quality (67%)", W(SrMode, 2), "Renders at 67% per axis."),
-            C("Balanced (58%)", W(SrMode, 1), "Renders at 58% per axis."),
-            C("Performance (50%)", W(SrMode, 0), "Renders at 50% per axis."),
-            C("Ultra Performance (33%)", W(SrMode, 5), "Renders at 33% per axis."),
-            C("Custom 77%", W(SrMode, 6, SrRatio, 77), "Between Quality and DLAA."),
-            C("Custom 85%", W(SrMode, 6, SrRatio, 85), "Close to native."),
-        ]) { Requires = GameFeatures.SR },
-        new("DLSS Ray Reconstruction preset", "Force a DLSS RR model preset (with the RR override switch).", "nv-rr-preset", [RrPreset, RrOverride],
-        [
-            Inherit,
-            C("Off", W(RrPreset, 0, RrOverride, 0), "No RR override for this game."),
-            Preset(RrPreset, RrOverride, 'D', "Transformer model."),
-            Preset(RrPreset, RrOverride, 'F', "Default model (RR 2)."),
-        ]) { Requires = GameFeatures.RR },
-        new("DLSS Frame Generation preset", "Force a DLSS FG model (with the FG override switch).", "nv-fg-preset", [FgPreset, FgOverride],
-        [
-            Inherit,
-            C("Off", W(FgPreset, 0, FgOverride, 0), "No FG override for this game."),
-            C("NVIDIA default", W(FgPreset, 0xFFFFFE, FgOverride, 1), "The driver's default FG model (the NVIDIA App's 'Default')."),
-            Preset(FgPreset, FgOverride, 'A', "FG model preset A."),
-            Preset(FgPreset, FgOverride, 'B', "FG model preset B."),
-        ]) { Requires = GameFeatures.FG },
-        new("Multi frame generation", "Override the frame generation multiplier (native 3x+ needs RTX 50).", "nv-mfg", [MfgCount],
-        [
-            Inherit,
-            C("Game setting", W(MfgCount, 0), "Explicitly use the game's own multiplier."),
-            C("2x", W(MfgCount, 1), "One generated frame per rendered frame."),
-            C("3x", W(MfgCount, 2), "Two generated frames."),
-            C("4x", W(MfgCount, 3), "Three generated frames."),
-        ]) { Requires = GameFeatures.FG },
-        new("Smooth Motion", "Driver frame generation for games without DLSS FG.", "nv-smooth-motion", [0xB0D384C0],
-        [
-            Inherit,
-            C("Off", "B0D384C0=0", "Off for this game."),
-            C("On", "B0D384C0=1", "Driver interpolates frames (RTX 40 / 50, driver 571.86+)."),
-        ]),
-        new("RTX HDR", "AI SDR-to-HDR conversion by the driver.", "nv-rtx-hdr", [0x00DD48FB],
-        [
-            Inherit,
-            C("Off", "DD48FB=0", "Off for this game."),
-            C("On", "DD48FB=1", "Converts SDR to HDR. Needs Windows HDR on; costs some FPS."),
-        ]),
-        new("RTX Dynamic Vibrance", "AI colour and saturation boost for SDR.", "nv-vibrance", [0x00980880],
-        [
-            Inherit,
-            C("Off", "980880=0", "Off for this game."),
-            C("On", "980880=1", "Adds vibrance / clarity to SDR output."),
-        ]),
-        new("Max frame rate", "Driver FPS limiter.", "nv-fps", [0x10835002],
-        [
-            Inherit,
-            C("Off", "10835002=0", "No limit for this game."),
-            .. new[] { 30, 60, 90, 117, 120, 138, 141, 144, 157, 162, 165, 225, 237, 240 }
-                .Select(f => C($"{f} FPS", $"10835002={f:X}", f is 117 or 138 or 141 or 157 or 162 or 225 or 237
-                    ? "A few FPS under a common refresh rate: keeps G-Sync / VRR active." : $"Cap at {f} FPS.")),
-        ]),
-        new("Vertical sync", "Driver VSync override (same choices as the NVIDIA Control Panel).", "nv-vsync", [VsyncMode, VsyncTear],
-        [
-            Inherit,
-            C("Use the 3D application setting", W(VsyncMode, 0x60925292, VsyncTear, TearOff), "The game decides."),
-            C("Off", W(VsyncMode, 0x08416747, VsyncTear, TearOff), "Force off. Lowest latency, tearing without VRR."),
-            C("On", W(VsyncMode, 0x47814940, VsyncTear, TearOff), "Force on. The usual choice with G-Sync plus an FPS cap."),
-            C("Fast", W(VsyncMode, 0x18888888, VsyncTear, TearOff), "Fast Sync: no tearing above refresh without VSync's latency."),
-            C("Adaptive", W(VsyncMode, 0x47814940, VsyncTear, TearOn), "VSync on at refresh rate, off below it (tears instead of stuttering)."),
-            C("Adaptive (half refresh rate)", W(VsyncMode, 0x32610244, VsyncTear, TearOn), "Adaptive at half the refresh rate."),
-        ]),
-        new("Power management", "GPU clock behaviour.", "nv-power", [0x1057EB71],
-        [
-            Inherit,
-            C("Optimal power", "1057EB71=5", "Clocks drop when the frame is unchanged."),
-            C("Adaptive", "1057EB71=0", "Clocks follow load."),
-            C("Prefer max performance", "1057EB71=1", "Holds high clocks; fewer stutters from clock changes, more power."),
-        ]),
-    ];
+    public static NvOptionViewModel[] Create() => [.. NvidiaProfileCatalog.Create().Select(d => new NvOptionViewModel(d))];
 }
