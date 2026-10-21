@@ -27,10 +27,19 @@ public sealed class InstallManifest
     // Keeps the pre-rename name on purpose: every existing game install keeps its backups under this folder.
     public const string DirName = ".dlssupdater";
 
-    public int Schema { get; set; } = 1;
+    /// <summary>
+    /// 1: per-component fields only (up to 2.2.x). 2: adds <see cref="Components"/>; the per-component fields are still
+    /// written for the components that use them, so 2.2.x can read, update and uninstall such a record (see docs/design.md).
+    /// </summary>
+    public const int CurrentSchema = 2;
+
+    public int Schema { get; set; } = CurrentSchema;
     /// <summary>The install folder this record was read from; set by <see cref="KnownInstalls"/> for the cleanup's messages, never saved.</summary>
     [JsonIgnore]
     public string? Dir { get; set; }
+    /// <summary>The install folder <see cref="Read"/> loaded this record from; never saved.</summary>
+    [JsonIgnore]
+    internal string? ReadFrom { get; set; }
     /// <summary>Game root relative to the target dir (e.g. "..\..\.."), or a full path when the two are on different drives.</summary>
     public string RootRel { get; set; } = ".";
     /// <summary>Proxy the game loads: OptiScaler's, or ReShade's in ReShade-only mode.</summary>
@@ -93,7 +102,14 @@ public sealed class InstallManifest
     /// <summary>Folders we own, entries as in <see cref="Files"/>.</summary>
     public List<string> Dirs { get; set; } = [];
     public List<BackupEntry> Backups { get; set; } = [];
+    /// <summary>
+    /// Components recorded the generic way (<see cref="InstalledComponent"/>). Their files and backups are also in
+    /// <see cref="Files"/> and <see cref="Backups"/>, so an older version that doesn't know this list still restores the originals.
+    /// </summary>
+    public List<InstalledComponent> Components { get; set; } = [];
     public DateTime Updated { get; set; }
+    /// <summary>Fields this version doesn't know (written by a newer one); kept so saving doesn't drop them.</summary>
+    [JsonExtensionData] public Dictionary<string, JsonElement>? Unknown { get; set; }
 
     public static string DirFor(string targetDir) => Path.Combine(targetDir, DirName);
     public static string PathFor(string targetDir) => Path.Combine(DirFor(targetDir), "manifest.json");
@@ -114,7 +130,7 @@ public sealed class InstallManifest
             Uplift ? "Uplift" : null,
             Mfg ? "MFG" : null,
             Streamline ? "Streamline" : null,
-        }.OfType<string>().ToList();
+        }.Concat(Components.Select(c => ComponentRegistry.Find(c.Id)?.Label)).OfType<string>().ToList();
         return parts.Count == 0 ? null : string.Join(" + ", parts);
     }
 
@@ -139,8 +155,11 @@ public sealed class InstallManifest
         if (!File.Exists(path)) return null;
         try
         {
-            return JsonSerializer.Deserialize(File.ReadAllText(path), JsonCtx.Default.InstallManifest)
-                   ?? throw new JsonException("empty manifest");
+            var m = JsonSerializer.Deserialize(File.ReadAllText(path), JsonCtx.Default.InstallManifest)
+                    ?? throw new JsonException("empty manifest");
+            m.Repair();
+            m.ReadFrom = FileUtil.Normalize(targetDir);
+            return m;
         }
         catch (Exception ex) when (ex is JsonException or IOException)
         {
@@ -149,8 +168,70 @@ public sealed class InstallManifest
         }
     }
 
+    /// <summary>
+    /// A hand-edited or damaged record may hold null for any list of <see cref="Components"/>; dictionaries come back
+    /// case-sensitive from JSON. Both are put right so the rest of the code can rely on them.
+    /// </summary>
+    internal void Repair()
+    {
+        Components = (Components ?? []).Where(c => c is not null).ToList();
+        foreach (var c in Components)
+        {
+            c.Id ??= "";
+            c.Files = (c.Files ?? []).Where(f => f is not null).ToList();
+            c.ConfigEdits = (c.ConfigEdits ?? []).Where(e => e is not null).ToList();
+            c.Attributes = (c.Attributes ?? []).Where(a => a is not null).ToList();
+            c.Backups = new Dictionary<string, string>(c.Backups ?? [], StringComparer.OrdinalIgnoreCase);
+            c.Extras = new Dictionary<string, string>(c.Extras ?? [], StringComparer.OrdinalIgnoreCase);
+        }
+    }
+
+    /// <summary>A component recorded the generic way, or null.</summary>
+    public InstalledComponent? Component(string id) => Components.FirstOrDefault(c => c.Id.Equals(id, StringComparison.OrdinalIgnoreCase));
+
+    /// <summary>
+    /// Every component installed here by id: the ones in <see cref="Components"/> and, for components still kept in the
+    /// per-component fields, the view <see cref="LegacyComponents"/> builds of them.
+    /// </summary>
+    public IReadOnlyList<InstalledComponent> InstalledComponents() =>
+        [.. Components, .. LegacyComponents.Project(this).Where(l => Component(l.Id) is null)];
+
     /// <summary>Starts an entry that is relative to the install folder. '|' can't occur in a Windows path, so no game file collides.</summary>
     public const string InstallTag = "|install|";
+
+    /// <summary>
+    /// Tags for config files outside the game that a component may edit (UE's Engine.ini lives in %LocalAppData%, many
+    /// games keep their settings in Documents\My Games). Only config edits and attribute changes may use them.
+    /// </summary>
+    public static readonly IReadOnlyList<string> KnownFolderTags = ["|localappdata|", "|documents|"];
+
+    /// <summary>The folder behind a known-folder tag; tests point it at a temp folder.</summary>
+    internal static Func<string, string?> KnownFolder { get; set; } = DefaultKnownFolder;
+
+    internal static string? DefaultKnownFolder(string tag) => tag switch
+    {
+        "|localappdata|" => Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
+        "|documents|" => Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments),
+        _ => null,
+    };
+
+    /// <summary>Config files a component may edit outside the game and install folders.</summary>
+    private static readonly string[] ConfigExtensions = [".ini", ".cfg"];
+
+    /// <summary>
+    /// How a config file <paramref name="full"/> is recorded: as <see cref="Entry"/> does inside the game or install
+    /// folder, otherwise behind the tag of the known folder it lies in (an .ini or .cfg only).
+    /// </summary>
+    public static string ConfigEntry(string full, string targetDir, string gameRoot)
+    {
+        if (FileUtil.IsUnder(full, gameRoot) || FileUtil.IsUnder(full, targetDir)) return Entry(full, targetDir, gameRoot);
+        if (ConfigExtensions.Contains(Path.GetExtension(full), StringComparer.OrdinalIgnoreCase))
+            foreach (var tag in KnownFolderTags)
+                if (KnownFolder(tag) is { Length: > 0 } dir && FileUtil.IsUnder(full, dir)
+                    && !FileUtil.Normalize(full).Equals(FileUtil.Normalize(dir), StringComparison.OrdinalIgnoreCase))
+                    return tag + Path.DirectorySeparatorChar + Path.GetRelativePath(dir, full);
+        throw new UnsafeManifestException(targetDir, $"{full} is not a config file DLSS5 Updater may change");
+    }
 
     /// <summary>
     /// How <paramref name="full"/> is recorded: relative to the game root when it lies in the game, otherwise relative to
@@ -175,6 +256,12 @@ public sealed class InstallManifest
         {
             var rel = entry[InstallTag.Length..];
             if (rel.Length > 1 && rel[0] is '\\' or '/' && IsRelative(rel[1..])) return Path.GetFullPath(Path.Combine(targetDir, rel[1..]));
+        }
+        else if (KnownFolderTags.FirstOrDefault(t => entry.StartsWith(t, StringComparison.Ordinal)) is { } tag)
+        {
+            var rel = entry[tag.Length..];
+            if (rel.Length > 1 && rel[0] is '\\' or '/' && IsRelative(rel[1..]) && KnownFolder(tag) is { Length: > 0 } dir)
+                return Path.GetFullPath(Path.Combine(dir, rel[1..]));
         }
         // Full paths are what 0ed78f7 recorded for an install folder on another drive or share.
         else if (IsFullPath(entry)) return Path.GetFullPath(entry);
@@ -246,9 +333,48 @@ public sealed class InstallManifest
             if (FileUtil.LinkBelow(Base(full), full) is { } l) throw new UnsafeManifestException(target, $"backup \"{b.Backup}\" leads through the link {l}");
         }
 
+        // A config file may also lie in a known folder: an .ini or .cfg there, reached without a link.
+        string CheckConfig(string entry)
+        {
+            var full = Resolve(entry, target, oldRoot);
+            if (StrictlyUnder(full, target) || StrictlyUnder(full, root))
+            {
+                if (FileUtil.LinkBelow(Base(full), full) is { } l) throw new UnsafeManifestException(target, $"\"{entry}\" leads through the link {l}");
+                return ConfigEntry(full, target, root);
+            }
+            var rewritten = ConfigEntry(full, target, root);
+            var tag = KnownFolderTags.First(t => rewritten.StartsWith(t, StringComparison.Ordinal));
+            if (FileUtil.LinkBelow(KnownFolder(tag)!, full) is { } link) throw new UnsafeManifestException(target, $"\"{entry}\" leads through the link {link}");
+            return rewritten;
+        }
+
+        var components = new List<(List<string> Files, List<(string Original, string Backup)> Backups, List<string> Configs, List<string> Attributes)>();
+        foreach (var c in Components)
+        {
+            if (string.IsNullOrWhiteSpace(c.Id)) throw new UnsafeManifestException(target, "a component without an id");
+            foreach (var b in c.Backups.Values)
+                if (!IsRelative(b) || b.Split('\\', '/').Contains("..")) throw new UnsafeManifestException(target, $"backup \"{b}\"");
+            if (c.Attributes.Any(a => ((a.Before | a.After) & ~AttributeChange.Managed) != 0))
+                throw new UnsafeManifestException(target, $"attributes other than read-only and hidden in {c.Id}");
+            components.Add((
+                c.Files.Select(f => Check(f.Path, inTargetOnly: false)).ToList(),
+                c.Backups.Select(b => (Check(b.Key, inTargetOnly: false), b.Value)).ToList(),
+                c.ConfigEdits.Select(e => CheckConfig(e.File)).ToList(),
+                c.Attributes.Select(a => CheckConfig(a.Path)).ToList()));
+        }
+
         Files = files.Select(f => Entry(f, target, root)).ToList();
         Dirs = dirs.Select(d => Entry(d, target, root)).ToList();
         for (var i = 0; i < Backups.Count; i++) Backups[i].Original = Entry(originals[i], target, root);
+        for (var i = 0; i < Components.Count; i++)
+        {
+            var (cFiles, cBackups, cConfigs, cAttributes) = components[i];
+            var c = Components[i];
+            for (var j = 0; j < c.Files.Count; j++) c.Files[j].Path = Entry(cFiles[j], target, root);
+            c.Backups = cBackups.ToDictionary(b => Entry(b.Original, target, root), b => b.Backup, StringComparer.OrdinalIgnoreCase);
+            for (var j = 0; j < c.ConfigEdits.Count; j++) c.ConfigEdits[j].File = cConfigs[j];
+            for (var j = 0; j < c.Attributes.Count; j++) c.Attributes[j].Path = cAttributes[j];
+        }
         RootRel = Path.GetRelativePath(target, root);
     }
 
@@ -271,11 +397,13 @@ public sealed class InstallManifest
     public void Save(string targetDir)
     {
         Updated = DateTime.UtcNow;
+        // A record from a newer version keeps its number: what this version doesn't know stays in Unknown.
+        Schema = Math.Max(Schema, CurrentSchema);
         FileUtil.AtomicWriteText(PathFor(targetDir), JsonSerializer.Serialize(this, JsonCtx.Default.InstallManifest));
     }
 
     [JsonIgnore]
-    public bool IsEmpty => Files.Count == 0 && Dirs.Count == 0 && Backups.Count == 0;
+    public bool IsEmpty => Files.Count == 0 && Dirs.Count == 0 && Backups.Count == 0 && Components.Count == 0;
 
     public bool Owns(string rel) => Files.Contains(rel, StringComparer.OrdinalIgnoreCase);
 
