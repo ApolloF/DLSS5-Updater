@@ -263,6 +263,8 @@ internal static class FakeVersionDll
         var fixedInfo = info.SelectMany(BitConverter.GetBytes).ToArray();
         var strings = Block("StringFileInfo", [], 0, 1, Block("040904b0", [], 0, 1,
             Block("OriginalFilename", Encoding.Unicode.GetBytes(original + '\0'), (ushort)(original.Length + 1), 1),
+            Block("ProductName", Encoding.Unicode.GetBytes((product ?? "") + '\0'), (ushort)((product ?? "").Length + 1), 1),
+            Block("CompanyName", Encoding.Unicode.GetBytes((company ?? "") + '\0'), (ushort)((company ?? "").Length + 1), 1),
             Block("InternalName", Encoding.Unicode.GetBytes((internalName ?? "") + '\0'), (ushort)((internalName ?? "").Length + 1), 1),
             Block("FileVersion", Encoding.Unicode.GetBytes(v + "\0"), (ushort)(v.ToString().Length + 1), 1),
             Block("ProductVersion", Encoding.Unicode.GetBytes(v + "\0"), (ushort)(v.ToString().Length + 1), 1)));
