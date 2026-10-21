@@ -99,6 +99,14 @@ public static class HelpTopics
             "It needs ReShade + add-ons mode, ReShade 6+ with add-on support and an imported nvngx_dlssnr.dll (placed beside the exe), and it replaces the RenoDX DLSS add-on and OptiScaler-NR (a game gets only one of them). " +
             "The default deep-fried-chicken.cfg is placed when the game has none. The few options in Settings are merged into it like into ReShade.ini: only keys you set are written, and values you tuned in the overlay survive updates. " +
             "Everything else (hook mode, placement, Auto Balance, motion stability, glow suppression, per-pass model, preset and intensity, the 4.x Refine tab, pass controls, frame generation, 5.0's Texture Boost and NR preset (Game, Preset A or Preset B) and so on) is tuned in the ReShade overlay (Home, Deep Fried Chicken tab); the cfg numbers for those are undocumented."),
+        new("feeder", "General", "DLSS5-Feeder",
+            "DLSS5-Feeder (MIT, by Jean-Laurent Rouzies, github.com/jlrouzies-fr/DLSS5-Feeder) is a ReShade add-on that makes the DLSS calls a game without DLSS never makes: it takes the frame, ReShade's depth and estimated motion vectors and hands them to NVIDIA's DLSS as a DLAA frame, so Deep Fried Chicken has something to run neural rendering on. " +
+            "It is DLAA only: no upscaling, no performance gain, a few milliseconds per frame at 4K. Single-player games only; anti-cheat games are skipped. " +
+            "The app downloads it from that one repository's releases and checks the zip against the SHA-256 GitHub publishes for it; a release without one is not installed. It places dlss5-feed.addon64 beside the exe and DLSS5_Feed.fx in reshade-shaders\\Shaders. For a 32-bit game it places dlss5-feed.addon32 and the 64-bit helper host64\\dlss5-feed-host64.exe instead." +
+            "Turning it on turns Deep Fried Chicken on (4.x or newer, imported): a game gets one neural consumer, and the app only pairs Feeder with that one. It can't run next to OptiScaler, the DLSS5 DX11 bridge or the RenoDX add-ons. " +
+            "What the app can't do for you: a motion-vector shader in reshade-shaders\\Shaders (LumeniteFX Kernel is recommended; its licence stops the app from shipping it) and choosing the right depth buffer in ReShade's Generic Depth; after that, enable the shader and set DLSS5_MV_PROVIDER in the overlay. " +
+            "Direct3D 9 games need dgVoodoo2 (freeware that the app can't redistribute), Vulkan games need ReShade's Vulkan layer (one administrator prompt), and a 32-bit game's host64 folder needs a 64-bit ReShade and Deep Fried Chicken's 64-bit set placed by hand. " +
+            "Feeder's settings (dlss5-feed.cfg) are created by the add-on itself; the app writes none. Releases are tagged by the author, betas included; the app follows the newest stable one unless you pick a build."),
         new("dfc-no-dlss", "Deep Fried Chicken", "Deep Fried Chicken without DLSS",
             "From 4.x (INSTALL.txt of 4.0.6 preview) DFC also runs in games without their own DLSS. There it runs NR with its own motion vectors (the package's motion model, dfc-neural-motion.onnx, is in the deep-fried-chicken-neural folder, which goes beside the exe whole), " +
             "or with the vectors of an external ReShade motion provider when one is running (Lumenite Kernel or QuantMotion, VORT, Launchpad, or a texMotionVectors effect such as DRME, qUINT or dh_uber_motion; DX10, DX11, DX12, Vulkan and OpenGL, not DX9). " +
@@ -473,6 +481,7 @@ public static class HelpTopics
         "lecram" => "comp-lecram",
         "uplift" => "uplift",
         "dfc" => "dfc",
+        "feeder" => "feeder",
         "dlss" => "comp-dlss",
         "streamline" => "comp-streamline",
         _ => throw new ArgumentOutOfRangeException(nameof(key), key, "No help topic for this component"),

@@ -228,6 +228,23 @@ public sealed partial class MainViewModel : ObservableObject
 
     // ---------- startup ----------
 
+    /// <summary>Gives the games what the catalog knows (OptiScaler's compatibility list, RenoDX's game list) and refreshes their method advice.</summary>
+    private void ApplyCatalog(CatalogLoad load)
+    {
+        if (load.Document is { } doc)
+        {
+            S.OptiCompat = new OptiCompatIndex(doc.Sections.OptiscalerCompat);
+            S.RenoDxMatcher = doc.Sections.Renodx is { } renodx ? new GameMatcher(renodx) : null;
+        }
+        RefreshAdvice();
+    }
+
+    /// <summary>The method advice of every game, after the GPU or the catalog changed.</summary>
+    private void RefreshAdvice()
+    {
+        foreach (var g in Games) g.RefreshAdvice();
+    }
+
     public async Task InitializeAsync()
     {
         var lease = _startup;
@@ -246,6 +263,8 @@ public sealed partial class MainViewModel : ObservableObject
                     S.Store.AutoImport();
                 });
             await RefreshLocalComponentsAsync();
+            if (!Demo.Active) S.Gpu = await Task.Run(GpuDetector.Detect);
+            ApplyCatalog(new CatalogClient(Gh).LoadCached());
 
             var cached = GameScanner.LoadCache();
             if (cached.Count > 0) ApplyScan(cached);
@@ -325,6 +344,7 @@ public sealed partial class MainViewModel : ObservableObject
             Gh.Token = S.Settings.GitHubToken;
             await S.Store.RefreshAsync(ct);
             await CheckLecramAsync(ct);
+            ApplyCatalog(await new CatalogClient(Gh).LoadAsync(ct));
         }
         var s = S.Store;
         Online = new[] { s.Opti, s.Dlss, s.Mfg, s.Uplift }.Any(r => r is { FromCache: false, Stale: false });
