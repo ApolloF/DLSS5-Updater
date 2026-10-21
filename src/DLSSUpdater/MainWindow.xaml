@@ -947,6 +947,12 @@
                                 </WrapPanel>
                                 <TextBlock Text="{Binding StatusLine}" Style="{StaticResource MutedText}" TextWrapping="Wrap" Margin="0,8,0,0"
                                            Visibility="{Binding HasStatusLine, Converter={StaticResource BoolToVis}}" />
+                                <StackPanel Margin="0,12,0,0" Visibility="{Binding ShowBuildChoices, Converter={StaticResource BoolToVis}}">
+                                    <TextBlock Text="BUILD FOR THIS GAME" Style="{StaticResource Caps}" />
+                                    <ComboBox Margin="0,4,0,0" HorizontalAlignment="Left" MinWidth="260" MaxDropDownHeight="300"
+                                              ItemsSource="{Binding BuildChoices}" SelectedItem="{Binding BuildChoice}"
+                                              AutomationProperties.Name="RenoDX HDR build for this game" ToolTip="Which downloaded build of this mod the game installs; Default follows the catalog" />
+                                </StackPanel>
                                 <StackPanel Margin="0,12,0,0" Visibility="{Binding ShowUeToggle, Converter={StaticResource BoolToVis}}">
                                     <CheckBox IsChecked="{Binding UeExtended}" AutomationProperties.Name="Use Unreal Extended">
                                         <TextBlock Text="Use Unreal Extended" TextWrapping="Wrap" />

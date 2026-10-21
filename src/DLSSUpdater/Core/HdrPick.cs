@@ -20,6 +20,8 @@ public sealed record HdrChoice
     /// <summary>Why this was picked, or why nothing was.</summary>
     public string Reason { get; init; } = "";
     public CatalogBinary? File { get; init; }
+    /// <summary>The library build the game is pinned to (<see cref="HdrPin"/>); null follows the catalog's file above.</summary>
+    public HdrBuild? Pinned { get; init; }
     public CatalogMod? Mod { get; init; }
     public CatalogEngineGame? EngineGame { get; init; }
     /// <summary>Unreal Extended settings for this game (method, upgrades, Engine.ini); null for every other kind.</summary>

@@ -127,21 +127,30 @@ public sealed record HdrStatus(HdrState State, string? Installed, string? Latest
 
 public sealed record HdrInstallResult(HdrBuild Build, HdrPlan Plan, ComponentUndo Undo);
 
+/// <summary>
+/// What the game's ReShade install uses when the HDR mod has to bring ReShade along: the game's build pick, its proxy name, and the
+/// ReShade.ini template and overrides (the same ones the game page's own install passes).
+/// </summary>
+public sealed record HdrReShade(string? BuildPick = null, string? Proxy = null, IReadOnlyList<IniOverride>? Overrides = null, IReadOnlyList<IniOverride>? Template = null);
+
 /// <summary>Installs, updates and removes the RenoDX HDR component in a game: library download, ReShade, then one component plan.</summary>
 public sealed class HdrService(ComponentStore store, Installer installer, CatalogDownloader downloader)
 {
     /// <summary>
-    /// Brings the game to the pick. ReShade with add-on support must be in the game: it is installed here (ReShade + add-ons mode,
-    /// through the installer's own code) when the game has none, but not beside OptiScaler, where the user decides about ReShade.
+    /// Brings the game to the pick. ReShade with add-on support must be in the game: it is installed here through the managed ReShade
+    /// install (the game's build, API-based name, ReShade32 for 32-bit games, the Vulkan layer) when the game has none, but not beside
+    /// OptiScaler, where the user decides about ReShade.
     /// </summary>
     public async Task<HdrInstallResult> InstallAsync(GameInfo game, string targetDir, HdrChoice choice, int? peakNits, string? engineIniHint,
-        string? preferredProxy, IProgress<TransferProgress>? progress, CancellationToken ct)
+        HdrReShade? reshade, IProgress<TransferProgress>? progress, CancellationToken ct)
     {
         if (game.AntiCheat is { } ac) throw new InvalidOperationException($"{game.Name} has {ac} anti-cheat: no add-on is installed in games with anti-cheat.");
         if (!choice.IsOffered) throw new InvalidOperationException(choice.Reason);
 
-        var build = await store.EnsureHdrBuildAsync(choice.File!, choice.ModId ?? choice.Title, choice.Title, downloader, progress, ct);
-        await EnsureReShadeAsync(game, targetDir, preferredProxy, progress, ct);
+        var build = choice.Pinned is { } pinned
+            ? store.VerifiedHdrBuild(pinned)
+            : await store.EnsureHdrBuildAsync(choice.File!, choice.ModId ?? choice.Title, choice.Title, downloader, progress, ct);
+        await EnsureReShadeAsync(game, targetDir, reshade ?? new HdrReShade(), progress, ct);
 
         var existing = InstallManifest.Read(targetDir)?.Component(ComponentRegistry.RenoDxHdr);
         var plan = HdrPlanner.Build(game, targetDir, choice, build, ComponentStore.HdrPathOf(build), peakNits, engineIniHint, existing);
@@ -154,7 +163,7 @@ public sealed class HdrService(ComponentStore store, Installer installer, Catalo
     public Task<ComponentUndo> RemoveAsync(GameInfo game, string targetDir, CancellationToken ct) =>
         installer.RemoveComponentAsync(game, targetDir, ComponentRegistry.RenoDxHdr, ct);
 
-    private async Task EnsureReShadeAsync(GameInfo game, string targetDir, string? preferredProxy, IProgress<TransferProgress>? progress, CancellationToken ct)
+    private async Task EnsureReShadeAsync(GameInfo game, string targetDir, HdrReShade setup, IProgress<TransferProgress>? progress, CancellationToken ct)
     {
         var m = InstallManifest.Read(targetDir);
         if (m is { ReShade: true })
@@ -164,12 +173,15 @@ public sealed class HdrService(ComponentStore store, Installer installer, Catalo
         }
         if (m is { Opti: true })
             throw new InvalidOperationException("OptiScaler is installed here without ReShade. Turn ReShade on in the install above and install again, then add the HDR mod.");
-        var proxy = ProxyFor(game, preferredProxy)
-                    ?? throw new InvalidOperationException("This game renders with Vulkan only, which needs ReShade's Vulkan layer. DLSS5 Updater doesn't install that yet.");
-        Log.Info($"{game.Name}: no ReShade yet, installing it as {proxy} (ReShade + add-ons) for the HDR mod");
+        var target = ReShadeNaming.Resolve(game.Tech, optiScalerLoads: false, setup.Proxy);
+        if (target.VulkanLayer && !VulkanLayer.Status(installer.VulkanHost).IsInstalled)
+            throw new InvalidOperationException("This game renders with Vulkan, which needs ReShade's Vulkan layer. Install the layer first (Settings → ReShade → Vulkan layer; one administrator prompt).");
+        Log.Info($"{game.Name}: no ReShade yet, installing it as {target.Display} (ReShade + add-ons) for the HDR mod");
         var o = new InstallOptions
         {
-            Mode = InstallMode.ReShadeOnly, ReShade = true, Proxy = proxy,
+            Mode = InstallMode.ReShadeOnly, ReShade = true, Proxy = target.DllName ?? ReShadeNaming.Default,
+            ReShadeVulkan = target.VulkanLayer, ReShadeBuildPick = setup.BuildPick,
+            ReShadeOverrides = setup.Overrides ?? [], ReShadeTemplate = setup.Template ?? [],
             Mfg = m?.Mfg == true, KeepMfg = m?.Mfg == true,
             DlssNr = m?.DlssNr == true, DlssNrId = m?.DlssNrId,
             Streamline = m?.Streamline == true && game.Streamline.Count > 0,
@@ -178,24 +190,14 @@ public sealed class HdrService(ComponentStore store, Installer installer, Catalo
         CheckReShadeVersion(targetDir, InstallManifest.Read(targetDir));
     }
 
-    /// <summary>The proxy name ReShade loads under for the game's API; null for a Vulkan-only game.</summary>
-    public static string? ProxyFor(GameInfo game, string? preferred)
+    private void CheckReShadeVersion(string targetDir, InstallManifest? m)
     {
-        if (preferred is not null && AppSettings.ReShadeProxyNames.Contains(preferred, StringComparer.OrdinalIgnoreCase)) return preferred;
-        return GraphicsApiInfo.Primary(game.Tech.Apis) switch
-        {
-            GraphicsApis.Dx9 => "d3d9.dll",
-            GraphicsApis.OpenGL => "opengl32.dll",
-            GraphicsApis.Vulkan => null,
-            _ => "dxgi.dll",
-        };
-    }
-
-    private static void CheckReShadeVersion(string targetDir, InstallManifest? m)
-    {
-        var name = m is { Mode: InstallMode.ReShadeOnly, Proxy: { } p } ? p : ComponentStore.ReShadeFile;
-        var dll = Path.Combine(targetDir, name);
-        if (File.Exists(dll) && FileUtil.ReadVersion(dll) is { Major: < 6 })
+        if (m is null) return;
+        // Through the Vulkan layer the game holds no dll: the library build the record names is what runs.
+        var version = m.ReShadeVulkan
+            ? store.ReShadeBuildFor(m.ReShadeId)?.ParsedVersion
+            : FileUtil.ReadVersion(Path.Combine(targetDir, m is { Mode: InstallMode.ReShadeOnly, Proxy: { } p } ? p : ComponentStore.ReShadeFile));
+        if (version is { Major: < 6 })
             throw new InvalidOperationException("The RenoDX HDR mod needs ReShade 6 or newer with add-on support.");
     }
 }

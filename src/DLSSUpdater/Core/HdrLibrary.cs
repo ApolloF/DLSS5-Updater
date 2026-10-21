@@ -82,6 +82,16 @@ public sealed partial class ComponentStore
 
     public static string HdrPathOf(HdrBuild build) => Path.Combine(HdrRoot, build.Id, build.FileName);
 
+    /// <summary>A build the game is pinned to: it is already in the library, so nothing is downloaded, but the file is checked against its hash before it is placed.</summary>
+    public HdrBuild VerifiedHdrBuild(HdrBuild build)
+    {
+        var path = HdrPathOf(build);
+        if (!File.Exists(path)) throw new FileNotFoundException($"The pinned build {build.Label} is no longer in the library. Pick another build or the default.", path);
+        if (!FileUtil.Sha256(path).Equals(build.Id, StringComparison.OrdinalIgnoreCase))
+            throw new InvalidDataException($"The stored file of {build.Label} changed. Remove the build in Settings and let the app download it again.");
+        return build;
+    }
+
     private IReadOnlyList<LibraryBuild> HdrLibraryBuilds() => HdrBuilds
         .Select(b => new LibraryBuild(LibraryKind.RenoDxHdr, b.Id, b.Label, b.Version, b.Date, Path.Combine(HdrRoot, b.Id), Group: b.ModId, Downloaded: true))
         .ToList();

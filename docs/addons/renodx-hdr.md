@@ -12,8 +12,8 @@ Component id `renodx-hdr` (`ComponentRegistry.RenoDxHdr`), recorded the generic 
 | Library | `components\renodx-hdr\<sha256>\<file>` + `version.json` (`HdrBuild`: id, file, arch, mod id and name, catalog version, first seen, url, licence). |
 | Build id / label | SHA-256 of the add-on file. The label is the catalog's version, the date the build was first seen plus its short hash (`2026-10-21-48fa2f3`), because the authors' snapshot builds have none. |
 | Order | Newest first by the catalog's first-seen date. The library groups by mod, so the cleanup keeps the newest builds of each mod (default 2). |
-| Default | "Newest": the build the catalog lists now for the game's pick. The app never pins. |
-| Per-game pick | The mod itself (see "Which mod a game gets"). The Unreal Extended switch is stored per game in `GameOverride.Components["renodx-hdr"].Options["ue-extended"]`. A per-game *build* pin (an older catalog build) is not offered in the UI yet; see Known gaps. |
+| Default | "Newest": the build the catalog lists now for the game's pick. A game may pin one of the library builds of its mod (below). |
+| Per-game pick | The mod itself (see "Which mod a game gets"). The Unreal Extended switch is stored per game in `GameOverride.Components["renodx-hdr"].Options["ue-extended"]`. The *build* pin is `GameOverride.BuildPick("renodx-hdr")`, offered on the game page as "Build for this game" (Default + the library builds of the same mod and architecture, newest first). A pinned build is installed and updated from the library without a download; if it left the library the game follows the catalog again. |
 | Cleanup | In `BuildCleanup` as `LibraryKind.RenoDxHdr`. Protected: builds installed in any game (also for games on unplugged drives, through `install-refs.json`), per-game and default picks. Downloaded builds may go in the automatic cleanup. |
 | Install | `InstalledComponent` with the add-on file and its hash, the `reshade.ini` and `Engine.ini` keys with their previous value or absent, the Engine.ini attribute change, and extras (`signature`, `mod`, `kind`, `method`, `peakNits`, `engineIni`). |
 | Config | The `[renodx]` keys, Engine.ini and the peak brightness, below. There is no `TestedVersion`: the add-ons are rolling snapshots, and the catalog's per-game method data is what is checked. |
@@ -43,10 +43,11 @@ The engine, bitness and Unreal version come from the game scan (`GameInfo.Tech`)
 ## What an install does
 
 1. The build is downloaded into the library (mirror first, then the author) and checked against the catalog's size and SHA-256.
-2. ReShade must be in the game. If it isn't, it is installed with the installer's own code in ReShade + add-ons mode as the
-   proxy for the game's API (`dxgi.dll` for DX10 to 12 and unknown, `d3d9.dll`, `opengl32.dll`; the game's saved proxy name wins).
-   A Vulkan-only game, or a game with OptiScaler but no ReShade, is not installed into; the page says what to do.
-   ReShade 6 or newer is required.
+2. ReShade must be in the game. If it isn't, it is installed through the managed ReShade install (ReShade + add-ons mode): the game's
+   ReShade build pick, the proxy name for the game's API (`ReShadeNaming`; the game's saved proxy name wins), `ReShade32.dll` for a
+   32-bit game (with the `.addon32` build), the ReShade.ini template and overrides. A Vulkan game goes through the Vulkan layer when it is
+   installed (`VulkanLayer.Status`), else it is refused with a line pointing to Settings → ReShade. A game with OptiScaler but no
+   ReShade is not installed into; the page says what to do. ReShade 6 or newer is required.
 3. The add-on goes into the folder of `[ADDON] AddonPath` in `ReShade.ini` when that is set (first entry, relative to the folder
    ReShade sits in, a trailing wildcard dropped), else next to ReShade. A path outside the game falls back to the ReShade folder.
    A file already there is backed up and put back on remove. Other RenoDX add-ons in the folder are warned about; `renodx-dlss*` is not.
@@ -129,7 +130,5 @@ The mirror's release notes carry each mirrored file's licence and copyright noti
 
 ## Known gaps
 
-- No per-game pin of an older catalog build in the UI; the core already tells the cleanup about picks (`GameOverride.BuildPick`).
-- Vulkan-only games need ReShade's Vulkan layer (workstream D) and are not installed into.
 - Games installed with OptiScaler but without ReShade are refused until ReShade is switched on in the main install.
 - Unreal project folders and Engine.ini locations beyond the order above (custom launchers, Xbox `WindowsApps` paths that can't be read) fall back to the new-file path.

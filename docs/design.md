@@ -133,7 +133,5 @@ Measured against this guideline on main (after #63, #66 and #67). Each is fixed 
   (`Opti`/`OptiTag`, `DfcFiles`, `DfcCfg`, `LecramFile`, ...) and their own install and removal code in `Installer`;
   `LegacyComponents` only reads them. Each moves to `InstalledComponent` when it is next reworked; the per-component
   fields keep being written for one major version so 2.2.x can still read the record.
-- **RenoDX HDR has no per-game build pin in the UI**: the library, cleanup protection and `GameOverride.BuildPick` support it, the
-  game page always follows the catalog's current build (`docs/addons/renodx-hdr.md`, Known gaps).
 - **Compat checks differ** per component (`OptiCompat`, `UpliftConfig`, `DfcConfig`, `LecramIni`, ...). Target: one
   `ComponentCompat` shape (tested version, schema, missing keys, summary) that each config class fills.

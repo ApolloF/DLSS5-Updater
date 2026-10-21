@@ -1,3 +1,4 @@
+using System.Collections.ObjectModel;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using DLSSUpdater.Core;
@@ -14,6 +15,8 @@ public sealed partial class HdrViewModel(GameViewModel game, Services services) 
     public const string UeHint = "Unreal Extended is the default for Unreal games without their own mod. Switch it off for the plain generic Unreal add-on.";
 
     private HdrChoice? _choice;
+    private HdrChoice? _picked;
+    private bool _filling;
     private HdrStatus? _status;
     private (HdrPicker? Picker, GameInfo Info, bool? Ue)? _pickKey;
 
@@ -84,6 +87,21 @@ public sealed partial class HdrViewModel(GameViewModel game, Services services) 
 
     public string UeHintText => UeHint;
 
+    /// <summary>"Default (...)" naming the catalog's current build, then the library's builds of the picked mod, newest first.</summary>
+    public ObservableCollection<DlssChoice> BuildChoices { get; } = [];
+
+    [ObservableProperty] private DlssChoice? _buildChoice;
+
+    public bool ShowBuildChoices => CatalogReady && _picked is { IsOffered: true };
+
+    partial void OnBuildChoiceChanged(DlssChoice? value)
+    {
+        if (_filling) return;
+        services.Settings.For(game.Id).SetBuildPick(ComponentRegistry.RenoDxHdr, value?.Tag);
+        services.Settings.Save();
+        game.RefreshHdr();
+    }
+
     private bool CatalogReady => services.Catalog?.Picker is not null;
     private string Problem => services.Catalog?.Problem ?? "";
 
@@ -92,38 +110,60 @@ public sealed partial class HdrViewModel(GameViewModel game, Services services) 
     {
         if (!Visible)
         {
-            _choice = null;
+            _choice = _picked = null;
             _status = null;
             return;
         }
         var picker = services.Catalog!.Picker;
         if (picker is null)
         {
-            _choice = null;
+            _choice = _picked = null;
             _status = null;
+            FillBuildChoices(null, null);
         }
         else
         {
             var ue = services.Settings.Games.GetValueOrDefault(game.Id)?.HdrUeExtended;
             if (_pickKey is not { } key || !ReferenceEquals(key.Picker, picker) || !ReferenceEquals(key.Info, game.Info) || key.Ue != ue)
             {
-                _choice = picker.Pick(game.Info, ue);
+                _picked = picker.Pick(game.Info, ue);
                 _pickKey = (picker, game.Info, ue);
             }
+            var pin = services.Settings.Games.GetValueOrDefault(game.Id)?.BuildPick(ComponentRegistry.RenoDxHdr);
+            var library = services.Store.HdrBuilds;
+            _choice = HdrPin.Apply(_picked!, pin, library);
+            FillBuildChoices(pin, library);
             _status = HdrStatus.Of(_choice!, Installed, services.Settings.HdrPeakNits);
         }
         OnPropertyChanged(string.Empty);
         Changed?.Invoke();
     }
 
-    /// <summary>Installs or updates the mod this game is picked for. Throws what the service throws (anti-cheat, Vulkan-only, offline).</summary>
+    private void FillBuildChoices(string? pin, IReadOnlyList<HdrBuild>? library)
+    {
+        _filling = true;
+        BuildChoices.Clear();
+        if (_picked is { IsOffered: true } picked && library is not null)
+        {
+            BuildChoices.Add(new DlssChoice(null, $"Default ({picked.File!.Version})"));
+            foreach (var b in HdrPin.Candidates(picked, library)) BuildChoices.Add(new DlssChoice(b.Id, b.Version));
+            if (pin is not null && BuildChoices.All(c => c.Tag != pin)) BuildChoices.Add(new DlssChoice(pin, "Pinned build not in the library"));
+            BuildChoice = BuildChoices.FirstOrDefault(c => c.Tag == pin) ?? BuildChoices[0];
+        }
+        else BuildChoice = null;
+        _filling = false;
+    }
+
+    /// <summary>Installs or updates the mod this game is picked for. Throws what the service throws (anti-cheat, Vulkan without the layer, offline).</summary>
     internal async Task InstallAsync(IProgress<TransferProgress>? progress, CancellationToken ct)
     {
         if (_choice is not { IsOffered: true } choice || game.SelectedTarget is not { } target || services.Hdr is not { } hdr)
             throw new InvalidOperationException(_choice?.Reason ?? "Nothing is offered for this game.");
         var hint = services.Catalog?.Document?.Sections.Renodx?.Overrides.EngineIniPath(game.Info.SteamAppId, game.Info.Name);
-        var proxy = services.Settings.Games.GetValueOrDefault(game.Id)?.Proxy;
-        await hdr.InstallAsync(game.Info, target.Dir, choice, services.Settings.HdrPeakNits, hint, proxy, progress, ct);
+        var settings = services.Settings;
+        var reshade = new HdrReShade(game.ReShadeChoice?.Tag, settings.Games.GetValueOrDefault(game.Id)?.Proxy,
+            GameConfig.EffectiveReShade(settings, game.Id), ReShadeIniTemplate.Load());
+        await hdr.InstallAsync(game.Info, target.Dir, choice, settings.HdrPeakNits, hint, reshade, progress, ct);
         Log.Info($"{game.Name}: {choice.Title} {choice.File!.Version} installed");
     }
 
