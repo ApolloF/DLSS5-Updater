@@ -23,7 +23,9 @@ public sealed class ReShadeInstallTests : IDisposable
         public void Delete(string path) => throw new InvalidOperationException("the installer must not write the layer");
         public void DeleteDirectoryIfEmpty(string dir) { }
         public string Sha256(string path) => "";
-        public void AllowAppPackages(string dir) { }
+        public void SecureLayerDir(string dir) { }
+        public void VerifyFile(string path) { }
+        public void Move(string from, string to) => throw new InvalidOperationException("the installer must not write the layer");
         public bool IsRegistered(string manifestPath, int bits) => state != VulkanLayerState.NotInstalled && bits == 64;
         public void Register(string manifestPath, int bits) => throw new InvalidOperationException();
         public void Unregister(string manifestPath, int bits) => throw new InvalidOperationException();
