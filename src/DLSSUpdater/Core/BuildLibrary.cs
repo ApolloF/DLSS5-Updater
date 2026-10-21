@@ -6,7 +6,7 @@ namespace DLSSUpdater.Core;
 /// Every library of kept builds: the downloaded OptiScaler and GITC Uplift releases, the imported add-ons and the NR runtime.
 /// Each keeps several builds side by side; settings choose a default and each game may choose its own.
 /// </summary>
-public enum LibraryKind { OptiScaler, Uplift, Lecram, RenoDx, Dfc, DlssNr, RenoDxHdr, ReShade, FrameLimiter }
+public enum LibraryKind { OptiScaler, Uplift, Lecram, RenoDx, Dfc, DlssNr, RenoDxHdr, ReShade, FrameLimiter, Feeder }
 
 /// <summary>
 /// One kept build as the lists and the cleanup see it. <see cref="Id"/> is what settings, game picks and install records name
@@ -176,6 +176,7 @@ public sealed partial class ComponentStore
         LibraryKind.RenoDxHdr => HdrLibraryBuilds(),
         LibraryKind.FrameLimiter => LimiterLibraryBuilds(),
         LibraryKind.ReShade => ReShadeBuilds.Select(b => new LibraryBuild(kind, b.Id, b.Label, b.Version, b.Added, ReShadeBuildDir(b), Downloaded: b.Downloaded)).ToList(),
+        LibraryKind.Feeder => FeederLibrary.Builds(),
         _ when AddonOf(kind) is { } addon => AddonBuilds(addon)
             .Select(b => new LibraryBuild(kind, b.Id, b.Label, b.DetectedLabel, b.Imported, Path.Combine(AddonRoot(addon), b.Id), Downloaded: b.Downloaded))
             .ToList(),

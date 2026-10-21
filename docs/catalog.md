@@ -20,6 +20,7 @@ allows it. Its README documents the format (and `schema/catalog.schema.json` is 
 | `CatalogState.cs` | The catalog the app holds: the last good copy at startup, refreshed with every update check; a failed refresh keeps what it has. Holds the `HdrPicker`. |
 | `CatalogClient.cs` | `LoadAsync` fetches catalog.json through `GitHubClient.GetRepoFileAsync` (ETag cache, 304s are free) and keeps the last good copy in `AppPaths.CatalogFile`. Offline, rate-limited, damaged or newer-than-us (`schema` > 1) answers fall back to that copy; it never throws except on cancellation. `LoadCached` reads the copy with no request. |
 | `CatalogDownloader.cs` | `DownloadAsync(file, dest, ...)` downloads from `MirrorUrl`, else `Url` (and from `Url` when the mirror copy fails), into a staging file, checks size and SHA-256, and only then moves it to `dest`. A mismatch returns a one-line `Refusal` and leaves nothing behind. |
+| `OptiCompatIndex.cs` | The `optiscalerCompat` section (OptiScaler's wiki compatibility list and its HUDfix-incompatible list) looked up by game title with `GameMatcher.MatchName`. Feeds the method advisor (`docs/advisor.md`); an older catalog without the section just leaves it empty. |
 | `GameMatcher.cs` | `new GameMatcher(catalog.Sections.Renodx).Match(game)`: overrides first, then Steam AppID, then the normalised name (exact; game name contains entry name, longest wins; entry starts with game name). Anything that is "name + only a sequel number" (digits, roman numerals up to 39) is not a match. Only `main` and `engine` entries take part; a matched entry can be `Blocked`, so check `Mod.Blocked` and show `BlockReason`. |
 
 `GameInfo.SteamAppId` comes from the Steam appmanifest (`Launchers.SteamLibrary`); other launchers and manual folders have none.
@@ -45,10 +46,6 @@ if (load.Document?.Sections.Renodx is { } renodx)
 and Engine.ini work (`docs/addons/renodx-hdr.md`). `Sections.RenodxDlss.Builds` lists ShortFuse's DLSS add-on releases, newest first, each
 `File` a zip with its SHA-256 (pinned, no mirror): `ComponentStore.CheckRenoDxCatalogAsync` downloads the newest, takes `renodx-dlss.addon64` out
 and imports it (`docs/design.md` section 3, the exception).
-
-`Sections.FrameLimiters.Limiters` lists the add-on files of ReLimiter (mirrored, MIT) and Display Commander (pinned, no licence found), one entry per limiter with its `release` tag
-and a file per bitness (a 32-bit file is absent when the release has none); `ComponentStore.EnsureLimiterBuildAsync` downloads one through `CatalogDownloader`
-(`docs/addons/frame-limiters.md`).
 
 A build's identity for the library is `file.Sha256`; `file.Version` is its label; `file.History` lists earlier builds.
 `renodx.Overrides` offers `OptsOutOfUeExtended(appId, name)` and `EngineIniPath(appId, name)` for the Unreal Extended path.

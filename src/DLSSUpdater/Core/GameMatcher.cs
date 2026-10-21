@@ -78,32 +78,44 @@ public sealed partial class GameMatcher
             return new CatalogMatch(Best(byApp), MatchKind.AppId);
         if (key.Length == 0) return CatalogMatch.None;
 
-        var exact = _names.Where(n => n.Key == key).Select(n => n.Mod).ToList();
-        if (exact.Count > 0) return new CatalogMatch(Best(exact), MatchKind.Exact);
+        var (mod, kind) = MatchName(_names, key, Best);
+        return mod is null ? CatalogMatch.None : new CatalogMatch(mod, kind);
+    }
+
+    /// <summary>
+    /// The name rules every catalog list shares: exact, "game contains entry" (longest entry wins), "entry starts with game", with
+    /// the sequel guard. <paramref name="key"/> is a <see cref="Normalize"/>d game name; <paramref name="best"/> picks among
+    /// several entries of one rank.
+    /// </summary>
+    public static (T? Item, MatchKind Kind) MatchName<T>(IReadOnlyList<(string Key, T Item)> names, string key, Func<List<T>, T> best) where T : class
+    {
+        if (key.Length == 0) return (null, MatchKind.None);
+        var exact = names.Where(n => n.Key == key).Select(n => n.Item).ToList();
+        if (exact.Count > 0) return (best(exact), MatchKind.Exact);
 
         // "Hades II" is not "Hades": a game that is an entry plus only a sequel number is skipped here as well.
-        var contained = _names
+        var contained = names
             .Where(n => n.Key.Length >= MinContainedLength && key.Contains(n.Key, StringComparison.Ordinal)
                         && !(key.StartsWith(n.Key, StringComparison.Ordinal) && IsSequelSuffix(key[n.Key.Length..])))
             .ToList();
         if (contained.Count > 0)
         {
             var longest = contained.Max(n => n.Key.Length);
-            return new CatalogMatch(Best(contained.Where(n => n.Key.Length == longest).Select(n => n.Mod).ToList()), MatchKind.Contains);
+            return (best(contained.Where(n => n.Key.Length == longest).Select(n => n.Item).ToList()), MatchKind.Contains);
         }
 
         if (key.Length >= MinPrefixLength)
         {
-            var starting = _names
+            var starting = names
                 .Where(n => n.Key.Length > key.Length && n.Key.StartsWith(key, StringComparison.Ordinal) && !IsSequelSuffix(n.Key[key.Length..]))
                 .ToList();
             if (starting.Count > 0)
             {
                 var shortest = starting.Min(n => n.Key.Length);
-                return new CatalogMatch(Best(starting.Where(n => n.Key.Length == shortest).Select(n => n.Mod).ToList()), MatchKind.StartsWith);
+                return (best(starting.Where(n => n.Key.Length == shortest).Select(n => n.Item).ToList()), MatchKind.StartsWith);
             }
         }
-        return CatalogMatch.None;
+        return (null, MatchKind.None);
     }
 
     private static bool Eligible(CatalogMod mod) => mod.Listing is "main" or "engine";

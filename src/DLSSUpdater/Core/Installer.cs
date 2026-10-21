@@ -33,6 +33,10 @@ public sealed record InstallOptions
     public bool Dfc { get; init; }
     /// <summary>Deep Fried Chicken build from the library (it decides the set, the default cfg and non-DLSS support); null = the default build.</summary>
     public string? DfcId { get; init; }
+    /// <summary>DLSS5-Feeder for a game without DLSS (needs <see cref="Dfc"/>, see <see cref="NrAddons.FeederRefusal"/>); recorded as a generic component.</summary>
+    public bool Feeder { get; init; }
+    /// <summary>Feeder build from the library; null = the newest.</summary>
+    public string? FeederId { get; init; }
     public bool Dlss { get; init; }
     /// <summary>Put nvngx_dlss.dll next to OptiScaler when the game has none (independent of <see cref="Dlss"/>).</summary>
     public bool AddMissingDlss { get; init; }
@@ -82,6 +86,7 @@ public sealed record InstallOptions
         RenoDxId = m.RenoDxId ?? RenoDxId,
         LecramId = m.LecramId ?? LecramId,
         DfcId = m.DfcId ?? DfcId,
+        FeederId = m.Component(ComponentRegistry.Feeder)?.BuildId ?? FeederId,
     };
 }
 
@@ -189,6 +194,7 @@ public sealed partial class Installer(ComponentStore store)
             throw new InvalidOperationException("Deep Fried Chicken only works in ReShade + add-ons mode: with OptiScaler-NR there would be two NR injectors.");
         if (o.Dfc && (!o.ReShade || !dlssNr))
             throw new InvalidOperationException("Deep Fried Chicken needs ReShade with add-on support and an imported NR runtime.");
+        EnsureOneNeuralConsumer(targetDir, o);
         var renoDx = o.RenoDx ? store.RequireAddon(AddonKind.RenoDx, o.RenoDxId) : null;
         var lecram = o.Lecram ? store.RequireAddon(AddonKind.Lecram, o.LecramId) : null;
         var dfc = o.Dfc ? store.RequireAddon(AddonKind.Dfc, o.DfcId).Build : null;
@@ -196,6 +202,8 @@ public sealed partial class Installer(ComponentStore store)
             throw new InvalidOperationException(DfcNeedsNativeDlss(dfc.FileVersion));
         // INSTALL.txt: add your own nvngx_dlss.dll beside the game exe; DFC does not ship it. The game has none of its own here.
         var dfcRuntimes = dfc is not null && !nativeDlss;
+        var feeder = o.Feeder ? await store.EnsureFeederAsync(o.FeederId, progress, ct) : null;
+        if (feeder is not null && nativeDlss) Log.Warn($"{game.Name}: the game has its own DLSS, so Deep Fried Chicken works on it directly and DLSS5-Feeder isn't needed");
         var uplift = o.Uplift ? await store.EnsureUpliftAsync(o.UpliftTag, progress, ct) : null;
         if (o.Uplift && UpliftConfig.Warning(o.UpliftTag ?? store.Uplift?.Tag) is { } upliftWarning) Log.Warn($"{game.Name}: {upliftWarning}");
         var addMissing = o.AddMissingDlss && o.Opti;
@@ -268,6 +276,8 @@ public sealed partial class Installer(ComponentStore store)
                 // Only a run that sets up the injectors drops the add-on; a DLSS-only update keeps it.
                 if (!o.RenoDx && m.RenoDx && (o.ReShade || pkg is not null)) RemoveRenoDx(ctx);
                 if (!o.Lecram && m.Lecram && (o.ReShade || pkg is not null)) RemoveLecram(ctx);
+                // Feeder goes before the consumer it feeds; a run that doesn't ask for it takes it out.
+                if (!o.Feeder && m.Component(ComponentRegistry.Feeder) is { } oldFeeder && (o.ReShade || pkg is not null)) UndoComponent(ctx, oldFeeder);
                 if (!o.Dfc && m.Dfc && (o.ReShade || pkg is not null)) RemoveDfc(ctx);
                 if (!o.Uplift && m.Uplift && (o.ReShade || pkg is not null)) RemoveUplift(ctx);
                 if (!o.Mfg && !o.KeepMfg && m.Mfg && (o.ReShade || pkg is not null)) RemoveMfg(ctx);
@@ -357,6 +367,7 @@ public sealed partial class Installer(ComponentStore store)
                     m.DfcTag = dfc.Tag;
                     m.DfcId = dfc.Id;
                 }
+                if (feeder is not null) ApplyPlan(ctx, FeederLibrary.Plan(feeder, game, targetDir));
                 if (uplift is not null)
                 {
                     DisplaceForeignNrAddons(ctx, [ComponentStore.RenoDxFile, .. ComponentStore.ForeignNrAddons.Where(f => !ComponentStore.UpliftFiles.Contains(f))]);
@@ -392,6 +403,40 @@ public sealed partial class Installer(ComponentStore store)
                 if (!m.IsEmpty) m.Save(targetDir);
             }
         }, ct);
+    }
+
+    /// <summary>
+    /// The neural routes this run leaves in the game, with the DX11 bridge when one sits in the folder (nothing of ours removes it).
+    /// </summary>
+    internal static List<NrAddon> RoutesOf(InstallOptions o, string targetDir)
+    {
+        var routes = new List<NrAddon>();
+        if (o.Opti && !o.ReShadeOnly) routes.Add(NrAddon.OptiScaler);
+        if (o.ReShadeOnly)
+        {
+            if (o.RenoDx) routes.Add(NrAddon.RenoDx);
+            if (o.Lecram) routes.Add(NrAddon.Lecram);
+            if (o.Dfc) routes.Add(NrAddon.Dfc);
+        }
+        if (o.Uplift) routes.Add(NrAddon.Uplift);
+        if (NrAddons.PresentIn(targetDir, null).Contains(NrAddon.Bridge)) routes.Add(NrAddon.Bridge);
+        return routes;
+    }
+
+    /// <summary>
+    /// The one-neural-consumer rule at install time (docs/research/methods-2026-10.md section 2 and 8 row 18): a game never gets a
+    /// second route that hooks its NGX calls, and DLSS5-Feeder only with Deep Fried Chicken. Checked before anything is fetched.
+    /// </summary>
+    internal static void EnsureOneNeuralConsumer(string targetDir, InstallOptions o)
+    {
+        var routes = RoutesOf(o, targetDir);
+        if (routes.Contains(NrAddon.Bridge))
+            foreach (var route in routes.Where(r => r != NrAddon.Bridge))
+                if (NrAddons.Refusal(route, [NrAddon.Bridge], false) is { } why)
+                    throw new InvalidOperationException(why + " Remove the bridge files from the game folder first.");
+        if (!o.Feeder) return;
+        if (!o.ReShadeOnly) throw new InvalidOperationException("DLSS5-Feeder is a ReShade add-on: it needs ReShade + add-ons mode.");
+        if (NrAddons.FeederRefusal(routes) is { } refusal) throw new InvalidOperationException(refusal);
     }
 
     private static void InstallOpti(Ctx ctx, string pkg, InstallOptions o, OptiSource source)

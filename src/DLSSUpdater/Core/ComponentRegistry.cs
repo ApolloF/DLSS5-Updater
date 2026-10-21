@@ -48,6 +48,8 @@ public static class ComponentRegistry
     public const string Uplift = "gitc-uplift";
     /// <summary>RenoDX HDR mods per game (named, Unreal Extended, generic Unreal and Unity). Not the ShortFuse DLSS add-on, <see cref="RenoDx"/>.</summary>
     public const string RenoDxHdr = "renodx-hdr";
+    /// <summary>DLSS5-Feeder (MIT, downloaded): makes the DLSS calls for games without DLSS; recorded the generic way (<see cref="FeederLibrary"/>).</summary>
+    public const string Feeder = "dlss5-feeder";
     /// <summary>Not a component with files: the per-game record of what the app wrote into the NVIDIA driver profile (<see cref="NvidiaRecord"/>).</summary>
     public const string NvidiaDriver = "nvidia-driver";
     /// <summary>The ReShade add-on frame limiters (ids match the catalog's <c>managedBy</c>) and the Unreal Engine.ini cap; one is active per game.</summary>
@@ -86,6 +88,7 @@ public static class ComponentRegistry
             Library = LibraryKind.FrameLimiter, Label = "Display Commander", OwnedFiles = ["zzz_display_commander.addon64", "zzz_display_commander.addon32"],
         });
         Register(new(UnrealFrameCap, "Unreal frame cap") { Label = "UE frame cap" });
+        Register(new(Feeder, "DLSS5-Feeder") { Library = LibraryKind.Feeder, Label = "Feeder", OwnedFiles = FeederLibrary.OwnedFiles });
     }
 
     /// <summary>

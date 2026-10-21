@@ -13,6 +13,7 @@ public sealed class CatalogDocument
 public sealed class CatalogSections
 {
     public CatalogRenodx? Renodx { get; set; }
+    public CatalogOptiCompat? OptiscalerCompat { get; set; }
     /// <summary>ShortFuse's renodx-dlss add-on: hash-pinned builds, never mirrored (licence unknown).</summary>
     public CatalogRenodxDlss? RenodxDlss { get; set; }
     /// <summary>ReLimiter and Display Commander add-on files (ReLimiter mirrored, Display Commander pinned to the author's URL).</summary>
@@ -60,6 +61,30 @@ public sealed class CatalogDlssBuild
     public string Version { get; set; } = "";
     public string? Published { get; set; }
     public CatalogBinary File { get; set; } = new();
+}
+
+/// <summary>OptiScaler's own compatibility list (its wiki), as the catalog copied it: facts and a pointer back to the wiki page.</summary>
+public sealed class CatalogOptiCompat
+{
+    public string? Updated { get; set; }
+    public List<CatalogOptiGame> Games { get; set; } = [];
+    /// <summary>Games OptiScaler's wiki lists as unable to use OptiFG's HUDfix.</summary>
+    public List<string> HudfixIncompatible { get; set; } = [];
+}
+
+public sealed class CatalogOptiGame
+{
+    public string Name { get; set; } = "";
+    /// <summary>The wiki page of the game: https://github.com/optiscaler/OptiScaler/wiki/&lt;Page&gt;; null when the list has none.</summary>
+    public string? Page { get; set; }
+    /// <summary>"main", "upscalerMods" (games that got an upscaler through a third-party mod) or "lumaUe".</summary>
+    public string List { get; set; } = "main";
+    /// <summary>"working", "single-os" or "not-working".</summary>
+    public string Compat { get; set; } = "working";
+    /// <summary>Upscaler inputs the game offers OptiScaler, as the wiki writes them: DLSS, FSR2, FSR3, FSR3.1/4, XeSS.</summary>
+    public List<string> Inputs { get; set; } = [];
+    public bool OptiPatcher { get; set; }
+    public string? Notes { get; set; }
 }
 
 public sealed class CatalogRenodx

@@ -762,6 +762,54 @@
                     </StackPanel>
 
                     <StackPanel Visibility="{Binding DetailTab, Converter={StaticResource EqualsToVis}, ConverterParameter=Install}">
+                    <!-- What works in this game (MethodAdvisor) -->
+                    <TextBlock Text="WORKS IN THIS GAME" Style="{StaticResource SectionTitle}" />
+                    <Border Style="{StaticResource Card}" Padding="16,12">
+                        <StackPanel>
+                            <TextBlock Text="{Binding AdviceBlocked}" Style="{StaticResource MutedText}" Foreground="{StaticResource Warn}" TextWrapping="Wrap"
+                                       Visibility="{Binding HasAdviceBlocked, Converter={StaticResource BoolToVis}}" />
+                            <ItemsControl ItemsSource="{Binding Methods}" Visibility="{Binding HasMethods, Converter={StaticResource BoolToVis}}">
+                                <ItemsControl.ItemTemplate>
+                                    <DataTemplate>
+                                        <Grid Margin="0,0,0,10">
+                                            <Grid.Style>
+                                                <Style TargetType="Grid">
+                                                    <Style.Triggers>
+                                                        <DataTrigger Binding="{Binding IsDim}" Value="True"><Setter Property="Opacity" Value="0.65" /></DataTrigger>
+                                                    </Style.Triggers>
+                                                </Style>
+                                            </Grid.Style>
+                                            <Grid.ColumnDefinitions>
+                                                <ColumnDefinition Width="*" />
+                                                <ColumnDefinition Width="Auto" />
+                                            </Grid.ColumnDefinitions>
+                                            <StackPanel>
+                                                <StackPanel Orientation="Horizontal">
+                                                    <TextBlock Text="{Binding Title}" FontWeight="SemiBold" Foreground="{StaticResource Text}" />
+                                                    <Border Style="{StaticResource Badge}" Margin="8,0,0,0">
+                                                        <TextBlock Text="{Binding StateText}" Style="{StaticResource BadgeText}" />
+                                                    </Border>
+                                                </StackPanel>
+                                                <TextBlock Text="{Binding Reason}" Style="{StaticResource MutedText}" FontSize="11.5" TextWrapping="Wrap" Margin="0,2,0,0" />
+                                                <TextBlock Text="{Binding NeedsText}" Style="{StaticResource MutedText}" FontSize="11.5" TextWrapping="Wrap" Margin="0,2,0,0"
+                                                           Foreground="{StaticResource Warn}" Visibility="{Binding HasNeeds, Converter={StaticResource BoolToVis}}" />
+                                            </StackPanel>
+                                            <Button Grid.Column="1" Content="Select" Style="{StaticResource BtnGhost}" VerticalAlignment="Top" Margin="12,0,0,0"
+                                                    Visibility="{Binding IsSelectable, Converter={StaticResource BoolToVis}}"
+                                                    Command="{Binding DataContext.SelectMethodCommand, RelativeSource={RelativeSource AncestorType=ItemsControl}}"
+                                                    CommandParameter="{Binding}" AutomationProperties.Name="{Binding Title, StringFormat='Select the components for {0}'}"
+                                                    ToolTip="Turns on the components below; nothing is installed until you press Install" />
+                                        </Grid>
+                                    </DataTemplate>
+                                </ItemsControl.ItemTemplate>
+                            </ItemsControl>
+                            <Button Content="{Binding SelectTopLabel}" Style="{StaticResource BtnPrimary}" HorizontalAlignment="Left" Margin="0,4,0,0"
+                                    Command="{Binding SelectTopMethodCommand}" Visibility="{Binding CanSelectTop, Converter={StaticResource BoolToVis}}"
+                                    ToolTip="Turns on the components of the best method; nothing is installed until you press Install" />
+                            <TextBlock Text="{Binding AdviceFooter}" Style="{StaticResource MutedText}" FontSize="11" TextWrapping="Wrap" Margin="0,10,0,0" />
+                        </StackPanel>
+                    </Border>
+
                     <!-- Target -->
                     <TextBlock Text="INSTALL LOCATION" Style="{StaticResource SectionTitle}" />
                     <Grid>
@@ -834,6 +882,7 @@
                                                             <DataTrigger Binding="{Binding Key}" Value="dfc"><Setter Property="Visibility" Value="Collapsed" /></DataTrigger>
                                                             <DataTrigger Binding="{Binding Key}" Value="opti"><Setter Property="Visibility" Value="Collapsed" /></DataTrigger>
                                                             <DataTrigger Binding="{Binding Key}" Value="uplift"><Setter Property="Visibility" Value="Collapsed" /></DataTrigger>
+                                                            <DataTrigger Binding="{Binding Key}" Value="feeder"><Setter Property="Visibility" Value="Collapsed" /></DataTrigger>
                                                             <DataTrigger Binding="{Binding Key}" Value="reshade"><Setter Property="Visibility" Value="Collapsed" /></DataTrigger>
                                                         </Style.Triggers>
                                                     </Style>
@@ -871,6 +920,16 @@
                                                       ItemsSource="{Binding DataContext.DfcChoices, RelativeSource={RelativeSource AncestorType=ItemsControl}}"
                                                       SelectedItem="{Binding DataContext.DfcChoice, RelativeSource={RelativeSource AncestorType=ItemsControl}}"
                                                       AutomationProperties.Name="Deep Fried Chicken version for this game" ToolTip="Which imported Deep Fried Chicken build this game installs; it decides the files, the default cfg and whether games without DLSS work" />
+                                            <DockPanel Grid.Column="3" Margin="0,0,8,0" Visibility="{Binding Key, Converter={StaticResource EqualsToVis}, ConverterParameter=feeder}">
+                                                <Button DockPanel.Dock="Right" Content="Reset to auto" Style="{StaticResource BtnGhost}" Margin="6,0,0,0" Padding="8,0"
+                                                        Command="{Binding DataContext.ResetFeederToAutoCommand, RelativeSource={RelativeSource AncestorType=ItemsControl}}"
+                                                        Visibility="{Binding DataContext.FeederIsManual, RelativeSource={RelativeSource AncestorType=ItemsControl}, Converter={StaticResource BoolToVis}}"
+                                                        ToolTip="Follow Auto again for this game" />
+                                                <ComboBox MaxDropDownHeight="300"
+                                                          ItemsSource="{Binding DataContext.FeederChoices, RelativeSource={RelativeSource AncestorType=ItemsControl}}"
+                                                          SelectedItem="{Binding DataContext.FeederChoice, RelativeSource={RelativeSource AncestorType=ItemsControl}}"
+                                                          AutomationProperties.Name="DLSS5-Feeder version for this game" ToolTip="Auto installs the newest build; pick one to keep this game on it" />
+                                            </DockPanel>
                                             <CheckBox Grid.Column="4" IsChecked="{Binding Enabled}" IsEnabled="{Binding Editable}" HorizontalAlignment="Right" ToolTip="Include in install"
                                                       AutomationProperties.Name="{Binding Name, StringFormat='Install {0}'}" />
                                         </Grid>
@@ -1667,6 +1726,37 @@
                                                             <Button Grid.Column="2" Content="Remove" Style="{StaticResource BtnGhost}" Command="{Binding RemoveCommand}" Margin="8,0,0,0" ToolTip="Remove the selected build from the library; games keep their copy" />
                                                         </Grid>
                                                     </StackPanel>
+                                                </StackPanel>
+                                            </Border>
+                                            <StackPanel Orientation="Horizontal">
+                                                <TextBlock Text="DLSS5-FEEDER BUILDS" Style="{StaticResource SectionTitle}" />
+                                                <Button Style="{StaticResource InfoBtn}" CommandParameter="feeder" Margin="4,18,0,0"
+                                                        ToolTip="{Binding Source=feeder, Converter={StaticResource HelpTip}}" AutomationProperties.Name="About DLSS5-Feeder" />
+                                            </StackPanel>
+                                            <Border Style="{StaticResource Card}" Padding="16">
+                                                <StackPanel DataContext="{Binding Feeder}">
+                                                    <TextBlock Text="Default build" Margin="0,0,0,6" />
+                                                    <DockPanel>
+                                                        <Button DockPanel.Dock="Right" Content="Reset to auto" Style="{StaticResource BtnGhost}" Margin="8,0,0,0" Command="{Binding ResetToAutoCommand}"
+                                                                Visibility="{Binding IsManual, Converter={StaticResource BoolToVis}}" ToolTip="Follow the newest build again" />
+                                                        <ComboBox ItemsSource="{Binding DefaultChoices}" SelectedItem="{Binding DefaultChoice}" MaxDropDownHeight="300"
+                                                                  AutomationProperties.Name="Default DLSS5-Feeder build" ToolTip="Games without their own pick install this: Auto is the newest build" />
+                                                    </DockPanel>
+                                                    <TextBlock Text="{Binding Info}" Style="{StaticResource MutedText}" TextWrapping="Wrap" FontSize="12" Margin="0,6,0,0" />
+                                                    <Border Style="{StaticResource Divider}" Margin="0,10" />
+                                                    <WrapPanel>
+                                                        <Button Content="Import…" Command="{Binding ImportCommand}" Margin="0,0,8,0" ToolTip="Add a DLSS5-Feeder release .zip or dlss5-feed.addon64 to the library" />
+                                                        <Button Content="Folder…" Style="{StaticResource BtnGhost}" Command="{Binding ImportFolderCommand}" Margin="0,0,8,0" ToolTip="Add the extracted DLSS5-Feeder release folder" />
+                                                        <Button Content="Download newest" Style="{StaticResource BtnGhost}" Command="{Binding DownloadCommand}" ToolTip="Download the newest release from GitHub now; its SHA-256 is checked against GitHub's" />
+                                                    </WrapPanel>
+                                                    <StackPanel Visibility="{Binding HasBuilds, Converter={StaticResource BoolToVis}}" Margin="0,10,0,0">
+                                                        <TextBlock Text="Library" Margin="0,0,0,6" />
+                                                        <DockPanel>
+                                                            <Button DockPanel.Dock="Right" Content="Remove" Style="{StaticResource BtnGhost}" Command="{Binding RemoveCommand}" Margin="8,0,0,0" ToolTip="Remove the selected build from the library" />
+                                                            <ComboBox ItemsSource="{Binding BuildChoices}" SelectedItem="{Binding SelectedBuildChoice}" MaxDropDownHeight="300" AutomationProperties.Name="DLSS5-Feeder build in the library" />
+                                                        </DockPanel>
+                                                    </StackPanel>
+                                                    <TextBlock Text="{Binding Status}" Style="{StaticResource MutedText}" TextWrapping="Wrap" FontSize="12" Margin="0,8,0,0" />
                                                 </StackPanel>
                                             </Border>
                                             <StackPanel Orientation="Horizontal">
