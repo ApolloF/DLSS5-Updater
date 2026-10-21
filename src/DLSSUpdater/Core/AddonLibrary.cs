@@ -11,7 +11,8 @@ public enum AddonKind { RenoDx, Lecram, Dfc }
 /// One imported build of ShortFuse's or Lecram's add-on or of Deep Fried Chicken, stored under
 /// components\&lt;add-on dir&gt;\&lt;sha256&gt;\&lt;FileName&gt; with this record next to it as version.json. <see cref="FileName"/> is the
 /// name the add-on is installed under. A Deep Fried Chicken build's folder holds its whole 64-bit set beside the add-on.
-/// <see cref="Downloaded"/>: the app fetched it from Lecram's channel; false for every import and for builds from before the flag.
+/// <see cref="Downloaded"/>: the app fetched it from Lecram's channel or the catalog; false for every import and for builds from before the flag.
+/// <see cref="CatalogSha"/>: the SHA-256 of the catalog download (a zip) this build came out of, so the next check knows it is already here.
 /// </summary>
 public sealed record AddonBuild(
     string Id,
@@ -21,7 +22,8 @@ public sealed record AddonBuild(
     string DetectedLabel,
     string? UserLabel,
     DateTime Imported,
-    bool Downloaded = false)
+    bool Downloaded = false,
+    string? CatalogSha = null)
 {
     /// <summary>The name this build goes by: the user's own label, else what was detected in the file.</summary>
     [JsonIgnore]

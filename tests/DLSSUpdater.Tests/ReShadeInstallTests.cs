@@ -12,7 +12,7 @@ public sealed class ReShadeInstallTests : IDisposable
     private readonly ComponentStore _store;
     private readonly ReShadeBuild _build;
 
-    private sealed class FakeLayer(VulkanLayerState state) : IVulkanLayerHost
+    internal sealed class FakeLayer(VulkanLayerState state) : IVulkanLayerHost
     {
         public string LayerDir => @"C:\ProgramData\ReShade";
         public bool FileExists(string path) => state != VulkanLayerState.NotInstalled;

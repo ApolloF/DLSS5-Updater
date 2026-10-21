@@ -13,7 +13,11 @@
 - No public source. `clshortfuse/renodx` holds only the shared `src/utils/dlss/*` helpers and the unrelated
   `dlssfix` add-on (`renodx-dlssfix.addon64`); nightlies don't contain `renodx-dlss.addon64`.
 - Official channel: RenoDX Discord, DLSS 5 thread. Third-party mirror: `github.com/RankFTW/rhi-repo` releases,
-  tags `renodx-dlss-SF-<YY.MMDD.HHMM>` (no hashes). Hence import-only in the app.
+  tags `renodx-dlss-SF-<YY.MMDD.HHMM>` (older ones `renodx-dlss-SF-0.55`), one zip per release holding `renodx-dlss.addon64`;
+  the releases publish no hashes and the repository has no licence.
+- The catalog (`renodxDlss` section, [catalog.md](../catalog.md)) lists the newest ten of those releases with the SHA-256 the
+  catalog generator computed, **pinned, never mirrored**. This is the exception in `docs/design.md` section 3 (user decision
+  2026-10-21): the app downloads the newest zip, refuses a hash mismatch, and imports the add-on from it.
 - Framework is MIT (RenoDX).
 
 ## ReShade.ini layout
@@ -91,7 +95,10 @@ Setting struct (1016, for the next diff): global flag at `+0x338`, type byte at 
 
 ## App support
 
-DLSS5 Updater imports the add-on (never downloads it: it is not published on any official GitHub) and installs it per game in
+DLSS5 Updater imports the add-on, and also downloads the newest catalog build (hash-pinned, see above; Settings can turn the
+download off). A build it fetched is a library build like an import (`AddonBuild.Downloaded`, with `CatalogSha` the zip's hash so
+the next check knows it is there), becomes the default when it is newer than the current default, and may go in the automatic
+cleanup, which never deletes imports. It installs it per game in
 ReShade-only mode with ReShade 6+, a game with native DLSS and an imported `nvngx_dlssnr.dll`. It adds the add-on to
 `[ADDON] LoadFromDllMain`, replaces OptiScaler-NR and excludes Deep Fried Chicken; Lecram's add-on may stay next to it.
 

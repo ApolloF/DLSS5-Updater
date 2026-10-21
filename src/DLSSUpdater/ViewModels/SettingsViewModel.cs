@@ -406,6 +406,39 @@ public sealed partial class SettingsViewModel : ObservableObject
         SelectedNr = NrChoices.FirstOrDefault(c => c.Tag == id);
     }
 
+    /// <summary>Per update check: fetch ShortFuse's DLSS add-on from the catalog when it has a newer build.</summary>
+    public bool AutoDownloadRenoDx
+    {
+        get => Settings.AutoDownloadRenoDx;
+        set { Settings.AutoDownloadRenoDx = value; Save(); }
+    }
+
+    /// <summary>The HDR peak brightness as typed: empty = off, else a number of nits kept between the limits the mod takes.</summary>
+    public string HdrPeakText
+    {
+        get => Settings.HdrPeakNits?.ToString() ?? "";
+        set
+        {
+            if (TryParsePeak(value, out var nits))
+            {
+                Settings.HdrPeakNits = nits;
+                Save();
+            }
+            OnPropertyChanged();
+        }
+    }
+
+    /// <summary>"" = off (null). A number is clamped to 80..10000; anything else is rejected and the old value stays.</summary>
+    internal static bool TryParsePeak(string? text, out int? nits)
+    {
+        nits = null;
+        text = text?.Trim();
+        if (string.IsNullOrEmpty(text)) return true;
+        if (!int.TryParse(text, System.Globalization.NumberStyles.None, System.Globalization.CultureInfo.InvariantCulture, out var n)) return false;
+        nits = HdrIni.ClampPeak(n);
+        return true;
+    }
+
     public bool InstallRenoDx
     {
         get => Settings.InstallRenoDx;
