@@ -222,9 +222,28 @@ public sealed class MethodAdvisorTests
         var a = MethodAdvisor.Advise(input);
 
         Assert.Contains(7, a.Rows);
-        Assert.Equal(Availability.Coming, Option(a, Method.Luma).Availability);
+        Assert.Equal(Availability.NotPossible, Option(a, Method.Luma).Availability);
+        Assert.Contains("no download", Option(a, Method.Luma).Reason);
         Assert.Equal(Method.OptiScaler, Order(a)[0]);
         Assert.Contains(Method.Feeder, Order(a));
+    }
+
+    [Fact]
+    public void Row7_UnrealDx11OnTheLumaList_WithALumaMod_LumaIsAvailable()
+    {
+        var game = Game(GraphicsApis.Dx11, engine: GameEngine.Unreal);
+        var input = Input(game) with
+        {
+            OptiCompat = new CatalogOptiGame { Name = "Test Game", List = "lumaUe", Inputs = ["DLSS"] },
+            Luma = LumaFixtures.Picker().Pick(LumaFixtures.Unreal("Listed Game"), LumaPicker.UnrealId),
+        };
+
+        var luma = Option(MethodAdvisor.Advise(input), Method.Luma);
+
+        Assert.Equal(Availability.Available, luma.Availability);
+        Assert.Contains("Luma section", luma.Reason);
+        Assert.Contains("RenoDX", luma.Reason);
+        Assert.Empty(luma.Components);
     }
 
     [Fact]
@@ -274,7 +293,7 @@ public sealed class MethodAdvisorTests
     [Theory]
     [InlineData(32, true)]
     [InlineData(64, false)]
-    public void Row10_Dx9_FeederThroughDgVoodoo_LumaComing(int bits, bool beta)
+    public void Row10_Dx9_FeederThroughDgVoodoo_NoLumaOptionWithoutAMod(int bits, bool beta)
     {
         var a = Advise(Game(GraphicsApis.Dx9, bits));
 
@@ -282,7 +301,19 @@ public sealed class MethodAdvisorTests
         var feeder = Option(a, Method.Feeder);
         Assert.Contains(feeder.Needs, n => n.Contains("dgVoodoo2"));
         Assert.Equal(beta, feeder.Reason.Contains("beta"));
-        Assert.Equal(Availability.Coming, Option(a, Method.Luma).Availability);
+        Assert.DoesNotContain(Method.Luma, Order(a));
+    }
+
+    [Fact]
+    public void Row10_Dx9_WithALumaMod_LumaIsAvailableAndMentionsDgVoodoo()
+    {
+        var game = Game(GraphicsApis.Dx9, 32);
+        var input = Input(game) with { Luma = LumaFixtures.Picker().Pick(LumaFixtures.Plain("Borderlands 2", bits: 32, apis: GraphicsApis.Dx9)) };
+
+        var luma = Option(MethodAdvisor.Advise(input), Method.Luma);
+
+        Assert.Equal(Availability.Available, luma.Availability);
+        Assert.Contains("dgVoodoo2", luma.Reason);
     }
 
     [Fact]
@@ -355,14 +386,29 @@ public sealed class MethodAdvisorTests
     [Theory]
     [InlineData("lumaUe", "")]
     [InlineData("upscalerMods", "Requires Luma Framework mod")]
-    public void Row16_GamesOnOptiScalersLumaLists_GetALumaPlaceholder(string list, string notes)
+    public void Row16_GamesOnOptiScalersLumaLists_WithoutACatalogMod_SayThereIsNoDownload(string list, string notes)
     {
         var input = Input(Game(GraphicsApis.Dx11)) with { OptiCompat = new CatalogOptiGame { Name = "Test Game", List = list, Notes = notes, Inputs = ["DLSS"] } };
 
         var a = MethodAdvisor.Advise(input);
 
         Assert.Contains(16, a.Rows);
-        Assert.Equal(Availability.Coming, Option(a, Method.Luma).Availability);
+        Assert.Equal(Availability.NotPossible, Option(a, Method.Luma).Availability);
+    }
+
+    [Fact]
+    public void Row16_AGameWithALumaMod_GetsLumaAsAdvice_EvenOffOptiScalersList()
+    {
+        var game = Game(GraphicsApis.Dx11, dlss: true);
+        var input = Input(game) with { Luma = LumaFixtures.Picker().Pick(LumaFixtures.Plain("Prey")) };
+
+        var a = MethodAdvisor.Advise(input);
+
+        Assert.Contains(16, a.Rows);
+        var luma = Option(a, Method.Luma);
+        Assert.Equal(Availability.Available, luma.Availability);
+        Assert.Contains("Don't stack it with a RenoDX HDR mod", luma.Reason);
+        Assert.Empty(luma.Components);
     }
 
     [Fact]

@@ -115,6 +115,7 @@ public sealed partial class GameViewModel
             OptiCompat = catalog.OptiCompat.Find(Info.Name),
             HudfixIncompatible = catalog.OptiCompat.IsHudfixIncompatible(Info.Name),
             RenoDxMod = catalog.RenoDx?.Match(Info).Mod,
+            Luma = _s.Catalog?.LumaPicker?.Pick(Info),
             Imported = imported,
             DfcRunsWithoutDlss = dfc is null || ComponentStore.DfcSupportsNonDlssGames(dfc),
             InstalledRoutes = NrAddons.PresentIn(target, Manifest),

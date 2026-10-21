@@ -10,6 +10,8 @@ public sealed class CatalogState(CatalogClient client)
     public CatalogOrigin Origin { get; private set; } = CatalogOrigin.None;
     public string? Note { get; private set; }
     public HdrPicker? Picker { get; private set; }
+    /// <summary>The Luma mods of the catalog; null when the catalog has no luma section.</summary>
+    public LumaPicker? LumaPicker { get; private set; }
 
     public event Action? Changed;
 
@@ -27,6 +29,7 @@ public sealed class CatalogState(CatalogClient client)
             changed = Document?.Generated != load.Document?.Generated || (Document is null) != (load.Document is null);
             Document = load.Document;
             Picker = load.Document?.Sections.Renodx is { } renodx ? new HdrPicker(renodx) : null;
+            LumaPicker = load.Document?.Sections.Luma is { } luma ? new LumaPicker(luma) : null;
         }
         Origin = load.Origin;
         Note = load.Note;

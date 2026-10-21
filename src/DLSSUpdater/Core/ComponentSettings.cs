@@ -134,6 +134,16 @@ public sealed partial class GameOverride
     public void SetEngineIniPath(string? path) =>
         Components = ComponentPicks.SetOption(Components, ComponentRegistry.RenoDxHdr, "engine-ini", string.IsNullOrWhiteSpace(path) ? null : path.Trim());
 
+    /// <summary>The Luma mod the user picked by hand for this game: a catalog mod id, <see cref="LumaPicker.UnrealId"/>, or <see cref="LumaManual.CustomMod"/> (an imported zip, whose library id is the build pick); null = automatic.</summary>
+    public string? LumaMod => ComponentPicks.GetOption(Components, ComponentRegistry.Luma, "mod");
+
+    public void SetLumaMod(string? mod) => Components = ComponentPicks.SetOption(Components, ComponentRegistry.Luma, "mod", mod);
+
+    /// <summary>HDR output for Luma in this game: true = on, false = off, null = leave it to Luma (it sets it from the display on first start).</summary>
+    public bool? LumaHdr => ComponentPicks.GetOption(Components, ComponentRegistry.Luma, "hdr") switch { "on" => true, "off" => false, _ => null };
+
+    public void SetLumaHdr(bool? on) => Components = ComponentPicks.SetOption(Components, ComponentRegistry.Luma, "hdr", on is null ? null : on.Value ? "on" : "off");
+
     /// <summary>Replaces this game's option values for a component in the map; null or empty removes them.</summary>
     public void SetPickOptions(string id, Dictionary<string, string>? options) => Components = ComponentPicks.SetOptions(Components, id, options);
 }

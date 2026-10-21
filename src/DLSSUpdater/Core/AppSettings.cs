@@ -379,6 +379,7 @@ public sealed partial class AppSettings
 [JsonSerializable(typeof(NrVersion))]
 [JsonSerializable(typeof(AddonBuild))]
 [JsonSerializable(typeof(HdrBuild))]
+[JsonSerializable(typeof(LumaBuild))]
 [JsonSerializable(typeof(TechOverride))]
 [JsonSerializable(typeof(LimiterBuild))]
 [JsonSerializable(typeof(ReShadeBuild))]
