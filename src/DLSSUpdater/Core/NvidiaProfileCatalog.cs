@@ -54,7 +54,7 @@ public sealed class NvOptionDef(string key, NvGroup group, string label, string 
 public static class NvidiaProfileCatalog
 {
     public const uint SrPreset = 0x10E41DF3, RrPreset = 0x10E41DF7, FgPreset = 0x10E41DF1;
-    public const uint SrLatest = 0x10E41E01, RrLatest = 0x10E41E02, FgLatest = 0x10E41E03;
+    public const uint SrOverride = 0x10E41E01, RrOverride = 0x10E41E02, FgOverride = 0x10E41E03;
     public const uint SrMode = 0x10AFB768, SrRatio = 0x10E41DF5;
     public const uint MfgMode = 0x10308298, MfgFactor = 0x104D6667, MfgDynamicMax = 0x10562D0F, MfgTargetFps = 0x10CF4125;
     public const uint SmoothMotion = 0xB0D384C0, SmoothMotionApis = 0xB0CC0875;
@@ -82,9 +82,13 @@ public static class NvidiaProfileCatalog
 
     private static NvChoice C(string label, string description, params (uint Id, uint Value)[] writes) => new(label, description, writes);
 
-    private static NvChoice Preset(uint id, uint value, string label, string description) => C(label, description, (id, value));
+    /// <summary>A preset choice also turns the override switch on, the way the NVIDIA App stores a preset (a preset without its switch may not take effect).</summary>
+    private static NvChoice Preset(uint id, uint overrideId, uint value, string label, string description) => C(label, description, (id, value), (overrideId, 1));
 
     private static NvChoice Off(uint id, string description) => C("Off", description, (id, 0));
+
+    /// <summary>"Off" for the DLSS presets: preset 0 together with the override switch off.</summary>
+    private static NvChoice Off(uint id, uint overrideId, string description) => C("Off", description, (id, 0), (overrideId, 0));
 
     private static NvChoice[] OnOff(uint id, string offDescription, string onDescription) =>
         [C("Off", offDescription, (id, 0)), C("On", onDescription, (id, 1))];
@@ -98,18 +102,15 @@ public static class NvidiaProfileCatalog
     public static IReadOnlyList<NvOptionDef> Create() =>
     [
         // ---- DLSS overrides. Source: CustomSettingNames.xml 0x10E41DF3 / DF7 / DF1 (preset letters), 0x10E41E01-03 (DLL override), 0x10AFB768 + 0x10E41DF5 (quality level, scaling ratio).
-        new("sr-preset", NvGroup.Dlss, "DLSS Super Resolution preset", "Force a DLSS SR model preset for this game.", "nv-sr-preset", [SrPreset],
+        new("sr-preset", NvGroup.Dlss, "DLSS Super Resolution preset", "Force a DLSS SR model preset for this game.", "nv-sr-preset", [SrPreset, SrOverride],
         [
-            Off(SrPreset, "No SR preset forced for this game, even if the global profile has one (stored as 0, which Profile Inspector calls N/A)."),
-            Preset(SrPreset, RecommendedPreset, "Recommended", "DLSS picks per quality mode: K for DLAA / Quality / Balanced, M for Performance, L for Ultra Performance."),
-            Preset(SrPreset, 0x0B, "K", "Transformer generation 1. Default for DLAA, Quality and Balanced."),
-            Preset(SrPreset, 0x0A, "J", "Transformer generation 1. Like K with slightly less ghosting but more flicker."),
-            Preset(SrPreset, 0x0D, "M", "Transformer generation 2. Default for Performance mode."),
-            Preset(SrPreset, 0x0C, "L", "Transformer generation 2. Default for Ultra Performance mode."),
-        ]) { Requires = GameFeatures.SR, Source = "CustomSettingNames.xml 0x10E41DF3" },
-        new("sr-latest", NvGroup.Dlss, "Use latest DLSS Super Resolution DLL", "Let the driver swap in the newest installed SR DLL.", "nv-latest-dll", [SrLatest],
-            OnOff(SrLatest, "The game's own DLL is used.", "The driver replaces the game's SR DLL with the latest one it has installed."))
-            { Requires = GameFeatures.SR, Source = "CustomSettingNames.xml 0x10E41E01" },
+            Off(SrPreset, SrOverride, "No SR preset forced for this game, even if the global profile has one (stored as 0, which Profile Inspector calls N/A)."),
+            Preset(SrPreset, SrOverride, RecommendedPreset, "Recommended", "DLSS picks per quality mode: K for DLAA / Quality / Balanced, M for Performance, L for Ultra Performance."),
+            Preset(SrPreset, SrOverride, 0x0B, "K", "Transformer generation 1. Default for DLAA, Quality and Balanced."),
+            Preset(SrPreset, SrOverride, 0x0A, "J", "Transformer generation 1. Like K with slightly less ghosting but more flicker."),
+            Preset(SrPreset, SrOverride, 0x0D, "M", "Transformer generation 2. Default for Performance mode."),
+            Preset(SrPreset, SrOverride, 0x0C, "L", "Transformer generation 2. Default for Ultra Performance mode."),
+        ]) { Requires = GameFeatures.SR, Source = "CustomSettingNames.xml 0x10E41DF3, 0x10E41E01" },
         new("sr-mode", NvGroup.Dlss, "DLSS render resolution", "Override the game's DLSS quality mode.", "nv-sr-mode", [SrMode, SrRatio],
         [
             C("Game setting", "Explicitly let the game choose (value 3, which Profile Inspector calls N/A).", (SrMode, 3)),
@@ -120,26 +121,20 @@ public static class NvidiaProfileCatalog
             C("Ultra Performance (33%)", "Renders at 33% per axis.", (SrMode, 5)),
             .. ScaleSteps.Select(p => C($"Custom {p}%", p == 77 ? "Profile Inspector calls 77% 'Ultra Quality'." : "Exact render scale per axis (driver 572.83 or newer).", (SrMode, 6), (SrRatio, (uint)p))),
         ]) { Requires = GameFeatures.SR, Source = "CustomSettingNames.xml 0x10AFB768 (Custom = 6), 0x10E41DF5 (ratio = percent, 0x21..0x64)" },
-        new("rr-preset", NvGroup.Dlss, "DLSS Ray Reconstruction preset", "Force a DLSS RR model preset for this game.", "nv-rr-preset", [RrPreset],
+        new("rr-preset", NvGroup.Dlss, "DLSS Ray Reconstruction preset", "Force a DLSS RR model preset for this game.", "nv-rr-preset", [RrPreset, RrOverride],
         [
-            Off(RrPreset, "No RR preset forced for this game (stored as 0, N/A in Profile Inspector)."),
-            Preset(RrPreset, RecommendedPreset, "Recommended", "The driver picks the preset."),
-            Preset(RrPreset, 0x04, "D", "Transformer generation 1."),
-            Preset(RrPreset, 0x06, "F", "Transformer generation 2."),
-        ]) { Requires = GameFeatures.RR, Source = "CustomSettingNames.xml 0x10E41DF7" },
-        new("rr-latest", NvGroup.Dlss, "Use latest DLSS Ray Reconstruction DLL", "Let the driver swap in the newest installed RR DLL.", "nv-latest-dll", [RrLatest],
-            OnOff(RrLatest, "The game's own DLL is used.", "The driver replaces the game's RR DLL with the latest one it has installed."))
-            { Requires = GameFeatures.RR, Source = "CustomSettingNames.xml 0x10E41E02" },
-        new("fg-preset", NvGroup.Dlss, "DLSS Frame Generation preset", "Force a DLSS FG model for this game.", "nv-fg-preset", [FgPreset],
+            Off(RrPreset, RrOverride, "No RR preset forced for this game (stored as 0, N/A in Profile Inspector)."),
+            Preset(RrPreset, RrOverride, RecommendedPreset, "Recommended", "The driver picks the preset."),
+            Preset(RrPreset, RrOverride, 0x04, "D", "Transformer generation 1."),
+            Preset(RrPreset, RrOverride, 0x06, "F", "Transformer generation 2."),
+        ]) { Requires = GameFeatures.RR, Source = "CustomSettingNames.xml 0x10E41DF7, 0x10E41E02" },
+        new("fg-preset", NvGroup.Dlss, "DLSS Frame Generation preset", "Force a DLSS FG model for this game.", "nv-fg-preset", [FgPreset, FgOverride],
         [
-            Off(FgPreset, "No FG preset forced for this game (stored as 0, N/A in Profile Inspector)."),
-            Preset(FgPreset, RecommendedFgPreset, "NVIDIA default", "The driver's recommended FG model."),
-            Preset(FgPreset, 0x01, "A", "Profile Inspector: 'Default Preset'."),
-            Preset(FgPreset, 0x02, "B", "Profile Inspector: 'UI Focus'."),
-        ]) { Requires = GameFeatures.FG, Source = "CustomSettingNames.xml 0x10E41DF1" },
-        new("fg-latest", NvGroup.Dlss, "Use latest DLSS Frame Generation DLL", "Let the driver swap in the newest installed FG DLL.", "nv-latest-dll", [FgLatest],
-            OnOff(FgLatest, "The game's own DLL is used.", "The driver replaces the game's FG DLL with the latest one it has installed."))
-            { Requires = GameFeatures.FG, Source = "CustomSettingNames.xml 0x10E41E03" },
+            Off(FgPreset, FgOverride, "No FG preset forced for this game (stored as 0, N/A in Profile Inspector)."),
+            Preset(FgPreset, FgOverride, RecommendedFgPreset, "NVIDIA default", "The driver's recommended FG model."),
+            Preset(FgPreset, FgOverride, 0x01, "A", "Profile Inspector: 'Default Preset'."),
+            Preset(FgPreset, FgOverride, 0x02, "B", "Profile Inspector: 'UI Focus'."),
+        ]) { Requires = GameFeatures.FG, Source = "CustomSettingNames.xml 0x10E41DF1, 0x10E41E03" },
 
         // ---- Multi frame generation. Source: CustomSettingNames.xml 0x10308298, 0x104D6667, 0x10562D0F (driver 595.97+), 0x10CF4125 (driver 595.97+).
         new("mfg-mode", NvGroup.FrameGeneration, "Multi frame generation mode", "Force fixed or dynamic multi frame generation.", "nv-mfg-mode", [MfgMode],

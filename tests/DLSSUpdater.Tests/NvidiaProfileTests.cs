@@ -137,7 +137,7 @@ public class NvidiaProfileTests
     private static (NvidiaProfile Profile, FakeDrs Drs, NvidiaGame Game) Setup(Action<FakeDrs>? configure = null)
     {
         var drs = new FakeDrs();
-        drs.Define(Fps, SrPreset, Vsync, NvidiaProfileCatalog.VsyncTear);
+        drs.Define(Fps, SrPreset, NvidiaProfileCatalog.SrOverride, Vsync, NvidiaProfileCatalog.VsyncTear);
         configure?.Invoke(drs);
         return (new NvidiaProfile(drs), drs, new NvidiaGame(FakeDrs.Exe, "Game", new GameOverride()));
     }
@@ -425,7 +425,7 @@ public class NvidiaProfileTests
         Assert.All(vm.Relevant.GroupBy(o => o.Group), g => Assert.True(g.First().ShowGroupHeader && g.Skip(1).All(o => !o.ShowGroupHeader)));
         Assert.Contains(vm.Relevant, o => o.Topic == "nv-fps");
         Assert.Contains(vm.Relevant, o => o.Topic == "nv-sr-preset");
-        // The fake driver defines only four ids: everything else is hidden.
+        // The fake driver defines only a few ids: everything else is hidden.
         Assert.DoesNotContain(vm.Relevant.Concat(vm.Other), o => o.Topic is "nv-smooth-motion" or "nv-rtx-hdr" or "nv-mfg" or "nv-low-latency");
         Assert.Contains("not shown", vm.HiddenNote);
         Assert.Equal("117 FPS", vm.Relevant.Single(o => o.Topic == "nv-fps").Selected!.Label);
@@ -457,6 +457,72 @@ public class NvidiaProfileTests
 
         var after = new DriverProfileViewModel(FakeDrs.Exe, "Game", settings: game.Settings, profile: nv);
         Assert.True(after.CanReset);
+    }
+
+    private static readonly uint[] DlssIds = [0x10E41DF3, 0x10E41E01, 0x10E41DF7, 0x10E41E02, 0x10E41DF1, 0x10E41E03];
+
+    /// <summary>Profiles as 2.2.x left them: preset and override switch written as one block.</summary>
+    [Theory]
+    [InlineData(0x10E41DF3u, 0x10E41E01u, 0x0Bu, 1u, "sr-preset", "K")]
+    [InlineData(0x10E41DF3u, 0x10E41E01u, 0x00FFFFFFu, 1u, "sr-preset", "Recommended")]
+    [InlineData(0x10E41DF3u, 0x10E41E01u, 0x0Du, 1u, "sr-preset", "M")]
+    [InlineData(0x10E41DF3u, 0x10E41E01u, 0u, 0u, "sr-preset", "Off")]
+    [InlineData(0x10E41DF7u, 0x10E41E02u, 0x06u, 1u, "rr-preset", "F")]
+    [InlineData(0x10E41DF7u, 0x10E41E02u, 0u, 0u, "rr-preset", "Off")]
+    [InlineData(0x10E41DF1u, 0x10E41E03u, 0x00FFFFFEu, 1u, "fg-preset", "NVIDIA default")]
+    [InlineData(0x10E41DF1u, 0x10E41E03u, 0x02u, 1u, "fg-preset", "B")]
+    [InlineData(0x10E41DF1u, 0x10E41E03u, 0u, 0u, "fg-preset", "Off")]
+    public async Task ViewModel_ShowsTheChoiceAProfileFromTheOldVersionHolds(uint presetId, uint switchId, uint preset, uint switchValue, string key, string label)
+    {
+        var (nv, drs, game) = Setup(d => d.Define(DlssIds));
+        var profile = drs.AddProfile(FakeDrs.Exe);
+        profile.Values[presetId] = preset;
+        profile.Values[switchId] = switchValue;
+        var vm = new DriverProfileViewModel(FakeDrs.Exe, "Game", settings: game.Settings, profile: nv);
+
+        await vm.Load();
+
+        var option = vm.Relevant.Concat(vm.Other).Single(o => o.Topic == $"nv-{key}");
+        Assert.Equal(label, option.Selected!.Label);
+        Assert.False(option.IsDirty);
+    }
+
+    [Fact]
+    public void Apply_OfAPresetChoice_WritesPresetAndSwitch_AndResetRestoresBoth()
+    {
+        var (nv, drs, game) = Setup(d => d.Define(DlssIds));
+        var profile = drs.AddProfile(FakeDrs.Exe);
+        profile.Values[0x10E41DF3] = 0x0A;
+        profile.Values[0x10E41E01] = 0;
+
+        var changes = NvidiaProfileCatalog.Create().Single(o => o.Key == "sr-preset").Choices.Single(c => c.Label == "K").Writes
+            .ToDictionary(w => w.Id, w => (uint?)w.Value);
+        Assert.True(nv.Apply(game, changes).Verified);
+        Assert.Equal(0x0Bu, drs.Value(0x10E41DF3));
+        Assert.Equal(1u, drs.Value(0x10E41E01));
+
+        Assert.True(nv.Reset(game).Verified);
+        Assert.Equal(0x0Au, drs.Value(0x10E41DF3));
+        Assert.Equal(0u, drs.Value(0x10E41E01));
+        Assert.True(NvidiaRecord.Load(game.Settings).IsEmpty);
+    }
+
+    [Fact]
+    public void UseGlobal_RemovesPresetAndSwitch()
+    {
+        var (nv, drs, game) = Setup(d => d.Define(DlssIds));
+        var profile = drs.AddProfile(FakeDrs.Exe);
+        profile.Values[0x10E41DF7] = 0x06;
+        profile.Values[0x10E41E02] = 1;
+        var option = new NvOptionViewModel(NvidiaProfileCatalog.Create().Single(o => o.Key == "rr-preset"));
+
+        Assert.Equal([0x10E41DF7u, 0x10E41E02u], option.Ids);
+        Assert.Null(option.Choices[0].Value);
+        var result = nv.Apply(game, option.Ids.ToDictionary(id => id, _ => (uint?)null));
+
+        Assert.True(result.Verified);
+        Assert.Null(drs.Value(0x10E41DF7));
+        Assert.Null(drs.Value(0x10E41E02));
     }
 
     [Fact]
@@ -510,13 +576,6 @@ public class NvidiaCatalogTests
     [Fact]
     public void Values_MatchProfileInspector()
     {
-        Assert.Equal([(0x10E41DF3u, 0x0Bu)], Writes("sr-preset", "K"));
-        Assert.Equal([(0x10E41DF3u, 0x00FFFFFFu)], Writes("sr-preset", "Recommended"));
-        Assert.Equal([(0x10E41DF7u, 0x06u)], Writes("rr-preset", "F"));
-        Assert.Equal([(0x10E41DF1u, 0x00FFFFFEu)], Writes("fg-preset", "NVIDIA default"));
-        Assert.Equal([(0x10E41E01u, 1u)], Writes("sr-latest", "On"));
-        Assert.Equal([(0x10E41E02u, 1u)], Writes("rr-latest", "On"));
-        Assert.Equal([(0x10E41E03u, 1u)], Writes("fg-latest", "On"));
         Assert.Equal([(0x10AFB768u, 6u), (0x10E41DF5u, 77u)], Writes("sr-mode", "Custom 77%"));
         Assert.Equal([(0x10308298u, 2u)], Writes("mfg-mode", "Fixed"));
         Assert.Equal([(0x10308298u, 4u)], Writes("mfg-mode", "Dynamic"));
@@ -531,6 +590,39 @@ public class NvidiaCatalogTests
         Assert.Equal([(0x00A879CFu, 0x71271021u), (0x005A375Cu, 0x96861077u)], Writes("vsync", "1/3 refresh rate"));
         Assert.Equal([(0x0005F543u, 2u), (0x10835000u, 1u)], Writes("low-latency", "Ultra"));
         Assert.Equal([(0x10835002u, 237u)], Writes("frame-limit", "237 FPS"));
+    }
+
+    [Theory]
+    [InlineData("sr-preset", "Off", 0x10E41DF3u, 0u, 0x10E41E01u, 0u)]
+    [InlineData("sr-preset", "Recommended", 0x10E41DF3u, 0x00FFFFFFu, 0x10E41E01u, 1u)]
+    [InlineData("sr-preset", "K", 0x10E41DF3u, 0x0Bu, 0x10E41E01u, 1u)]
+    [InlineData("sr-preset", "J", 0x10E41DF3u, 0x0Au, 0x10E41E01u, 1u)]
+    [InlineData("sr-preset", "M", 0x10E41DF3u, 0x0Du, 0x10E41E01u, 1u)]
+    [InlineData("sr-preset", "L", 0x10E41DF3u, 0x0Cu, 0x10E41E01u, 1u)]
+    [InlineData("rr-preset", "Off", 0x10E41DF7u, 0u, 0x10E41E02u, 0u)]
+    [InlineData("rr-preset", "Recommended", 0x10E41DF7u, 0x00FFFFFFu, 0x10E41E02u, 1u)]
+    [InlineData("rr-preset", "D", 0x10E41DF7u, 0x04u, 0x10E41E02u, 1u)]
+    [InlineData("rr-preset", "F", 0x10E41DF7u, 0x06u, 0x10E41E02u, 1u)]
+    [InlineData("fg-preset", "Off", 0x10E41DF1u, 0u, 0x10E41E03u, 0u)]
+    [InlineData("fg-preset", "NVIDIA default", 0x10E41DF1u, 0x00FFFFFEu, 0x10E41E03u, 1u)]
+    [InlineData("fg-preset", "A", 0x10E41DF1u, 0x01u, 0x10E41E03u, 1u)]
+    [InlineData("fg-preset", "B", 0x10E41DF1u, 0x02u, 0x10E41E03u, 1u)]
+    public void DlssPresets_AreWrittenTogetherWithTheirOverrideSwitch(string key, string label, uint presetId, uint preset, uint switchId, uint switchValue)
+    {
+        Assert.Equal([(presetId, preset), (switchId, switchValue)], Writes(key, label));
+    }
+
+    [Fact]
+    public void EveryDlssPresetChoice_IsCovered_AndThereAreNoSeparateLatestDllOptions()
+    {
+        Assert.Equal([0x10E41DF3u, 0x10E41E01u], Options.Single(o => o.Key == "sr-preset").Ids);
+        Assert.Equal([0x10E41DF7u, 0x10E41E02u], Options.Single(o => o.Key == "rr-preset").Ids);
+        Assert.Equal([0x10E41DF1u, 0x10E41E03u], Options.Single(o => o.Key == "fg-preset").Ids);
+        Assert.Equal(6, Options.Single(o => o.Key == "sr-preset").Choices.Count);
+        Assert.Equal(4, Options.Single(o => o.Key == "rr-preset").Choices.Count);
+        Assert.Equal(4, Options.Single(o => o.Key == "fg-preset").Choices.Count);
+        Assert.DoesNotContain(Options, o => o.Key.EndsWith("-latest"));
+        Assert.All(Options.Where(o => o.Key.EndsWith("-preset")), o => Assert.All(o.Choices, c => Assert.Equal(2, c.Writes.Count)));
     }
 
     [Fact]

@@ -31,22 +31,22 @@ public class FeatureTests
     public void NvOption_PresetBlock_AndGlobalLabel()
     {
         var sr = NvSettings.Create().First(o => o.Topic == "nv-sr-preset");
-        var global = D((0x10E41DF3, 12));
+        var global = D((0x10E41DF3, 12), (0x10E41E01, 1));
 
         sr.SetLoaded(D(), global, gameDefault: false);
         Assert.Equal("Use global (L)", sr.Selected!.Label);
         Assert.Null(sr.Selected.Value);
 
-        sr.SetLoaded(D((0x10E41DF3, 11)), global, false);
+        sr.SetLoaded(D((0x10E41DF3, 11), (0x10E41E01, 1)), global, false);
         Assert.Equal("K", sr.Selected!.Label);
         Assert.False(sr.IsDirty);
 
-        sr.SetLoaded(D((0x10E41DF3, 0)), global, false);
+        sr.SetLoaded(D((0x10E41DF3, 0), (0x10E41E01, 0)), global, false);   // what the NVIDIA App stores for "off"
         Assert.Equal("Off", sr.Selected!.Label);
 
         sr.Selected = sr.DisplayChoices.First(c => c.Label == "M");
         Assert.True(sr.IsDirty);
-        Assert.Equal([(0x10E41DF3u, 13u)], NvOptionViewModel.Pairs(sr.Selected!.Value).ToArray());
+        Assert.Equal([(0x10E41DF3u, 13u), (0x10E41E01u, 1u)], NvOptionViewModel.Pairs(sr.Selected!.Value).ToArray());
 
         sr.Selected = null;   // ComboBox churn must not clear the selection
         Assert.Equal("M", sr.Selected!.Label);
@@ -57,7 +57,7 @@ public class FeatureTests
     {
         var fg = NvSettings.Create().First(o => o.Topic == "nv-fg-preset");
         Assert.Equal(["Use global", "Off", "NVIDIA default", "A", "B"], fg.Choices.Select(c => c.Label).ToArray());
-        fg.SetLoaded(D(), D((0x10E41DF1, 0xFFFFFE)), false);
+        fg.SetLoaded(D(), D((0x10E41DF1, 0xFFFFFE), (0x10E41E03, 1)), false);
         Assert.Equal("Use global (NVIDIA default)", fg.Selected!.Label);
     }
 
@@ -105,14 +105,14 @@ public class FeatureTests
     public void DriverProfile_GroupsOptionsTheGameCantUse()
     {
         var vm = new DriverProfileViewModel(@"C:\g\game.exe", "Game", GameFeatures.SR);
-        Assert.Equal(["nv-rr-preset", "nv-latest-dll", "nv-fg-preset", "nv-latest-dll", "nv-mfg-mode", "nv-mfg", "nv-mfg-dynamic", "nv-mfg-dynamic-fps"], vm.Other.Select(o => o.Topic).ToArray());
+        Assert.Equal(["nv-rr-preset", "nv-fg-preset", "nv-mfg-mode", "nv-mfg", "nv-mfg-dynamic", "nv-mfg-dynamic-fps"], vm.Other.Select(o => o.Topic).ToArray());
         Assert.Contains(vm.Relevant, o => o.Topic == "nv-sr-preset");
         Assert.Contains("Recommended", vm.Relevant.Single(o => o.Topic == "nv-smooth-motion").Note);
         Assert.Contains("Ray Reconstruction", vm.Other.Single(o => o.Topic == "nv-rr-preset").Note);
         Assert.StartsWith("Detected in the game files: DLSS Super Resolution", vm.FeatureSummary);
 
         var fg = new DriverProfileViewModel(@"C:\g\game.exe", "Game", GameFeatures.SR | GameFeatures.FG, new Version(310, 4, 0, 0));
-        Assert.Equal(["nv-rr-preset", "nv-latest-dll"], fg.Other.Select(o => o.Topic).ToArray());
+        Assert.Equal(["nv-rr-preset"], fg.Other.Select(o => o.Topic).ToArray());
         Assert.Contains("MFG capable", fg.FeatureSummary);
         Assert.Contains("use that instead", fg.Relevant.Single(o => o.Topic == "nv-smooth-motion").Note);
 

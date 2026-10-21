@@ -337,21 +337,18 @@ public static class HelpTopics
         new("nv-sr-preset", "NVIDIA", "DLSS Super Resolution preset",
             "Tells the driver which DLSS SR model preset to use for this game, whatever the game asks for (DRS setting 0x10E41DF3, 'DLSS - Forced Preset Letter'). " +
             "Recommended (0xFFFFFF) lets DLSS pick per quality mode. Off writes 0, which Profile Inspector lists as N/A. Use global removes the game's own value. " +
-            "Only the preset is written: the 'use latest DLL' switch is a separate setting. Works on every RTX GPU and a driver that has the setting (it is hidden otherwise). " +
+            "A preset is written together with its override switch (0x10E41E01 = 1, the way the NVIDIA App stores it); Off writes preset 0 and the switch 0. Works on every RTX GPU and a driver that has the setting (it is hidden otherwise). " +
             "OptiScaler has its own preset override (RenderPresetOverride in the profile); if both are set, OptiScaler's wins in games it handles."),
-        new("nv-latest-dll", "NVIDIA", "Use latest DLSS DLL (SR / RR / FG)",
-            "Profile Inspector's 'Enable DLL Override' for DLSS Super Resolution (0x10E41E01), Ray Reconstruction (0x10E41E02) and Frame Generation (0x10E41E03): " +
-            "On makes the driver use the newest DLSS DLL it has installed instead of the one in the game folder. Off uses the game's own DLL. " +
-            "This is the driver's own DLL store and the NVIDIA App's DLSS override; it does not touch the game's files, and the DLSS tab here still manages the game's own DLLs. " +
-            "Which GPUs and driver versions support it isn't documented by Profile Inspector."),
         new("nv-sr-mode", "NVIDIA", "DLSS render resolution",
             "Forces the internal render resolution DLSS upscales from, independent of the game's quality menu (0x10AFB768 'Forced Quality Level', values Performance 0, Balanced 1, Quality 2, DLAA 4, Ultra Performance 5, Custom 6; 3 is listed as N/A). " +
             "Custom also writes the scaling ratio (0x10E41DF5), a percentage per axis from 33 to 100; the ratio setting needs driver 572.83 or newer. A ratio set elsewhere shows as Custom."),
         new("nv-rr-preset", "NVIDIA", "DLSS Ray Reconstruction preset",
             "Model preset for Ray Reconstruction (the DLSS denoiser in path-traced games), setting 0x10E41DF7. Only matters in games that use RR. " +
-            "Profile Inspector names D and E 'Transformer Gen 1' and F 'Transformer Gen 2'; A to C are CNN. This list offers D and F, plus Recommended."),
+            "Profile Inspector names D and E 'Transformer Gen 1' and F 'Transformer Gen 2'; A to C are CNN. This list offers D and F, plus Recommended. " +
+            "A preset is written together with its override switch (0x10E41E02 = 1); Off writes preset 0 and the switch 0."),
         new("nv-fg-preset", "NVIDIA", "DLSS Frame Generation preset",
-            "Which DLSS FG model the driver loads (setting 0x10E41DF1). NVIDIA default (0xFFFFFE) is the recommended one; A is named 'Default Preset' and B 'UI Focus' in Profile Inspector, which also lists C 'Performance Focus' that this list does not offer."),
+            "Which DLSS FG model the driver loads (setting 0x10E41DF1). NVIDIA default (0xFFFFFE) is the recommended one; A is named 'Default Preset' and B 'UI Focus' in Profile Inspector, which also lists C 'Performance Focus' that this list does not offer. " +
+            "A preset is written together with its override switch (0x10E41E03 = 1); Off writes preset 0 and the switch 0."),
         new("nv-mfg-mode", "NVIDIA", "Multi frame generation mode",
             "Profile Inspector's 'DLSS-FG - Forced Mode' (0x10308298): Fixed (2) or Dynamic (4); Off writes 0, listed as N/A. " +
             "Multi frame generation is an RTX 50 feature. How the mode combines with the factor and dynamic settings isn't documented beyond their names: " +
@@ -588,7 +585,6 @@ public static class HelpTopics
         ["hdr-force"] = "Off. Only with an HDR mod that expects OptiScaler to make the swapchain HDR.",
         ["hdr-10"] = "Off (scRGB, more precision). On if your capture tool or display chain works better with HDR10.",
         ["nv-sr-preset"] = "Use global for most games. Recommended lets DLSS pick per quality mode. Force K for Quality / DLAA, M for Performance, L for Ultra Performance; Off stops the driver override for that game.",
-        ["nv-latest-dll"] = "Off unless you want the driver's newest DLSS in a game that won't take a swapped DLL. Not needed if this app already updated the game's DLLs.",
         ["nv-sr-mode"] = "Use the game's setting. DLAA if you have headroom; Performance with an L/M preset at 4K looks close to Quality with older presets.",
         ["nv-rr-preset"] = "Use global or F. Try D only if F shows smearing in a specific game.",
         ["nv-fg-preset"] = "Use global or NVIDIA default. Try A or B only when a game shows FG artifacts that a different model fixes.",
