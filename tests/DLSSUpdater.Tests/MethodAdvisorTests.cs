@@ -267,7 +267,7 @@ public sealed class MethodAdvisorTests
         var a = Advise(Game(GraphicsApis.Dx11, engine: GameEngine.Unity));
 
         Assert.Equal([9], a.Rows);
-        Assert.Equal([Method.Feeder, Method.SmoothMotion], Order(a));
+        Assert.Equal([Method.Feeder, Method.SmoothMotion, Method.Dxvk], Order(a));
         Assert.Contains("Fell & Sell", Option(a, Method.Feeder).Reason);
     }
 

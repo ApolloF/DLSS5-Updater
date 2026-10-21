@@ -58,7 +58,8 @@ public sealed record DxvkRelease(DxvkChannel Channel, string Id, string Label, s
 /// master run of its Artifacts workflow, through nightly.link, a .zip of the dlls) and Lilium HDR (EndlesslyFlowering/dxvk releases, a
 /// .7z). Every download is checked against the SHA-256 GitHub publishes for the asset (no digest = no install). A build is the folder
 /// components\dxvk\&lt;id&gt;\pkg\{x32,x64}\ holding the five dlls of each bitness; the folder's .complete record is its metadata.
-/// docs/addons/dxvk.md has the layouts.
+/// Layouts, checked against the real releases: the Stable tarball holds dxvk-&lt;version&gt;/x32 and /x64; the Development zip holds x32 and x64 at its top
+/// (plus a native Linux tarball); the Lilium .7z holds normal/x32 and normal/x64 and the author's preset .conf files.
 /// </summary>
 public sealed partial class DxvkLibrary(GitHubClient github)
 {

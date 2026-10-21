@@ -6,7 +6,7 @@ namespace DLSSUpdater.Core;
 public sealed record LiliumTier(string Id, string Label, string Description, bool D3d9, IReadOnlyList<(string Key, string Value)> Keys);
 
 /// <summary>
-/// The dxvk.conf the app writes, and nothing else. Facts (docs/addons/dxvk.md): every key and its values come from DXVK's own dxvk.conf
+/// The dxvk.conf the app writes, and nothing else. Facts: every key and its values come from DXVK's own dxvk.conf
 /// (the four defaults below, all documented there) or from the Lilium fork's HDR-mod.md (the HDR keys, only meaningful in a fork build).
 /// The tiers are the groupings of the preset files the fork ships in its release; their keys and values are the documented ones, except
 /// where noted. dxvk.conf has no sections: keys sit at the top level, so every edit uses the empty section name.
