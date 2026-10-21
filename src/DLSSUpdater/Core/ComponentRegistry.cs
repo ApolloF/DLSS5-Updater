@@ -56,6 +56,12 @@ public static class ComponentRegistry
     public const string Feeder = "dlss5-feeder";
     /// <summary>Not a component with files: the per-game record of what the app wrote into the NVIDIA driver profile (<see cref="NvidiaRecord"/>).</summary>
     public const string NvidiaDriver = "nvidia-driver";
+    /// <summary>The ReShade add-on frame limiters (ids match the catalog's <c>managedBy</c>) and the Unreal Engine.ini cap; one is active per game.</summary>
+    public const string ReLimiter = "relimiter";
+    public const string DisplayCommander = "display-commander";
+    public const string UnrealFrameCap = "ue-frame-cap";
+    /// <summary>Not a component with files: the per-game and app-wide choice of frame-limit method and cap (<see cref="FrameLimitSettings"/>).</summary>
+    public const string FrameLimit = "frame-limit";
 
     private static readonly ConcurrentDictionary<string, ComponentDefinition> Defs = new(StringComparer.OrdinalIgnoreCase);
 
@@ -82,6 +88,13 @@ public static class ComponentRegistry
         Register(new(Dlss, "DLSS") { Legacy = true, OwnedFiles = ComponentStore.DlssFiles });
         // Recorded the generic way. The wildcard also matches renodx-dlss.addon64, which is ShortFuse's other component.
         Register(new(RenoDxHdr, "RenoDX HDR") { Library = LibraryKind.RenoDxHdr, Label = "RenoDX HDR", OwnedFiles = ["renodx-*.addon64", "renodx-*.addon32"] });
+        // Frame limiters: two add-ons sharing one library (a build is one file of one add-on), and the Engine.ini cap, which places no file.
+        Register(new(ReLimiter, "ReLimiter") { Library = LibraryKind.FrameLimiter, Label = "ReLimiter", OwnedFiles = ["relimiter.addon64", "relimiter.addon32"] });
+        Register(new(DisplayCommander, "Display Commander")
+        {
+            Library = LibraryKind.FrameLimiter, Label = "Display Commander", OwnedFiles = ["zzz_display_commander.addon64", "zzz_display_commander.addon32"],
+        });
+        Register(new(UnrealFrameCap, "Unreal frame cap") { Label = "UE frame cap" });
         Register(new(Feeder, "DLSS5-Feeder") { Library = LibraryKind.Feeder, Label = "Feeder", OwnedFiles = FeederLibrary.OwnedFiles });
     }
 

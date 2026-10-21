@@ -74,6 +74,10 @@ public sealed class Services
     /// <summary>The mod catalog and the RenoDX HDR service; null switches the HDR section off (tests build Services without them).</summary>
     public CatalogState? Catalog { get; init; }
     public HdrService? Hdr { get; init; }
+    /// <summary>The frame limiters (driver, add-ons, Unreal cap); null hides the Frame limit section.</summary>
+    public FrameLimitService? FrameLimit { get; init; }
+    /// <summary>The primary display's refresh rate for the frame-limit hint; 0 = unknown.</summary>
+    public Func<int> RefreshHz { get; init; } = DisplayRefresh.Hz;
     /// <summary>The graphics card, read once at startup; the method advisor judges the games against it.</summary>
     public GpuInfo Gpu { get; set; } = GpuInfo.Unknown;
 }
@@ -87,6 +91,7 @@ public sealed partial class GameViewModel : ObservableObject
     {
         _s = services;
         Hdr = new HdrViewModel(this, services);
+        FrameLimit = new FrameLimitViewModel(this, services);
         _modChoices = ModPicker.Available(false, SelectedBuild.Name);
         Components =
         [
@@ -135,6 +140,7 @@ public sealed partial class GameViewModel : ObservableObject
 
     public GameInfo Info { get; private set; }
     public HdrViewModel Hdr { get; }
+    public FrameLimitViewModel FrameLimit { get; }
     public string Id => Info.Id;
     public string Name => Info.Name;
     public string Source => Info.Source;
@@ -605,6 +611,7 @@ public sealed partial class GameViewModel : ObservableObject
 
     /// <summary>The RenoDX HDR mod in this game has a newer catalog build, another pick or changed settings to apply.</summary>
     public bool NeedsHdrUpdate => Hdr.NeedsUpdate;
+    public bool NeedsFrameLimitUpdate => FrameLimit.NeedsUpdate;
 
     public string Subtitle => Info.Exes.Count == 0 ? "No executable found" : Path.GetFileName(Info.Exes[0]);
 
@@ -974,6 +981,8 @@ public sealed partial class GameViewModel : ObservableObject
     {
         Hdr.Refresh();
         OnPropertyChanged(nameof(NeedsHdrUpdate));
+        FrameLimit.Refresh();
+        OnPropertyChanged(nameof(NeedsFrameLimitUpdate));
     }
 
     private static bool IsTracked(InstallManifest m, string key) => key switch
