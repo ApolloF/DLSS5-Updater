@@ -13,6 +13,10 @@ public sealed class CatalogDocument
 public sealed class CatalogSections
 {
     public CatalogRenodx? Renodx { get; set; }
+    /// <summary>ReShade add-on packages from crosire's list (see <see cref="CatalogAddon"/>).</summary>
+    public CatalogAddons? Addons { get; set; }
+    /// <summary>Shader repositories pinned to a release or commit (see <see cref="CatalogShaderPack"/>).</summary>
+    public CatalogShaderPacks? ShaderPacks { get; set; }
 }
 
 public sealed class CatalogRenodx
@@ -68,7 +72,7 @@ public sealed class CatalogLinks
 public sealed class CatalogBinary
 {
     public string Name { get; set; } = "";
-    /// <summary>"x64" or "x86".</summary>
+    /// <summary>"x64" or "x86"; "both" for an add-on or shader package that serves 32-bit and 64-bit games.</summary>
     public string Arch { get; set; } = "x64";
     public string Url { get; set; } = "";
     public string? Sha256 { get; set; }
@@ -80,6 +84,10 @@ public sealed class CatalogBinary
     /// <summary>Immutable copy in the catalog repository; null = pinned (upstream URL plus hash only).</summary>
     public string? MirrorUrl { get; set; }
     public string? Mod { get; set; }
+    /// <summary>Add-on packages: what to install from the download (an add-on binary or zip).</summary>
+    public List<CatalogPayloadItem>? Payload { get; set; }
+    /// <summary>Shader packs: where the Shaders and Textures folders are inside the zip.</summary>
+    public CatalogPackLayout? Layout { get; set; }
     public List<CatalogHistory> History { get; set; } = [];
 
     /// <summary>Where to download from: the mirror when there is one, else the author's own URL.</summary>
