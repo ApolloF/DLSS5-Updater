@@ -33,6 +33,8 @@ public static class AppPaths
     public static string GamesFile => Path.Combine(Root, "games.json");
     public static string ApiCacheDir => Path.Combine(Cache, "api");
     public static string LegacyApiCacheFile => Path.Combine(Cache, "api.json");
+    /// <summary>Last good copy of the catalog repository's catalog.json, for when GitHub can't be reached.</summary>
+    public static string CatalogFile => Path.Combine(Cache, "catalog.json");
     public static string LogFile => Path.Combine(Root, "log.txt");
 
     public static void Ensure()
