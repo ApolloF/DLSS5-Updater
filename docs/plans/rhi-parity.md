@@ -73,6 +73,13 @@ Wave 4:
   DRS ids in `docs/research/rhi-2026-10.md` §9.2, cross-checked against nvidiaProfileInspector's
   `CustomSettingNames.xml`. Tests use a fake DRS layer; nothing writes a real profile.
 
+- **L Manual control everywhere** `feature/rhi-overrides` → Sonnet. Needs A, E. Rule (user, 2026-10-21): every auto
+  pick is overridable per game and every component is importable. Per-game overrides for detected API(s), bitness,
+  engine/UE version, main exe and mod folder (all consumers read the effective value; the badge says "set by you");
+  HDR: pick any catalog mod by hand (searchable) or import your own `.addon64/.addon32`, manual Engine.ini path;
+  "Auto (X)" + manual choices + "Reset to auto" on every picker; per-game ini override editor covers `[renodx]` and
+  Engine.ini keys. Workers H, F, G add import + override for their own components.
+
 Final: integration pass + docs + release notes (me, Haiku checker for the check command), one Opus reviewer pass
 on the whole branch before main (risk: game files, elevation, downloads). UI checked by you on the PC.
 
@@ -84,5 +91,5 @@ DLDSR, digital vibrance, DLSS DLL version mirror, Nexus, REFramework, ultrawide 
 launching, tray/background updater.
 
 ## Open questions
-- `nvngx_dlssnr.dll` in the mirror (AGENTS.md hard rule today says never). Undecided; the catalog is built so a
-  private-only source can be added later without touching the public catalog.
+- `nvngx_dlssnr.dll` and Lecram's builds on a public mirror: requested by the user, not built (leaked NVIDIA binary;
+  Lecram's builds are paid). Manual import stays; a private-only source is possible.

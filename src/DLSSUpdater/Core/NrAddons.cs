@@ -1,7 +1,11 @@
 namespace DLSSUpdater.Core;
 
-/// <summary>The NR add-ons of ReShade + add-ons mode. Each one runs NR itself, so a game normally gets one of them.</summary>
-public enum NrAddon { RenoDx, Lecram, Uplift, Dfc }
+/// <summary>
+/// The routes that run NR (the "neural consumers"). The first four are the add-ons of ReShade + add-ons mode; a game normally
+/// gets one of them. <see cref="Bridge"/> (the DX11 bridge, placed by other tools) and <see cref="OptiScaler"/> (OptiScaler's own
+/// NR) are never Settings defaults, but they hook the same NGX calls, so they count for the one-consumer rule.
+/// </summary>
+public enum NrAddon { RenoDx, Lecram, Uplift, Dfc, Bridge, OptiScaler }
 
 /// <summary>
 /// Which NR add-ons may be on together (docs/addons). Only ShortFuse's and Lecram's can share a game: Lecram then
@@ -28,6 +32,75 @@ public static class NrAddons
         foreach (var a in Priority)
             if (on.Contains(a) && kept.All(k => CanRunTogether(k, a, allowSeveral))) kept.Add(a);
         return kept.ToHashSet();
+    }
+
+    public static string Name(NrAddon a) => a switch
+    {
+        NrAddon.RenoDx => "the ShortFuse RenoDX DLSS add-on",
+        NrAddon.Lecram => "Lecram's DLSS5 add-on",
+        NrAddon.Uplift => "GITC Uplift",
+        NrAddon.Dfc => "Deep Fried Chicken",
+        NrAddon.Bridge => "the DLSS5 DX11 bridge",
+        _ => "OptiScaler",
+    };
+
+    /// <summary>
+    /// Why <paramref name="adding"/> may not join the routes already in the game (<paramref name="present"/>), as one line; null when
+    /// it may. One neural consumer per game (docs/research/methods-2026-10.md section 2 and section 8 row 18): they all detour the
+    /// game's NGX calls, and Deep Fried Chicken does nothing at all when another one is loaded beside it.
+    /// </summary>
+    public static string? Refusal(NrAddon adding, IEnumerable<NrAddon> present, bool allowSeveral)
+    {
+        foreach (var other in present.Where(p => p != adding).Distinct())
+        {
+            if (CanRunTogether(adding, other, allowSeveral)) continue;
+            var why = adding == NrAddon.Dfc || other == NrAddon.Dfc ? "Deep Fried Chicken does nothing when another neural route is loaded beside it"
+                : adding == NrAddon.OptiScaler || other == NrAddon.OptiScaler ? "OptiScaler takes over the NGX calls the other route needs"
+                : "only one neural route can hook the game's DLSS calls";
+            return $"{Capitalize(Name(adding))} and {Name(other)} can't be in the same game: {why}.";
+        }
+        return null;
+    }
+
+    /// <summary>
+    /// What stops DLSS5-Feeder in a game with <paramref name="present"/> routes; null when it fits. Feeder only makes the DLSS
+    /// calls a game without DLSS never makes, so it needs exactly one neural consumer to act on them, and the app only pairs it
+    /// with Deep Fried Chicken (the consumer Feeder's README recommends, and the one the app can install in a game without DLSS).
+    /// </summary>
+    public static string? FeederRefusal(IEnumerable<NrAddon> present)
+    {
+        var routes = present.Distinct().ToList();
+        if (routes.Where(r => r != NrAddon.Dfc).Select(r => (NrAddon?)r).FirstOrDefault() is { } other)
+            return other switch
+            {
+                NrAddon.OptiScaler => "DLSS5-Feeder can't run next to stock OptiScaler: it takes over the NGX calls Feeder makes.",
+                NrAddon.Bridge => "DLSS5-Feeder can't run next to the DLSS5 DX11 bridge: the bridge is for games with their own DLSS, never both.",
+                NrAddon.RenoDx => "DLSS5-Feeder can't run with ShortFuse's RenoDX DLSS add-on: it replaces Feeder instead of working with it.",
+                _ => $"DLSS5-Feeder can't run with {Name(other)}: this app only pairs Feeder with Deep Fried Chicken, and a game gets one neural consumer.",
+            };
+        return routes.Contains(NrAddon.Dfc) ? null : "DLSS5-Feeder needs one neural consumer in the game: turn on Deep Fried Chicken.";
+    }
+
+    private static string Capitalize(string s) => char.ToUpperInvariant(s[0]) + s[1..];
+
+    /// <summary>File names of the DX11 bridge add-on (docs/research/methods-2026-10.md section 6.1).</summary>
+    public static readonly string[] BridgeFiles = ["dlss5-bridge.addon64", "dlss5-dx11-bridge.addon64"];
+
+    /// <summary>
+    /// The neural routes in the folder <paramref name="dir"/>: ours by the install record, anyone's by their files. The record
+    /// matters because OptiScaler's NR needs no add-on file.
+    /// </summary>
+    public static IReadOnlyList<NrAddon> PresentIn(string dir, InstallManifest? record)
+    {
+        bool Has(IEnumerable<string> names) => names.Any(n => File.Exists(Path.Combine(dir, n)));
+        var found = new List<NrAddon>();
+        if (record?.RenoDx == true || Has([ComponentStore.RenoDxFile, .. ComponentStore.LegacyRenoDxFiles])) found.Add(NrAddon.RenoDx);
+        if (record?.Lecram == true || Has(ComponentStore.LecramFiles)) found.Add(NrAddon.Lecram);
+        if (record?.Uplift == true || Has([ComponentStore.UpliftFile, .. ComponentStore.LegacyUpliftFiles])) found.Add(NrAddon.Uplift);
+        if (record?.Dfc == true || Has([ComponentStore.DfcFile])) found.Add(NrAddon.Dfc);
+        if (Has(BridgeFiles)) found.Add(NrAddon.Bridge);
+        if (record?.Opti == true || File.Exists(Path.Combine(dir, "OptiScaler.ini"))) found.Add(NrAddon.OptiScaler);
+        return found;
     }
 
     /// <summary>The one-line note shown while ShortFuse and Lecram are both on; null otherwise.</summary>

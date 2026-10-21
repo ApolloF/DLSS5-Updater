@@ -98,6 +98,14 @@ public static class HelpTopics
             "It needs ReShade + add-ons mode, ReShade 6+ with add-on support and an imported nvngx_dlssnr.dll (placed beside the exe), and it replaces the RenoDX DLSS add-on and OptiScaler-NR (a game gets only one of them). " +
             "The default deep-fried-chicken.cfg is placed when the game has none. The few options in Settings are merged into it like into ReShade.ini: only keys you set are written, and values you tuned in the overlay survive updates. " +
             "Everything else (hook mode, placement, Auto Balance, motion stability, glow suppression, per-pass model, preset and intensity, the 4.x Refine tab, pass controls, frame generation, 5.0's Texture Boost and NR preset (Game, Preset A or Preset B) and so on) is tuned in the ReShade overlay (Home, Deep Fried Chicken tab); the cfg numbers for those are undocumented."),
+        new("feeder", "General", "DLSS5-Feeder",
+            "DLSS5-Feeder (MIT, by Jean-Laurent Rouzies, github.com/jlrouzies-fr/DLSS5-Feeder) is a ReShade add-on that makes the DLSS calls a game without DLSS never makes: it takes the frame, ReShade's depth and estimated motion vectors and hands them to NVIDIA's DLSS as a DLAA frame, so Deep Fried Chicken has something to run neural rendering on. " +
+            "It is DLAA only: no upscaling, no performance gain, a few milliseconds per frame at 4K. Single-player games only; anti-cheat games are skipped. " +
+            "The app downloads it from that one repository's releases and checks the zip against the SHA-256 GitHub publishes for it; a release without one is not installed. It places dlss5-feed.addon64 beside the exe and DLSS5_Feed.fx in reshade-shaders\\Shaders. For a 32-bit game it places dlss5-feed.addon32 and the 64-bit helper host64\\dlss5-feed-host64.exe instead." +
+            "Turning it on turns Deep Fried Chicken on (4.x or newer, imported): a game gets one neural consumer, and the app only pairs Feeder with that one. It can't run next to OptiScaler, the DLSS5 DX11 bridge or the RenoDX add-ons. " +
+            "What the app can't do for you: a motion-vector shader in reshade-shaders\\Shaders (LumeniteFX Kernel is recommended; its licence stops the app from shipping it) and choosing the right depth buffer in ReShade's Generic Depth; after that, enable the shader and set DLSS5_MV_PROVIDER in the overlay. " +
+            "Direct3D 9 games need dgVoodoo2 (freeware that the app can't redistribute), Vulkan games need ReShade's Vulkan layer (one administrator prompt), and a 32-bit game's host64 folder needs a 64-bit ReShade and Deep Fried Chicken's 64-bit set placed by hand. " +
+            "Feeder's settings (dlss5-feed.cfg) are created by the add-on itself; the app writes none. Releases are tagged by the author, betas included; the app follows the newest stable one unless you pick a build."),
         new("dfc-no-dlss", "Deep Fried Chicken", "Deep Fried Chicken without DLSS",
             "From 4.x (INSTALL.txt of 4.0.6 preview) DFC also runs in games without their own DLSS. There it runs NR with its own motion vectors (the package's motion model, dfc-neural-motion.onnx, is in the deep-fried-chicken-neural folder, which goes beside the exe whole), " +
             "or with the vectors of an external ReShade motion provider when one is running (Lumenite Kernel or QuantMotion, VORT, Launchpad, or a texMotionVectors effect such as DRME, qUINT or dh_uber_motion; DX10, DX11, DX12, Vulkan and OpenGL, not DX9). " +
@@ -490,6 +498,24 @@ public static class HelpTopics
             "NVIDIA's Streamline files (sl.*.dll), the layer between the game and DLSS frame generation. Dynamic MFG needs FG 310.9.1 with Streamline 2.14.1, or 310.9.16 with 2.14.16. " +
             "Only files the game already ships are replaced, always as one set; Restore DLSS puts them back. " +
             "Off by default. Turn it on only for Dynamic MFG in a game with an older Streamline, and off again if frame generation breaks."),
+        // ---------- RenoDX HDR ----------
+        new("hdr-renodx", "HDR (RenoDX)", "HDR (RenoDX)",
+            "RenoDX HDR mods are ReShade add-ons that give a game real HDR output. The app picks one per game from the catalog, and the section on the game's Install tab says which and why. " +
+            "A mod made for that game comes first, matched by its Steam AppID, else by name. Unreal games without their own mod get Unreal Extended by default, or the plain generic Unreal add-on if you switch Use Unreal Extended off. " +
+            "Unity games get the generic Unity add-on in the game's bitness (32 or 64). Unreal 3 and older, other engines and games with anti-cheat get nothing, and the section says why. " +
+            "Installing puts the add-on beside ReShade, or in the AddonPath folder when reshade.ini sets one. A game without ReShade gets it first (ReShade + add-ons mode) the same way the ReShade section installs it: the game's ReShade build, the file name for its graphics API, ReShade32 for 32-bit games. Vulkan games need the Vulkan layer from Settings → ReShade. Beside OptiScaler you decide about ReShade yourself. " +
+            "Build for this game lists the downloaded builds of the picked mod; Default follows the catalog, a pinned build is what install and Update all use. " +
+            "Only keys missing from reshade.ini are added to its [renodx] section, so values you tuned stay. For Unreal Extended games that need it, HDR keys are appended to Engine.ini and the file is made read-only so the game doesn't undo them. " +
+            "Remove takes the add-on out and puts every file and key back as it was. " +
+            "Update appears when the catalog has a newer build, the pick changed, or the peak brightness in Settings changed; Update all applies it with the rest. Every download is checked against the SHA-256 in the catalog."),
+        new("hdr-peak", "General", "HDR peak brightness",
+            "The peak brightness your display reaches in HDR, in nits. When set, it is written to ToneMapPeakNits in the three renodx-preset sections of reshade.ini next to each HDR mod, replacing the mod's own value. " +
+            "Empty leaves the mod's value alone. Numbers are kept between 80 and 10000. " +
+            "Changing it marks installed games as having an update; Update all or the game's Update button writes it. The mods also have their own peak setting in the ReShade overlay (Home), which wins once you change it there."),
+        new("hdr-catalog-addon", "General", "ShortFuse's DLSS add-on from the catalog",
+            "The catalog lists ShortFuse's RenoDX DLSS add-on with a SHA-256 for each build. With this on, each update check downloads a newer build, verifies the hash, checks that the file is the add-on and adds it to the ShortFuse library; a newer build becomes the default like an import does. " +
+            "A build that fails the hash check is thrown away. Offline checks change nothing. Games keep the build they have until you update them. " +
+            "Turn it off to manage the library by hand: importing a file in Local components works either way. No nvngx_dlssnr.dll is downloaded."),
     ];
 
     /// <summary>The help topic behind the ⓘ button of a component row on the Install tab.</summary>
@@ -503,6 +529,7 @@ public static class HelpTopics
         "lecram" => "comp-lecram",
         "uplift" => "uplift",
         "dfc" => "dfc",
+        "feeder" => "feeder",
         "dlss" => "comp-dlss",
         "streamline" => "comp-streamline",
         _ => throw new ArgumentOutOfRangeException(nameof(key), key, "No help topic for this component"),
@@ -633,6 +660,9 @@ public static class HelpTopics
         ["nv-low-latency"] = "Use global. Ultra for competitive DX11 games when the GPU is the bottleneck.",
         ["nv-power"] = "Use global. Prefer max performance for a game that stutters when the GPU clocks down.",
         ["hdr-skip"] = "Off. On only if colours look wrong while another HDR mod is active.",
+        ["hdr-renodx"] = "Install what is picked. Switch Use Unreal Extended off only if the game misbehaves with it, then try the plain generic Unreal add-on. Tune the look in the ReShade overlay (Home).",
+        ["hdr-peak"] = "Your display's real peak (the HDR Calibration app or rtings.com give it). Leave empty if you are not sure.",
+        ["hdr-catalog-addon"] = "Leave on. Turn off only if you want to choose every build of the add-on yourself.",
     };
 
     public static string? AdviceFor(string id) => Advice.GetValueOrDefault(id);

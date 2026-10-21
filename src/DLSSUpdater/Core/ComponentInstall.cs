@@ -267,13 +267,13 @@ public sealed partial class Installer
         var full = ConfigFull(ctx, entry);
         var exists = File.Exists(full);
         var text = exists ? File.ReadAllText(full) : "";
-        var ini = IniFile.Parse(text);
+        var ini = IniFile.Parse(text, keepFinalNewlineAsIs: true);
         foreach (var (section, key, value) in keys)
         {
             var e = c.EditOf(entry, section, key);
             if (e is null)
             {
-                e = new ConfigEdit { File = entry, Section = section, Key = key, Previous = ini.Get(section, key), FileCreated = !exists };
+                e = new ConfigEdit { File = entry, Section = section, Key = key, Previous = ini.Get(section, key), FileCreated = !exists, SectionCreated = !ini.HasSection(section) };
                 c.ConfigEdits.Add(e);
             }
             else if (!exists) e.FileCreated = true;
@@ -281,7 +281,16 @@ public sealed partial class Installer
             ini.Set(section, key, value);
         }
         Persist(ctx);
-        if (ini.ToString() != text) FileUtil.AtomicWriteText(full, ini.ToString());
+        if (ini.ToString() != text) FileUtil.AtomicWriteText(full, Bom(full) + ini.ToString());
+    }
+
+    /// <summary>The byte order mark an existing config file starts with, so a rewrite keeps it (Unreal writes some of its ini files with one).</summary>
+    private static string Bom(string full)
+    {
+        if (!File.Exists(full)) return "";
+        using var fs = File.OpenRead(full);
+        Span<byte> head = stackalloc byte[3];
+        return fs.Read(head) == 3 && head[0] == 0xEF && head[1] == 0xBB && head[2] == 0xBF ? "﻿" : "";
     }
 
     /// <summary>
@@ -296,7 +305,7 @@ public sealed partial class Installer
             if (File.Exists(full))
             {
                 var text = File.ReadAllText(full);
-                var ini = IniFile.Parse(text);
+                var ini = IniFile.Parse(text, keepFinalNewlineAsIs: true);
                 foreach (var e in group.Reverse())
                 {
                     // IniFile reads values trimmed.
@@ -308,8 +317,10 @@ public sealed partial class Installer
                     else if (e.Previous is null) ini.Remove(e.Section, e.Key);
                     else ini.Set(e.Section, e.Key, e.Previous);
                 }
+                foreach (var section in group.Where(e => e.SectionCreated).Select(e => e.Section).Distinct(StringComparer.OrdinalIgnoreCase))
+                    ini.RemoveSectionIfEmpty(section);
                 if (group.Any(e => e.FileCreated) && !ini.Entries().Any()) FileUtil.DeleteFile(full);
-                else if (ini.ToString() != text) FileUtil.AtomicWriteText(full, ini.ToString());
+                else if (ini.ToString() != text) FileUtil.AtomicWriteText(full, Bom(full) + ini.ToString());
             }
             foreach (var e in group) c.ConfigEdits.Remove(e);
             Persist(ctx);

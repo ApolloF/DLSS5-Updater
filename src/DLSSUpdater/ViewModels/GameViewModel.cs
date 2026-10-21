@@ -71,6 +71,11 @@ public sealed class Services
     /// <summary>Scans a game again after something changed in it.</summary>
     public Func<GameViewModel, Task>? Rescan { get; set; }
     public string? ReShadeSha { get; set; }
+    /// <summary>The mod catalog and the RenoDX HDR service; null switches the HDR section off (tests build Services without them).</summary>
+    public CatalogState? Catalog { get; init; }
+    public HdrService? Hdr { get; init; }
+    /// <summary>The graphics card, read once at startup; the method advisor judges the games against it.</summary>
+    public GpuInfo Gpu { get; set; } = GpuInfo.Unknown;
 }
 
 public sealed partial class GameViewModel : ObservableObject
@@ -81,6 +86,7 @@ public sealed partial class GameViewModel : ObservableObject
     public GameViewModel(GameInfo info, Services services)
     {
         _s = services;
+        Hdr = new HdrViewModel(this, services);
         _modChoices = ModPicker.Available(false, SelectedBuild.Name);
         Components =
         [
@@ -92,12 +98,16 @@ public sealed partial class GameViewModel : ObservableObject
             new ComponentRow("lecram", "Lecram DLSS5 add-on"),
             new ComponentRow("uplift", "GITC Uplift"),
             new ComponentRow("dfc", "Deep Fried Chicken"),
+            new ComponentRow("feeder", "DLSS5-Feeder"),
             new ComponentRow("dlss", "DLSS (SR · RR · FG)"),
             new ComponentRow("streamline", "Streamline (for Dynamic MFG)"),
         ];
         foreach (var c in Components) c.PropertyChanged += (_, e) =>
         {
             if (e.PropertyName != nameof(ComponentRow.Enabled)) return;
+            // Feeder only feeds Deep Fried Chicken (NrAddons.FeederRefusal): turning it on turns DFC on, and DFC going off takes it along.
+            if (c.Key == "feeder" && c.Enabled && !_loading) Components.First(r => r.Key == "dfc").Enabled = true;
+            if (c.Key == "dfc" && !c.Enabled) Components.First(r => r.Key == "feeder").Enabled = false;
             if (c.Key is "renodx" or "lecram" or "dfc" or "uplift" && c.Enabled)
             {
                 Components.First(r => r.Key == "dlssnr").Enabled = true;
@@ -124,6 +134,7 @@ public sealed partial class GameViewModel : ObservableObject
     }
 
     public GameInfo Info { get; private set; }
+    public HdrViewModel Hdr { get; }
     public string Id => Info.Id;
     public string Name => Info.Name;
     public string Source => Info.Source;
@@ -179,7 +190,7 @@ public sealed partial class GameViewModel : ObservableObject
             c.Editable = c.Key != (IsReShadeOnly ? "reshade" : "opti");
             if (!c.Editable) c.Enabled = true;
             // The add-on replaces OptiScaler's NR, so it exists in ReShade-only mode alone.
-            if (c.Key is "renodx" or "lecram" or "dfc" or "uplift" && !IsReShadeOnly) { c.Visible = false; c.Enabled = false; }
+            if (c.Key is "renodx" or "lecram" or "dfc" or "uplift" or "feeder" && !IsReShadeOnly) { c.Visible = false; c.Enabled = false; }
         }
         OnPropertyChanged(nameof(AnyEnabled));
     }
@@ -591,6 +602,10 @@ public sealed partial class GameViewModel : ObservableObject
     }
 
     public string ActionText => Manifest is null ? "Install" : CoreNeedsUpdate ? "Update" : "Reinstall";
+
+    /// <summary>The RenoDX HDR mod in this game has a newer catalog build, another pick or changed settings to apply.</summary>
+    public bool NeedsHdrUpdate => Hdr.NeedsUpdate;
+
     public string Subtitle => Info.Exes.Count == 0 ? "No executable found" : Path.GetFileName(Info.Exes[0]);
 
     private Version? LatestDlss => (_s.Store.DlssFor(EffectiveDlssTag)?.Version) is { } v ? Trim(v) : null;
@@ -664,6 +679,7 @@ public sealed partial class GameViewModel : ObservableObject
         ReShadeChoice = FillReShadeChoices(over?.ReShadeId);
         OptiChoice = FillBuildChoices(OptiChoices, _s.Store.Library(LibraryKind.OptiScaler), _s.Settings.OptiTag, _s.Store.Opti?.Tag, over?.OptiTag);
         UpliftChoice = FillBuildChoices(UpliftChoices, _s.Store.Library(LibraryKind.Uplift), _s.Settings.UpliftTag, _s.Store.Uplift?.Tag, over?.UpliftTag);
+        FillFeederChoices(over);
         _loading = loading;
         OnPropertyChanged(nameof(EffectiveLecramGeneration));
         RefreshAddonPairStatus();
@@ -846,6 +862,7 @@ public sealed partial class GameViewModel : ObservableObject
         Set("renodx", m?.RenoDx ?? _s.Settings.InstallRenoDx);
         Set("lecram", m?.Lecram ?? _s.Settings.InstallLecram);
         Set("dfc", m?.Dfc ?? false);
+        Set("feeder", m?.Component(ComponentRegistry.Feeder) is not null);
         Set("uplift", m?.Uplift ?? _s.Settings.InstallUplift);
         Set("dlss", m?.Dlss ?? HasDlss); // nothing to replace in games that don't ship DLSS
         Set("streamline", m?.Streamline ?? (_s.Settings.InstallStreamline && HasStreamline));
@@ -853,6 +870,7 @@ public sealed partial class GameViewModel : ObservableObject
         if (!ProxyNames.Contains(Proxy, StringComparer.OrdinalIgnoreCase)) Proxy = "dxgi.dll";
         _loading = false;
         RefreshStatus();
+        RefreshAdvice();
 
         void Set(string key, bool on) => Components.First(c => c.Key == key).Enabled = on;
     }
@@ -897,6 +915,10 @@ public sealed partial class GameViewModel : ObservableObject
         Row("uplift", m?.Uplift == true ? m.UpliftTag : null, EffectiveUpliftTag ?? store.Uplift?.Tag, true);
         var dfc = store.DfcBuildFor(EffectiveDfcId);
         Row("dfc", m?.Dfc == true ? InstalledAddon(AddonKind.Dfc, m.DfcId, m.DfcTag) : null, dfc?.Name, dfc is not null && dfc.Matches(m?.DfcId, m?.DfcTag));
+        var feeder = m?.Component(ComponentRegistry.Feeder);
+        var feederBuild = FeederLibrary.Choose(EffectiveFeederId);
+        Row("feeder", feeder?.Version, feederBuild?.Label ?? "downloads on install",
+            feeder is null || EffectiveFeederId is null && feederBuild is null || feeder.BuildId?.Equals(feederBuild?.Id, StringComparison.OrdinalIgnoreCase) == true);
         OnPropertyChanged(nameof(CanSwitchNr));
         OnPropertyChanged(nameof(CanUndoNr));
         RefreshAddonPairStatus();
@@ -944,6 +966,14 @@ public sealed partial class GameViewModel : ObservableObject
         OnPropertyChanged(nameof(DlssOutdated));
         OnPropertyChanged(nameof(DlssOutdatedTip));
         OnPropertyChanged(nameof(DlssBadgeText));
+        RefreshHdr();
+    }
+
+    /// <summary>Recomputes the HDR section; Update all and the Updates filter read <see cref="NeedsHdrUpdate"/>.</summary>
+    public void RefreshHdr()
+    {
+        Hdr.Refresh();
+        OnPropertyChanged(nameof(NeedsHdrUpdate));
     }
 
     private static bool IsTracked(InstallManifest m, string key) => key switch
@@ -956,6 +986,7 @@ public sealed partial class GameViewModel : ObservableObject
         "lecram" => m.Lecram,
         "uplift" => m.Uplift,
         "dfc" => m.Dfc,
+        "feeder" => m.Component(ComponentRegistry.Feeder) is not null,
         "streamline" => m.Streamline,
         _ => m.Dlss,
     };
@@ -967,7 +998,7 @@ public sealed partial class GameViewModel : ObservableObject
         row.Latest = latest ?? "—";
         row.State = latest is null ? RowState.Missing
             : installed is null ? RowState.None
-            : key is "reshade" or "dlssnr" or "renodx" or "lecram" or "dfc" ? (hashMatches ? RowState.Current : RowState.Update)
+            : key is "reshade" or "dlssnr" or "renodx" or "lecram" or "dfc" or "feeder" ? (hashMatches ? RowState.Current : RowState.Update)
             : installed == latest ? RowState.Current : RowState.Update;
     }
 
@@ -1028,6 +1059,8 @@ public sealed partial class GameViewModel : ObservableObject
         Dfc = !dlssOnly && IsReShadeOnly && On("dfc"),
         DfcId = EffectiveDfcId,
         DfcFrameGen = DfcFrameGen,
+        Feeder = !dlssOnly && IsReShadeOnly && On("dfc") && On("feeder"),
+        FeederId = EffectiveFeederId,
         Dlss = dlssOnly || On("dlss"),
         AddMissingDlss = _s.Settings.AddMissingDlss && !dlssOnly && !IsReShadeOnly && On("opti"),
         DlssTag = EffectiveDlssTag,
@@ -1062,6 +1095,8 @@ public sealed partial class GameViewModel : ObservableObject
         Dfc = m.Dfc,
         DfcId = EffectiveDfcId,
         DfcFrameGen = DfcFrameGen,
+        Feeder = m.Component(ComponentRegistry.Feeder) is not null,
+        FeederId = EffectiveFeederId,
         Dlss = m.Dlss,
         AddMissingDlss = m.Opti && m.Files.Any(f => Path.GetFileName(f).Equals("nvngx_dlss.dll", StringComparison.OrdinalIgnoreCase)),
         DlssTag = EffectiveDlssTag,
@@ -1081,5 +1116,8 @@ public sealed partial class GameViewModel : ObservableObject
 
     private bool On(string key) => Components.First(c => c.Key == key).Enabled;
 
-    public bool NeedsInjection(InstallOptions o) => o.Opti || o.ReShade || o.Mfg || o.DlssNr || o.RenoDx || o.Lecram || o.Dfc || o.Uplift;
+    /// <summary>The Feeder build this game installs: its own pick, else the default; null follows the newest release.</summary>
+    public string? EffectiveFeederId => _s.Settings.Games.GetValueOrDefault(Id)?.BuildPick(ComponentRegistry.Feeder) ?? _s.Settings.DefaultBuild(ComponentRegistry.Feeder);
+
+    public bool NeedsInjection(InstallOptions o) => o.Opti || o.ReShade || o.Mfg || o.DlssNr || o.RenoDx || o.Lecram || o.Dfc || o.Uplift || o.Feeder;
 }

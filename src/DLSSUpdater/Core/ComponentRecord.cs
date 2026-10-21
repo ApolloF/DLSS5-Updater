@@ -69,6 +69,8 @@ public sealed class ConfigEdit
     public string? Previous { get; set; }
     /// <summary>The file did not exist before; it goes again when no key is left in it.</summary>
     public bool FileCreated { get; set; }
+    /// <summary>The section did not exist before; it goes again when no key is left in it.</summary>
+    public bool SectionCreated { get; set; }
     /// <summary>The previous value was never recorded (legacy records); undo can't put it back.</summary>
     [JsonIgnore] public bool PreviousUnknown { get; init; }
     [JsonExtensionData] public Dictionary<string, JsonElement>? Unknown { get; set; }
