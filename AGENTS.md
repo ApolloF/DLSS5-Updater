@@ -25,7 +25,7 @@ Windows desktop app that pulls the latest OptiScaler-NR, DLSS, MFG Unlock, Strea
 
 ## Layout
 - `src/DLSSUpdater/Core`: business logic with no UI: GitHub client (ETag cache), component store, installer, ini merging, NVIDIA driver profiles (`NvDrs`), settings
-- `src/DLSSUpdater/Scan`: game discovery (launchers, Steam VDF) and inspection (DLSS dlls, exe ranking, anti-cheat)
+- `src/DLSSUpdater/Scan`: game discovery (launchers, Steam VDF) and inspection (DLSS dlls, exe ranking, anti-cheat, and `GameTech`: graphics API from the PE import tables, bitness, engine and Unreal version, FSR/XeSS signals; PE results are cached in `detect-cache.json`)
 - `src/DLSSUpdater/ViewModels`: MVVM view models. `MainViewModel` owns the `Services` (settings, store, installer).
 - `src/DLSSUpdater/Views`: dialogs, converters, small WPF helpers
 - `src/DLSSUpdater/Addon`: only the `--unregister-addon` cleanup of stale launcher add-on links (called by the uninstaller)

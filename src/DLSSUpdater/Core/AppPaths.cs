@@ -31,6 +31,7 @@ public static class AppPaths
     public static string Components => Path.Combine(Root, "components");
     public static string SettingsFile => Path.Combine(Root, "settings.json");
     public static string GamesFile => Path.Combine(Root, "games.json");
+    public static string DetectCacheFile => Path.Combine(Root, "detect-cache.json");
     public static string ApiCacheDir => Path.Combine(Cache, "api");
     public static string LegacyApiCacheFile => Path.Combine(Cache, "api.json");
     /// <summary>Last good copy of the catalog repository's catalog.json, for when GitHub can't be reached.</summary>

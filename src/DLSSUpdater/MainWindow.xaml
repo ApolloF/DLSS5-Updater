@@ -622,6 +622,10 @@
                                 <Border Style="{StaticResource Badge}">
                                     <TextBlock Text="{Binding Source}" Style="{StaticResource BadgeText}" />
                                 </Border>
+                                <Border Style="{StaticResource Badge}" Margin="4,0,0,0" Visibility="{Binding HasTechBadge, Converter={StaticResource BoolToVis}}"
+                                        ToolTip="{Binding TechTip}">
+                                    <TextBlock Text="{Binding TechBadge}" Style="{StaticResource BadgeText}" AutomationProperties.HelpText="{Binding TechTip}" />
+                                </Border>
                                 <TextBlock Text="{Binding Root}" Style="{StaticResource MutedText}" FontSize="12" VerticalAlignment="Center" Margin="4,0,0,0" />
                             </StackPanel>
                         </StackPanel>
@@ -1356,7 +1360,7 @@
                                                             </DataTemplate>
                                                         </ItemsControl.ItemTemplate>
                                                     </ItemsControl>
-                                                    <TextBlock Text="Steam, Epic, GOG, EA, Ubisoft and Xbox games are found automatically." Style="{StaticResource MutedText}"
+                                                    <TextBlock Text="Steam, Epic, GOG, EA, Ubisoft, Battle.net, Rockstar and Xbox games are found automatically." Style="{StaticResource MutedText}"
                                                                FontSize="12" Margin="0,6" />
                                                     <StackPanel Orientation="Horizontal" Margin="0,4,0,4">
                                                         <Button Content="Add game folder" Margin="0,0,8,0"

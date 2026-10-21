@@ -49,6 +49,8 @@ public sealed class GameInfo
     /// <summary>Streamline runtime files (sl.*.dll) the game ships.</summary>
     public List<DlssDll> Streamline { get; set; } = [];
     public string? AntiCheat { get; set; }
+    /// <summary>Graphics API, bitness, engine and non-NVIDIA upscaler signals from the game's files.</summary>
+    public GameTech Tech { get; set; } = new();
     /// <summary>Directories under the root holding a .dlssupdater manifest.</summary>
     public List<string> Installs { get; set; } = [];
     public DateTime Scanned { get; set; }

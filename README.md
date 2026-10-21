@@ -24,7 +24,7 @@ Settings for all games. Every option has a short explanation, and the help butto
 
 ## Features
 
-- Finds games from Steam, Epic, GOG, EA, Ubisoft and Xbox. You can also add a single game folder or a whole library folder.
+- Finds games from Steam, Epic, GOG, EA, Ubisoft, Battle.net, Rockstar and Xbox. You can also add a single game folder or a whole library folder.
 - Checks for new releases of every component and shows installed and latest versions side by side.
 - Installs or updates the mods for one game, or for all managed games with **Update all**.
 - Swaps only the DLSS files with **DLSS only**, without adding any other mod. You can pin an older DLSS version if a newer one looks worse in a game.
