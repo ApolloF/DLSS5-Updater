@@ -39,6 +39,18 @@ public sealed class ApiCacheEntry
 
 public readonly record struct TransferProgress(string Text, double? Fraction);
 
+/// <summary>GitHub is refusing API requests until <see cref="ResetAt"/> (null when it didn't say); <see cref="TokenUsed"/> says the refused request carried an access token.</summary>
+public readonly record struct GitHubRateLimit(DateTimeOffset? ResetAt, bool TokenUsed)
+{
+    /// <summary>One line for the main window; the reset is shown in local time.</summary>
+    public string Describe()
+    {
+        var until = ResetAt is { } at ? $" until {at.ToLocalTime():t}" : "";
+        var with = TokenUsed ? " even with your token" : "";
+        return $"GitHub is limiting requests{with}{until}, showing cached versions.";
+    }
+}
+
 /// <summary>Minimal GitHub REST client with ETag caching (304s don't count against the rate limit).</summary>
 public sealed class GitHubClient
 {
@@ -56,6 +68,19 @@ public sealed class GitHubClient
     internal GitHubClient(HttpMessageHandler handler) => _http = CreateHttp(handler);
 
     public string? Token { get; set; }
+
+    /// <summary>Set while GitHub is rate-limiting the app (cached data is shown meanwhile); cleared by the next successful API call.</summary>
+    public GitHubRateLimit? RateLimit { get; private set; }
+
+    /// <summary>Raised when <see cref="RateLimit"/> changes, on whatever thread made the request.</summary>
+    public event Action? RateLimitChanged;
+
+    private void SetRateLimit(GitHubRateLimit? value)
+    {
+        if (Equals(RateLimit, value)) return;
+        RateLimit = value;
+        RateLimitChanged?.Invoke();
+    }
 
     private static HttpClient CreateHttp(HttpMessageHandler handler)
     {
@@ -147,7 +172,10 @@ public sealed class GitHubClient
                                  "Checking without it for now. Replace or clear it in Settings.");
                     res.Dispose();
                     res = await SendApiAsync(url, null, cached, cts.Token, accept);
+                    token = null;
                 }
+                if (res.IsSuccessStatusCode || res.StatusCode == HttpStatusCode.NotModified) SetRateLimit(null);
+                else if (DetectRateLimit(res, token is not null, DateTimeOffset.UtcNow) is { } limit) SetRateLimit(limit);
                 if (res.StatusCode == HttpStatusCode.NotModified && cached is not null) return (cached.Body, false);
                 if (!res.IsSuccessStatusCode && cached is not null)
                 {
@@ -177,6 +205,21 @@ public sealed class GitHubClient
         if (token is not null) req.Headers.Authorization = new AuthenticationHeaderValue("Bearer", token);
         if (cached is not null) req.Headers.IfNoneMatch.Add(EntityTagHeaderValue.Parse(cached.ETag));
         return await _http.SendAsync(req, ct);
+    }
+
+    /// <summary>A 429, or a 403 with no requests left or a Retry-After; the reset comes from Retry-After, else X-RateLimit-Reset.</summary>
+    internal static GitHubRateLimit? DetectRateLimit(HttpResponseMessage res, bool tokenUsed, DateTimeOffset now)
+    {
+        var remainingZero = res.Headers.TryGetValues("X-RateLimit-Remaining", out var left) && left.FirstOrDefault() == "0";
+        var limited = res.StatusCode == HttpStatusCode.TooManyRequests
+                      || (res.StatusCode == HttpStatusCode.Forbidden && (res.Headers.RetryAfter is not null || remainingZero));
+        if (!limited) return null;
+        DateTimeOffset? reset = null;
+        if (res.Headers.RetryAfter is { } retry) reset = retry.Date ?? (retry.Delta is { } d ? now + d : null);
+        if (reset is null && res.Headers.TryGetValues("X-RateLimit-Reset", out var stamp)
+            && long.TryParse(stamp.FirstOrDefault(), out var unix))
+            reset = DateTimeOffset.FromUnixTimeSeconds(unix);
+        return new GitHubRateLimit(reset, tokenUsed);
     }
 
     /// <summary>
