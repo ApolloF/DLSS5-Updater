@@ -22,7 +22,7 @@ Each component has exactly these parts. A part that doesn't apply is explicitly 
 
 | Part | Rule |
 |---|---|
-| Source | `Download` (official public source, verified), `Import` (user-supplied), or both. Import-only when the licence or a paywall requires it (section 3). |
+| Source | `Download` (official public source, or the catalog's hash-pinned or mirrored copy, verified), `Import` (user-supplied), or both. Import-only when the licence or a paywall requires it (section 3; one documented exception). |
 | Library | Every build the app has is kept in that component's library under `components\<component>\<build id>\`, with a `version.json` (id, label, detected version, source = downloaded/imported, date, user label). One build = one folder holding the whole set of files. No single-file "current import" slots. |
 | Build id | SHA-256 of the build's main file (downloads may use the release tag when the release publishes digests). Duplicate imports dedupe by id. |
 | Order | Newest first by the component's version (tag, version resource or detected label; one `BuildOrder` implementation). Ties: newer date first. |
@@ -41,6 +41,14 @@ Each component has exactly these parts. A part that doesn't apply is explicitly 
 - Licence forbids redistribution, or builds are paid: **import-only** in the public build. The app accepts the files
   the user got from the author (the release folder, the main file, or a .zip of the release) and copies them byte for
   byte. No probes or reverse engineering where the licence forbids it (see `docs/addons/README.md`).
+- **Exception, ShortFuse's DLSS add-on (user decision 2026-10-21):** `renodx-dlss.addon64` has no licence we can find and no
+  official channel, but it is auto-pulled in the public build too, through the catalog. The catalog only **pins** it (the
+  author's release URL plus the SHA-256 of each build, never a mirror copy); the app downloads the zip, refuses a hash mismatch,
+  and takes the add-on out of it like an import (version resource checked, kept in the library). It is the project owner's decision
+  that this add-on should arrive without a manual import, in the public build too: its builds appear every few days and the only
+  channel is a community release list. Imports stay possible, a Settings switch turns the download off, and if the author objects
+  or a licence appears, it is a catalog edit, not an app release. It is the only component that is both unlicensed and
+  auto-downloaded.
 - Owner-only conveniences that a public build must not have (today: fetching Lecram's paid builds from his channel)
   sit behind a compile-time switch (`-p:<Name>=true`, default off, `BuildFlags.<Name>`), are compiled in both variants
   and tested in both. Public releases build with the switch off; `tools/build-private.ps1` builds the private
@@ -124,5 +132,7 @@ Measured against this guideline on main (after #63, #66 and #67). Each is fixed 
   (`Opti`/`OptiTag`, `DfcFiles`, `DfcCfg`, `LecramFile`, ...) and their own install and removal code in `Installer`;
   `LegacyComponents` only reads them. Each moves to `InstalledComponent` when it is next reworked; the per-component
   fields keep being written for one major version so 2.2.x can still read the record.
+- **RenoDX HDR has no per-game build pin in the UI**: the library, cleanup protection and `GameOverride.BuildPick` support it, the
+  game page always follows the catalog's current build (`docs/addons/renodx-hdr.md`, Known gaps).
 - **Compat checks differ** per component (`OptiCompat`, `UpliftConfig`, `DfcConfig`, `LecramIni`, ...). Target: one
   `ComponentCompat` shape (tested version, schema, missing keys, summary) that each config class fills.

@@ -427,6 +427,23 @@ public static class HelpTopics
             "NVIDIA's Streamline files (sl.*.dll), the layer between the game and DLSS frame generation. Dynamic MFG needs FG 310.9.1 with Streamline 2.14.1, or 310.9.16 with 2.14.16. " +
             "Only files the game already ships are replaced, always as one set; Restore DLSS puts them back. " +
             "Off by default. Turn it on only for Dynamic MFG in a game with an older Streamline, and off again if frame generation breaks."),
+        // ---------- RenoDX HDR ----------
+        new("hdr-renodx", "HDR (RenoDX)", "HDR (RenoDX)",
+            "RenoDX HDR mods are ReShade add-ons that give a game real HDR output. The app picks one per game from the catalog, and the section on the game's Install tab says which and why. " +
+            "A mod made for that game comes first, matched by its Steam AppID, else by name. Unreal games without their own mod get Unreal Extended by default, or the plain generic Unreal add-on if you switch Use Unreal Extended off. " +
+            "Unity games get the generic Unity add-on in the game's bitness (32 or 64). Unreal 3 and older, other engines and games with anti-cheat get nothing, and the section says why. " +
+            "Installing puts the add-on beside ReShade, or in the AddonPath folder when reshade.ini sets one. A game without ReShade gets it first (ReShade + add-ons mode); beside OptiScaler you decide about ReShade yourself. " +
+            "Only keys missing from reshade.ini are added to its [renodx] section, so values you tuned stay. For Unreal Extended games that need it, HDR keys are appended to Engine.ini and the file is made read-only so the game doesn't undo them. " +
+            "Remove takes the add-on out and puts every file and key back as it was. " +
+            "Update appears when the catalog has a newer build, the pick changed, or the peak brightness in Settings changed; Update all applies it with the rest. Every download is checked against the SHA-256 in the catalog."),
+        new("hdr-peak", "General", "HDR peak brightness",
+            "The peak brightness your display reaches in HDR, in nits. When set, it is written to ToneMapPeakNits in the three renodx-preset sections of reshade.ini next to each HDR mod, replacing the mod's own value. " +
+            "Empty leaves the mod's value alone. Numbers are kept between 80 and 10000. " +
+            "Changing it marks installed games as having an update; Update all or the game's Update button writes it. The mods also have their own peak setting in the ReShade overlay (Home), which wins once you change it there."),
+        new("hdr-catalog-addon", "General", "ShortFuse's DLSS add-on from the catalog",
+            "The catalog lists ShortFuse's RenoDX DLSS add-on with a SHA-256 for each build. With this on, each update check downloads a newer build, verifies the hash, checks that the file is the add-on and adds it to the ShortFuse library; a newer build becomes the default like an import does. " +
+            "A build that fails the hash check is thrown away. Offline checks change nothing. Games keep the build they have until you update them. " +
+            "Turn it off to manage the library by hand: importing a file in Local components works either way. No nvngx_dlssnr.dll is downloaded."),
     ];
 
     /// <summary>The help topic behind the ⓘ button of a component row on the Install tab.</summary>
@@ -563,6 +580,9 @@ public static class HelpTopics
         ["nv-vsync"] = "Use global. With G-Sync: On plus an FPS cap under refresh. Without VRR: Adaptive avoids stutter below refresh; Off for the lowest latency.",
         ["nv-power"] = "Use global. Prefer max performance for a game that stutters when the GPU clocks down.",
         ["hdr-skip"] = "Off. On only if colours look wrong while another HDR mod is active.",
+        ["hdr-renodx"] = "Install what is picked. Switch Use Unreal Extended off only if the game misbehaves with it, then try the plain generic Unreal add-on. Tune the look in the ReShade overlay (Home).",
+        ["hdr-peak"] = "Your display's real peak (the HDR Calibration app or rtings.com give it). Leave empty if you are not sure.",
+        ["hdr-catalog-addon"] = "Leave on. Turn off only if you want to choose every build of the add-on yourself.",
     };
 
     public static string? AdviceFor(string id) => Advice.GetValueOrDefault(id);

@@ -64,6 +64,9 @@ public sealed class Services
     public required Installer Installer { get; init; }
     public string? DlssNrSha { get; set; }
     public string? ReShadeSha { get; set; }
+    /// <summary>The mod catalog and the RenoDX HDR service; null switches the HDR section off (tests build Services without them).</summary>
+    public CatalogState? Catalog { get; init; }
+    public HdrService? Hdr { get; init; }
 }
 
 public sealed partial class GameViewModel : ObservableObject
@@ -74,6 +77,7 @@ public sealed partial class GameViewModel : ObservableObject
     public GameViewModel(GameInfo info, Services services)
     {
         _s = services;
+        Hdr = new HdrViewModel(this, services);
         _modChoices = ModPicker.Available(false, SelectedBuild.Name);
         Components =
         [
@@ -117,6 +121,7 @@ public sealed partial class GameViewModel : ObservableObject
     }
 
     public GameInfo Info { get; private set; }
+    public HdrViewModel Hdr { get; }
     public string Id => Info.Id;
     public string Name => Info.Name;
     public string Source => Info.Source;
@@ -520,6 +525,9 @@ public sealed partial class GameViewModel : ObservableObject
 
     [ObservableProperty] private bool _needsUpdate;
 
+    /// <summary>The RenoDX HDR mod in this game has a newer catalog build, another pick or changed settings to apply.</summary>
+    public bool NeedsHdrUpdate => Hdr.NeedsUpdate;
+
     public string ActionText => Manifest is null ? "Install" : NeedsUpdate ? "Update" : "Reinstall";
     public string Subtitle => Info.Exes.Count == 0 ? "No executable found" : Path.GetFileName(Info.Exes[0]);
 
@@ -846,6 +854,14 @@ public sealed partial class GameViewModel : ObservableObject
         OnPropertyChanged(nameof(DlssOutdated));
         OnPropertyChanged(nameof(DlssOutdatedTip));
         OnPropertyChanged(nameof(DlssBadgeText));
+        RefreshHdr();
+    }
+
+    /// <summary>Recomputes the HDR section; Update all and the Updates filter read <see cref="NeedsHdrUpdate"/>.</summary>
+    public void RefreshHdr()
+    {
+        Hdr.Refresh();
+        OnPropertyChanged(nameof(NeedsHdrUpdate));
     }
 
     private static bool IsTracked(InstallManifest m, string key) => key switch
