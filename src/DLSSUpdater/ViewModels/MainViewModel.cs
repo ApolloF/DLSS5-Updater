@@ -35,6 +35,7 @@ public sealed partial class MainViewModel : ObservableObject
         {
             Settings = settings, Store = store, Installer = installer,
             Catalog = new CatalogState(new CatalogClient(gh)), Hdr = new HdrService(store, installer, new CatalogDownloader(gh)),
+            FrameLimit = new FrameLimitService(store, installer, new CatalogDownloader(gh), NvidiaProfile.Real),
         };
         Gh = gh;
         S.Catalog!.Changed += () =>
@@ -446,12 +447,12 @@ public sealed partial class MainViewModel : ObservableObject
             if (!seen.Contains(itemId(list[i]))) list.RemoveAt(i);
     }
 
-    /// <summary>A game has something to update: its main install, or its RenoDX HDR mod.</summary>
-    internal static bool HasUpdate(GameViewModel g) => g.NeedsUpdate || g.NeedsHdrUpdate;
+    /// <summary>A game has something to update: its main install, its RenoDX HDR mod or its frame limiter add-on.</summary>
+    internal static bool HasUpdate(GameViewModel g) => g.NeedsUpdate || g.NeedsHdrUpdate || g.NeedsFrameLimitUpdate;
 
     /// <summary>What Update all works through: games with a main update and an install record, and games whose HDR mod has an update.</summary>
     internal static List<GameViewModel> UpdateTargets(IEnumerable<GameViewModel> games) =>
-        games.Where(g => (g.NeedsUpdate && g.Manifest is not null) || g.NeedsHdrUpdate).ToList();
+        games.Where(g => (g.NeedsUpdate && g.Manifest is not null) || g.NeedsHdrUpdate || g.NeedsFrameLimitUpdate).ToList();
 
     private void CountUpdates() => UpdateCount = Games.Count(HasUpdate);
 
@@ -463,6 +464,11 @@ public sealed partial class MainViewModel : ObservableObject
             CountUpdates();
             if (ReferenceEquals(g, SelectedGame)) NotifyHdrCommands();
         };
+        g.FrameLimit.Changed += () =>
+        {
+            CountUpdates();
+            if (ReferenceEquals(g, SelectedGame)) NotifyHdrCommands();
+        };
         return g;
     }
 
@@ -470,6 +476,8 @@ public sealed partial class MainViewModel : ObservableObject
     {
         InstallHdrCommand.NotifyCanExecuteChanged();
         RemoveHdrCommand.NotifyCanExecuteChanged();
+        ApplyFrameLimitCommand.NotifyCanExecuteChanged();
+        RemoveFrameLimitCommand.NotifyCanExecuteChanged();
     }
 
     [RelayCommand(CanExecute = nameof(CanRun))]
@@ -508,6 +516,17 @@ public sealed partial class MainViewModel : ObservableObject
                     {
                         Log.Info($"Updating the HDR mod in {g.Name}");
                         await g.Hdr.InstallAsync(TransferProgress(), ct);
+                        await RescanOne(g);
+                    }
+                }
+                if (g.NeedsFrameLimitUpdate)
+                {
+                    if (g.HasAntiCheat)
+                        Log.Info($"{g.Name}: the frame limiter add-on was skipped because it has anti-cheat.");
+                    else
+                    {
+                        Log.Info($"Updating the frame limiter add-on in {g.Name}");
+                        await g.FrameLimit.ApplyAsync(TransferProgress(), ct, update: true);
                         await RescanOne(g);
                     }
                 }
@@ -735,6 +754,36 @@ public sealed partial class MainViewModel : ObservableObject
         await Run($"Removing the HDR mod from {g.Name}", async ct =>
         {
             await g.Hdr.RemoveAsync(ct);
+            await RescanOne(g);
+        });
+    }
+
+    private bool CanApplyFrameLimit() => !IsBusy && SelectedGame?.FrameLimit is { CanApply: true };
+    private bool CanRemoveFrameLimit() => !IsBusy && SelectedGame?.FrameLimit is { CanRemove: true };
+
+    /// <summary>Sets the frame limit chosen for the selected game (the method switch removes the previous limiter). Anti-cheat games only get the driver limiter, which places nothing.</summary>
+    [RelayCommand(CanExecute = nameof(CanApplyFrameLimit))]
+    private async Task ApplyFrameLimit()
+    {
+        var g = SelectedGame;
+        if (g?.SelectedTarget is null || !g.FrameLimit.CanApply) return;
+        await Run($"Setting the frame limit for {g.Name}", async ct =>
+        {
+            await g.FrameLimit.ApplyAsync(TransferProgress(), ct);
+            // An add-on may have put ReShade into a game that had none.
+            await RescanOne(g);
+            await AutoCleanUpAsync();
+        });
+    }
+
+    [RelayCommand(CanExecute = nameof(CanRemoveFrameLimit))]
+    private async Task RemoveFrameLimit()
+    {
+        var g = SelectedGame;
+        if (g?.SelectedTarget is null || !g.FrameLimit.CanRemove) return;
+        await Run($"Removing the frame limiter from {g.Name}", async ct =>
+        {
+            await g.FrameLimit.RemoveAsync(ct);
             await RescanOne(g);
         });
     }

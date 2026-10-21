@@ -163,11 +163,14 @@ public sealed class FrameLimitService(ComponentStore store, Installer installer,
             : await store.EnsureLimiterBuildAsync(resolved.Limiter!, resolved.File!, downloader, progress, ct);
     }
 
-    private static EngineIniTarget? EngineIniFor(FrameLimitRequest r)
+    private static EngineIniTarget? EngineIniFor(FrameLimitRequest r) => ResolveEngineIni(r.Game, r.EngineIniHint);
+
+    /// <summary>The game's Engine.ini (found or to be created), by the same rules the HDR component uses; null when the Unreal project isn't known.</summary>
+    public static EngineIniTarget? ResolveEngineIni(GameInfo game, string? hint)
     {
         var local = InstallManifest.KnownFolder("|localappdata|") ?? Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData);
         var docs = InstallManifest.KnownFolder("|documents|") ?? Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments);
-        return EngineIniLocator.Resolve(r.Game, r.EngineIniHint, local, docs);
+        return EngineIniLocator.Resolve(game, hint, local, docs);
     }
 
     /// <summary>Takes one limiter away and puts back what it replaced; null when there was nothing recorded to remove.</summary>
