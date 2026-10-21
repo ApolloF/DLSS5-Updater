@@ -113,7 +113,7 @@ public sealed partial class Installer(ComponentStore store)
     private static readonly string[] PackageDirs = ["OptiScaler", "Licenses"];
     private static readonly string[] LogFiles = ["OptiScaler.log", "ReShade.log", "ReShade64.log"];
 
-    private sealed record Ctx(string Root, string Target, InstallManifest M, IReadOnlySet<string>? Keep = null)
+    private sealed record Ctx(string Root, string Target, InstallManifest M, IReadOnlySet<string>? Keep = null, GameInfo? Game = null)
     {
         public string Rel(string full) => InstallManifest.Entry(full, Target, Root);
         /// <summary>Entries live in the game or in the install folder, which the user may have picked outside the game.</summary>
@@ -232,7 +232,7 @@ public sealed partial class Installer(ComponentStore store)
         // An unreadable or unsafe record stops the install instead of starting over and burying the originals.
         var m = InstallManifest.Read(targetDir) ?? new InstallManifest();
         m.Contain(targetDir, game.Root);
-        var ctx = new Ctx(FileUtil.Normalize(game.Root), targetDir, m, KeptAddonFiles(o));
+        var ctx = new Ctx(FileUtil.Normalize(game.Root), targetDir, m, KeptAddonFiles(o), game);
         if (o.Uplift)
             foreach (var full in ComponentStore.UpliftFiles.Select(f => Path.Combine(targetDir, f)).Append(UpliftConfig.NrPath(targetDir)))
                 if (FileUtil.LinkBelow(FileUtil.IsUnder(full, ctx.Root) ? ctx.Root : ctx.Target, full) is { } link)
@@ -1298,7 +1298,7 @@ public sealed partial class Installer(ComponentStore store)
         var m = InstallManifest.Read(targetDir) ?? throw new InvalidOperationException("Install NR in this game first.");
         m.Contain(targetDir, game.Root);
         if (!m.DlssNr) throw new InvalidOperationException("Install NR in this game first.");
-        var ctx = new Ctx(FileUtil.Normalize(game.Root), targetDir, m);
+        var ctx = new Ctx(FileUtil.Normalize(game.Root), targetDir, m, null, game);
         var source = store.VerifiedDlssNrPath(id ?? store.SelectedDlssNr());
         var target = m.Uplift ? UpliftConfig.NrPath(targetDir) : Path.Combine(targetDir, ComponentStore.DlssNrFile);
         var previous = File.Exists(target) ? store.RetainDlssNr(target) : null;
@@ -1325,7 +1325,7 @@ public sealed partial class Installer(ComponentStore store)
         EnsureNotRunning(game.Root);
         var m = InstallManifest.Read(targetDir) ?? throw new InvalidOperationException("No DLSS5 Updater install found here.");
         m.Contain(targetDir, game.Root);
-        var ctx = new Ctx(FileUtil.Normalize(game.Root), targetDir, m);
+        var ctx = new Ctx(FileUtil.Normalize(game.Root), targetDir, m, null, game);
         try
         {
             // Every step is recorded as soon as it is done, so a retry after a failure part-way (a locked file)
@@ -1383,7 +1383,7 @@ public sealed partial class Installer(ComponentStore store)
         EnsureNotRunning(game.Root);
         var m = InstallManifest.Read(targetDir) ?? throw new InvalidOperationException("No DLSS5 Updater install found here.");
         m.Contain(targetDir, game.Root);
-        var ctx = new Ctx(FileUtil.Normalize(game.Root), targetDir, m);
+        var ctx = new Ctx(FileUtil.Normalize(game.Root), targetDir, m, null, game);
         try
         {
             foreach (var b in m.Backups.Where(b => b.Kind is "dlss" or "streamline").ToList())

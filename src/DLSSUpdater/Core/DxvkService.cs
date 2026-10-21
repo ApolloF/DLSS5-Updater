@@ -143,15 +143,27 @@ public sealed class DxvkService(Installer installer, GitHubClient github, Nvidia
         return new DxvkResult(build, undone, notes);
     }
 
-    /// <summary>Takes DXVK out, puts back the dlls it replaced and the driver profile values it changed.</summary>
-    public async Task<ComponentUndo> RemoveAsync(GameInfo game, string targetDir, NvidiaGame driver, Action saveSettings, CancellationToken ct)
+    /// <summary>
+    /// Takes DXVK out, puts back the dlls it replaced and the driver profile values it changed. When DXVK had moved ReShade to the Vulkan
+    /// layer, ReShade is installed again under the proxy name of the game's API (<paramref name="reShadeBack"/> = the options of its install),
+    /// so a Direct3D game that has a ReShade.ini still has the dll that loads it.
+    /// </summary>
+    public async Task<ComponentUndo> RemoveAsync(GameInfo game, string targetDir, NvidiaGame driver, InstallOptions? reShadeBack, Action saveSettings, CancellationToken ct)
     {
         targetDir = FileUtil.Normalize(targetDir);
         var undo = await installer.RemoveComponentAsync(game, targetDir, ComponentRegistry.Dxvk, ct);
         if (nvidia.Available) nvidia.RestoreLiliumPresentMethod(driver);
         saveSettings();
-        if (InstallManifest.Read(targetDir) is { ReShadeVulkan: true } && !game.Effective.PrimaryApi.HasFlag(GraphicsApis.Vulkan))
-            Log.Info($"{game.Name}: ReShade still loads through its Vulkan layer. Install ReShade again to give it the {ReShadeNaming.ForApi(game.Effective.PrimaryApi)} name back.");
+        if (InstallManifest.Read(targetDir) is { ReShade: true, ReShadeVulkan: true } && ReShadeNaming.ForApi(game.Effective.PrimaryApi) is { } proxy)
+        {
+            if (reShadeBack is null)
+                Log.Info($"{game.Name}: ReShade still loads through its Vulkan layer. Install ReShade again to give it the {proxy} name back.");
+            else
+            {
+                await installer.InstallAsync(game, targetDir, reShadeBack with { ReShadeVulkan = false, Proxy = proxy }, null, ct);
+                Log.Info($"{game.Name}: ReShade is installed as {proxy} again.");
+            }
+        }
         return undo;
     }
 

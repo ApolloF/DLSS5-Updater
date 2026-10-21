@@ -3,7 +3,14 @@ using DLSSUpdater.Scan;
 namespace DLSSUpdater.Core;
 
 /// <summary>The words an add-on component uses when ReShade isn't ready for it: what it is called in a sentence, and the version complaint.</summary>
-public sealed record AddonPurpose(string Name, string NeedsReShade6);
+/// <param name="NeedsReShade6">The message when the installed ReShade is older than <paramref name="Minimum"/>.</param>
+/// <param name="Minimum">The oldest ReShade the add-on works with; null = 6.0, the first with full add-on support.</param>
+public sealed record AddonPurpose(string Name, string NeedsReShade6, Version? Minimum = null)
+{
+    public static readonly Version AddonSupport = new(6, 0);
+
+    public bool Allows(Version? reshade) => reshade is null || reshade >= (Minimum ?? AddonSupport);
+}
 
 /// <summary>
 /// Makes sure a game has ReShade with add-on support before an add-on component goes in (the RenoDX HDR mod, the frame limiters):
@@ -45,7 +52,7 @@ public sealed class ReShadeAddonHost(ComponentStore store, Installer installer)
         var version = m.ReShadeVulkan
             ? store.ReShadeBuildFor(m.ReShadeId)?.ParsedVersion
             : FileUtil.ReadVersion(Path.Combine(targetDir, m is { Mode: InstallMode.ReShadeOnly, Proxy: { } p } ? p : ComponentStore.ReShadeFile));
-        if (version is { Major: < 6 })
+        if (!purpose.Allows(version))
             throw new InvalidOperationException(purpose.NeedsReShade6);
     }
 }

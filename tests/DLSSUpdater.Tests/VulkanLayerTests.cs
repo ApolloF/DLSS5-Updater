@@ -203,6 +203,17 @@ public sealed class VulkanLayerTests : IDisposable
         Assert.Equal(VulkanLayerState.Installed, VulkanLayer.Status(_host).State);
     }
 
+    [Theory]
+    [InlineData(ReShadeChannel.Nightly, ReShadeVerification.RecordedAtDownload, false)]
+    [InlineData(ReShadeChannel.Nightly, ReShadeVerification.PublishedDigest, true)]
+    [InlineData(ReShadeChannel.Stable, ReShadeVerification.RecordedAtDownload, true)]
+    [InlineData(ReShadeChannel.Custom, ReShadeVerification.Imported, true)]
+    public void ANightlyWithoutAGitHubDigest_CannotBecomeTheSystemWideLayer(ReShadeChannel channel, ReShadeVerification verification, bool allowed)
+    {
+        var build = new ReShadeBuild("id", "6.8.0", channel, "aa", null, verification, null, DateTime.UtcNow);
+        Assert.Equal(allowed, VulkanLayer.WhyNotLayer(build) is null);
+    }
+
     // ---- the elevated command line ----
 
     private int Run(params string[] args) => VulkanLayerCommand.Run([VulkanLayerCommand.Verb, .. args], _host);

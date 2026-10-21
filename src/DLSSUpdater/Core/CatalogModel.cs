@@ -215,7 +215,16 @@ public sealed class CatalogBinary
     public string DownloadUrl => string.IsNullOrWhiteSpace(MirrorUrl) ? Url : MirrorUrl;
 
     /// <summary>Only entries with a hash can be installed ("no digest = no install").</summary>
-    public bool IsInstallable => Sha256 is { Length: 64 } && !string.IsNullOrWhiteSpace(DownloadUrl);
+    public bool IsInstallable => HasValidSha256 && HasPlainName && !string.IsNullOrWhiteSpace(DownloadUrl);
+
+    /// <summary>64 hex characters: the hash names cache folders, so nothing else may get in.</summary>
+    public bool HasValidSha256 => Sha256 is { Length: 64 } h && h.All(char.IsAsciiHexDigit);
+
+    /// <summary>The catalog is trusted for the bytes (it gives the hash), not for a path: a name with folders or invalid characters is refused.</summary>
+    public bool HasPlainName => Name.Length > 0 && Path.GetFileName(Name) == Name && Name is not ("." or "..") && Name.IndexOfAny(Path.GetInvalidFileNameChars()) < 0;
+
+    /// <summary>The name to build a path with; only the last segment of whatever the catalog says.</summary>
+    public string FileName => Path.GetFileName(Name);
 }
 
 public sealed class CatalogHistory

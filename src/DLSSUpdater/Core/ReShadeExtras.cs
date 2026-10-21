@@ -201,7 +201,7 @@ public sealed class ReShadeExtras
             else
             {
                 Directory.CreateDirectory(stage);
-                File.Copy(part, Path.Combine(stage, file.Name), true);
+                File.Copy(part, Path.Combine(stage, file.FileName), true);
             }
             Directory.Move(stage, dir);
             return (dir, null);
@@ -259,6 +259,7 @@ public sealed class ReShadeExtras
             else edits.AddRange(ReShadeLayout.SearchPathEdits(target, folder, effects: true, textures: false));
         }
         var extras = WantedAddons(game);
+        if (plan.HasEffects && !UserSets(game.Id, "EffectSearchPaths")) extras[ReShadeLayout.OwnedEntryKey("EffectSearchPaths")] = ReShadeLayout.SearchEntry(folder, "Shaders");
         foreach (var id in plan.Placed.Keys) extras["placed:" + id] = plan.Placed[id];
         var undo = await _installer.InstallComponentAsync(game, target,
             new ComponentPlan(ComponentRegistry.ReShadeAddons) { Version = Count(plan.Placed.Count, "add-on"), Files = plan.Files, ConfigEdits = edits, Extras = extras }, ct);
@@ -315,6 +316,8 @@ public sealed class ReShadeExtras
             }
             var extras = WantedPacks(game);
             extras["folder"] = folder.Name;
+            if (!UserSets(game.Id, "EffectSearchPaths")) extras[ReShadeLayout.OwnedEntryKey("EffectSearchPaths")] = ReShadeLayout.SearchEntry(folder, "Shaders");
+            if (hasTextures && !UserSets(game.Id, "TextureSearchPaths")) extras[ReShadeLayout.OwnedEntryKey("TextureSearchPaths")] = ReShadeLayout.SearchEntry(folder, "Textures");
             foreach (var id in plan.Placed.Keys) extras["placed:" + id] = plan.Placed[id];
             var undo = await _installer.InstallComponentAsync(game, target,
                 new ComponentPlan(ComponentRegistry.ReShadeShaders) { Version = Count(plan.Placed.Count, "pack"), Files = files, ConfigEdits = edits, Extras = extras }, ct);

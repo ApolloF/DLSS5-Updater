@@ -72,6 +72,15 @@ public static class VulkanLayer
     /// <summary>Our own record next to the layer, so a layer installed by ReShade's setup is never removed by us.</summary>
     public const string MarkerFile = "DLSS5Updater.layer.json";
 
+    /// <summary>
+    /// Why a build must not become the system-wide layer, or null. A nightly without the digest GitHub publishes was only fetched through
+    /// nightly.link and has nothing to check it against, and the layer is loaded into every Vulkan process.
+    /// </summary>
+    public static string? WhyNotLayer(ReShadeBuild build) =>
+        build.Channel == ReShadeChannel.Nightly && build.Verification != ReShadeVerification.PublishedDigest
+            ? "This ReShade nightly has no digest from GitHub to check it against, so it can't become the Vulkan layer for the whole PC. Pick a stable build, or a nightly that has a digest."
+            : null;
+
     public static string DllName(int bits) => bits == 32 ? ReShadeBuild.File32 : ReShadeBuild.File64;
     public static string ManifestName(int bits) => bits == 32 ? "ReShade32.json" : "ReShade64.json";
     public static string ManifestPath(IVulkanLayerHost host, int bits) => Path.Combine(host.LayerDir, ManifestName(bits));

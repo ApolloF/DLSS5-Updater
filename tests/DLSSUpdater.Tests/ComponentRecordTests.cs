@@ -68,7 +68,13 @@ public class ComponentRecordTests : IDisposable
         File.WriteAllText(path, content);
     }
 
-    private GameInfo Game() => GameScanner.Inspect(new GameEntry("Game", _root, "Manual"));
+    private GameInfo Game()
+    {
+        var g = GameScanner.Inspect(new GameEntry("Game", _root, "Manual"));
+        g.Tech.Engine = GameEngine.Unreal;
+        g.Tech.UeProject = "TestGame";
+        return g;
+    }
 
     private Dictionary<string, string> Snapshot(string dir) =>
         Directory.EnumerateFiles(dir, "*", SearchOption.AllDirectories)

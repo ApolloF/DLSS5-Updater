@@ -185,7 +185,7 @@ public sealed class LumaService(ComponentStore store, Installer installer, Catal
             return ZipStage.Extract(ComponentStore.LumaPathOf(build), pkg, LumaFiles.Include);
         }, ct);
 
-        await host.EnsureAsync(game, targetDir, reshade ?? new HdrReShade(), new("Luma", "Luma needs ReShade 6 or newer with add-on support."), progress, ct);
+        await host.EnsureAsync(game, targetDir, reshade ?? new HdrReShade(), new("Luma", "Luma needs ReShade 6.6 or newer (its ReadMe says so). Update ReShade for this game first.", new Version(6, 6)), progress, ct);
 
         var existing = InstallManifest.Read(targetDir)?.Component(ComponentRegistry.Luma);
         var plan = LumaPlanner.Build(game, targetDir, choice, build, pkg, names, hdr, engineIniHint, existing);
