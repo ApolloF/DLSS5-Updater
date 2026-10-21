@@ -26,6 +26,13 @@ public partial class App : Application
             Shutdown();
             return;
         }
+        if (e.Args.Contains(VulkanLayerCommand.Verb))
+        {
+            // The elevated step of the Vulkan layer install (started with "runas" from Settings → ReShade): no window, the result is the exit code.
+            ShutdownMode = ShutdownMode.OnExplicitShutdown;
+            Shutdown(VulkanLayerCommand.Run(e.Args, new WindowsVulkanLayerHost()));
+            return;
+        }
         // Made-up games for screenshots and trying the interface; see Core/Demo.cs. The demo has its own temp data folder,
         // so it may run next to a normal instance, but only one demo at a time (each start wipes that folder).
         var demo = e.Args.Contains("--demo");

@@ -8,6 +8,7 @@ checked, and keep the "Checked builds" table current.
 |---|---|---|---|
 | RenoDX DLSS | ShortFuse (clshortfuse) | `renodx-dlss.addon64` | [renodx-dlss-sf.md](renodx-dlss-sf.md) |
 | RenoDX HDR mods | RenoDX authors | `renodx-*.addon64` / `.addon32` per game | [renodx-hdr.md](renodx-hdr.md) (from the catalog; open source, nothing to probe) |
+| ReShade | crosire | `ReShade64.dll`, `ReShade32.dll` | [reshade.md](reshade.md) (open source: sources, verification, DLL names, Vulkan layer, foreign-dll signs) |
 | DLSS5 Neural Rendering | Lecram | `renodx-dlss5.addon64` (≤ v10.x), `dlss5-nr.addon64` (v11+) | [lecram-dlss5.md](lecram-dlss5.md) |
 
 Deep Fried Chicken's licence forbids reverse engineering, so none of the methods below apply to it.

@@ -62,6 +62,21 @@ internal static class ComponentPicks
         if (pick.IsEmpty) map!.Remove(map!.Keys.First(k => k.Equals(id, StringComparison.OrdinalIgnoreCase)));
         return map is { Count: 0 } ? null : map;
     }
+
+    /// <summary>Replaces the option values of <paramref name="id"/> in <paramref name="map"/> (created when needed); an emptied entry goes.</summary>
+    public static Dictionary<string, ComponentPick>? SetOptions(Dictionary<string, ComponentPick>? map, string id, Dictionary<string, string>? options)
+    {
+        var pick = Get(map, id);
+        if (pick is null)
+        {
+            if (options is not { Count: > 0 }) return map;
+            map ??= new Dictionary<string, ComponentPick>(StringComparer.OrdinalIgnoreCase);
+            map[id] = pick = new ComponentPick();
+        }
+        pick.Options = options is { Count: > 0 } ? options : null;
+        if (pick.IsEmpty) map!.Remove(map!.Keys.First(k => k.Equals(id, StringComparison.OrdinalIgnoreCase)));
+        return map is { Count: 0 } ? null : map;
+    }
 }
 
 public sealed partial class GameOverride
@@ -79,6 +94,7 @@ public sealed partial class GameOverride
         ComponentRegistry.Lecram => LecramId,
         ComponentRegistry.Dfc => DfcId,
         ComponentRegistry.Dlss => DlssTag,
+        ComponentRegistry.ReShade => ReShadeId,
         _ => ComponentPicks.Get(Components, id)?.Build,
     };
 
@@ -93,6 +109,7 @@ public sealed partial class GameOverride
             case ComponentRegistry.Lecram: LecramId = build; break;
             case ComponentRegistry.Dfc: DfcId = build; break;
             case ComponentRegistry.Dlss: DlssTag = build; break;
+            case ComponentRegistry.ReShade: ReShadeId = build; break;
             default: Components = ComponentPicks.SetBuild(Components, id, build); break;
         }
     }
@@ -105,6 +122,9 @@ public sealed partial class GameOverride
 
     public void SetHdrUeExtended(bool? on) =>
         Components = ComponentPicks.SetOption(Components, ComponentRegistry.RenoDxHdr, "ue-extended", on is null ? null : on.Value ? "on" : "off");
+
+    /// <summary>Replaces this game's option values for a component in the map; null or empty removes them.</summary>
+    public void SetPickOptions(string id, Dictionary<string, string>? options) => Components = ComponentPicks.SetOptions(Components, id, options);
 }
 
 public sealed partial class AppSettings
@@ -122,6 +142,7 @@ public sealed partial class AppSettings
         ComponentRegistry.Lecram => LecramId,
         ComponentRegistry.Dfc => DfcId,
         ComponentRegistry.Dlss => DlssTag,
+        ComponentRegistry.ReShade => ReShadeId,
         _ => ComponentPicks.Get(Components, id)?.Build,
     };
 

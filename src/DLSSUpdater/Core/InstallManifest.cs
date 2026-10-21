@@ -90,6 +90,10 @@ public sealed class InstallManifest
     /// </summary>
     public List<string> DfcRuntimes { get; set; } = [];
     public string? ReShadeSha { get; set; }
+    /// <summary>Library id of the ReShade build placed (its ReShade64.dll hash); null in records from before the library.</summary>
+    public string? ReShadeId { get; set; }
+    /// <summary>ReShade loads through the Vulkan implicit layer: no dll was placed in the game, only its ReShade.ini.</summary>
+    public bool ReShadeVulkan { get; set; }
     public string? StreamlineTag { get; set; }
     public bool Streamline { get; set; }
     /// <summary>Values we wrote into OptiScaler.ini / ReShade.ini last time, keyed "Section/Key".</summary>

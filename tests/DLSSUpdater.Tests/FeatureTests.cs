@@ -68,7 +68,7 @@ public class FeatureTests
         res.SetLoaded(D((0x10AFB768, 6), (0x10E41DF5, 77)), D((0x10AFB768, 3)), false);
         Assert.Equal("Custom 77%", res.Selected!.Label);
 
-        res.SetLoaded(D((0x10AFB768, 6), (0x10E41DF5, 90)), D(), false);
+        res.SetLoaded(D((0x10AFB768, 6), (0x10E41DF5, 88)), D(), false);
         Assert.StartsWith("Custom (", res.Selected!.Label);
 
         var sm = NvSettings.Create().First(o => o.Topic == "nv-smooth-motion");
@@ -81,7 +81,7 @@ public class FeatureTests
     {
         var all = NvSettings.Create();
         Assert.Equal(["Use global", "Off", "Recommended", "K", "J", "M", "L"], all.First(o => o.Topic == "nv-sr-preset").Choices.Select(c => c.Label).ToArray());
-        Assert.Equal(["Use global", "Off", "D", "F"], all.First(o => o.Topic == "nv-rr-preset").Choices.Select(c => c.Label).ToArray());
+        Assert.Equal(["Use global", "Off", "Recommended", "D", "F"], all.First(o => o.Topic == "nv-rr-preset").Choices.Select(c => c.Label).ToArray());
 
         var vs = all.First(o => o.Topic == "nv-vsync");
         vs.SetLoaded(D(), D((0x00A879CF, 0x47814940), (0x005A375C, 0x96861077)), false);
@@ -105,7 +105,7 @@ public class FeatureTests
     public void DriverProfile_GroupsOptionsTheGameCantUse()
     {
         var vm = new DriverProfileViewModel(@"C:\g\game.exe", "Game", GameFeatures.SR);
-        Assert.Equal(["nv-rr-preset", "nv-fg-preset", "nv-mfg"], vm.Other.Select(o => o.Topic).ToArray());
+        Assert.Equal(["nv-rr-preset", "nv-fg-preset", "nv-mfg-mode", "nv-mfg", "nv-mfg-dynamic", "nv-mfg-dynamic-fps"], vm.Other.Select(o => o.Topic).ToArray());
         Assert.Contains(vm.Relevant, o => o.Topic == "nv-sr-preset");
         Assert.Contains("Recommended", vm.Relevant.Single(o => o.Topic == "nv-smooth-motion").Note);
         Assert.Contains("Ray Reconstruction", vm.Other.Single(o => o.Topic == "nv-rr-preset").Note);

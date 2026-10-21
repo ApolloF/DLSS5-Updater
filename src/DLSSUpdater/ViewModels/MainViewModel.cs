@@ -29,7 +29,7 @@ public sealed partial class MainViewModel : ObservableObject
         Log.TrimFile();
         var settings = AppSettings.Load();
         var gh = new GitHubClient { Token = settings.GitHubToken };
-        var store = new ComponentStore(gh, () => settings.IncludePrereleases) { AutoReShade = () => settings.AutoDownloadReShade, SelectedDlssNr = () => settings.DlssNrId, SelectedRenoDx = () => settings.RenoDxId, SelectedLecram = () => settings.LecramId, SelectedDfc = () => settings.DfcId, PairTests = () => settings.AddonPairTests, OptiSourceRepo = () => settings.OptiSource };
+        var store = new ComponentStore(gh, () => settings.IncludePrereleases) { AutoReShade = () => settings.AutoDownloadReShade, SelectedDlssNr = () => settings.DlssNrId, SelectedRenoDx = () => settings.RenoDxId, SelectedLecram = () => settings.LecramId, SelectedDfc = () => settings.DfcId, SelectedReShade = () => settings.ReShadeId, PairTests = () => settings.AddonPairTests, OptiSourceRepo = () => settings.OptiSource };
         var installer = new Installer(store);
         S = new Services
         {
@@ -256,6 +256,12 @@ public sealed partial class MainViewModel : ObservableObject
                 {
                     HashCache.Load();
                     S.Store.AutoImport();
+                    // A ReShade64.dll imported before the library keeps being what installs use: its build becomes the pinned default once.
+                    if (S.Store.TakeLegacyReShadePin() is { } pin && S.Settings.ReShadeId is null)
+                    {
+                        S.Settings.ReShadeId = pin;
+                        S.Settings.Save();
+                    }
                 });
             }
             await RefreshLocalComponentsAsync();
@@ -756,6 +762,10 @@ public sealed partial class MainViewModel : ObservableObject
         }
 
         if (o.Opti && !ConfirmCompat()) return;
+
+        // ReShade replacing a dll that belongs to another mod: say so in one line first; the original is backed up either way.
+        if (!dlssOnly && o.ReShade && g.ReShadeForeignWarning is { } foreign
+            && !Dialog.Confirm("Another mod's dll is in the way", foreign + "\n\nContinue?", "Install ReShade", danger: true)) return;
 
         if (!dlssOnly && o.Opti && g.SelectedTarget.Exe is null && !g.Info.Exes.Any())
             Log.Info($"{g.Name}: no game .exe found in the install location. OptiScaler only works next to the game's .exe; pick that folder under Install location.");
