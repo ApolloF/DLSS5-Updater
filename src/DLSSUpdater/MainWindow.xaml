@@ -1357,6 +1357,74 @@
                         </Border>
                     </StackPanel>
 
+                    <!-- DXVK: Direct3D 8-11 over Vulkan, with the Lilium HDR build -->
+                    <StackPanel Visibility="{Binding Dxvk.Visible, Converter={StaticResource BoolToVis}}">
+                        <StackPanel Orientation="Horizontal">
+                            <TextBlock Text="DXVK" Style="{StaticResource SectionTitle}" />
+                            <Button Style="{StaticResource InfoBtn}" CommandParameter="dxvk" Margin="4,18,0,0"
+                                    ToolTip="{Binding Source=dxvk, Converter={StaticResource HelpTip}}" AutomationProperties.Name="About DXVK" />
+                        </StackPanel>
+                        <Border Style="{StaticResource Card}" Padding="16,12">
+                            <StackPanel DataContext="{Binding Dxvk}">
+                                <TextBlock Text="{Binding NotApplicable}" Style="{StaticResource MutedText}" FontSize="11.5" TextWrapping="Wrap"
+                                           Visibility="{Binding Applies, Converter={StaticResource InvBoolToVis}}" />
+                                <StackPanel Visibility="{Binding Applies, Converter={StaticResource BoolToVis}}">
+                                    <TextBlock Text="BUILD" Style="{StaticResource Caps}" />
+                                    <WrapPanel Margin="0,4,0,0">
+                                        <ComboBox MinWidth="260" MaxDropDownHeight="300" Margin="0,0,8,4"
+                                                  ItemsSource="{Binding BuildChoices}" SelectedItem="{Binding BuildChoice}"
+                                                  AutomationProperties.Name="DXVK build for this game" ToolTip="Default follows Settings → DXVK; pick a channel's newest build or one build from the library for this game" />
+                                        <Button Content="Reset to default" Style="{StaticResource BtnGhost}" Margin="0,0,8,4" Command="{Binding ResetBuildCommand}"
+                                                Visibility="{Binding IsManual, Converter={StaticResource BoolToVis}}" AutomationProperties.Name="Reset the DXVK build to the default" />
+                                    </WrapPanel>
+                                    <TextBlock Text="{Binding ResolvedText}" Style="{StaticResource MutedText}" FontSize="11.5" TextWrapping="Wrap" />
+                                    <TextBlock Text="{Binding DllText}" Style="{StaticResource MutedText}" FontSize="11.5" TextWrapping="Wrap" Margin="0,4,0,0" />
+                                    <StackPanel Margin="0,12,0,0" Visibility="{Binding ShowLilium, Converter={StaticResource BoolToVis}}">
+                                        <StackPanel Orientation="Horizontal">
+                                            <TextBlock Text="HDR PRESET (LILIUM)" Style="{StaticResource Caps}" />
+                                            <Button Style="{StaticResource InfoBtn}" CommandParameter="dxvk-lilium" Margin="4,0,0,0"
+                                                    ToolTip="{Binding Source=dxvk-lilium, Converter={StaticResource HelpTip}}" AutomationProperties.Name="About the Lilium HDR presets" />
+                                        </StackPanel>
+                                        <ComboBox Margin="0,4,0,0" HorizontalAlignment="Left" MinWidth="260" MaxDropDownHeight="300"
+                                                  ItemsSource="{Binding TierChoices}" SelectedItem="{Binding TierChoice}"
+                                                  AutomationProperties.Name="Lilium HDR preset" ToolTip="Start with the default and move down the list only if the game looks wrong" />
+                                        <TextBlock Text="{Binding TierDescription}" Style="{StaticResource MutedText}" FontSize="11.5" TextWrapping="Wrap" Margin="0,4,0,0" />
+                                        <CheckBox IsChecked="{Binding PresentMethod}" Margin="0,8,0,0" Visibility="{Binding ShowPresentMethod, Converter={StaticResource BoolToVis}}"
+                                                  AutomationProperties.Name="Set the NVIDIA present method for this game"
+                                                  ToolTip="Writes two settings into this game's NVIDIA driver profile (present method layered on DXGI, treat DXVK as native); they go back to what they were when DXVK is removed.">
+                                            <TextBlock Text="Set the NVIDIA present method in this game's driver profile" TextWrapping="Wrap" />
+                                        </CheckBox>
+                                    </StackPanel>
+                                    <StackPanel Margin="0,12,0,0">
+                                        <StackPanel Orientation="Horizontal">
+                                            <TextBlock Text="EXTRA DXVK.CONF LINES" Style="{StaticResource Caps}" />
+                                            <Button Style="{StaticResource InfoBtn}" CommandParameter="dxvk-conf" Margin="4,0,0,0"
+                                                    ToolTip="{Binding Source=dxvk-conf, Converter={StaticResource HelpTip}}" AutomationProperties.Name="About the dxvk.conf lines" />
+                                        </StackPanel>
+                                        <TextBox Margin="0,4,0,0" MinHeight="48" MaxHeight="140" AcceptsReturn="True" TextWrapping="Wrap" VerticalScrollBarVisibility="Auto"
+                                                 Text="{Binding ConfText, UpdateSourceTrigger=LostFocus}" AutomationProperties.Name="Extra dxvk.conf lines" ToolTip="{Binding ConfHint}" />
+                                        <TextBlock Text="{Binding ConfHint}" Style="{StaticResource MutedText}" FontSize="11.5" TextWrapping="Wrap" Margin="0,4,0,0" />
+                                    </StackPanel>
+                                    <TextBlock Text="{Binding Blockers}" Style="{StaticResource MutedText}" Foreground="{StaticResource Warn}" FontSize="11.5" TextWrapping="Wrap" Margin="0,8,0,0"
+                                               Visibility="{Binding HasBlockers, Converter={StaticResource BoolToVis}}" />
+                                    <TextBlock Text="{Binding Warnings}" Style="{StaticResource MutedText}" Foreground="{StaticResource Warn}" FontSize="11.5" TextWrapping="Wrap" Margin="0,8,0,0"
+                                               Visibility="{Binding HasWarnings, Converter={StaticResource BoolToVis}}" />
+                                    <TextBlock Text="{Binding StatusLine}" Style="{StaticResource MutedText}" TextWrapping="Wrap" Margin="0,12,0,0" />
+                                    <WrapPanel Margin="0,12,0,0">
+                                        <Button Style="{StaticResource BtnPrimary}" Padding="22,9" MinWidth="110" Margin="0,0,8,4" AutomationProperties.Name="{Binding ApplyText, StringFormat='{}{0} DXVK'}"
+                                                Command="{Binding DataContext.ApplyDxvkCommand, RelativeSource={RelativeSource AncestorType=Window}}"
+                                                IsEnabled="{Binding CanApply}">
+                                            <TextBlock Text="{Binding ApplyText}" />
+                                        </Button>
+                                        <Button Content="Remove" Padding="16,9" Margin="0,0,8,4" AutomationProperties.Name="Remove DXVK" ToolTip="Remove DXVK and put back the dlls and driver settings it changed"
+                                                Command="{Binding DataContext.RemoveDxvkCommand, RelativeSource={RelativeSource AncestorType=Window}}"
+                                                IsEnabled="{Binding CanRemove}" />
+                                    </WrapPanel>
+                                </StackPanel>
+                            </StackPanel>
+                        </Border>
+                    </StackPanel>
+
                     <TextBlock Text="NR RUNTIME VERSION" Style="{StaticResource SectionTitle}" />
                     <Border Style="{StaticResource Card}" Padding="16">
                         <StackPanel>
@@ -2119,6 +2187,39 @@
                                                         <DockPanel>
                                                             <Button DockPanel.Dock="Right" Content="Remove" Style="{StaticResource BtnGhost}" Command="{Binding RemoveCommand}" Margin="8,0,0,0" ToolTip="Remove the selected build from the library" />
                                                             <ComboBox ItemsSource="{Binding BuildChoices}" SelectedItem="{Binding SelectedBuildChoice}" MaxDropDownHeight="300" AutomationProperties.Name="DLSS5-Feeder build in the library" />
+                                                        </DockPanel>
+                                                    </StackPanel>
+                                                    <TextBlock Text="{Binding Status}" Style="{StaticResource MutedText}" TextWrapping="Wrap" FontSize="12" Margin="0,8,0,0" />
+                                                </StackPanel>
+                                            </Border>
+                                            <StackPanel Orientation="Horizontal">
+                                                <TextBlock Text="DXVK BUILDS" Style="{StaticResource SectionTitle}" />
+                                                <Button Style="{StaticResource InfoBtn}" CommandParameter="dxvk" Margin="4,18,0,0"
+                                                        ToolTip="{Binding Source=dxvk, Converter={StaticResource HelpTip}}" AutomationProperties.Name="About DXVK" />
+                                            </StackPanel>
+                                            <Border Style="{StaticResource Card}" Padding="16">
+                                                <StackPanel DataContext="{Binding Dxvk}">
+                                                    <TextBlock Text="Default build" Margin="0,0,0,6" />
+                                                    <DockPanel>
+                                                        <Button DockPanel.Dock="Right" Content="Reset to auto" Style="{StaticResource BtnGhost}" Margin="8,0,0,0" Command="{Binding ResetToAutoCommand}"
+                                                                Visibility="{Binding IsManual, Converter={StaticResource BoolToVis}}" ToolTip="Follow the newest Stable release again" />
+                                                        <ComboBox ItemsSource="{Binding DefaultChoices}" SelectedItem="{Binding DefaultChoice}" MaxDropDownHeight="300"
+                                                                  AutomationProperties.Name="Default DXVK build" ToolTip="Games without their own pick install this: Auto is the newest Stable release" />
+                                                    </DockPanel>
+                                                    <TextBlock Text="{Binding Info}" Style="{StaticResource MutedText}" TextWrapping="Wrap" FontSize="12" Margin="0,6,0,0" />
+                                                    <Border Style="{StaticResource Divider}" Margin="0,10" />
+                                                    <WrapPanel>
+                                                        <Button Content="Import…" Command="{Binding ImportCommand}" Margin="0,0,8,0" ToolTip="Add a DXVK release (.tar.gz, .zip or .7z) to the library" />
+                                                        <Button Content="Folder…" Style="{StaticResource BtnGhost}" Command="{Binding ImportFolderCommand}" Margin="0,0,8,0" ToolTip="Add an extracted DXVK folder (with x32 and x64) to the library" />
+                                                        <ComboBox ItemsSource="{Binding ChannelChoices}" SelectedItem="{Binding DownloadChannel}" MinWidth="130" Margin="0,0,8,0"
+                                                                  AutomationProperties.Name="DXVK channel to download" ToolTip="Stable: doitsujin/dxvk releases. Development: the newest master build. Lilium HDR: EndlesslyFlowering's HDR fork." />
+                                                        <Button Content="Download newest" Style="{StaticResource BtnGhost}" Command="{Binding DownloadCommand}" ToolTip="Download the newest build of that channel now; its SHA-256 is checked against GitHub's" />
+                                                    </WrapPanel>
+                                                    <StackPanel Visibility="{Binding HasBuilds, Converter={StaticResource BoolToVis}}" Margin="0,10,0,0">
+                                                        <TextBlock Text="Library" Margin="0,0,0,6" />
+                                                        <DockPanel>
+                                                            <Button DockPanel.Dock="Right" Content="Remove" Style="{StaticResource BtnGhost}" Command="{Binding RemoveCommand}" Margin="8,0,0,0" ToolTip="Remove the selected build from the library" />
+                                                            <ComboBox ItemsSource="{Binding BuildChoices}" SelectedItem="{Binding SelectedBuildChoice}" MaxDropDownHeight="300" AutomationProperties.Name="DXVK build in the library" />
                                                         </DockPanel>
                                                     </StackPanel>
                                                     <TextBlock Text="{Binding Status}" Style="{StaticResource MutedText}" TextWrapping="Wrap" FontSize="12" Margin="0,8,0,0" />

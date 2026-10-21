@@ -21,7 +21,7 @@ public sealed class ReShadeAddonHost(ComponentStore store, Installer installer)
         }
         if (m is { Opti: true })
             throw new InvalidOperationException($"OptiScaler is installed here without ReShade. Turn ReShade on in the install above and install again, then add {purpose.Name}.");
-        var target = ReShadeNaming.Resolve(game.Effective, optiScalerLoads: false, setup.Proxy);
+        var target = ReShadeNaming.Resolve(game.Effective, optiScalerLoads: false, setup.Proxy, DxvkDlls.InstalledIn(m));
         if (target.VulkanLayer && !VulkanLayer.Status(installer.VulkanHost).IsInstalled)
             throw new InvalidOperationException("This game renders with Vulkan, which needs ReShade's Vulkan layer. Install the layer first (Settings → ReShade → Vulkan layer; one administrator prompt).");
         Log.Info($"{game.Name}: no ReShade yet, installing it as {target.Display} (ReShade + add-ons) for {purpose.Name}");

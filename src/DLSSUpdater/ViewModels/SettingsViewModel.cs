@@ -22,6 +22,7 @@ public sealed partial class SettingsViewModel : ObservableObject
         Extras = new ReShadeExtrasSettingsViewModel(main.S);
         FrameLimit = new FrameLimitSettingsViewModel(main, AddonsChanged);
         Feeder = new FeederSettingsViewModel(main, AddonsChanged);
+        Dxvk = new DxvkSettingsViewModel(main, AddonsChanged);
         Cleanup = new BuildCleanupViewModel(main);
         Overrides = new ObservableCollection<IniOverride>(Settings.IniOverrides);
         ReShadeOverrides = new ObservableCollection<IniOverride>(Settings.ReShadeOverrides);
@@ -51,6 +52,7 @@ public sealed partial class SettingsViewModel : ObservableObject
     public ReShadeExtrasSettingsViewModel Extras { get; }
     public FrameLimitSettingsViewModel FrameLimit { get; }
     public FeederSettingsViewModel Feeder { get; }
+    public DxvkSettingsViewModel Dxvk { get; }
     public AddonLibraryViewModel Lecram { get; }
     public AddonLibraryViewModel Dfc { get; }
     public BuildCleanupViewModel Cleanup { get; }
@@ -535,6 +537,7 @@ public sealed partial class SettingsViewModel : ObservableObject
         ReShade.Reload();
         FrameLimit.Reload();
         Feeder.Reload();
+        Dxvk.Reload();
         ApplyLecramGeneration();
         ApplyDfcCompat();
         RefreshAddonPairStatus();
