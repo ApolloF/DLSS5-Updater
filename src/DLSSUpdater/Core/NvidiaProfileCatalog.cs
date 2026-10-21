@@ -64,6 +64,13 @@ public static class NvidiaProfileCatalog
     public const uint FrameRateLimit = 0x10835002;
     public const uint Vibrance = 0x00980880, PowerMode = 0x1057EB71;
 
+    /// <summary>
+    /// "Vulkan/OpenGL Present Method" (0 prefer native, 1 prefer layered on DXGI swapchain, 2 auto) and its flags (OGL_DX_PRESENT_DEBUG; 0x000802A5 is
+    /// named "Treat DXVK as Native"), CustomSettingNames.xml 0x20D690F8 / 0x20324987. Used for the Lilium HDR build of DXVK, not offered as options.
+    /// </summary>
+    public const uint PresentMethod = 0x20D690F8, PresentFlags = 0x20324987;
+    public const uint PresentLayeredOnDxgi = 1, PresentTreatDxvkAsNative = 0x000802A5;
+
     public const uint TearStandard = 0x96861077, TearAdaptive = 0x99941284;
     public const uint RecommendedPreset = 0x00FFFFFF, RecommendedFgPreset = 0x00FFFFFE;
     public const uint MaxRefreshRate = 0x01000000;

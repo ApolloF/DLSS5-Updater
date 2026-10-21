@@ -39,12 +39,17 @@ public static class ReShadeNaming
     /// <paramref name="optiScalerLoads"/>: OptiScaler owns the proxy name and loads ReShade64.dll itself, so ReShade keeps
     /// that name whatever the API. <paramref name="manualName"/>: the user's own choice for this game wins over the API.
     /// </summary>
-    public static ReShadeTarget Resolve(GameTech tech, bool optiScalerLoads, string? manualName)
+    /// <param name="dxvkDlls">The dlls DXVK has in the game, when it is installed: ReShade can't share their names, so it loads through its Vulkan layer on top of DXVK
+    /// (unless the user chose a proxy name DXVK doesn't use).</param>
+    public static ReShadeTarget Resolve(GameTech tech, bool optiScalerLoads, string? manualName, IReadOnlyCollection<string>? dxvkDlls = null)
     {
         if (optiScalerLoads)
             return new(WithOptiScaler, false, 64, "OptiScaler owns the proxy name and loads ReShade64.dll (LoadReshade)");
         var bits = tech.Bits == 32 ? 32 : 64;
-        if (AppSettings.ReShadeProxyNames.Contains(manualName ?? "", StringComparer.OrdinalIgnoreCase))
+        var manual = AppSettings.ReShadeProxyNames.Contains(manualName ?? "", StringComparer.OrdinalIgnoreCase);
+        if (dxvkDlls is { Count: > 0 } && !(manual && !dxvkDlls.Contains(manualName!, StringComparer.OrdinalIgnoreCase)))
+            return new(null, true, bits, "DXVK uses the game's graphics dll names, so ReShade loads through its Vulkan layer on top of it");
+        if (manual)
             return new(manualName!.ToLowerInvariant(), false, bits, "chosen by you for this game");
         var primary = tech.PrimaryApi;
         var name = ForApi(primary);
