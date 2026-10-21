@@ -38,6 +38,15 @@ public sealed partial class MainViewModel : ObservableObject
             FrameLimit = new FrameLimitService(store, installer, new CatalogDownloader(gh), NvidiaProfile.Real),
         };
         Gh = gh;
+        S.Extras = new ReShadeExtras(S.Installer, settings, new CatalogDownloader(gh), ct => new CatalogClient(gh).LoadAsync(ct));
+        S.RunJob = RunJob;
+        S.Progress = TransferProgress;
+        S.Rescan = RescanOne;
+        S.Extras.Changed += () =>
+        {
+            foreach (var game in Games) game.RefreshExtrasUpdate();
+            CountUpdates();
+        };
         S.Catalog!.Changed += () =>
         {
             if (_ui.CheckAccess()) CatalogChanged();
@@ -387,6 +396,7 @@ public sealed partial class MainViewModel : ObservableObject
             await S.Store.RefreshAsync(ct);
             await CheckLecramAsync(ct);
             await CheckCatalogAsync(ct);
+            await S.Extras!.LoadCatalogAsync(ct);
         }
         var s = S.Store;
         Online = new[] { s.Opti, s.Dlss, s.Mfg, s.Uplift }.Any(r => r is { FromCache: false, Stale: false });
@@ -501,13 +511,13 @@ public sealed partial class MainViewModel : ObservableObject
             Log.Info("Everything is up to date");
             return;
         }
-        if (targets.Any(g => g.NeedsUpdate && g.Manifest is { Opti: true }) && !ConfirmCompat()) return;
+        if (targets.Any(g => g.CoreNeedsUpdate && g.Manifest is { Opti: true }) && !ConfirmCompat()) return;
         var failed = 0;
         foreach (var g in targets)
         {
             try
             {
-                if (g.NeedsUpdate && g.Manifest is { } m)
+                if (g.CoreNeedsUpdate && g.Manifest is { } m)
                 {
                     var o = g.UpdateOptions(m);
                     if (g.HasAntiCheat && g.NeedsInjection(o) && !m.AntiCheatConfirmed)
@@ -520,6 +530,17 @@ public sealed partial class MainViewModel : ObservableObject
                         await S.Installer.InstallAsync(g.Info, g.SelectedTarget!.Dir, o, TransferProgress(), ct);
                         await RescanOne(g);
                     }
+                }
+                // The ReShade add-ons, shader packs and preset this game already has follow the catalog and Settings.
+                if (g.ExtrasToUpdate.Count > 0)
+                {
+                    foreach (var r in await S.Extras!.UpdateAsync(g.Info, g.SelectedTarget!.Dir, TransferProgress(), ct))
+                    {
+                        if (r.Ok) Log.Info($"{g.Name}: {r.Message}");
+                        else Log.Warn($"{g.Name}: {r.Message}");
+                        foreach (var n in r.Notes) Log.Info($"  {n}");
+                    }
+                    await RescanOne(g);
                 }
                 // Read again after the main update: it can change what the HDR section sees.
                 if (g.NeedsHdrUpdate)

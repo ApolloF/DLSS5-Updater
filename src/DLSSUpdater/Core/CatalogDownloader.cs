@@ -14,7 +14,7 @@ public sealed record CatalogDownload(string? Path, string? Refusal, bool FromMir
 /// Downloads a catalog file (mirror first, then the author's URL) into a staging file, checks size and SHA-256 against
 /// the catalog, and only then moves it to its destination. A mismatch leaves nothing behind and returns a one-line reason.
 /// </summary>
-public sealed class CatalogDownloader(GitHubClient github)
+public sealed class CatalogDownloader(GitHubClient github) : ICatalogFetch
 {
     public async Task<CatalogDownload> DownloadAsync(CatalogBinary file, string dest, IProgress<TransferProgress>? progress, CancellationToken ct)
     {

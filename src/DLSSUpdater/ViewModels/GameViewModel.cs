@@ -63,6 +63,13 @@ public sealed class Services
     public required ComponentStore Store { get; init; }
     public required Installer Installer { get; init; }
     public string? DlssNrSha { get; set; }
+    /// <summary>ReShade add-ons, shader packs and presets; null in tests that don't need them.</summary>
+    public ReShadeExtras? Extras { get; set; }
+    /// <summary>Runs work as a busy-gated job of the main window (null in tests).</summary>
+    public Func<string, Func<CancellationToken, Task>, Task>? RunJob { get; set; }
+    public Func<IProgress<TransferProgress>>? Progress { get; set; }
+    /// <summary>Scans a game again after something changed in it.</summary>
+    public Func<GameViewModel, Task>? Rescan { get; set; }
     public string? ReShadeSha { get; set; }
     /// <summary>The mod catalog and the RenoDX HDR service; null switches the HDR section off (tests build Services without them).</summary>
     public CatalogState? Catalog { get; init; }
@@ -353,6 +360,9 @@ public sealed partial class GameViewModel : ObservableObject
     private PresetChoice? _presetChoice;
     [ObservableProperty] private string _detailTab = "Install";
     [ObservableProperty] private DriverProfileViewModel? _driver;
+    /// <summary>The Add-ons &amp; shaders tab; created when the tab is first opened.</summary>
+    [ObservableProperty] private ReShadeExtrasViewModel? _extras;
+    public bool ShowExtrasTab => !Demo.Active && _s.Extras is not null;
 
     /// <summary>The exe the driver profile is matched on.</summary>
     public string? DriverExe => SelectedTarget?.Exe ?? Info.Exes.FirstOrDefault();
@@ -360,6 +370,11 @@ public sealed partial class GameViewModel : ObservableObject
     partial void OnDetailTabChanged(string value)
     {
         if (value == "Config") EnsureConfigRows();
+        if (value == "Extras" && ShowExtrasTab)
+        {
+            Extras ??= new ReShadeExtrasViewModel(this, _s);
+            Extras.Load();
+        }
         if (value != "Nvidia" || Demo.Active) return;
         if (Driver is null && DriverExe is { } exe)
         {
@@ -582,11 +597,26 @@ public sealed partial class GameViewModel : ObservableObject
 
     [ObservableProperty] private bool _needsUpdate;
 
+    /// <summary>A component of the main install (OptiScaler, ReShade, DLSS ...) is behind; <see cref="NeedsUpdate"/> also counts ReShade add-ons, shaders and the preset.</summary>
+    public bool CoreNeedsUpdate { get; private set; }
+
+    /// <summary>The ReShade add-ons, shader packs or preset installed in this game that differ from what Settings and the catalog say now.</summary>
+    public IReadOnlyList<string> ExtrasToUpdate =>
+        Demo.Active || _s.Extras is null || SelectedTarget is null || Manifest is null ? [] : _s.Extras.ComponentsToUpdate(Info, SelectedTarget.Dir, Manifest);
+
+    /// <summary>Recomputes <see cref="NeedsUpdate"/> after the catalog or the extras settings changed.</summary>
+    public void RefreshExtrasUpdate()
+    {
+        NeedsUpdate = CoreNeedsUpdate || ExtrasToUpdate.Count > 0;
+        OnPropertyChanged(nameof(ActionText));
+    }
+
+    public string ActionText => Manifest is null ? "Install" : CoreNeedsUpdate ? "Update" : "Reinstall";
+
     /// <summary>The RenoDX HDR mod in this game has a newer catalog build, another pick or changed settings to apply.</summary>
     public bool NeedsHdrUpdate => Hdr.NeedsUpdate;
     public bool NeedsFrameLimitUpdate => FrameLimit.NeedsUpdate;
 
-    public string ActionText => Manifest is null ? "Install" : NeedsUpdate ? "Update" : "Reinstall";
     public string Subtitle => Info.Exes.Count == 0 ? "No executable found" : Path.GetFileName(Info.Exes[0]);
 
     private Version? LatestDlss => (_s.Store.DlssFor(EffectiveDlssTag)?.Version) is { } v ? Trim(v) : null;
@@ -938,7 +968,8 @@ public sealed partial class GameViewModel : ObservableObject
             : interposer?.Version is { } sv && slLatest is not null && Trim(sv) == Trim(slLatest) ? RowState.Current
             : m?.Streamline == true ? RowState.Update : RowState.None;
 
-        NeedsUpdate = m is not null && Components.Where(c => c.Key != "dlss" || m.Dlss).Any(c => c.State == RowState.Update && IsTracked(m, c.Key));
+        CoreNeedsUpdate = m is not null && Components.Where(c => c.Key != "dlss" || m.Dlss).Any(c => c.State == RowState.Update && IsTracked(m, c.Key));
+        RefreshExtrasUpdate();
         OnPropertyChanged(nameof(ActionText));
         OnPropertyChanged(nameof(IsInstalled));
         OnPropertyChanged(nameof(IsOptiInstalled));
