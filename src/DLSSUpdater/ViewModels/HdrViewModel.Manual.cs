@@ -180,10 +180,15 @@ public sealed partial class HdrViewModel
             ? over.BuildPick(ComponentRegistry.RenoDxHdr) is { } sha ? CustomTag(sha) : null
             : over?.HdrMod;
 
-        _fillingManual = true;
-        IniRows.Clear();
-        foreach (var e in over?.HdrIni ?? []) IniRows.Add(new HdrIniRow(e, SaveIniRows));
-        _fillingManual = false;
+        // The rows are rebuilt only when the saved list is not the one they edit, so typing in a row doesn't swap it under the cursor.
+        var saved = over?.HdrIni ?? [];
+        if (!IniRows.Select(r => r.Edit).SequenceEqual(saved))
+        {
+            _fillingManual = true;
+            IniRows.Clear();
+            foreach (var e in saved) IniRows.Add(new HdrIniRow(e, SaveIniRows));
+            _fillingManual = false;
+        }
 
         RefillMods();
         OnPropertyChanged(nameof(EngineIniText));
