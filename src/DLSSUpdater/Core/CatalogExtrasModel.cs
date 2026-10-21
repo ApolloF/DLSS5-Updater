@@ -1,3 +1,5 @@
+using System.Text.Json.Serialization;
+
 namespace DLSSUpdater.Core;
 
 // The `addons` and `shaderPacks` sections of catalog.json (see CatalogModel.cs and the catalog repository's README).
@@ -26,6 +28,8 @@ public sealed class CatalogAddon
     /// <summary>Why the app can't install the package itself (no download, or files it doesn't place).</summary>
     public string? Manual { get; set; }
     public List<CatalogBinary> Files { get; set; } = [];
+    /// <summary>Added by the user (<see cref="ExtrasLibrary"/>); never in the catalog.</summary>
+    [JsonIgnore] public bool Imported { get; init; }
 
     /// <summary>The app can download and install it: not managed elsewhere, not manual, and at least one file with a hash.</summary>
     public bool IsInstallable => ManagedBy is null && Manual is null && Files.Any(f => f.IsInstallable);
@@ -99,6 +103,8 @@ public sealed class CatalogShaderPack
     public string Version { get; set; } = "";
     public string? License { get; set; }
     public CatalogBinary? File { get; set; }
+    /// <summary>Added by the user (<see cref="ExtrasLibrary"/>); never in the catalog.</summary>
+    [JsonIgnore] public bool Imported { get; init; }
 
     public CatalogPackLayout? Layout => File?.Layout;
 

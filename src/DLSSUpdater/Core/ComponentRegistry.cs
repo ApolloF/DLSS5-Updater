@@ -46,6 +46,10 @@ public static class ComponentRegistry
     public const string Lecram = "lecram-dlss5";
     public const string Dfc = "dfc";
     public const string Uplift = "gitc-uplift";
+    /// <summary>The add-ons from crosire's list, the shader packs and the preset the app places in a game that runs ReShade (<see cref="ReShadeExtras"/>).</summary>
+    public const string ReShadeAddons = "reshade-addons";
+    public const string ReShadeShaders = "reshade-shaders";
+    public const string ReShadePreset = "reshade-preset";
     /// <summary>Not a component with files: the per-game record of what the app wrote into the NVIDIA driver profile (<see cref="NvidiaRecord"/>).</summary>
     public const string NvidiaDriver = "nvidia-driver";
 
@@ -65,6 +69,9 @@ public static class ComponentRegistry
                 Path.Combine(ComponentStore.DfcShaderDir, ComponentStore.DfcShaderPrefix + "*")],
         });
         Register(new(Uplift, "GITC Uplift") { Library = LibraryKind.Uplift, Legacy = true, OwnedFiles = ComponentStore.UpliftFiles });
+        Register(new(ReShadeAddons, "ReShade add-ons") { OwnedFiles = ["*.addon", "*.addon32", "*.addon64"] });
+        Register(new(ReShadeShaders, "ReShade shaders") { OwnedFiles = [ReShadeLayout.ShadersFolder + @"\*", ReShadeLayout.ManagedFolder + @"\*"] });
+        Register(new(ReShadePreset, "ReShade preset") { OwnedFiles = [ReShadeLayout.PresetsFolder + @"\*"] });
         Register(new(MfgUnlock, "MFG Unlock") { Legacy = true, OwnedFiles = [ComponentStore.MfgFile] });
         Register(new(Streamline, "Streamline") { Legacy = true, OwnedFiles = ["sl.*.dll"] });
         Register(new(DlssNr, "NR runtime") { Library = LibraryKind.DlssNr, Legacy = true, OwnedFiles = [ComponentStore.DlssNrFile, Path.Combine(ComponentStore.UpliftNrDir, ComponentStore.DlssNrFile)] });
