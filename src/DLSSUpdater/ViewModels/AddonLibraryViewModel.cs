@@ -101,7 +101,7 @@ public sealed partial class AddonLibraryViewModel : ObservableObject
 
     internal static string NoLecramBuilds(bool channelEnabled) => channelEnabled
         ? $"No builds yet. Use Check now to fetch the latest v11 build, or import your own copy ({ComponentStore.Lecram10File} for v10 and older, {ComponentStore.Lecram11File} for v11 and newer)."
-        : $"No builds yet. Import the add-on ({ComponentStore.Lecram10File} for v10 and older, {ComponentStore.Lecram11File} for v11 and newer). Builds are available to supporters on the author's Buy Me a Coffee.";
+        : $"No builds yet. They are downloaded and installed automatically at the next update check, or import the add-on ({ComponentStore.Lecram10File} for v10 and older, {ComponentStore.Lecram11File} for v11 and newer).";
 
     private const string NoDfcBuilds =
         "Not imported. Its licence is personal use only, so import your own copy: extract the release and choose its folder (Folder…), " +
@@ -131,7 +131,7 @@ public sealed partial class AddonLibraryViewModel : ObservableObject
             if (SelectedBuild is not { } build)
                 return _kind switch
                 {
-                    AddonKind.RenoDx => $"Not imported. ShortFuse's {ComponentStore.RenoDxFile} isn't published on GitHub; get it from ShortFuse's RenoDX Discord and import it here.",
+                    AddonKind.RenoDx => $"Not in the library yet. ShortFuse's {ComponentStore.RenoDxFile} is downloaded and installed automatically at the next update check, or import it here.",
                     AddonKind.Lecram => NoLecramBuilds(BuildFlags.LecramChannel),
                     _ => NoDfcBuilds,
                 };

@@ -16,18 +16,18 @@ public static class HelpTopics
 {
     internal static string LecramSourceIntro(bool channelEnabled) => channelEnabled
         ? "Lecram v11 builds are fetched from the author's public MediaFire channel during update checks. In Local components, turn automatic checks on or off, use Check now and see the last result. Older builds can still be imported. "
-        : "This app doesn't fetch Lecram's builds: you import the add-on (dlss5-nr.addon64 or renodx-dlss5.addon64) in Local components. The builds are available to supporters on the author's Buy Me a Coffee. ";
+        : "Lecram's builds are downloaded and installed automatically from the app's catalog during update checks; the file itself tells v10 from v11. In Local components you can turn that off or import a build (dlss5-nr.addon64 or renodx-dlss5.addon64). ";
 
     internal static string LecramUpdates(bool channelEnabled) => channelEnabled
         ? "The public MediaFire folder is the same source used by the author's DLSS5-NR-Setup installer. " +
           "The newest upload wins; ties prefer the raw add-on, then ZIP, then setup EXE. Each download is checked against the listing's SHA-256. " +
           "Only dlss5-nr.addon64 is extracted; downloaded installers are never run and are removed afterwards. Channel moves are followed once. " +
           "Builds enter the existing library and only a newer build becomes its default. Games keep their installed build until you choose to change it. " +
-          "Offline or failed checks keep the library. New builds can have options this app does not list; tune those in the ReShade overlay. No nvngx_dlssnr.dll is downloaded."
-        : "Lecram's builds are available to supporters on the author's Buy Me a Coffee, so this app no longer checks for or downloads them. " +
-          "Import a new build in Local components (the add-on file itself; extract archives first). " +
+          "Offline or failed checks keep the library. New builds can have options this app does not list; tune those in the ReShade overlay."
+        : "Lecram's builds are downloaded and installed automatically from the app's catalog during update checks. Each is checked against its SHA-256 and size first. " +
+          "You can also import a build in Local components (the add-on file itself; extract archives first). " +
           "Builds enter the existing library and only a newer build becomes its default. Games keep their installed build until you choose to change it. " +
-          "Builds already in the library keep working. New builds can have options this app does not list; tune those in the ReShade overlay. No nvngx_dlssnr.dll is downloaded.";
+          "Builds already in the library keep working. New builds can have options this app does not list; tune those in the ReShade overlay.";
 
     public static readonly HelpTopic[] All =
     [
@@ -35,7 +35,7 @@ public static class HelpTopics
             "GITC Uplift is an open-source ReShade add-on (MIT licence) that runs DLSS-NR on the game image. Single-player only: injection can trigger anti-cheat. " +
             "Use it instead of ShortFuse, Lecram, Deep Fried Chicken or OptiScaler-NR; these NR routes cannot coexist. " +
             "This app installs the 64-bit add-on, its helper and Uplift effects. ReShade with full add-on support is required; Vulkan and OpenGL need ReShade 6.8+. " +
-            "Import your own nvngx_dlssnr.dll. It goes in GITC-Uplift beside the add-on because Uplift blocks a runtime mapped from the game folder (NVIDIA DLSS can load that copy first on RTX 50). " +
+            "It uses the NR runtime from your library (downloaded automatically; you can import another). It goes in GITC-Uplift beside the add-on because Uplift blocks a runtime mapped from the game folder (NVIDIA DLSS can load that copy first on RTX 50). " +
             "The app writes Enabled=1. In the game press Home, then open the GITC Uplift tab. Tested with 1.4.2; newer tags warn in the log. " +
             "Preset B needs NR 310.9.16. NGX hooks Off is safe mode, Present only. Use D3D9Ex changes exclusive fullscreen to borderless. Mask blend values are undocumented."),
         // ---------- General ----------
@@ -75,18 +75,18 @@ public static class HelpTopics
             "(DLSS upscaler, preset override, Delete menu key, NR strengths and HDR tone mapping, ReShade tutorial skipped). Load it here or assign it to single games."),
         new("nr-library", "General", "NR versions and sources",
             "OptiScaler-NR updates come from ShyVortex/OptiScaler-DLSSNR-PreSR-Multipass. Existing cached releases still work. " +
-            "The RenoDX DLSS add-on (ShortFuse's renodx-dlss.addon64) is imported by you, not downloaded. It needs ReShade + add-ons mode, ReShade 6+ with full add-on support, a game with native DLSS and an imported NR runtime. " +
-            "The runtime nvngx_dlssnr.dll is always imported by you too. " +
+            "The RenoDX DLSS add-on (ShortFuse's renodx-dlss.addon64) is downloaded and installed automatically from the app's catalog (or imported by you). It needs ReShade + add-ons mode, ReShade 6+ with full add-on support, a game with native DLSS and the NR runtime. " +
+            "The runtime nvngx_dlssnr.dll is downloaded automatically too. " +
             "ShortFuse openNR describes compatible FP16 builds, including compat-fp16-310.9.16-cuda13.4.3 for RTX 20/30/40. " +
             "Versions come from DLL resources; hashes distinguish originals, compat builds and unverified files. " +
             "Choose a default in Settings or a per-game version, then Switch NR. Switch back restores the previous build without changing other components."),
         new("local-components", "General", "Local components",
-            "nvngx_dlssnr.dll (DLSS 5 neural rendering model) is always user-supplied. ShortFuse compat-fp16-310.9.16-cuda13.4.3 targets RTX 20/30/40. Each imported version is kept in your library " +
+            "nvngx_dlssnr.dll (DLSS 5 neural rendering model) is downloaded automatically into your library, and you can import your own. ShortFuse compat-fp16-310.9.16-cuda13.4.3 targets RTX 20/30/40. Each imported version is kept in your library " +
             "and copied into each game. ReShade has its own library under Settings → ReShade add-ons. " +
             "ShortFuse's renodx-dlss.addon64 is imported the same way and only accepted when the file identifies itself as renodx-dlss.addon64; every import stays in a library of builds, with a default here, an optional pick per game and your own name per build. " +
             "Deep Fried Chicken is imported from its extracted release folder or its 64-bit folder (Folder…), from deep-fried-chicken.addon64 in that folder or from a .zip of the release (Import…); the NGX bridge deep-fried-chicken-nvngx.dll must be beside the add-on. From 4.x the whole 64-bit folder is taken, as the package's README asks. A .7z can't be read: extract it first. " +
             "Each import is kept as a build of its own, so several DFC versions sit side by side; importing the same add-on again replaces that build's files. The default is Newest unless you pick a build. " +
-            "Lecram's DLSS5 add-on is imported as renodx-dlss5.addon64 (v10 and older) or dlss5-nr.addon64 (v11 and newer); all builds are kept side by side and each game picks its own."),
+            "Lecram's DLSS5 add-on is downloaded and installed automatically (or imported) as renodx-dlss5.addon64 (v10 and older) or dlss5-nr.addon64 (v11 and newer); all builds are kept side by side and each game picks its own."),
         new("dfc", "General", "Deep Fried Chicken",
             "Deep Fried Chicken (DFC) is a closed-source ReShade add-on that runs NVIDIA DLSS neural rendering. 2.x needs a game with native DLSS; 4.x and newer also run in games without their own DLSS (see Deep Fried Chicken without DLSS). " +
             "Its licence is personal use only, so this app never downloads or redistributes it: you import your own copy (add-on, NGX bridge and default config) in Local components, and the files are copied into games unchanged. " +
@@ -95,7 +95,7 @@ public static class HelpTopics
             "From 4.x the whole 64-bit folder goes beside the game exe, as the package asks: in 4.0.6 and 5.0 that is the add-on, the bridge, deep-fried-chicken-present-support.dll, the deep-fried-chicken-neural folder and reshade-shaders\\Shaders\\DFC_OutputState.addonfx. " +
             "Logs, NVIDIA's nvngx_*.dll and ReShade's own files in that folder are left out (the app places those itself), and ReShade.ini's EffectSearchPaths gets .\\reshade-shaders\\Shaders\\** when it doesn't cover that folder yet. " +
             "DFC's 32-bit route (addon32 plus a 64-bit companion host) is not supported by this app. " +
-            "It needs ReShade + add-ons mode, ReShade 6+ with add-on support and an imported nvngx_dlssnr.dll (placed beside the exe), and it replaces the RenoDX DLSS add-on and OptiScaler-NR (a game gets only one of them). " +
+            "It needs ReShade + add-ons mode, ReShade 6+ with add-on support and the NR runtime nvngx_dlssnr.dll (placed beside the exe), and it replaces the RenoDX DLSS add-on and OptiScaler-NR (a game gets only one of them). " +
             "The default deep-fried-chicken.cfg is placed when the game has none. The few options in Settings are merged into it like into ReShade.ini: only keys you set are written, and values you tuned in the overlay survive updates. " +
             "Everything else (hook mode, placement, Auto Balance, motion stability, glow suppression, per-pass model, preset and intensity, the 4.x Refine tab, pass controls, frame generation, 5.0's Texture Boost and NR preset (Game, Preset A or Preset B) and so on) is tuned in the ReShade overlay (Home, Deep Fried Chicken tab); the cfg numbers for those are undocumented."),
         new("feeder", "General", "DLSS5-Feeder",
@@ -110,7 +110,7 @@ public static class HelpTopics
             "From 4.x (INSTALL.txt of 4.0.6 preview) DFC also runs in games without their own DLSS. There it runs NR with its own motion vectors (the package's motion model, dfc-neural-motion.onnx, is in the deep-fried-chicken-neural folder, which goes beside the exe whole), " +
             "or with the vectors of an external ReShade motion provider when one is running (Lumenite Kernel or QuantMotion, VORT, Launchpad, or a texMotionVectors effect such as DRME, qUINT or dh_uber_motion; DX10, DX11, DX12, Vulkan and OpenGL, not DX9). " +
             "NR works on top of the game's own anti-aliasing; lower Resolution under Pass controls in the overlay for speed. There is no DLSS upscaling in these games: 4.x removed DFC's own upscaler (SR), scene jitter and the virtual display. " +
-            "INSTALL.txt asks for nvngx_dlss.dll and nvngx_dlssnr.dll beside the game exe; DFC ships neither. The app places your imported nvngx_dlssnr.dll and adds nvngx_dlss.dll from NVIDIA's DLSS release (the version picked for DLSS files), and takes both out again when DFC goes. " +
+            "INSTALL.txt asks for nvngx_dlss.dll and nvngx_dlssnr.dll beside the game exe; DFC ships neither. The app places the NR runtime from your library and adds nvngx_dlss.dll from NVIDIA's DLSS release (the version picked for DLSS files), and takes both out again when DFC goes. " +
             "In games with native DLSS nothing is added: DFC uses the game's own DLSS. A 2.x import is refused in games without DLSS. " +
             "Frame generation for these games is switched on in the overlay (Rendering card); it needs borderless or windowed mode and pauses while the ReShade menu is open. DLSS-G needs an RTX 40/50 GPU and NVIDIA's nvngx_dlssg.dll beside the exe: tick Add NVIDIA's frame generation file (nvngx_dlssg.dll) on the game's Install tab and the app places it from the DLSS release. " +
             "FSR 3.1 frame generation needs AMD's amd_fidelityfx_*_dx12.dll, which this app does not provide. " +
@@ -120,7 +120,7 @@ public static class HelpTopics
             LecramSourceIntro(BuildFlags.LecramChannel) +
             "There are two generations: v10 and older (renodx-dlss5.addon64, recognised by its version resource) and v11 and newer (dlss5-nr.addon64, recognised by strings in the file because it has no version resource). " +
             "Every import is kept as its own build, named by the highest vX.Y.Z string in the file or by you; a game only ever gets one file, because v11 goes inert when a renodx-dlss5.addon64 file sits next to it (from v11 beta.22 not when ReShade has that add-on disabled). Settings picks the default build and each game can pick its own, whose generation decides the options shown. " +
-            "It needs ReShade + add-ons mode, ReShade 6+ with add-on support, a game with native DLSS and an imported nvngx_dlssnr.dll, and it replaces OptiScaler-NR and Deep Fried Chicken. " +
+            "It needs ReShade + add-ons mode, ReShade 6+ with add-on support, a game with native DLSS and the NR runtime nvngx_dlssnr.dll, and it replaces OptiScaler-NR and Deep Fried Chicken. " +
             "It can run next to ShortFuse's RenoDX add-on when Allow more than one NR add-on is on (NR then runs twice): the app then sets ForeignNr=observe. The 0928 pair (ShortFuse 0.2026.0928 and Lecram v8.5.0-rc10) was tested working. Each exact pair of builds has a status (Works, Crashed or not tested together yet); only Crashed shows a warning. Mark the current build pair on the Install tab. " +
             "A copy of either Lecram file already in the game is moved to the backup folder and restored by Uninstall. Options that exist in only one generation are hidden for the other, following the build the game uses. " +
             "From v11 Patch 4 (beta.18) the author also ships its own installer (DLSS5 NR Setup). It finds the add-on in every game on every drive and its Update all replaces it there, games this app manages included, so manage a game with one of the two. " +
@@ -479,15 +479,15 @@ public static class HelpTopics
             "Needs ReShade and a game with DLSS frame generation through Streamline; other games are not affected. " +
             "Turn it off on RTX 50 (it has MFG natively), on cards without frame generation, or when the game misbehaves with frame generation forced."),
         new("comp-dlssnr", "Components", "NR runtime",
-            "NVIDIA's DLSS 5 neural rendering model, nvngx_dlssnr.dll. You import it in Settings, Local components; the app never downloads it. " +
-            "NVIDIA's original needs an RTX 50 card; for RTX 20/30/40 import ShortFuse's compat build. OptiScaler's NR and every NR add-on need it. " +
+            "NVIDIA's DLSS 5 neural rendering model, nvngx_dlssnr.dll. The app downloads it automatically into Settings, Local components; you can also import your own. " +
+            "NVIDIA's original needs an RTX 50 card; for RTX 20/30/40 use a compat build (import it if it isn't in the library). OptiScaler's NR and every NR add-on need it. " +
             "Turn it off to install without neural rendering."),
         new("comp-renodx", "Components", "ShortFuse RenoDX DLSS add-on",
             "ShortFuse's ReShade add-on (renodx-dlss.addon64) that runs DLSS neural rendering itself. You import it; the dropdown picks which imported build this game gets. " +
             "Needs ReShade + add-ons mode, ReShade 6+ with add-on support, a game with its own DLSS and the NR runtime. " +
             "It is one NR route: turning it on turns Lecram, GITC Uplift and Deep Fried Chicken off, unless Allow more than one NR add-on lets Lecram run next to it."),
         new("comp-lecram", "Components", "Lecram DLSS5 add-on",
-            "Lecram's ReShade add-on that runs DLSS neural rendering itself: renodx-dlss5.addon64 (v10 and older) or dlss5-nr.addon64 (v11). You import it or the app fetches v11 builds; the dropdown picks the build. " +
+            "Lecram's ReShade add-on that runs DLSS neural rendering itself: renodx-dlss5.addon64 (v10 and older) or dlss5-nr.addon64 (v11). The app downloads and installs it automatically, or you import it; the dropdown picks the build. " +
             "Needs ReShade + add-ons mode, ReShade 6+ with add-on support, a game with its own DLSS and the NR runtime. " +
             "It is one NR route: turning it on turns the others off. With Allow more than one NR add-on it can run next to ShortFuse's add-on, then NR runs twice."),
         new("comp-dlss", "Components", "DLSS (SR · RR · FG)",
@@ -522,7 +522,7 @@ public static class HelpTopics
         new("hdr-catalog-addon", "General", "ShortFuse's DLSS add-on from the catalog",
             "The catalog lists ShortFuse's RenoDX DLSS add-on with a SHA-256 for each build. With this on, each update check downloads a newer build, verifies the hash, checks that the file is the add-on and adds it to the ShortFuse library; a newer build becomes the default like an import does. " +
             "A build that fails the hash check is thrown away. Offline checks change nothing. Games keep the build they have until you update them. " +
-            "Turn it off to manage the library by hand: importing a file in Local components works either way. No nvngx_dlssnr.dll is downloaded."),
+            "Turn it off to manage the library by hand: importing a file in Local components works either way. The NR runtime download is a separate switch."),
         // ---------- Frame limit ----------
         new("frame-limit", "Frame limit", "Frame limit",
             "One frame limit per game, set by one method. Pick the method and the cap on the game's Install tab; Auto picks the NVIDIA driver limiter on NVIDIA cards and the game page says what Auto picked. " +
@@ -574,7 +574,7 @@ public static class HelpTopics
         ["add-missing"] = "Leave on. It only adds a file to games that have none, and Uninstall removes it again.",
         ["ini-mode"] = "Keep game settings for everyday use: updates never undo tuning you did in-game. Apply app settings once after you changed something here and want " +
                        "it everywhere, then switch back. Fresh config when a mod's config got messy or a new release changed a lot.",
-        ["local-components"] = "Import each nvngx_dlssnr.dll to keep it in the local library. Choose the default here or a version on a game, then use Switch NR. Switch back restores its previous file. No NR binary is downloaded by this app. The ShortFuse and Lecram add-ons and Deep Fried Chicken keep a library too: import every build you want, pick the default, and name builds yourself.",
+        ["local-components"] = "The NR runtime is downloaded automatically; import any other nvngx_dlssnr.dll to keep it in the local library too. Choose the default here or a version on a game, then use Switch NR. Switch back restores its previous file. The ShortFuse and Lecram add-ons and Deep Fried Chicken keep a library too: downloaded or imported builds all stay, pick the default, and name builds yourself.",
         ["keybinds"] = "Pick keys the game doesn't use: Delete, Insert, End, Page Up/Down and \\ are usually free. Avoid Home if you use ReShade's default overlay key.",
         ["skip-tutorial"] = "On, unless you are new to ReShade.",
         ["performance-mode"] = "Off while you set up effects, on for playing. With only add-ons (RenoDX, MFG Unlock) and no effects it makes no difference.",

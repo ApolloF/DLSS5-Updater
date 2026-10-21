@@ -685,7 +685,7 @@ public sealed partial class GameViewModel : ObservableObject
         var versions = _s.Store.DlssNrVersions;
         var global = _s.Settings.DlssNrId;
         var follows = versions.FirstOrDefault(v => v.Id == global) ?? (global is null ? versions.FirstOrDefault() : null);
-        NrChoices.Add(new DlssChoice(null, $"Default ({follows?.Version ?? "none imported"})"));
+        NrChoices.Add(new DlssChoice(null, $"Default ({follows?.Version ?? "none in library"})"));
         foreach (var nr in versions) NrChoices.Add(new DlssChoice(nr.Id, nr.Label));
         if (pin is not null && NrChoices.All(c => c.Tag != pin)) NrChoices.Add(new DlssChoice(pin, "Missing NR file · import again"));
         NrChoice = NrChoices.FirstOrDefault(c => c.Tag == pin) ?? NrChoices[0];

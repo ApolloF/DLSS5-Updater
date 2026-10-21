@@ -82,6 +82,12 @@ public sealed partial class AppSettings
     public bool InstallReShade { get; set; } = true;
     /// <summary>Download the ReShade add-on build from reshade.me when no ReShade64.dll was imported.</summary>
     public bool AutoDownloadReShade { get; set; } = true;
+    /// <summary>Download nvngx_dlssnr.dll from the catalog mirror and keep it in the NR library.</summary>
+    public bool AutoDownloadDlssNr { get; set; } = true;
+    /// <summary>SHA-256 of the catalog's newest nvngx_dlssnr.dll once fetched, so a cleanup of it doesn't download it again at every check.</summary>
+    public string? CatalogDlssNrFetched { get; set; }
+    /// <summary>The same for the catalog's newest Lecram build.</summary>
+    public string? CatalogLecramFetched { get; set; }
     /// <summary>Check Lecram's public MediaFire channel for new v11 builds and add them to the library.</summary>
     public bool AutoDownloadLecram { get; set; } = true;
     public string LecramFolderKey { get; set; } = MediaFireClient.DefaultFolder;

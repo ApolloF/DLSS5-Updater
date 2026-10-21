@@ -44,7 +44,7 @@ Windows desktop app that pulls the latest OptiScaler-NR, DLSS, MFG Unlock, Strea
 - Fetching Lecram's builds from MediaFire is private-build only (`BuildFlags.LecramChannel`, MSBuild `LecramChannel`). The default must stay off in public releases (`release.yml` passes `-p:LecramChannel=false`); a private build never self-installs the public release.
 
 ## Hard rules
-- **`nvngx_dlssnr.dll` must never be committed, bundled, uploaded or redistributed** (NVIDIA's terms don't allow it). The user supplies it, and it stays in `%LocalAppData%\DLSS5Updater\components`. `.gitignore` blocks `*.dll`, `*.exe`, `*.addon64` and `*.zip`. Don't force-add binaries.
+- **`nvngx_dlssnr.dll` is never committed to this repo or bundled in the exe/installer.** The app downloads it from the catalog mirror into `%LocalAppData%\DLSS5Updater\components`. `.gitignore` blocks `*.dll`, `*.exe`, `*.addon64` and `*.zip`. Don't force-add binaries.
 - Tests and agents must not write NVIDIA driver profiles (`NvDrs` / NvAPI `Save`), launch real games or install into real game folders. Use temp directories.
 
 ## Check command

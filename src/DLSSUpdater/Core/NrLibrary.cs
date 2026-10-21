@@ -113,7 +113,7 @@ public sealed partial class ComponentStore
     public string VerifiedDlssNrPath(string? id)
     {
         var path = DlssNrFor(id);
-        if (!File.Exists(path)) throw new FileNotFoundException("Import this NR version in Settings → Local components first.", path);
+        if (!File.Exists(path)) throw new FileNotFoundException("This NR version isn't in the library. It downloads at the next update check, or import it in Settings → Local components.", path);
         if (id is not null && !FileUtil.Sha256(path).Equals(id, StringComparison.OrdinalIgnoreCase))
             throw new InvalidDataException("The stored NR file changed. Import it again before switching.");
         return path;

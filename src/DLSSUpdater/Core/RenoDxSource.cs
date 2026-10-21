@@ -4,10 +4,9 @@ using System.Text.Json;
 namespace DLSSUpdater.Core;
 
 /// <summary>
-/// ShortFuse's renodx-dlss add-on isn't published on any official GitHub. It is imported like a user-supplied ReShade64.dll, and
-/// also pulled from the catalog (docs/design.md section 3, the exception: its licence is unknown, so the catalog only pins the
-/// hash of each build and never mirrors it). Either way the file is checked by its version resource and kept in the add-on
-/// library (one folder per SHA-256, see AddonLibrary.cs).
+/// ShortFuse's renodx-dlss add-on isn't published on any official GitHub. The app downloads it from the catalog (the mirror
+/// first, the author's URL as the fallback, hash-checked either way) and still accepts an import. Either way the file is checked
+/// by its version resource and kept in the add-on library (one folder per SHA-256, see AddonLibrary.cs).
 /// </summary>
 public sealed partial class ComponentStore
 {
@@ -46,7 +45,7 @@ public sealed partial class ComponentStore
     /// SHA-256 (the download is refused on a mismatch); the add-on inside is checked like an import. It becomes the default when
     /// it is newer than the current one, as an import does. Offline, refused or odd downloads are logged and change nothing.
     /// </summary>
-    public async Task<AddonBuild?> CheckRenoDxCatalogAsync(AppSettings settings, CatalogRenodxDlss? section, CatalogDownloader downloader,
+    public async Task<AddonBuild?> CheckRenoDxCatalogAsync(AppSettings settings, CatalogRenodxDlss? section, ICatalogFetch downloader,
         IProgress<TransferProgress>? progress, CancellationToken ct)
     {
         if (!settings.AutoDownloadRenoDx) return null;
@@ -66,7 +65,8 @@ public sealed partial class ComponentStore
                 Log.Info($"ShortFuse's add-on {newest.Version} not downloaded: {result.Refusal}");
                 return null;
             }
-            var addon = await Task.Run(() => ExtractAddon(zip, work), ct);
+            // Builds from the catalog's incoming folder are the bare add-on, not a zip.
+            var addon = zip.EndsWith(RenoDxFile, StringComparison.OrdinalIgnoreCase) ? zip : await Task.Run(() => ExtractAddon(zip, work), ct);
             var build = ImportRenoDx(addon, downloaded: true);
             if (!string.Equals(build.CatalogSha, zipSha, StringComparison.OrdinalIgnoreCase))
             {

@@ -49,7 +49,7 @@ public sealed partial class ComponentStore
     public const string DlssNrFile = "nvngx_dlssnr.dll";
     public const string ReShadeFile = "ReShade64.dll";
     public const string MfgFile = "renodx-mfgunlock.addon64";
-    /// <summary>ShortFuse's DLSS add-on with neural rendering; import-only.</summary>
+    /// <summary>ShortFuse's DLSS add-on with neural rendering; downloaded from the catalog, import works too.</summary>
     public const string RenoDxFile = "renodx-dlss.addon64";
     /// <summary>Other ShortFuse-family add-ons that also inject NR or replaced the add-on earlier; never installed by this app.</summary>
     public static readonly string[] LegacyRenoDxFiles = ["renodx-dlssfix.addon64"];
