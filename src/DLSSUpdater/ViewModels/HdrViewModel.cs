@@ -18,7 +18,7 @@ public sealed partial class HdrViewModel(GameViewModel game, Services services) 
     private HdrChoice? _picked;
     private bool _filling;
     private HdrStatus? _status;
-    private (HdrPicker? Picker, GameInfo Info, bool? Ue)? _pickKey;
+    private (HdrPicker? Picker, GameInfo Info, GameTech Tech, bool? Ue, string? Mod)? _pickKey;
 
     /// <summary>Raised after every refresh; the main view model re-counts updates and re-checks its commands.</summary>
     public event Action? Changed;
@@ -92,7 +92,7 @@ public sealed partial class HdrViewModel(GameViewModel game, Services services) 
 
     [ObservableProperty] private DlssChoice? _buildChoice;
 
-    public bool ShowBuildChoices => CatalogReady && _picked is { IsOffered: true };
+    public bool ShowBuildChoices => CatalogReady && _picked is { IsOffered: true, Kind: not HdrKind.Custom };
 
     partial void OnBuildChoiceChanged(DlssChoice? value)
     {
@@ -123,17 +123,33 @@ public sealed partial class HdrViewModel(GameViewModel game, Services services) 
         }
         else
         {
-            var ue = services.Settings.Games.GetValueOrDefault(game.Id)?.HdrUeExtended;
-            if (_pickKey is not { } key || !ReferenceEquals(key.Picker, picker) || !ReferenceEquals(key.Info, game.Info) || key.Ue != ue)
-            {
-                _picked = picker.Pick(game.Info, ue);
-                _pickKey = (picker, game.Info, ue);
-            }
-            var pin = services.Settings.Games.GetValueOrDefault(game.Id)?.BuildPick(ComponentRegistry.RenoDxHdr);
+            var over = services.Settings.Games.GetValueOrDefault(game.Id);
+            var ue = over?.HdrUeExtended;
+            var manual = over?.HdrMod;
+            var pin = over?.BuildPick(ComponentRegistry.RenoDxHdr);
             var library = services.Store.HdrBuilds;
-            _choice = HdrPin.Apply(_picked!, pin, library);
+            if (manual == HdrManual.CustomMod)
+            {
+                _picked = _choice = game.Info.AntiCheat is { } ac
+                    ? new HdrChoice { Reason = $"{ac} anti-cheat: no add-on is installed in games with anti-cheat." }
+                    : library.FirstOrDefault(b => b.Id.Equals(pin, StringComparison.OrdinalIgnoreCase) && b.ModId == HdrManual.ImportedModId) is { } mine
+                        ? HdrManual.CustomChoice(mine, game.Info.Effective.Bits)
+                        : HdrManual.MissingCustom();
+                _pickKey = null;
+            }
+            else
+            {
+                if (_pickKey is not { } key || !ReferenceEquals(key.Picker, picker) || !ReferenceEquals(key.Info, game.Info) || !ReferenceEquals(key.Tech, game.Info.Effective)
+                    || key.Ue != ue || key.Mod != manual)
+                {
+                    _picked = picker.Pick(game.Info, ue, manual);
+                    _pickKey = (picker, game.Info, game.Info.Effective, ue, manual);
+                }
+                _choice = HdrPin.Apply(_picked!, pin, library);
+            }
             FillBuildChoices(pin, library);
-            _status = HdrStatus.Of(_choice!, Installed, services.Settings.HdrPeakNits);
+            FillManual(picker, ue, over);
+            _status = HdrStatus.Of(_choice!, Installed, services.Settings.HdrPeakNits, over?.HdrIni);
         }
         OnPropertyChanged(string.Empty);
         Changed?.Invoke();
@@ -143,7 +159,7 @@ public sealed partial class HdrViewModel(GameViewModel game, Services services) 
     {
         _filling = true;
         BuildChoices.Clear();
-        if (_picked is { IsOffered: true } picked && library is not null)
+        if (_picked is { IsOffered: true, Kind: not HdrKind.Custom } picked && library is not null)
         {
             BuildChoices.Add(new DlssChoice(null, $"Default ({picked.File!.Version})"));
             foreach (var b in HdrPin.Candidates(picked, library)) BuildChoices.Add(new DlssChoice(b.Id, b.Version));
@@ -159,11 +175,12 @@ public sealed partial class HdrViewModel(GameViewModel game, Services services) 
     {
         if (_choice is not { IsOffered: true } choice || game.SelectedTarget is not { } target || services.Hdr is not { } hdr)
             throw new InvalidOperationException(_choice?.Reason ?? "Nothing is offered for this game.");
-        var hint = services.Catalog?.Document?.Sections.Renodx?.Overrides.EngineIniPath(game.Info.SteamAppId, game.Info.Name);
         var settings = services.Settings;
+        var over = settings.Games.GetValueOrDefault(game.Id);
+        var hint = EngineIniLocator.HintFor(over, services.Catalog?.Document?.Sections.Renodx?.Overrides.EngineIniPath(game.Info.SteamAppId, game.Info.Name));
         var reshade = new HdrReShade(game.ReShadeChoice?.Tag, settings.Games.GetValueOrDefault(game.Id)?.Proxy,
             GameConfig.EffectiveReShade(settings, game.Id), ReShadeIniTemplate.Load());
-        await hdr.InstallAsync(game.Info, target.Dir, choice, settings.HdrPeakNits, hint, reshade, progress, ct);
+        await hdr.InstallAsync(game.Info, target.Dir, choice, settings.HdrPeakNits, hint, reshade, progress, ct, over?.HdrIni);
         Log.Info($"{game.Name}: {choice.Title} {choice.File!.Version} installed");
     }
 

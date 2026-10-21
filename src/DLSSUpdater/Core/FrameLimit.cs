@@ -80,15 +80,15 @@ public static class FrameLimitRules
                 // Works for every API and in games with anti-cheat: nothing is placed in the game.
                 return env.NvidiaGpu ? LimitAvailability.Yes(method) : LimitAvailability.No(method, "Needs an NVIDIA graphics card and driver.");
             case LimitMethod.Unreal:
-                if (!game.Tech.IsUnreal) return LimitAvailability.No(method, "Only for Unreal Engine games.");
+                if (!game.Effective.IsUnreal) return LimitAvailability.No(method, "Only for Unreal Engine games.");
                 // An Engine.ini setting is no injection; it stays allowed with anti-cheat.
                 return env.EngineIniKnown ? LimitAvailability.Yes(method) : LimitAvailability.No(method, "The game's Engine.ini location couldn't be worked out (Unreal project not found).");
             default:
                 var name = LimitMethods.Label(method);
                 if (!env.Addons.TryGetValue(method, out var have)) have = (false, false);
-                var ok = game.Tech.Is32Bit ? have.Has32 : have.Has64;
+                var ok = game.Effective.Is32Bit ? have.Has32 : have.Has64;
                 if (!ok)
-                    return LimitAvailability.No(method, game.Tech.Is32Bit ? $"{name} has no 32-bit build, and this game is 32-bit."
+                    return LimitAvailability.No(method, game.Effective.Is32Bit ? $"{name} has no 32-bit build, and this game is 32-bit."
                         : $"{name} isn't in the library yet and the catalog can't be reached. Import it in Settings or try again online.");
                 return game.AntiCheat is { } ac
                     ? LimitAvailability.Warn(method, $"{game.Name} has {ac} anti-cheat: an injected add-on can get an account banned and online modes may refuse to start. The driver limiter places nothing and is the safe choice.")
@@ -172,8 +172,8 @@ public static class FrameLimitHint
     public static string? FrameGenerationSource(GameInfo game)
     {
         if (game.Features.HasFlag(GameFeatures.FG)) return "DLSS frame generation";
-        if (game.Tech.Upscalers.HasFlag(UpscalerSignals.FsrFrameGen)) return "FSR frame generation";
-        if (game.Tech.Upscalers.HasFlag(UpscalerSignals.XeSSFrameGen)) return "XeSS frame generation";
+        if (game.Effective.Upscalers.HasFlag(UpscalerSignals.FsrFrameGen)) return "FSR frame generation";
+        if (game.Effective.Upscalers.HasFlag(UpscalerSignals.XeSSFrameGen)) return "XeSS frame generation";
         return null;
     }
 

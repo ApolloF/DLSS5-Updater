@@ -156,7 +156,7 @@ public sealed partial class Installer(ComponentStore store)
             if (!o.DlssNr) throw new InvalidOperationException("GITC Uplift needs an imported NR runtime.");
             o = o with { ReShade = true };
             var exe = game.Exes.FirstOrDefault(f => string.Equals(Path.GetDirectoryName(f), targetDir, StringComparison.OrdinalIgnoreCase))
-                ?? game.Exes.FirstOrDefault()
+                ?? game.MainExe
                 ?? throw new InvalidOperationException("GITC Uplift needs a game executable to verify that the game is 64-bit x64.");
             {
                 using var stream = File.OpenRead(exe);
@@ -207,7 +207,7 @@ public sealed partial class Installer(ComponentStore store)
         var sl = swapSl && game.Streamline.Count > 0 ? await store.EnsureStreamlineAsync(progress, ct) : null;
         if (o.Streamline && game.Streamline.Count == 0) Log.Info($"{game.Name}: no Streamline files in this game, skipped");
         // ReShade32.dll for a 32-bit game when ReShade is the proxy; beside OptiScaler it is always the 64-bit ReShade64.dll it loads.
-        var reshadeFile = o.ReShade ? await store.EnsureReShadeAsync(o.ReShadeBuildPick, o.ReShadeOnly && game.Tech.Bits == 32 ? 32 : 64, progress, ct) : null;
+        var reshadeFile = o.ReShade ? await store.EnsureReShadeAsync(o.ReShadeBuildPick, o.ReShadeOnly && game.Effective.Bits == 32 ? 32 : 64, progress, ct) : null;
         var reshade = reshadeFile?.Path;
         if (o.ReShade && o.ReShadeVulkan)
         {

@@ -91,6 +91,7 @@ public sealed partial class GameViewModel : ObservableObject
     {
         _s = services;
         Hdr = new HdrViewModel(this, services);
+        Detection = new TechOverrideViewModel(this, services);
         FrameLimit = new FrameLimitViewModel(this, services);
         _modChoices = ModPicker.Available(false, SelectedBuild.Name);
         Components =
@@ -134,6 +135,7 @@ public sealed partial class GameViewModel : ObservableObject
 
     public GameInfo Info { get; private set; }
     public HdrViewModel Hdr { get; }
+    public TechOverrideViewModel Detection { get; }
     public FrameLimitViewModel FrameLimit { get; }
     public string Id => Info.Id;
     public string Name => Info.Name;
@@ -196,7 +198,17 @@ public sealed partial class GameViewModel : ObservableObject
     }
 
     [ObservableProperty] private TargetOption? _selectedTarget;
-    [ObservableProperty] private string _proxy = "dxgi.dll";
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(ProxyDiffersFromAuto))]
+    private string _proxy = "dxgi.dll";
+
+    /// <summary>The proxy name the app would pick: from the graphics API in ReShade-only mode, else the default of the settings.</summary>
+    private string AutoProxy => IsReShadeOnly ? AutoReShadeProxy : _s.Settings.DefaultProxy;
+    public string ProxyAutoText => $"Auto: {AutoProxy}";
+    public bool ProxyDiffersFromAuto => !Proxy.Equals(AutoProxy, StringComparison.OrdinalIgnoreCase);
+
+    [RelayCommand]
+    private void ResetProxy() => Proxy = AutoProxy;
     [ObservableProperty] private InstallManifest? _manifest;
     [ObservableProperty] private DlssChoice? _dlssChoice;
     [ObservableProperty] private DlssChoice? _nrChoice;
@@ -229,7 +241,7 @@ public sealed partial class GameViewModel : ObservableObject
         {
             var over = _s.Settings.Games.GetValueOrDefault(Id);
             var manual = IsReShadeOnly && Manifest?.ReShadeVulkan != true ? Manifest?.Proxy ?? over?.Proxy : null;
-            return ReShadeNaming.Resolve(Info.Tech, optiScalerLoads: !IsReShadeOnly, manual);
+            return ReShadeNaming.Resolve(Info.Effective, optiScalerLoads: !IsReShadeOnly, manual);
         }
     }
 
@@ -250,7 +262,7 @@ public sealed partial class GameViewModel : ObservableObject
 
     public bool HasReShadeForeignWarning => ReShadeForeignWarning is not null;
 
-    private string AutoReShadeProxy => ReShadeNaming.ForApi(Info.Tech.PrimaryApi) ?? ReShadeNaming.Default;
+    private string AutoReShadeProxy => ReShadeNaming.ForApi(Info.Effective.PrimaryApi) ?? ReShadeNaming.Default;
 
     [ObservableProperty] private DlssChoice? _optiChoice;
     [ObservableProperty] private DlssChoice? _upliftChoice;
@@ -365,7 +377,7 @@ public sealed partial class GameViewModel : ObservableObject
     public bool ShowExtrasTab => !Demo.Active && _s.Extras is not null;
 
     /// <summary>The exe the driver profile is matched on.</summary>
-    public string? DriverExe => SelectedTarget?.Exe ?? Info.Exes.FirstOrDefault();
+    public string? DriverExe => SelectedTarget?.Exe ?? Info.MainExe;
 
     partial void OnDetailTabChanged(string value)
     {
@@ -569,9 +581,9 @@ public sealed partial class GameViewModel : ObservableObject
     /// <summary>The NVIDIA driver profile tab; the demo never opens the driver.</summary>
     public bool ShowDriverTab => !Demo.Active;
     /// <summary>"DX12 · 64-bit · Unreal 5.4": what the game's files say about how it renders.</summary>
-    public string TechBadge => Info.Tech.Label;
+    public string TechBadge => Info.Manual is { IsEmpty: false } ? Info.Effective.Label + " · set by you" : Info.Effective.Label;
     public bool HasTechBadge => TechBadge.Length > 0;
-    public string TechTip => Info.Tech.Details;
+    public string TechTip => Info.Effective.Details;
     public bool HasAntiCheat => Info.AntiCheat is not null;
     public string? AntiCheat => Info.AntiCheat;
     public bool IsInstalled => Manifest is not null || Info.Installs.Count > 0;
@@ -617,7 +629,7 @@ public sealed partial class GameViewModel : ObservableObject
     public bool NeedsHdrUpdate => Hdr.NeedsUpdate;
     public bool NeedsFrameLimitUpdate => FrameLimit.NeedsUpdate;
 
-    public string Subtitle => Info.Exes.Count == 0 ? "No executable found" : Path.GetFileName(Info.Exes[0]);
+    public string Subtitle => Info.MainExe is { } exe ? Path.GetFileName(exe) : "No executable found";
 
     private Version? LatestDlss => (_s.Store.DlssFor(EffectiveDlssTag)?.Version) is { } v ? Trim(v) : null;
     private bool DlssPinned => EffectiveDlssTag is not null;
@@ -627,13 +639,14 @@ public sealed partial class GameViewModel : ObservableObject
     {
         if (Driver is not null && Driver.Features != Features) Driver = null; // rebuilt with the new scan when the tab opens
         Info = info;
+        TechOverrides.Attach(_s.Settings, info);
         _pickedMod = null;
         _loading = true;
         var over = _s.Settings.Games.GetValueOrDefault(Id);
 
         Targets.Clear();
-        foreach (var t in BuildTargets(info, over?.TargetDir)) Targets.Add(t);
-        var preferred = info.Installs.FirstOrDefault() ?? over?.TargetDir;
+        foreach (var t in BuildTargets(info, over?.TargetDir, info.Manual?.ModFolder)) Targets.Add(t);
+        var preferred = info.Installs.FirstOrDefault() ?? over?.TargetDir ?? info.Manual?.ModFolder;
         SelectedTarget = Targets.FirstOrDefault(t => preferred is not null && t.Dir.Equals(preferred, StringComparison.OrdinalIgnoreCase))
                          ?? Targets.FirstOrDefault();
 
@@ -642,6 +655,7 @@ public sealed partial class GameViewModel : ObservableObject
         RebuildIniModeChoices();
         _loading = false;
         LoadManifest();
+        Detection.Refresh();
         OnPropertyChanged(string.Empty);
     }
 
@@ -813,7 +827,7 @@ public sealed partial class GameViewModel : ObservableObject
         RefreshStatus();
     }
 
-    private static IEnumerable<TargetOption> BuildTargets(GameInfo info, string? custom)
+    private static IEnumerable<TargetOption> BuildTargets(GameInfo info, string? custom, string? modFolder = null)
     {
         var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         foreach (var dir in info.Installs)
@@ -824,6 +838,7 @@ public sealed partial class GameViewModel : ObservableObject
             if (seen.Add(dir)) yield return Option(info.Root, dir, exe);
         }
         if (custom is not null && Directory.Exists(custom) && seen.Add(custom)) yield return Option(info.Root, custom, null);
+        if (modFolder is not null && Directory.Exists(modFolder) && seen.Add(modFolder)) yield return Option(info.Root, modFolder, null);
         if (seen.Add(info.Root)) yield return Option(info.Root, info.Root, null);
     }
 

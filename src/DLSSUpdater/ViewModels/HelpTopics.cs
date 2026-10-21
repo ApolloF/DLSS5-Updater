@@ -498,12 +498,19 @@ public static class HelpTopics
             "NVIDIA's Streamline files (sl.*.dll), the layer between the game and DLSS frame generation. Dynamic MFG needs FG 310.9.1 with Streamline 2.14.1, or 310.9.16 with 2.14.16. " +
             "Only files the game already ships are replaced, always as one set; Restore DLSS puts them back. " +
             "Off by default. Turn it on only for Dynamic MFG in a game with an older Streamline, and off again if frame generation breaks."),
+        // ---------- Detection overrides ----------
+        new("detection-override", "HDR (RenoDX)", "Detection overrides",
+            "The app reads each game's files to work out its graphics API, 32 or 64-bit, engine (and Unreal version), main executable and mod folder. Everything else follows from that: the file name ReShade loads as, which RenoDX add-on and which limiter fit, what the method advisor offers. " +
+            "Each row shows Auto and what was detected. Pick another value when the guess is wrong; the row then says set by you, and Reset to auto goes back to what the scan finds. A set value is kept across rescans. " +
+            "Main executable is read again on the next scan: API and bitness then come from that exe. The mod folder is where installs go by default; the Install folder list above still decides where a single install lands."),
         // ---------- RenoDX HDR ----------
         new("hdr-renodx", "HDR (RenoDX)", "HDR (RenoDX)",
             "RenoDX HDR mods are ReShade add-ons that give a game real HDR output. The app picks one per game from the catalog, and the section on the game's Install tab says which and why. " +
             "A mod made for that game comes first, matched by its Steam AppID, else by name. Unreal games without their own mod get Unreal Extended by default, or the plain generic Unreal add-on if you switch Use Unreal Extended off. " +
             "Unity games get the generic Unity add-on in the game's bitness (32 or 64). Unreal 3 and older, other engines and games with anti-cheat get nothing, and the section says why. " +
             "Installing puts the add-on beside ReShade, or in the AddonPath folder when reshade.ini sets one. A game without ReShade gets it first (ReShade + add-ons mode) the same way the ReShade section installs it: the game's ReShade build, the file name for its graphics API, ReShade32 for 32-bit games. Vulkan games need the Vulkan layer from Settings → ReShade. Beside OptiScaler you decide about ReShade yourself. " +
+            "Mod for this game starts on Auto and lists every catalog mod (the search box shortens it); pick one to use it instead, or import your own .addon64 / .addon32, which is installed as it is. Reset to auto goes back. " +
+            "On Unreal games, Engine.ini can be set by hand (a folder or file under AppData, Documents or the game folder), and Your ini values writes extra keys to the [renodx...] sections of reshade.ini or to Engine.ini; they win over the values the app writes and are put back on Remove. " +
             "Build for this game lists the downloaded builds of the picked mod; Default follows the catalog, a pinned build is what install and Update all use. " +
             "Only keys missing from reshade.ini are added to its [renodx] section, so values you tuned stay. For Unreal Extended games that need it, HDR keys are appended to Engine.ini and the file is made read-only so the game doesn't undo them. " +
             "Remove takes the add-on out and puts every file and key back as it was. " +
@@ -676,6 +683,7 @@ public static class HelpTopics
         ["nv-low-latency"] = "Use global. Ultra for competitive DX11 games when the GPU is the bottleneck.",
         ["nv-power"] = "Use global. Prefer max performance for a game that stutters when the GPU clocks down.",
         ["hdr-skip"] = "Off. On only if colours look wrong while another HDR mod is active.",
+        ["detection-override"] = "Leave everything on Auto. Change a value only when the game page shows something clearly wrong, such as DX11 for a DX12 game.",
         ["hdr-renodx"] = "Install what is picked. Switch Use Unreal Extended off only if the game misbehaves with it, then try the plain generic Unreal add-on. Tune the look in the ReShade overlay (Home).",
         ["hdr-peak"] = "Your display's real peak (the HDR Calibration app or rtings.com give it). Leave empty if you are not sure.",
         ["hdr-catalog-addon"] = "Leave on. Turn off only if you want to choose every build of the add-on yourself.",

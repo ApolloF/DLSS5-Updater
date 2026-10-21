@@ -1172,7 +1172,7 @@ public sealed partial class MainViewModel : ObservableObject
 
     private async Task RescanOne(GameViewModel g)
     {
-        var info = Demo.Active ? Demo.Find(g.Root)! : await Task.Run(() => GameScanner.Inspect(new GameEntry(g.Name, g.Root, g.Source, g.Info.SteamAppId)));
+        var info = Demo.Active ? Demo.Find(g.Root)! : await Task.Run(() => GameScanner.Inspect(new GameEntry(g.Name, g.Root, g.Source, g.Info.SteamAppId), S.Settings.Games.GetValueOrDefault(g.Id)?.Tech));
         g.Load(info);
         RefreshGames();
         CountUpdates();

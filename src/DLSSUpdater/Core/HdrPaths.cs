@@ -15,7 +15,7 @@ public static class EngineIniLocator
     {
         if (FromOverride(game, overridePath, localAppData, documents) is { } hinted) return hinted;
 
-        var project = game.Tech.UeProject;
+        var project = game.Effective.UeProject;
         if (string.IsNullOrWhiteSpace(project)) return null;
 
         // The folder above Binaries is the project; some games keep their AppData folder under the game folder's name instead.
@@ -28,16 +28,27 @@ public static class EngineIniLocator
         foreach (var gameName in new[] { game.Name, stripped }.Distinct(StringComparer.OrdinalIgnoreCase))
             if (FirstConfigDir(System.IO.Path.Combine(documents, "My Games", gameName)) is { } dir) return At(dir, "Documents");
 
-        var projectDir = game.Tech.ModFolder is { } mod ? System.IO.Path.GetDirectoryName(System.IO.Path.GetDirectoryName(mod)) : null;
+        var projectDir = game.Effective.ModFolder is { } mod ? System.IO.Path.GetDirectoryName(System.IO.Path.GetDirectoryName(mod)) : null;
         if (projectDir is not null && FirstConfigDir(projectDir) is { } inGame) return At(inGame, "game folder");
         if (Directory.Exists(game.Root))
             foreach (var sibling in SafeDirectories(game.Root))
                 if (FirstConfigDir(sibling) is { } other) return At(other, "game folder");
 
         // Nothing yet: the game creates its config where the engine puts it, which is AppData.
-        var platform = game.Tech.ModFolder is { } m && System.IO.Path.GetFileName(m).Equals("WinGDK", StringComparison.OrdinalIgnoreCase) ? "WinGDK" : "Windows";
+        var platform = game.Effective.ModFolder is { } m && System.IO.Path.GetFileName(m).Equals("WinGDK", StringComparison.OrdinalIgnoreCase) ? "WinGDK" : "Windows";
         return new EngineIniTarget(System.IO.Path.Combine(localAppData, project, "Saved", "Config", platform, "Engine.ini"), false, "new, in AppData");
     }
+
+    /// <summary>The Engine.ini hint of a game: the path the user typed, else the catalog's.</summary>
+    public static string? HintFor(GameOverride? game, string? catalogHint) => string.IsNullOrWhiteSpace(game?.EngineIniPath) ? catalogHint : game.EngineIniPath;
+
+    /// <summary>
+    /// Why a typed path can't be used, or null when it can: it has to be a folder or an .ini file under AppData, Documents or the game
+    /// folder, the only places the install record can name (so the edit can be undone).
+    /// </summary>
+    public static string? Problem(GameInfo game, string path, string localAppData, string documents) =>
+        string.IsNullOrWhiteSpace(path) || FromOverride(game, path, localAppData, documents) is not null ? null
+            : "Engine.ini has to be in AppData, Documents or the game folder; that is where the app can undo its changes.";
 
     private static EngineIniTarget? FromOverride(GameInfo game, string? hint, string localAppData, string documents)
     {
@@ -49,7 +60,7 @@ public static class EngineIniLocator
         var file = path.EndsWith(".ini", StringComparison.OrdinalIgnoreCase) ? path : System.IO.Path.Combine(path, "Engine.ini");
         // Only places the install record may name: AppData, Documents or the game.
         var allowed = new[] { localAppData, documents, game.Root }.Any(root => FileUtil.IsUnder(file, root));
-        return allowed ? new EngineIniTarget(file, File.Exists(file), "the catalog's path for this game") : null;
+        return allowed ? new EngineIniTarget(file, File.Exists(file), "the path set for this game") : null;
     }
 
     private static string? FirstConfigDir(string projectRoot)

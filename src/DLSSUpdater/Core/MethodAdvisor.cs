@@ -129,7 +129,7 @@ public static class MethodAdvisor
     {
         fileExists ??= File.Exists;
         if (game.Root.Contains(@"\WindowsApps\", StringComparison.OrdinalIgnoreCase)) return true;
-        return game.Tech.Bits == 0 && game.Exes.Count > 0 && fileExists(Path.Combine(game.Root, "MicrosoftGame.config"));
+        return game.Effective.Bits == 0 && game.Exes.Count > 0 && fileExists(Path.Combine(game.Root, "MicrosoftGame.config"));
     }
 
     /// <summary>A Store install whose folder the app can't write to (a probe file fails): nothing can be added, whatever the user confirms.</summary>
@@ -216,7 +216,7 @@ public static class MethodAdvisor
     {
         public AdvisorInput In { get; } = input;
         public GameInfo Game => In.Game;
-        public GameTech Tech => In.Game.Tech;
+        public GameTech Tech => In.Game.Effective;
         public GpuInfo Gpu => In.Gpu;
         public bool Native => In.NativeDlss ?? Game.Features.HasFlag(GameFeatures.SR);
         public GraphicsApis Api => Tech.PrimaryApi;

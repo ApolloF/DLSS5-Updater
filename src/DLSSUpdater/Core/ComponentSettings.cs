@@ -123,6 +123,17 @@ public sealed partial class GameOverride
     public void SetHdrUeExtended(bool? on) =>
         Components = ComponentPicks.SetOption(Components, ComponentRegistry.RenoDxHdr, "ue-extended", on is null ? null : on.Value ? "on" : "off");
 
+    /// <summary>The RenoDX HDR mod the user picked by hand for this game: a catalog mod id, a generic id, or <see cref="HdrManual.CustomMod"/> (an imported add-on, whose library id is the build pick); null = automatic.</summary>
+    public string? HdrMod => ComponentPicks.GetOption(Components, ComponentRegistry.RenoDxHdr, "mod");
+
+    public void SetHdrMod(string? mod) => Components = ComponentPicks.SetOption(Components, ComponentRegistry.RenoDxHdr, "mod", mod);
+
+    /// <summary>Engine.ini location typed by the user for this game's HDR mod and Unreal frame cap; null = the catalog's hint, else the search.</summary>
+    public string? EngineIniPath => ComponentPicks.GetOption(Components, ComponentRegistry.RenoDxHdr, "engine-ini");
+
+    public void SetEngineIniPath(string? path) =>
+        Components = ComponentPicks.SetOption(Components, ComponentRegistry.RenoDxHdr, "engine-ini", string.IsNullOrWhiteSpace(path) ? null : path.Trim());
+
     /// <summary>Replaces this game's option values for a component in the map; null or empty removes them.</summary>
     public void SetPickOptions(string id, Dictionary<string, string>? options) => Components = ComponentPicks.SetOptions(Components, id, options);
 }

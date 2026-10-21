@@ -100,7 +100,7 @@ public sealed class ReShadeExtras
     }
 
     /// <summary>The bitness add-ons are chosen for: the game's own, unless the game has a manual pick.</summary>
-    public int BitsOf(GameInfo game) => ExtrasPicks.BitsOf(_settings.Games.GetValueOrDefault(game.Id)) ?? (game.Tech.Bits == 32 ? 32 : 64);
+    public int BitsOf(GameInfo game) => ExtrasPicks.BitsOf(_settings.Games.GetValueOrDefault(game.Id)) ?? (game.Effective.Bits == 32 ? 32 : 64);
 
     private bool UserSets(string gameId, string key) =>
         GameConfig.EffectiveReShade(_settings, gameId).Any(o => o.Section.Equals("GENERAL", StringComparison.OrdinalIgnoreCase)

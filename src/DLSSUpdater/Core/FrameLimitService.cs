@@ -96,7 +96,7 @@ public sealed class FrameLimitService(ComponentStore store, Installer installer,
                 build = await PrepareAddonAsync(r, notes, progress, ct);
                 break;
             case LimitMethod.Unreal:
-                if (!r.Game.Tech.IsUnreal) throw new InvalidOperationException($"{r.Game.Name} isn't an Unreal Engine game: t.MaxFPS is for Unreal games only.");
+                if (!r.Game.Effective.IsUnreal) throw new InvalidOperationException($"{r.Game.Name} isn't an Unreal Engine game: t.MaxFPS is for Unreal games only.");
                 engine = EngineIniFor(r) ?? throw new InvalidOperationException("The game's Engine.ini location couldn't be worked out (Unreal project not found), so t.MaxFPS can't be set.");
                 break;
         }
@@ -157,7 +157,7 @@ public sealed class FrameLimitService(ComponentStore store, Installer installer,
         }
         var limiterId = LimitMethods.ComponentOf(r.Method)!;
         var name = LimitMethods.Label(r.Method);
-        var arch = LimiterFiles.ArchOf(r.Game.Tech.Is32Bit);
+        var arch = LimiterFiles.ArchOf(r.Game.Effective.Is32Bit);
         var resolved = LimiterResolution.Resolve(store, limiterId, arch, r.Catalog, r.BuildPick);
         if (resolved.Note is { } note) notes.Add(note);
         if (!resolved.Found)

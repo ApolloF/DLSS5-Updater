@@ -269,7 +269,7 @@ public sealed partial class FeederLibrary(GitHubClient github)
     public static ComponentPlan Plan(LibraryBuild build, GameInfo game, string targetDir)
     {
         var pkg = PackageOf(build);
-        var is32 = game.Tech.Is32Bit;
+        var is32 = game.Effective.Is32Bit;
         var files = new List<(string Source, string Dest)>
         {
             (Path.Combine(pkg, is32 ? Addon32 : Addon64), Path.Combine(targetDir, is32 ? Addon32 : Addon64)),
