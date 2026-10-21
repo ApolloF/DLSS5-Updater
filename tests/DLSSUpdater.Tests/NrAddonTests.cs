@@ -36,36 +36,35 @@ public sealed class NrAddonTests : IDisposable
     }
 
     [Fact]
-    public void SettingsToggles_AreExclusive_StillAllowNone()
+    public void SettingsToggles_LeaveTheOthersOn_AndReportTheClash()
     {
         var s = new AppSettings();
         NrAddons.SetDefault(s, NrAddon.RenoDx, true);
+        Assert.Empty(NrAddons.DefaultConflicts(s));
         NrAddons.SetDefault(s, NrAddon.Lecram, true);
-        Assert.Equal((false, true, false), (s.InstallRenoDx, s.InstallLecram, s.InstallUplift));
+        Assert.Equal((true, true, false), (s.InstallRenoDx, s.InstallLecram, s.InstallUplift));
+        Assert.Single(NrAddons.DefaultConflicts(s));
         NrAddons.SetDefault(s, NrAddon.Uplift, true);
-        Assert.Equal((false, false, true), (s.InstallRenoDx, s.InstallLecram, s.InstallUplift));
+        Assert.Equal((true, true, true), (s.InstallRenoDx, s.InstallLecram, s.InstallUplift));
+        Assert.Equal(3, NrAddons.DefaultConflicts(s).Count);
         NrAddons.SetDefault(s, NrAddon.Uplift, false);
-        Assert.Equal((false, false, false), (s.InstallRenoDx, s.InstallLecram, s.InstallUplift));
-    }
-
-    [Theory]
-    [InlineData(true, true, false, false, true, false)]  // Settings keep one default: Lecram outranks ShortFuse
-    [InlineData(true, true, true, false, false, true)]   // Uplift wins, as installs already did
-    [InlineData(true, false, true, false, false, true)]
-    [InlineData(false, true, false, false, true, false)] // one add-on: nothing changes
-    public void Migration_KeepsOneDefault(bool sf, bool lecram, bool uplift, bool sfAfter, bool lecramAfter, bool upliftAfter)
-    {
-        var s = new AppSettings { InstallRenoDx = sf, InstallLecram = lecram, InstallUplift = uplift };
-        var changed = NrAddons.Migrate(s);
-        Assert.Equal((sfAfter, lecramAfter, upliftAfter), (s.InstallRenoDx, s.InstallLecram, s.InstallUplift));
-        Assert.Equal((sf, lecram, uplift) != (sfAfter, lecramAfter, upliftAfter), changed);
-        Assert.False(NrAddons.Migrate(s));
+        NrAddons.SetDefault(s, NrAddon.Lecram, false);
+        Assert.Equal((true, false, false), (s.InstallRenoDx, s.InstallLecram, s.InstallUplift));
     }
 
     [Fact]
-    public void OldSettingsFile_WithTheRemovedAllowKey_StillLoads()
+    public void OldSettingsFile_WithSeveralAddonsOn_KeepsEveryDefault()
     {
         FileUtil.AtomicWriteText(AppPaths.SettingsFile, """{"InstallRenoDx":true,"InstallLecram":true,"AllowSeveralNrAddons":true,"SomethingFromTheFuture":1}""");
+        var s = AppSettings.Load();
+        Assert.True(s.InstallLecram);
+        Assert.True(s.InstallRenoDx);
+    }
+
+    [Fact]
+    public void OldSettingsFile_WithOneAddonOn_KeepsIt()
+    {
+        FileUtil.AtomicWriteText(AppPaths.SettingsFile, """{"InstallRenoDx":false,"InstallLecram":true,"AllowSeveralNrAddons":false}""");
         var s = AppSettings.Load();
         Assert.True(s.InstallLecram);
         Assert.False(s.InstallRenoDx);

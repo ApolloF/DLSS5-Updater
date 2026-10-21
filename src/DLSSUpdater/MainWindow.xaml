@@ -1592,6 +1592,8 @@
                                                     <CheckBox IsChecked="{Binding InstallLecram}" Margin="0,8" AutomationProperties.Name="Install Lecram DLSS5 add-on (ReShade + add-ons mode; runs its own NR; needs ReShade 6+ and the NR runtime)">
                                                         <TextBlock Text="Install Lecram DLSS5 add-on (ReShade + add-ons mode; runs its own NR; needs ReShade 6+ and the NR runtime)" TextWrapping="Wrap" />
                                                     </CheckBox>
+                                                    <TextBlock Text="{Binding NrAddonDefaultsWarning}" Foreground="{StaticResource Warn}" FontSize="11.5" TextWrapping="Wrap" Margin="18,0,0,4"
+                                                               Visibility="{Binding HasNrAddonDefaultsWarning, Converter={StaticResource BoolToVis}}" />
                                                     <CheckBox IsChecked="{Binding InstallDlssNr}" Margin="0,8" AutomationProperties.Name="Install NR runtime (nvngx_dlssnr.dll)">
                                                         <TextBlock Text="Install NR runtime (nvngx_dlssnr.dll)" TextWrapping="Wrap" />
                                                     </CheckBox>

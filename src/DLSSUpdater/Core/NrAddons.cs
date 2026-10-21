@@ -13,15 +13,8 @@ public enum NrAddon { RenoDx, Lecram, Uplift, Dfc, Bridge, OptiScaler }
 /// </summary>
 public static class NrAddons
 {
-    /// <summary>Who stays when only one default may: the route the mod picker treats as the one in use.</summary>
+    /// <summary>The route the mod picker treats as the one in use when several are on.</summary>
     public static readonly NrAddon[] Priority = [NrAddon.Uplift, NrAddon.Dfc, NrAddon.Lecram, NrAddon.RenoDx];
-
-    /// <summary>The add-ons that survive "one default" in Settings, kept by <see cref="Priority"/>.</summary>
-    private static IReadOnlySet<NrAddon> KeepOne(IEnumerable<NrAddon> enabled)
-    {
-        var on = enabled.ToHashSet();
-        return Priority.Where(on.Contains).Take(1).ToHashSet();
-    }
 
     public static string Name(NrAddon a) => a switch
     {
@@ -104,25 +97,11 @@ public static class NrAddons
         return found;
     }
 
-    /// <summary>
-    /// Settings saved before defaults were kept clash-free may have several on: one stays, by <see cref="Priority"/>. Per game, any
-    /// set of add-ons can be picked and confirmed.
-    /// </summary>
-    public static bool Migrate(AppSettings s)
-    {
-        var before = (s.InstallRenoDx, s.InstallLecram, s.InstallUplift);
-        var kept = KeepOne(Defaults(s));
-        foreach (var a in Defaults(s).ToList()) Apply(s, a, kept.Contains(a));
-        return before != (s.InstallRenoDx, s.InstallLecram, s.InstallUplift);
-    }
+    /// <summary>Switches a default add-on in Settings. Other defaults stay as they are; a clash is a warning the user confirms.</summary>
+    public static void SetDefault(AppSettings s, NrAddon addon, bool on) => Apply(s, addon, on);
 
-    /// <summary>Switches a default add-on in Settings; switching one on switches off the others.</summary>
-    public static void SetDefault(AppSettings s, NrAddon addon, bool on)
-    {
-        if (on)
-            foreach (var other in Defaults(s).Where(a => a != addon).ToList()) Apply(s, other, false);
-        Apply(s, addon, on);
-    }
+    /// <summary>What clashes among the defaults in Settings, one line per pair; empty when they fit.</summary>
+    public static IReadOnlyList<string> DefaultConflicts(AppSettings s) => Conflicts(Defaults(s));
 
     private static void Apply(AppSettings s, NrAddon addon, bool on)
     {

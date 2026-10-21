@@ -227,9 +227,8 @@ public sealed partial class AppSettings
                     if (sourceMigrated) s.OptiSource = ComponentStore.OptiRepo;
                     s.Presets.RemoveAll(p => p.Name.Equals(ConfigProfile.RecommendedName, StringComparison.OrdinalIgnoreCase));
                     var renoDxMigrated = RenoDxIni.Migrate(s);
-                    var addonsMigrated = NrAddons.Migrate(s);
                     var lecramMigrated = s.MigrateLecramNewest();
-                    if (s._legacyTokenRead || sourceMigrated || renoDxMigrated || addonsMigrated || lecramMigrated) s.Save();
+                    if (s._legacyTokenRead || sourceMigrated || renoDxMigrated || lecramMigrated) s.Save();
                     return s;
                 }
             }

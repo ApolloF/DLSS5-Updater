@@ -465,7 +465,16 @@ public sealed partial class SettingsViewModel : ObservableObject
 
     private void SetNrAddon(NrAddon addon, bool on)
     {
-        NrAddons.SetDefault(Settings, addon, on);
+        if (on)
+        {
+            NrAddons.SetDefault(Settings, addon, true);
+            if (NrAddons.DefaultConflicts(Settings) is { Count: > 0 } clash
+                && !Views.Dialog.Confirm("Check before installing",
+                    string.Join(Environment.NewLine + Environment.NewLine, clash) + Environment.NewLine + Environment.NewLine + "You can keep them all on anyway, for example to compare. The warning stays here and on the games.",
+                    "Keep both on", danger: true))
+                NrAddons.SetDefault(Settings, addon, false);
+        }
+        else NrAddons.SetDefault(Settings, addon, false);
         Save();
         NotifyNrAddons();
     }
@@ -475,7 +484,12 @@ public sealed partial class SettingsViewModel : ObservableObject
         OnPropertyChanged(nameof(InstallRenoDx));
         OnPropertyChanged(nameof(InstallUplift));
         OnPropertyChanged(nameof(InstallLecram));
+        OnPropertyChanged(nameof(NrAddonDefaultsWarning));
+        OnPropertyChanged(nameof(HasNrAddonDefaultsWarning));
     }
+
+    public string? NrAddonDefaultsWarning => NrAddons.DefaultConflicts(Settings) is { Count: > 0 } c ? string.Join(Environment.NewLine, c) : null;
+    public bool HasNrAddonDefaultsWarning => NrAddonDefaultsWarning is not null;
 
     public string DlssNrInfo => Describe(_main.S.Store.DlssNrPath, _main.S.DlssNrSha, true);
     public string? LecramMessage => _main.S.Store.SfLecramMessage(_main.S.Store.RenoDxImported, _main.S.Store.LecramImported, Settings.RenoDxId, Settings.LecramId);
