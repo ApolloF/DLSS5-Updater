@@ -104,10 +104,11 @@ public static class LegacyComponents
         if (m.ReShade)
         {
             var file = m.Mode == InstallMode.ReShadeOnly && m.Proxy is not null ? m.Proxy : ComponentStore.ReShadeFile;
-            var reshade = Add(ComponentRegistry.ReShade, m.ReShadeSha, null, f => Beside(f, file, "ReShade.ini"));
+            var reshade = Add(ComponentRegistry.ReShade, m.ReShadeId ?? m.ReShadeSha, null, f => Beside(f, file, "ReShade.ini"));
             Hash(reshade, file, m.ReShadeSha);
             Edits(reshade, m.ReShadeIni, "ReShade.ini", s => !OtherSection(s));
             if (m.Mode == InstallMode.ReShadeOnly && m.Proxy is not null) reshade.Extras["Proxy"] = m.Proxy;
+            if (m.ReShadeVulkan) reshade.Extras["Vulkan"] = "true";
         }
         if (m.RenoDx)
         {
