@@ -44,7 +44,7 @@ Each component has exactly these parts. A part that doesn't apply is explicitly 
 - Owner-only conveniences that a public build must not have (today: fetching Lecram's paid builds from his channel)
   sit behind a compile-time switch (`-p:<Name>=true`, default off, `BuildFlags.<Name>`), are compiled in both variants
   and tested in both. Public releases build with the switch off; `tools/build-private.ps1` builds the private
-  variant; the release bot drops it on copyparty after each release (`tools/release-bot/README.md`).
+  variant; the release bot drops it on copyparty after each release.
 - NVIDIA's `nvngx_dlssnr.dll` is never bundled, uploaded or downloaded.
 
 ## 4. Choosing builds
@@ -75,7 +75,7 @@ A new component, or a new version of one, ships in one PR with:
    tested build; `TestedVersion` raised only after the options match.
 3. Options, help topics and per-build variants for the new or changed config keys.
 4. Tests for import/download, install, uninstall, switching, config writing and version/compat detection.
-5. README table row, release notes entry, and the release bot's watch list (`tools/release-bot`) when there is an
+5. README table row, release notes entry, and the release bot's watch list when there is an
    upstream channel to watch.
 6. The check command (`dotnet build -warnaserror && dotnet test`, plus `-p:<Switch>=true` builds for each build
    switch) passing.
