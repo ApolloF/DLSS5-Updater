@@ -367,6 +367,7 @@ public sealed partial class AppSettings
 [JsonSerializable(typeof(CachedComponent))]
 [JsonSerializable(typeof(NrVersion))]
 [JsonSerializable(typeof(AddonBuild))]
+[JsonSerializable(typeof(HdrBuild))]
 [JsonSerializable(typeof(AddonPairTest))]
 [JsonSerializable(typeof(Dictionary<string, InstallRefs>))]
 [JsonSerializable(typeof(Dictionary<string, PeScanResult>))]
