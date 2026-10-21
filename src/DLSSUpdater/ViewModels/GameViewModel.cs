@@ -307,7 +307,15 @@ public sealed partial class GameViewModel : ObservableObject
     {
         if (value == "Config") EnsureConfigRows();
         if (value != "Nvidia" || Demo.Active) return;
-        if (Driver is null && DriverExe is { } exe) Driver = new DriverProfileViewModel(exe, Name, Features, Info.FgVersion);
+        if (Driver is null && DriverExe is { } exe)
+        {
+            var over = _s.Settings.Games.GetValueOrDefault(Id) ?? new GameOverride();
+            Driver = new DriverProfileViewModel(exe, Name, Features, Info.FgVersion, over, () =>
+            {
+                _s.Settings.Games[Id] = over;
+                _s.Settings.Save();
+            });
+        }
         if (Driver is { Loaded: false, Busy: false } d) d.LoadCommand.Execute(null);
     }
 

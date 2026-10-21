@@ -46,6 +46,8 @@ public static class ComponentRegistry
     public const string Lecram = "lecram-dlss5";
     public const string Dfc = "dfc";
     public const string Uplift = "gitc-uplift";
+    /// <summary>Not a component with files: the per-game record of what the app wrote into the NVIDIA driver profile (<see cref="NvidiaRecord"/>).</summary>
+    public const string NvidiaDriver = "nvidia-driver";
 
     private static readonly ConcurrentDictionary<string, ComponentDefinition> Defs = new(StringComparer.OrdinalIgnoreCase);
 
