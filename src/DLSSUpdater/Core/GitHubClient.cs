@@ -87,6 +87,15 @@ public sealed class GitHubClient
         return releases;
     }
 
+    /// <summary>
+    /// Raw content of a file in a repository (contents API with the raw media type, so size isn't capped at 1 MB), through
+    /// the ETag cache. Stale = served from the cache because GitHub failed.
+    /// </summary>
+    public Task<(string Body, bool Stale)> GetRepoFileAsync(string repo, string path, CancellationToken ct) =>
+        GetApiAsync($"https://api.github.com/repos/{repo}/contents/{path}", ct, RawAccept);
+
+    private const string RawAccept = "application/vnd.github.raw+json";
+
     public async Task<List<string>> GetTagsAsync(string repo, int perPage, CancellationToken ct)
     {
         var (body, _) = await GetApiAsync($"https://api.github.com/repos/{repo}/tags?per_page={perPage}", ct);
@@ -114,7 +123,7 @@ public sealed class GitHubClient
     /// Body of an API request, and whether it came from the ETag cache because GitHub failed (stale). A token GitHub
     /// refuses is dropped for the rest of the session, with one warning, so an expired token never hides new releases.
     /// </summary>
-    private async Task<(string Body, bool Stale)> GetApiAsync(string url, CancellationToken ct)
+    private async Task<(string Body, bool Stale)> GetApiAsync(string url, CancellationToken ct, string accept = "application/vnd.github+json")
     {
         var cacheFile = CacheFileFor(url);
         var cached = ReadEntry(cacheFile) is { } e && e.Url == url ? e : null;
@@ -125,7 +134,7 @@ public sealed class GitHubClient
         cts.CancelAfter(TimeSpan.FromSeconds(30));
         try
         {
-            var res = await SendApiAsync(url, token, cached, cts.Token);
+            var res = await SendApiAsync(url, token, cached, cts.Token, accept);
             try
             {
                 if (token is not null && await IsTokenRejectedAsync(res, cts.Token))
@@ -134,7 +143,7 @@ public sealed class GitHubClient
                         Log.Warn($"GitHub rejected the saved access token ({(int)res.StatusCode}); it may be expired or revoked. " +
                                  "Checking without it for now. Replace or clear it in Settings.");
                     res.Dispose();
-                    res = await SendApiAsync(url, null, cached, cts.Token);
+                    res = await SendApiAsync(url, null, cached, cts.Token, accept);
                 }
                 if (res.StatusCode == HttpStatusCode.NotModified && cached is not null) return (cached.Body, false);
                 if (!res.IsSuccessStatusCode && cached is not null)
@@ -157,10 +166,10 @@ public sealed class GitHubClient
         }
     }
 
-    private async Task<HttpResponseMessage> SendApiAsync(string url, string? token, ApiCacheEntry? cached, CancellationToken ct)
+    private async Task<HttpResponseMessage> SendApiAsync(string url, string? token, ApiCacheEntry? cached, CancellationToken ct, string accept)
     {
         using var req = new HttpRequestMessage(HttpMethod.Get, url);
-        req.Headers.Accept.Add(new MediaTypeWithQualityHeaderValue("application/vnd.github+json"));
+        req.Headers.Accept.Add(new MediaTypeWithQualityHeaderValue(accept));
         req.Headers.Add("X-GitHub-Api-Version", "2022-11-28");
         if (token is not null) req.Headers.Authorization = new AuthenticationHeaderValue("Bearer", token);
         if (cached is not null) req.Headers.IfNoneMatch.Add(EntityTagHeaderValue.Parse(cached.ETag));

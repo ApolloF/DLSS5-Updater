@@ -40,6 +40,8 @@ public sealed class GameInfo
     public string Name { get; set; } = "";
     public string Source { get; set; } = "";
     public string Root { get; set; } = "";
+    /// <summary>Steam AppID from the game's appmanifest; null for other launchers and manual folders.</summary>
+    public int? SteamAppId { get; set; }
 
     /// <summary>Executables, best candidate first.</summary>
     public List<string> Exes { get; set; } = [];
@@ -80,4 +82,4 @@ public sealed class GameInfo
 }
 
 /// <summary>A game folder reported by a launcher or the user, before inspection.</summary>
-public sealed record GameEntry(string Name, string Root, string Source);
+public sealed record GameEntry(string Name, string Root, string Source, int? SteamAppId = null);

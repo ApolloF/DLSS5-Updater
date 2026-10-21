@@ -26,10 +26,10 @@ Each component has exactly these parts. A part that doesn't apply is explicitly 
 | Library | Every build the app has is kept in that component's library under `components\<component>\<build id>\`, with a `version.json` (id, label, detected version, source = downloaded/imported, date, user label). One build = one folder holding the whole set of files. No single-file "current import" slots. |
 | Build id | SHA-256 of the build's main file (downloads may use the release tag when the release publishes digests). Duplicate imports dedupe by id. |
 | Order | Newest first by the component's version (tag, version resource or detected label; one `BuildOrder` implementation). Ties: newer date first. |
-| Default | Settings hold `<Component>Id`; **null means "Newest"** and follows the newest build in the library automatically. Picking a build pins it; picking "Newest" unpins. The app never pins on its own. |
-| Per-game pick | `GameOverride.<Component>Id`, same semantics (null = follow the default). The game page shows the same picker for every component with more than one build: "Default (<label>)", then the builds. |
+| Default | Settings hold the build by component id (`AppSettings.DefaultBuild(id)`: `<Component>Id` for the components from before 3.0, `Components[id].Build` for the rest); **null means "Newest"** and follows the newest build in the library automatically. Picking a build pins it; picking "Newest" unpins. The app never pins on its own. |
+| Per-game pick | `GameOverride.BuildPick(id)` (`<Component>Id` or `Components[id]`), same semantics (null = follow the default). The game page shows the same picker for every component with more than one build: "Default (<label>)", then the builds. |
 | Cleanup | Every library is in `BuildCleanup` with a keep count (default 2). Protected: the default, per-game picks, builds installed in a game, the runtime a game can switch back to. Automatic cleanup removes downloaded builds only; imported builds go only by hand. The UI shows why extra builds stay. |
-| Install | One `Installer.Place<Component>` that places the whole build set; the manifest records the component's build id, tag and its file list (`<Component>Files`), before each copy. Removal = exactly those files, originals restored. |
+| Install | One generic record per component in the game's install record (`InstallManifest.Components`, an `InstalledComponent`): component id, build id, version label, the files placed with the SHA-256 of what was placed, backups (original -> backup), config keys set (file, section, key, value, the previous value or absent), file attributes changed, and a string map for extras. `Installer.InstallComponentAsync` takes a `ComponentPlan` (the whole wanted set) and records each step before it is taken. Removal undoes exactly what the record lists, in reverse order (attributes, keys, files), originals restored; a file, key or attribute that changed since we set it stays as it is and is reported as changed by the user or the game, never deleted silently. Placed files and backups are also kept in the record-level `Files`/`Backups` lists, so an older version still restores the originals. |
 | Config | If the app writes the mod's config: a `<Component>Config` with `TestedVersion` (+ schema when the mod has one), a compat report, merge rules shared with the ini merger, options defined once with help topics. Options a build doesn't know are hidden and not written. |
 | Update check | Downloads: through `GitHubClient.GetApiAsync` (ETag cache) or the component's documented channel; offline falls back to cached data and never throws at the user. Import-only: no check in the app; the release bot watches the author's public channel if one exists. |
 | Docs and tests | `docs/addons/<component>.md` (checked builds table, package layout, config diff per version, licence) and one test file per component: import/download, install/uninstall, config writing, compat detection. |
@@ -80,7 +80,34 @@ A new component, or a new version of one, ships in one PR with:
 6. The check command (`dotnet build -warnaserror && dotnet test`, plus `-p:<Switch>=true` builds for each build
    switch) passing.
 
-## 7. Known gaps (2026-10-20)
+## 7. Registering a component
+
+A component recorded the generic way needs one registration and no per-component fields:
+
+1. One line in `ComponentRegistry`'s list: `Register(new("<id>", "<Name>") { Library = ..., Label = ..., OwnedFiles = [...] })`.
+   The id is stable (letters, digits, `-`, `.`, `_`): install records, `install-refs.json` and settings keep it.
+   `Library` (if the component has builds) makes the cleanup protect its default, per-game picks and installed builds,
+   and `KnownInstalls` remember them for unplugged drives. `Label` puts it in the game list's mod label.
+2. Install: build a `ComponentPlan` (source -> destination files, config keys, files to lock read-only, extras) and call
+   `Installer.InstallComponentAsync`; inside the main install run use `ApplyPlan` with its context. Installing again
+   with another plan updates in place: what the new plan lacks is undone, a placed file the user changed is kept in
+   `.dlssupdater\previous` before it is replaced.
+3. Remove: `Installer.RemoveComponentAsync`; the game's uninstall removes it with everything else.
+4. Settings: `AppSettings.DefaultBuild/SetDefaultBuild(id)` and `GameOverride.BuildPick/SetBuildPick(id)`, with on/off
+   and option values in the same `ComponentPick` (`PickOf(id)`). Null build = follow the default / Newest.
+
+Paths: files go into the game or the install folder. Config keys and attributes may also change an `.ini`/`.cfg` in
+%LocalAppData% or Documents (`InstallManifest.KnownFolderTags`), for example UE's Engine.ini; nothing else outside.
+
+**Record versions.** Schema 1 is every record up to 2.2.x; schema 2 adds `Components`. The components that existed
+before 3.0 (OptiScaler, ReShade, MFG Unlock, NR runtime, DLSS, Streamline, ShortFuse, Lecram, DFC, GITC Uplift) still
+store their per-component fields, and `LegacyComponents` reads them into the same `InstalledComponent` view, so code
+that works by id sees them too. Downgrading to 2.2.x: it reads a schema-2 record, ignores `Components` and drops it on
+its next save, but still deletes the placed files and restores the backups (both are also in the record-level lists).
+It does not undo config keys or attribute changes of generic components. Fields a newer version wrote are kept
+(`JsonExtensionData`), so a record never loses data this version doesn't know.
+
+## 8. Known gaps (2026-10-21)
 
 Measured against this guideline on main (after #63, #66 and #67). Each is fixed when its component is next touched, or in its own PR.
 
@@ -93,5 +120,9 @@ Measured against this guideline on main (after #63, #66 and #67). Each is fixed 
   for imports). Target: one library type with a source flag.
 - **Verification differs**: GitHub digests, Uplift's `SHA256SUMS.txt` (skipped when absent), the MediaFire listing hash.
   Target: one verifier per source kind, and no install without a digest.
+- **Per-component install fields**: the components from before 3.0 still keep their own fields in the install record
+  (`Opti`/`OptiTag`, `DfcFiles`, `DfcCfg`, `LecramFile`, ...) and their own install and removal code in `Installer`;
+  `LegacyComponents` only reads them. Each moves to `InstalledComponent` when it is next reworked; the per-component
+  fields keep being written for one major version so 2.2.x can still read the record.
 - **Compat checks differ** per component (`OptiCompat`, `UpliftConfig`, `DfcConfig`, `LecramIni`, ...). Target: one
   `ComponentCompat` shape (tested version, schema, missing keys, summary) that each config class fills.
