@@ -273,7 +273,7 @@ public sealed class DfcTests : IDisposable
     }
 
     [Fact]
-    public async Task Dfc_NeedsReShadeOnlyMode_AndExcludesRenoDx()
+    public async Task Dfc_NeedsReShadeOnlyMode_AndKeepsRenoDxWhenAlsoPicked()
     {
         _store.ImportDfc(Release());
         _store.ImportRenoDx(RenoDxAddon());
@@ -356,15 +356,14 @@ public sealed class DfcTests : IDisposable
         vm.Components.First(c => c.Key == "dfc").Enabled = true;
         var options = vm.BuildOptions(false, false);
         Assert.True(options.Dfc);
-        Assert.False(options.RenoDx);
+        Assert.True(options.RenoDx);
         Assert.True(options.DlssNr);
         Assert.True(options.ReShade);
-        Assert.False(vm.Components.First(c => c.Key == "renodx").Enabled);
+        Assert.NotNull(vm.ConflictWarning);
 
-        vm.Components.First(c => c.Key == "renodx").Enabled = true;
-        Assert.False(vm.Components.First(c => c.Key == "dfc").Enabled);
-        Assert.True(vm.BuildOptions(false, false).RenoDx);
-        Assert.False(vm.BuildOptions(false, false).Dfc);
+        vm.Components.First(c => c.Key == "renodx").Enabled = false;
+        Assert.True(vm.BuildOptions(false, false).Dfc);
+        Assert.Null(vm.ConflictWarning);
     }
 
     private static IniOverride O(string key, string value) => new(DfcConfig.Section, key, value);
@@ -1300,7 +1299,7 @@ public sealed class DfcTests : IDisposable
     }
 
     [Fact]
-    public async Task Dfc_NextToAForeignDx11Bridge_IsRefused_WithTheOneConsumerReason()
+    public async Task Dfc_NextToAForeignDx11Bridge_NeedsConfirmation_WithTheOneConsumerReason()
     {
         _store.ImportDfc(Package());
         var game = PlainGame();
@@ -1309,8 +1308,9 @@ public sealed class DfcTests : IDisposable
 
         var ex = await Assert.ThrowsAsync<InvalidOperationException>(() => installer.InstallAsync(game, PlainRoot, Dfc(), null, default));
 
-        Assert.Contains("can't be in the same game", ex.Message);
+        Assert.Contains("don't work well in the same game", ex.Message);
         Assert.Contains("DX11 bridge", ex.Message);
         Assert.False(File.Exists(P(ComponentStore.DfcFile)));
+
     }
 }
