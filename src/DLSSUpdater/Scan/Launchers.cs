@@ -97,7 +97,7 @@ public static class Launchers
                 if (SteamSkipNames.Any(s => name.Contains(s, StringComparison.OrdinalIgnoreCase))) continue;
                 var path = Path.Combine(apps, "common", dir);
                 listed.Add(dir);
-                if (Directory.Exists(path)) games.Add(new GameEntry(name.Length > 0 ? name : dir, path, "Steam"));
+                if (Directory.Exists(path)) games.Add(new GameEntry(name.Length > 0 ? name : dir, path, "Steam", int.TryParse(id, out var appId) && appId > 0 ? appId : null));
             }
             catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) { }
         }

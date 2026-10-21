@@ -57,6 +57,7 @@ public static class GameScanner
             Name = entry.Name,
             Source = entry.Source,
             Root = FileUtil.Normalize(entry.Root),
+            SteamAppId = entry.SteamAppId,
         };
         try { GameInspector.Inspect(game); }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
