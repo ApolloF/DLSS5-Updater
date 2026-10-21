@@ -46,5 +46,9 @@ and Engine.ini work (`docs/addons/renodx-hdr.md`). `Sections.RenodxDlss.Builds` 
 `File` a zip with its SHA-256 (pinned, no mirror): `ComponentStore.CheckRenoDxCatalogAsync` downloads the newest, takes `renodx-dlss.addon64` out
 and imports it (`docs/design.md` section 3, the exception).
 
+`Sections.FrameLimiters.Limiters` lists the add-on files of ReLimiter (mirrored, MIT) and Display Commander (pinned, no licence found), one entry per limiter with its `release` tag
+and a file per bitness (a 32-bit file is absent when the release has none); `ComponentStore.EnsureLimiterBuildAsync` downloads one through `CatalogDownloader`
+(`docs/addons/frame-limiters.md`).
+
 A build's identity for the library is `file.Sha256`; `file.Version` is its label; `file.History` lists earlier builds.
 `renodx.Overrides` offers `OptsOutOfUeExtended(appId, name)` and `EngineIniPath(appId, name)` for the Unreal Extended path.

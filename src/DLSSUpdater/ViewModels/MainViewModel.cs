@@ -160,7 +160,7 @@ public sealed partial class MainViewModel : ObservableObject
     [ObservableProperty]
     [NotifyCanExecuteChangedFor(nameof(InstallCommand), nameof(DlssOnlyCommand), nameof(UninstallCommand),
         nameof(RestoreDlssCommand), nameof(SwitchNrCommand), nameof(UndoNrCommand), nameof(UpdateAllCommand), nameof(CheckUpdatesCommand), nameof(RescanCommand),
-        nameof(AddGameFolderCommand), nameof(AddLibraryRootCommand), nameof(RemoveGameCommand), nameof(InstallHdrCommand), nameof(RemoveHdrCommand))]
+        nameof(AddGameFolderCommand), nameof(AddLibraryRootCommand), nameof(RemoveGameCommand), nameof(InstallHdrCommand), nameof(RemoveHdrCommand), nameof(ApplyFrameLimitCommand), nameof(RemoveFrameLimitCommand))]
     private bool _isBusy;
 
     // component chips

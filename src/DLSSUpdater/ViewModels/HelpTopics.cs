@@ -492,6 +492,22 @@ public static class HelpTopics
             "The catalog lists ShortFuse's RenoDX DLSS add-on with a SHA-256 for each build. With this on, each update check downloads a newer build, verifies the hash, checks that the file is the add-on and adds it to the ShortFuse library; a newer build becomes the default like an import does. " +
             "A build that fails the hash check is thrown away. Offline checks change nothing. Games keep the build they have until you update them. " +
             "Turn it off to manage the library by hand: importing a file in Local components works either way. No nvngx_dlssnr.dll is downloaded."),
+        // ---------- Frame limit ----------
+        new("frame-limit", "Frame limit", "Frame limit",
+            "One frame limit per game, set by one method. Pick the method and the cap on the game's Install tab; Auto picks the NVIDIA driver limiter on NVIDIA cards and the game page says what Auto picked. " +
+            "Choosing a method yourself wins over Auto and the Settings default; Reset to auto removes your choice. Nothing changes in a game until you press Apply, and switching removes the previous limiter and puts back what it changed. " +
+            "While ReLimiter or Display Commander is installed, a limit set in the game's NVIDIA driver profile is switched to 0 (two limiters would fight over the same frames) and put back when the add-on goes. " +
+            "With frame generation in the game, a hint suggests a cap of refresh rate ÷ frame generation factor; it is only shown, never applied. " +
+            "Games with anti-cheat only get the driver limiter and the Unreal setting, because the add-ons are injected into the game."),
+        new("frame-limit-method", "Frame limit", "Frame limit methods",
+            "NVIDIA driver limiter: written into the game's driver profile (Frame Rate Limiter V3, 0 or 20 to 1000 FPS in the driver, 30 to 1000 here). Nothing is placed in the game and it works for every graphics API. Needs an NVIDIA card. " +
+            "ReLimiter (RankFTW/ReLimiter, MIT): a ReShade add-on for frame pacing on G-Sync / VRR displays. This app writes target_fps (and osd_enabled when you choose it) in the [FrameLimiter] section of relimiter.ini beside the add-on. The 32-bit build exists from ReLimiter 3.3.1 on. " +
+            "Display Commander (pmnoxx/display-commander): a ReShade add-on with an FPS limiter and window controls. This app writes fps_limit and fps_limiter_enabled in the [DisplayCommander] section of DisplayCommander.ini beside the exe. Its repository has no licence file, so the catalog points at the author's own download instead of a copy. " +
+            "Unreal t.MaxFPS: sets t.MaxFPS in the [SystemSettings] section of the game's Engine.ini (Epic lists console variables there, and describes the cvar as \"Caps FPS to the given value. Set to <= 0 to be uncapped.\"). Unreal games only; some games ignore it or override it in their own menus. " +
+            "Both add-ons need ReShade with add-on support; a game without ReShade gets it first. Every download is checked against the SHA-256 in the catalog, and you can import the add-on yourself in Settings."),
+        new("frame-limit-ini", "Frame limit", "Extra ini lines",
+            "Your own settings for the limiter's config file, one key=value per line. A [Section] line above them changes the section (the limiter's own section is the default). They are written after what this app writes, so your value wins, and they go back with the add-on or the cap when you remove it. " +
+            "A key you change in the game's own overlay later is not overwritten by an update, only by pressing Apply. Lines starting with ; or # are ignored. The app only writes the keys the projects document; anything else you want must be listed here."),
     ];
 
     /// <summary>The help topic behind the ⓘ button of a component row on the Install tab.</summary>
@@ -638,6 +654,9 @@ public static class HelpTopics
         ["hdr-renodx"] = "Install what is picked. Switch Use Unreal Extended off only if the game misbehaves with it, then try the plain generic Unreal add-on. Tune the look in the ReShade overlay (Home).",
         ["hdr-peak"] = "Your display's real peak (the HDR Calibration app or rtings.com give it). Leave empty if you are not sure.",
         ["hdr-catalog-addon"] = "Leave on. Turn off only if you want to choose every build of the add-on yourself.",
+        ["frame-limit"] = "Leave Auto on NVIDIA cards. Pick ReLimiter if you have a G-Sync / VRR display and want tighter frame pacing; the Unreal setting is for games that ignore the driver limiter.",
+        ["frame-limit-method"] = "Driver limiter first: it needs nothing in the game. Use an add-on only when you want its pacing or overlay, and never two limiters at once.",
+        ["frame-limit-ini"] = "Leave empty unless you know the key you want to change; the limiter's own overlay already saves its settings.",
     };
 
     public static string? AdviceFor(string id) => Advice.GetValueOrDefault(id);

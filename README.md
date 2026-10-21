@@ -45,6 +45,8 @@ Settings for all games. Every option has a short explanation, and the help butto
 | [NVIDIA Streamline](https://github.com/NVIDIA-RTX/Streamline) | The layer between a game and DLSS frame generation. Optional. | Downloaded from NVIDIA's GitHub. |
 | [MFG Unlock](https://github.com/mavismmg/MFGAdaUnlock-RenoDx) | A ReShade add-on that unlocks multi frame generation on RTX 40 cards. | Downloaded from GitHub. |
 | [ReShade](https://reshade.me) | Post-processing and add-on loader. | Downloaded from reshade.me (add-on build, build without add-ons, older versions) or from crosire's CI (nightly), or imported. Every build is kept in a library; the file name follows the game's graphics API and Vulkan games use the Vulkan layer. |
+| [ReLimiter](https://github.com/RankFTW/ReLimiter) | A ReShade add-on for frame pacing and FPS limiting (MIT). One of the frame limit methods. | Downloaded through the catalog (checked against its SHA-256), or imported. |
+| [Display Commander](https://github.com/pmnoxx/display-commander) | A ReShade add-on with an FPS limiter and window controls. One of the frame limit methods. | Downloaded from the author's releases through the catalog (hash-pinned, no copy of ours), or imported. |
 | [GITC Uplift](https://github.com/ghostinthecamera/GITC-Uplift) | A ReShade add-on that runs DLSS neural rendering. Replaces the other neural rendering routes. | Downloaded from GitHub. |
 | [RenoDX DLSS add-on](https://github.com/clshortfuse/renodx) | ShortFuse's ReShade add-on for neural rendering. | You import the file yourself. |
 | Lecram DLSS5 add-on | A ReShade add-on for neural rendering by Lecram. | You import it yourself. The builds are available to supporters on the author's Buy Me a Coffee. |
