@@ -38,6 +38,11 @@ public sealed partial class MainViewModel : ObservableObject
             FrameLimit = new FrameLimitService(store, installer, new CatalogDownloader(gh), NvidiaProfile.Real),
         };
         Gh = gh;
+        gh.RateLimitChanged += () =>
+        {
+            if (_ui.CheckAccess()) RateLimit = gh.RateLimit;
+            else _ui.BeginInvoke(() => RateLimit = gh.RateLimit);
+        };
         S.Extras = new ReShadeExtras(S.Installer, settings, new CatalogDownloader(gh), ct => new CatalogClient(gh).LoadAsync(ct));
         S.RunJob = RunJob;
         S.Progress = TransferProgress;
@@ -182,6 +187,30 @@ public sealed partial class MainViewModel : ObservableObject
     [ObservableProperty] private bool _dlssNrOk;
     [ObservableProperty] private bool _reShadeOk;
     [ObservableProperty] private bool _online = true;
+    [ObservableProperty, NotifyPropertyChangedFor(nameof(ShowRateLimit))] private bool _rateLimitDismissed;
+    [ObservableProperty, NotifyPropertyChangedFor(nameof(ShowRateLimit), nameof(RateLimitText), nameof(CanAddGitHubToken))] private GitHubRateLimit? _rateLimit;
+
+    public bool ShowRateLimit => RateLimit is not null && !RateLimitDismissed;
+    public string RateLimitText => RateLimit?.Describe() ?? "";
+    public bool CanAddGitHubToken => RateLimit is { TokenUsed: false };
+
+    /// <summary>The Settings page is open on the General tab; the window puts the cursor in the GitHub token box.</summary>
+    public event Action? FocusGitHubToken;
+
+    [RelayCommand]
+    private void AddGitHubToken()
+    {
+        AboutOpen = false;
+        SettingsVm.Tab = "General";
+        SettingsOpen = true;
+        FocusGitHubToken?.Invoke();
+    }
+
+    [RelayCommand]
+    private void OpenGitHubTokenPage() => OpenUrl("https://github.com/settings/personal-access-tokens/new");
+
+    [RelayCommand]
+    private void DismissRateLimit() => RateLimitDismissed = true;
 
     partial void OnSearchChanged(string value) => RefreshGames();
 

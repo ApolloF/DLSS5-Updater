@@ -497,8 +497,22 @@
             </StackPanel>
         </Grid>
 
+        <StackPanel Grid.Row="1">
+        <!-- GitHub is rate-limiting the app; the cached versions are shown -->
+        <Border Background="{StaticResource WarnSoft}" BorderBrush="{StaticResource Warn}" BorderThickness="2,0,0,0" Padding="18,8"
+                Visibility="{Binding ShowRateLimit, Converter={StaticResource BoolToVis}}">
+            <DockPanel>
+                <Button DockPanel.Dock="Right" Content="&#xE711;" Style="{StaticResource BtnGhost}" FontFamily="Segoe MDL2 Assets" Margin="8,0,0,0"
+                        Command="{Binding DismissRateLimitCommand}" AutomationProperties.Name="Dismiss" ToolTip="Hide this for now" />
+                <Button DockPanel.Dock="Right" Content="How to make a token" Style="{StaticResource BtnGhost}" Margin="8,0,0,0"
+                        Command="{Binding OpenGitHubTokenPageCommand}" Visibility="{Binding CanAddGitHubToken, Converter={StaticResource BoolToVis}}" ToolTip="Opens GitHub's page for new fine-grained tokens; public read only needs no permissions" />
+                <Button DockPanel.Dock="Right" Content="Add a GitHub token" Command="{Binding AddGitHubTokenCommand}" Margin="8,0,0,0"
+                        Visibility="{Binding CanAddGitHubToken, Converter={StaticResource BoolToVis}}" />
+                <TextBlock Text="{Binding RateLimitText}" VerticalAlignment="Center" TextWrapping="Wrap" />
+            </DockPanel>
+        </Border>
         <!-- ============ Component strip ============ -->
-        <Border Grid.Row="1" BorderBrush="{StaticResource Line}" BorderThickness="0,1,0,1" Background="{StaticResource Surface}">
+        <Border BorderBrush="{StaticResource Line}" BorderThickness="0,1,0,1" Background="{StaticResource Surface}">
             <Grid Margin="18,12,18,12">
                 <Grid.ColumnDefinitions>
                     <ColumnDefinition Width="*" />
@@ -603,6 +617,7 @@
                 </StackPanel>
             </Grid>
         </Border>
+        </StackPanel>
 
         <!-- ============ Content ============ -->
         <Grid Grid.Row="2">
@@ -1801,7 +1816,7 @@
                                             </Border>
 
                                             <TextBlock Text="GITHUB TOKEN (OPTIONAL)" Style="{StaticResource SectionTitle}" />
-                                            <TextBox Text="{Binding GitHubToken, UpdateSourceTrigger=LostFocus}" Tag="Only needed if update checks hit GitHub's request limit"
+                                            <TextBox x:Name="GitHubTokenBox" Text="{Binding GitHubToken, UpdateSourceTrigger=LostFocus}" Tag="Only needed if update checks hit GitHub's request limit"
                                                      AutomationProperties.Name="GitHub token" />
 
                                             <StackPanel Orientation="Horizontal" Margin="0,28,0,0">
