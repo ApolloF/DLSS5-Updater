@@ -23,13 +23,14 @@ public class FrameLimitRulesTests
     [Theory]
     [InlineData(LimitMethod.ReLimiter)]
     [InlineData(LimitMethod.DisplayCommander)]
-    public void Add_on_limiters_are_refused_with_anti_cheat_and_say_why(LimitMethod method)
+    public void Add_on_limiters_with_anti_cheat_are_a_warning_to_confirm_not_a_block(LimitMethod method)
     {
         var a = FrameLimitRules.Availability(method, Plain("BattlEye"), FrameLimitFixtures.Env());
 
-        Assert.False(a.Available);
-        Assert.Contains("BattlEye", a.Reason);
-        Assert.Contains("driver limiter is still fine", a.Reason);
+        Assert.True(a.Available);
+        Assert.Contains("BattlEye", a.Warning);
+        Assert.Contains("driver limiter", a.Warning);
+        Assert.NotEqual(method, FrameLimitRules.Auto(Plain("BattlEye"), FrameLimitFixtures.Env()));
     }
 
     [Theory]
@@ -116,13 +117,26 @@ public class FrameLimitRulesTests
     public void A_chosen_method_the_game_cannot_use_falls_back_to_auto_and_the_note_says_why()
     {
         var over = new GameOverride();
+        FrameLimitSettings.SetMethod(over, LimitMethod.Unreal);
+
+        var e = FrameLimitRules.Effective(Plain(), FrameLimitFixtures.Env(), over, new AppSettings());
+
+        Assert.Equal(LimitMethod.Driver, e.Method);
+        Assert.False(e.Manual);
+        Assert.Contains("can't be used here", e.Note);
+        Assert.Contains("Unreal", e.Note);
+    }
+
+    [Fact]
+    public void A_chosen_add_on_in_an_anti_cheat_game_is_kept_with_the_warning_as_its_note()
+    {
+        var over = new GameOverride();
         FrameLimitSettings.SetMethod(over, LimitMethod.ReLimiter);
 
         var e = FrameLimitRules.Effective(Plain("EasyAntiCheat"), FrameLimitFixtures.Env(), over, new AppSettings());
 
-        Assert.Equal(LimitMethod.Driver, e.Method);
-        Assert.False(e.Manual);
-        Assert.Contains("ReLimiter can't be used here", e.Note);
+        Assert.Equal(LimitMethod.ReLimiter, e.Method);
+        Assert.True(e.Manual);
         Assert.Contains("EasyAntiCheat", e.Note);
     }
 

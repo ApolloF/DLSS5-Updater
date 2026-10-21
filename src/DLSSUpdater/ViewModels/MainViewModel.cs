@@ -779,9 +779,15 @@ public sealed partial class MainViewModel : ObservableObject
     {
         var g = SelectedGame;
         if (g?.SelectedTarget is null || !g.FrameLimit.CanApply) return;
+        var confirmed = false;
+        if (g.FrameLimit.NeedsAntiCheatConfirm)
+        {
+            if (!Dialog.Confirm($"{g.AntiCheat} detected", $"{g.FrameLimit.Note}\n\nOnly continue for offline / single-player use.", "Install anyway", danger: true)) return;
+            confirmed = true;
+        }
         await Run($"Setting the frame limit for {g.Name}", async ct =>
         {
-            await g.FrameLimit.ApplyAsync(TransferProgress(), ct);
+            await g.FrameLimit.ApplyAsync(TransferProgress(), ct, antiCheatConfirmed: confirmed);
             // An add-on may have put ReShade into a game that had none.
             await RescanOne(g);
             await AutoCleanUpAsync();

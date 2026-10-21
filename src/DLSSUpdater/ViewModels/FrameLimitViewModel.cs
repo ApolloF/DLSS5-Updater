@@ -167,6 +167,9 @@ public sealed partial class FrameLimitViewModel(GameViewModel game, Services ser
 
     public string ApplyText => _active == Method && _needsUpdate ? "Update" : "Apply";
 
+    /// <summary>The chosen add-on needs the user's OK first (anti-cheat); the warning stays in <see cref="Note"/>.</summary>
+    public bool NeedsAntiCheatConfirm => _effective is { } e && _env is not null && FrameLimitRules.Availability(e.Method, game.Info, _env).Warning.Length > 0 && _active != e.Method;
+
     private bool Available(LimitMethod m) => _env is not null && FrameLimitRules.Availability(m, game.Info, _env).Available;
 
     // ---------- refresh ----------
@@ -264,13 +267,13 @@ public sealed partial class FrameLimitViewModel(GameViewModel game, Services ser
     // ---------- actions ----------
 
     /// <summary>Brings the game to the chosen method and cap. Throws what the service throws (anti-cheat, no 32-bit build, offline with an empty library).</summary>
-    internal async Task ApplyAsync(IProgress<TransferProgress>? progress, CancellationToken ct, bool update = false)
+    internal async Task ApplyAsync(IProgress<TransferProgress>? progress, CancellationToken ct, bool update = false, bool antiCheatConfirmed = false)
     {
         if (_effective is not { } e || services.FrameLimit is not { } service || game.SelectedTarget is not { } target)
             throw new InvalidOperationException("Nothing to apply for this game.");
         var method = update ? _active : e.Method;
         var fps = update && ActiveRecord?.Extras.GetValueOrDefault(FrameLimitPlanner.FpsKey) is { } kept && int.TryParse(kept, out var k) ? k : e.Fps;
-        var request = Request(target, method, fps, force: !update);
+        var request = Request(target, method, fps, force: !update, antiCheatConfirmed || update);
         var result = await service.ApplyAsync(request, services.Settings.Save, progress, ct);
         foreach (var n in result.Notes) Log.Info($"{game.Name}: {n}");
         Log.Info($"{game.Name}: frame limit {LimitMethods.Label(result.Method)}{(result.Method == LimitMethod.None ? "" : $" at {fps} FPS")}");
@@ -283,7 +286,7 @@ public sealed partial class FrameLimitViewModel(GameViewModel game, Services ser
         Log.Info($"{game.Name}: frame limiter removed");
     }
 
-    private FrameLimitRequest Request(TargetOption target, LimitMethod method, int fps, bool force)
+    private FrameLimitRequest Request(TargetOption target, LimitMethod method, int fps, bool force, bool antiCheatConfirmed = false)
     {
         var settings = services.Settings;
         var over = settings.For(game.Id);
@@ -294,6 +297,6 @@ public sealed partial class FrameLimitViewModel(GameViewModel game, Services ser
         var reshade = new HdrReShade(game.ReShadeChoice?.Tag, over.Proxy, GameConfig.EffectiveReShade(settings, game.Id), ReShadeIniTemplate.Load());
         return new FrameLimitRequest(game.Info, target.Dir, new NvidiaGame(exe, game.Name, over), method, fps, pick,
             FrameLimitSettings.IniText(over.PickOf(ComponentRegistry.FrameLimit)), id is null ? null : PinFor(id),
-            id is null ? null : CatalogLimiter(id), hint, reshade, force);
+            id is null ? null : CatalogLimiter(id), hint, reshade, force, antiCheatConfirmed);
     }
 }

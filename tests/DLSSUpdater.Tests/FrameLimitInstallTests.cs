@@ -102,13 +102,13 @@ public class FrameLimitInstallTests : IDisposable
     private void DriverLimitOf(uint fps) => _drs.AddProfile(FakeDrs.Exe).Values[Fps] = fps;
 
     private FrameLimitRequest Req(GameInfo g, LimitMethod method, int fps = 117, bool? osd = null, string? userIni = null, string? pick = null,
-        CatalogLimiter? catalog = null, bool force = true) =>
+        CatalogLimiter? catalog = null, bool force = true, bool acConfirmed = false) =>
         new(g, _target, new NvidiaGame(FakeDrs.Exe, "Game", _over), method, fps, osd, userIni, pick,
-            catalog ?? FrameLimitFixtures.Section().For(method == LimitMethod.DisplayCommander ? "display-commander" : "relimiter"), null, null, force);
+            catalog ?? FrameLimitFixtures.Section().For(method == LimitMethod.DisplayCommander ? "display-commander" : "relimiter"), null, null, force, acConfirmed);
 
     private Task<FrameLimitResult> Apply(GameInfo g, LimitMethod method, int fps = 117, bool? osd = null, string? userIni = null, string? pick = null,
-        CatalogLimiter? catalog = null, bool force = true) =>
-        _service.ApplyAsync(Req(g, method, fps, osd, userIni, pick, catalog, force), () => _saves++, null, default);
+        CatalogLimiter? catalog = null, bool force = true, bool acConfirmed = false) =>
+        _service.ApplyAsync(Req(g, method, fps, osd, userIni, pick, catalog, force, acConfirmed), () => _saves++, null, default);
 
     private LimitMethod Active() => FrameLimitService.Active(InstallManifest.Read(_target), _over);
     private InstalledComponent? Record(string id) => InstallManifest.Read(_target)?.Component(id);
@@ -201,7 +201,7 @@ public class FrameLimitInstallTests : IDisposable
     }
 
     [Fact]
-    public async Task Anti_cheat_games_get_no_add_on_but_keep_the_driver_limiter()
+    public async Task Anti_cheat_games_get_an_add_on_only_after_the_user_confirmed_and_always_the_driver_limiter()
     {
         var g = Game(antiCheat: "EasyAntiCheat");
 
@@ -212,6 +212,10 @@ public class FrameLimitInstallTests : IDisposable
 
         await Apply(g, LimitMethod.Driver, 100);
         Assert.Equal(100u, _drs.Value(Fps));
+
+        var result = await Apply(g, LimitMethod.DisplayCommander, acConfirmed: true);
+        Assert.Contains(result.Notes, n => n.Contains("EasyAntiCheat"));
+        Assert.Equal(LimitMethod.DisplayCommander, Active());
     }
 
     [Fact]

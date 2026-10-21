@@ -43,11 +43,15 @@ public static class LimitMethods
     };
 }
 
-/// <summary>Whether a method can be used for a game, with the one-line reason when it can't.</summary>
-public sealed record LimitAvailability(LimitMethod Method, bool Available, string Reason)
+/// <summary>
+/// Whether a method can be used for a game, with the one-line reason when it can't. <see cref="Warning"/>: usable, but only after the user
+/// confirms (an add-on in a game with anti-cheat); Auto never picks such a method.
+/// </summary>
+public sealed record LimitAvailability(LimitMethod Method, bool Available, string Reason, string Warning = "")
 {
     public static LimitAvailability Yes(LimitMethod m) => new(m, true, "");
     public static LimitAvailability No(LimitMethod m, string reason) => new(m, false, reason);
+    public static LimitAvailability Warn(LimitMethod m, string warning) => new(m, true, "", warning);
 }
 
 /// <summary>What the rules need to know about the machine and the catalog; the view model fills it, tests build it directly.</summary>
@@ -80,14 +84,15 @@ public static class FrameLimitRules
                 // An Engine.ini setting is no injection; it stays allowed with anti-cheat.
                 return env.EngineIniKnown ? LimitAvailability.Yes(method) : LimitAvailability.No(method, "The game's Engine.ini location couldn't be worked out (Unreal project not found).");
             default:
-                if (game.AntiCheat is { } ac)
-                    return LimitAvailability.No(method, $"{game.Name} has {ac} anti-cheat: no add-on is installed in games with anti-cheat. The driver limiter is still fine.");
                 var name = LimitMethods.Label(method);
                 if (!env.Addons.TryGetValue(method, out var have)) have = (false, false);
-                if (game.Tech.Is32Bit)
-                    return have.Has32 ? LimitAvailability.Yes(method) : LimitAvailability.No(method, $"{name} has no 32-bit build, and this game is 32-bit.");
-                return have.Has64 ? LimitAvailability.Yes(method)
-                    : LimitAvailability.No(method, $"{name} isn't in the library yet and the catalog can't be reached. Import it in Settings or try again online.");
+                var ok = game.Tech.Is32Bit ? have.Has32 : have.Has64;
+                if (!ok)
+                    return LimitAvailability.No(method, game.Tech.Is32Bit ? $"{name} has no 32-bit build, and this game is 32-bit."
+                        : $"{name} isn't in the library yet and the catalog can't be reached. Import it in Settings or try again online.");
+                return game.AntiCheat is { } ac
+                    ? LimitAvailability.Warn(method, $"{game.Name} has {ac} anti-cheat: an injected add-on can get an account banned and online modes may refuse to start. The driver limiter places nothing and is the safe choice.")
+                    : LimitAvailability.Yes(method);
         }
     }
 
@@ -95,7 +100,7 @@ public static class FrameLimitRules
     public static LimitMethod Auto(GameInfo game, LimitEnvironment env)
     {
         foreach (var m in new[] { LimitMethod.Driver, LimitMethod.Unreal, LimitMethod.DisplayCommander })
-            if (Availability(m, game, env).Available) return m;
+            if (Availability(m, game, env) is { Available: true, Warning.Length: 0 }) return m;
         return LimitMethod.None;
     }
 
@@ -113,7 +118,7 @@ public static class FrameLimitRules
         if (chosen is null) return new FrameLimitSetting(auto, fps, Manual: false, AutoMethod: auto, null);
         var availability = Availability(chosen.Value, game, env);
         return availability.Available
-            ? new FrameLimitSetting(chosen.Value, fps, gameChoice is not null, auto, null)
+            ? new FrameLimitSetting(chosen.Value, fps, gameChoice is not null, auto, availability.Warning.Length > 0 ? availability.Warning : null)
             : new FrameLimitSetting(auto, fps, Manual: false, auto, $"{LimitMethods.Label(chosen.Value)} can't be used here: {availability.Reason}");
     }
 }

@@ -46,7 +46,9 @@ public sealed record FrameLimitRequest(
     string? EngineIniHint,
     HdrReShade? ReShade,
     /// <summary>An explicit Apply: our keys replace what the files hold. False for an update of the add-on.</summary>
-    bool Force = true);
+    bool Force = true,
+    /// <summary>The user confirmed the anti-cheat warning for an add-on (or the add-on is already installed and only updates).</summary>
+    bool AntiCheatConfirmed = false);
 
 /// <param name="Notes">Warnings for the log and the game page (a second limiter in the folder, a build that fell back).</param>
 public sealed record FrameLimitResult(LimitMethod Method, IReadOnlyList<ComponentUndo> Undone, IReadOnlyList<string> Notes);
@@ -148,7 +150,11 @@ public sealed class FrameLimitService(ComponentStore store, Installer installer,
 
     private async Task<LimiterBuild> PrepareAddonAsync(FrameLimitRequest r, List<string> notes, IProgress<TransferProgress>? progress, CancellationToken ct)
     {
-        if (r.Game.AntiCheat is { } ac) throw new InvalidOperationException($"{r.Game.Name} has {ac} anti-cheat: no add-on is installed in games with anti-cheat.");
+        if (r.Game.AntiCheat is { } ac)
+        {
+            if (!r.AntiCheatConfirmed) throw new InvalidOperationException($"{r.Game.Name} has {ac} anti-cheat: the add-on is only installed after you confirm the warning.");
+            notes.Add($"{r.Game.Name} has {ac} anti-cheat; the add-on was installed after confirmation.");
+        }
         var limiterId = LimitMethods.ComponentOf(r.Method)!;
         var name = LimitMethods.Label(r.Method);
         var arch = LimiterFiles.ArchOf(r.Game.Tech.Is32Bit);

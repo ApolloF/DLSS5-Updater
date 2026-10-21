@@ -177,15 +177,29 @@ public class FrameLimitViewModelTests : IDisposable
     [Fact]
     public void A_method_the_game_cannot_use_is_explained_and_Auto_is_used()
     {
+        var vm = NewVm(NewServices(), Game(g => g.Tech.Engine = GameEngine.Unknown));
+        var fl = vm.FrameLimit;
+
+        fl.MethodChoice = Choice(fl, LimitMethod.Unreal);
+
+        Assert.Equal(LimitMethod.Driver, fl.Method);
+        Assert.True(fl.HasNote);
+        Assert.Contains("Unreal", fl.Note);
+        Assert.Contains("(not available)", Choice(fl, LimitMethod.Unreal).Label);
+    }
+
+    [Fact]
+    public void An_add_on_in_an_anti_cheat_game_can_be_chosen_but_asks_for_confirmation_and_keeps_its_warning()
+    {
         var vm = NewVm(NewServices(), Game(g => g.AntiCheat = "EasyAntiCheat"));
         var fl = vm.FrameLimit;
 
         fl.MethodChoice = Choice(fl, LimitMethod.ReLimiter);
 
-        Assert.Equal(LimitMethod.Driver, fl.Method);
-        Assert.True(fl.HasNote);
+        Assert.Equal(LimitMethod.ReLimiter, fl.Method);
+        Assert.True(fl.NeedsAntiCheatConfirm);
         Assert.Contains("EasyAntiCheat", fl.Note);
-        Assert.Contains("(not available)", Choice(fl, LimitMethod.DisplayCommander).Label);
+        Assert.DoesNotContain("(not available)", Choice(fl, LimitMethod.ReLimiter).Label);
     }
 
     [Fact]
