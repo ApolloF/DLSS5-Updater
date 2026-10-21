@@ -7,6 +7,20 @@ public sealed class ExtrasLibraryTests : ExtrasTestBase
 {
     private string Incoming(string name) => Path.Combine(Tmp, "incoming", name);
 
+    [Theory]
+    [InlineData("imported:..")]
+    [InlineData("imported:")]
+    [InlineData("imported:..\\..\\x")]
+    [InlineData("imported:a/b")]
+    public void Ids_that_are_not_a_plain_folder_name_are_rejected(string id)
+    {
+        var outside = Path.Combine(Tmp, "keep.txt");
+        Write(outside, "x");
+        ExtrasLibrary.Remove(id);
+        Assert.True(File.Exists(outside));
+        Assert.Throws<ArgumentException>(() => ExtrasLibrary.DirOf(id));
+    }
+
     [Fact]
     public void An_add_on_file_is_copied_byte_for_byte_and_listed()
     {

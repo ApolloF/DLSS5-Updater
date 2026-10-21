@@ -28,8 +28,19 @@ public static class ExtrasLibrary
         return s.Length == 0 ? "import" : s.Length > 60 ? s[..60] : s;
     }
 
-    public static string DirOf(string id) =>
-        Path.Combine(Directory.Exists(Path.Combine(AddonsRoot, id[Prefix.Length..])) ? AddonsRoot : PacksRoot, id[Prefix.Length..]);
+    /// <summary>The folder name of an import id, or null when the rest isn't a plain folder name.</summary>
+    static string? FolderName(string id)
+    {
+        if (!IsImported(id)) return null;
+        var name = id[Prefix.Length..];
+        return name.Length == 0 || name is "." or ".." || name.IndexOfAny(Path.GetInvalidFileNameChars()) >= 0 || name.IndexOfAny(['/', '\\']) >= 0 ? null : name;
+    }
+
+    public static string DirOf(string id)
+    {
+        var name = FolderName(id) ?? throw new ArgumentException("Not an import id: " + id, nameof(id));
+        return Path.Combine(Directory.Exists(Path.Combine(AddonsRoot, name)) ? AddonsRoot : PacksRoot, name);
+    }
 
     // ---- add-ons ----
 
@@ -150,9 +161,10 @@ public static class ExtrasLibrary
     /// <summary>Deletes an import. Only the user asks for this; nothing cleans the imports up by itself.</summary>
     public static void Remove(string id)
     {
-        if (!IsImported(id)) return;
-        FileUtil.DeleteDirectory(Path.Combine(AddonsRoot, id[Prefix.Length..]));
-        FileUtil.DeleteDirectory(Path.Combine(PacksRoot, id[Prefix.Length..]));
+        var name = FolderName(id);
+        if (name is null) return;
+        FileUtil.DeleteDirectory(Path.Combine(AddonsRoot, name));
+        FileUtil.DeleteDirectory(Path.Combine(PacksRoot, name));
     }
 
     /// <summary>The Shaders folder (and the Textures folder beside it) inside a folder: the shallowest "Shaders" that holds an .fx, else the folder itself when it holds .fx files.</summary>
