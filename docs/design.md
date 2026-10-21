@@ -1,8 +1,8 @@
 # Design guideline
 
 How every component in DLSS5 Updater is handled. New code follows this; code that doesn't is listed under "Known gaps"
-and is brought in line when it is touched. AGENTS.md has the commands and coding conventions; this file has the
-product rules they serve. When a rule here and the code disagree, fix the code or change the rule in the same PR.
+and is brought in line when it is touched. This file has the
+product rules. When a rule here and the code disagree, fix the code or change the rule in the same PR.
 
 ## 1. Principles
 
@@ -14,7 +14,7 @@ product rules they serve. When a rule here and the code disagree, fix the code o
   forbids redistribution, or the builds are paid, the component is import-only in public builds.
 - **Say why.** When the app keeps, refuses, hides or skips something, the UI says why in one line.
 - **Facts, not guesses.** Options, labels and help text come from the mod's own docs, config comments and release
-  notes for that build. Undocumented values are marked undocumented (AGENTS.md, Conventions).
+  notes for that build. Undocumented values are marked undocumented.
 
 ## 2. The component model
 
@@ -45,7 +45,7 @@ Each component has exactly these parts. A part that doesn't apply is explicitly 
   sit behind a compile-time switch (`-p:<Name>=true`, default off, `BuildFlags.<Name>`), are compiled in both variants
   and tested in both. Public releases build with the switch off; `tools/build-private.ps1` builds the private
   variant; the release bot drops it on copyparty after each release (`tools/release-bot/README.md`).
-- NVIDIA's `nvngx_dlssnr.dll` is never bundled, uploaded or downloaded (AGENTS.md, Hard rules).
+- NVIDIA's `nvngx_dlssnr.dll` is never bundled, uploaded or downloaded.
 
 ## 4. Choosing builds
 
