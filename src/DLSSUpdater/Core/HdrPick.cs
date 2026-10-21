@@ -2,7 +2,7 @@ using DLSSUpdater.Scan;
 
 namespace DLSSUpdater.Core;
 
-public enum HdrKind { None, Named, UeExtended, UnrealGeneric, UnityGeneric }
+public enum HdrKind { None, Named, UeExtended, UnrealGeneric, UnityGeneric, Custom }
 
 /// <summary>How Unreal Extended gets HDR into a game; read from the wiki notes in the catalog (<see cref="CatalogEngineGame.Method"/>).</summary>
 public enum UeMethod { Native, Ini, Upgrade }
@@ -36,8 +36,8 @@ public sealed record HdrChoice
     public bool IsOffered => Kind != HdrKind.None && File is not null;
 
     /// <summary>Everything the files and ini edits depend on; an install is current while its stored signature matches.</summary>
-    public string Signature(int? peakNits) =>
-        string.Join('|', Kind, ModId, File?.Sha256, Ue?.Signature, peakNits?.ToString() ?? "");
+    public string Signature(int? peakNits, string? userEdits = null) =>
+        string.Join('|', Kind, ModId, File?.Sha256, Ue?.Signature, peakNits?.ToString() ?? "") + (string.IsNullOrEmpty(userEdits) ? "" : "|" + userEdits);
 }
 
 /// <summary>Unreal Extended per game: which path it takes and which keys that needs.</summary>
@@ -96,13 +96,15 @@ public sealed class HdrPicker
     }
 
     /// <param name="ueExtended">The user's switch for Unreal games without a named mod; null = the default (Unreal Extended unless the catalog opts the game out).</param>
-    public HdrChoice Pick(GameInfo game, bool? ueExtended)
+    /// <param name="manualMod">A catalog mod id or generic id (<see cref="UeExtendedId"/>, <see cref="UnrealId"/>, <see cref="UnityId"/>) the user picked by hand; null = automatic.</param>
+    public HdrChoice Pick(GameInfo game, bool? ueExtended, string? manualMod = null)
     {
         if (game.AntiCheat is { } ac)
             return None($"{ac} anti-cheat: no add-on is installed in games with anti-cheat.");
 
         var tech = game.Effective;
         var bits = tech.Bits;
+        if (manualMod is not null) return ByHand(game, manualMod, bits);
         var match = _matcher.Match(game);
         var mod = match.Mod;
 
@@ -147,6 +149,38 @@ public sealed class HdrPicker
 
         // The generic add-ons only come in 32 or 64 bit; a game whose exe couldn't be read is taken as 64-bit.
         return engine == UnrealId ? Unreal(game, bits == 32 ? 32 : 64, ueExtended, why) : Unity(game, bits == 32 ? 32 : 64, why);
+    }
+
+    /// <summary>
+    /// The mod the user picked by hand. The catalog's blocklist and "no download" rules still say so, but as a note: the user may know better.
+    /// Bitness and download availability are facts, so a missing build still refuses.
+    /// </summary>
+    private HdrChoice ByHand(GameInfo game, string id, int bits)
+    {
+        var size = bits == 32 ? 32 : 64;
+        var note = IsBlocked(game, _catalog.Mods.FirstOrDefault(m => m.Id.Equals(id, StringComparison.OrdinalIgnoreCase)));
+        HdrChoice choice;
+        if (id.Equals(UeExtendedId, StringComparison.OrdinalIgnoreCase)) choice = Unreal(game, size, true, "You picked it by hand. ");
+        else if (id.Equals(UnrealId, StringComparison.OrdinalIgnoreCase)) choice = Unreal(game, size, false, "You picked it by hand. ");
+        else if (id.Equals(UnityId, StringComparison.OrdinalIgnoreCase)) choice = Unity(game, size, "You picked it by hand. ");
+        else if (_catalog.Mods.FirstOrDefault(m => m.Id.Equals(id, StringComparison.OrdinalIgnoreCase)) is { } mod)
+        {
+            if (mod.Files.Any(f => f.IsInstallable)) choice = Named(mod, "your pick", size);
+            else if (mod.Generic is UnrealId or UnityId) choice = ByHand(game, mod.Generic, bits);
+            else choice = None($"{mod.Name} has no download in the catalog.", mod);
+        }
+        else choice = None($"The mod you picked ({id}) isn't in the catalog now. Reset to auto or pick another.");
+        return note is null || !choice.IsOffered ? choice : choice with { Notes = [.. choice.Notes, note] };
+    }
+
+    /// <summary>The mods the user may pick by hand: every catalog mod with a download or a generic add-on, then the three generic add-ons.</summary>
+    public IReadOnlyList<(string Id, string Name)> ManualChoices()
+    {
+        var list = _catalog.Mods.Where(m => m.Files.Any(f => f.IsInstallable) || m.Generic is UnrealId or UnityId)
+            .Select(m => (m.Id, m.Name)).ToList();
+        foreach (var g in _catalog.Generic.Where(g => g.Files.Any(f => f.IsInstallable)))
+            if (g.Id is UeExtendedId or UnrealId or UnityId) list.Add((g.Id, g.Name));
+        return list.DistinctBy(c => c.Id, StringComparer.OrdinalIgnoreCase).OrderBy(c => c.Name, StringComparer.OrdinalIgnoreCase).ToList();
     }
 
     private HdrChoice Named(CatalogMod mod, string how, int bits)

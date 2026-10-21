@@ -978,7 +978,12 @@
                         <ComboBox Grid.Column="2" ItemsSource="{Binding ProxyNames}" SelectedItem="{Binding Proxy}" AutomationProperties.Name="Proxy file name"
                                   ToolTip="File name the game loads the mod as" />
                     </Grid>
-                    <TextBlock Text="{Binding ProxyHint}" Style="{StaticResource MutedText}" FontSize="11.5" Margin="0,8,0,0" />
+                    <DockPanel Margin="0,8,0,0">
+                        <Button DockPanel.Dock="Right" Content="Reset to auto" Style="{StaticResource BtnGhost}" Margin="12,0,0,0" Command="{Binding ResetProxyCommand}"
+                                Visibility="{Binding ProxyDiffersFromAuto, Converter={StaticResource BoolToVis}}" AutomationProperties.Name="Reset the proxy file name to automatic" />
+                        <TextBlock Text="{Binding ProxyAutoText}" DockPanel.Dock="Right" Style="{StaticResource MutedText}" FontSize="11.5" Margin="12,0,0,0" />
+                        <TextBlock Text="{Binding ProxyHint}" Style="{StaticResource MutedText}" FontSize="11.5" TextWrapping="Wrap" />
+                    </DockPanel>
                     <StackPanel Orientation="Horizontal" Margin="0,14,0,0">
                         <TextBlock Text="INSTALL MODE" Style="{StaticResource Caps}" VerticalAlignment="Center" Margin="0,0,12,0" Width="140" />
                         <ComboBox Width="240" ItemsSource="{Binding Modes}" SelectedItem="{Binding ModeChoice}"
@@ -1196,11 +1201,61 @@
                                 </WrapPanel>
                                 <TextBlock Text="{Binding StatusLine}" Style="{StaticResource MutedText}" TextWrapping="Wrap" Margin="0,8,0,0"
                                            Visibility="{Binding HasStatusLine, Converter={StaticResource BoolToVis}}" />
+                                <StackPanel Margin="0,12,0,0" Visibility="{Binding ShowManual, Converter={StaticResource BoolToVis}}">
+                                    <TextBlock Text="MOD FOR THIS GAME" Style="{StaticResource Caps}" />
+                                    <TextBox Margin="0,4,0,0" HorizontalAlignment="Left" Width="260" Text="{Binding ModSearch, UpdateSourceTrigger=PropertyChanged}"
+                                             Tag="Search the catalog" AutomationProperties.Name="Search the RenoDX mods" ToolTip="Type part of a game or mod name to shorten the list below" />
+                                    <WrapPanel Margin="0,4,0,0" DataContext="{Binding ModPick}">
+                                        <ComboBox MinWidth="260" MaxDropDownHeight="300" Margin="0,0,8,4" ItemsSource="{Binding Choices}" SelectedItem="{Binding Selected}"
+                                                  AutomationProperties.Name="RenoDX mod for this game" ToolTip="{Binding Hint}" />
+                                        <TextBlock Text="{Binding StateText}" Style="{StaticResource MutedText}" VerticalAlignment="Center" Margin="0,0,8,4" />
+                                        <Button Content="Reset to auto" Style="{StaticResource BtnGhost}" Margin="0,0,8,4" Command="{Binding ResetCommand}"
+                                                Visibility="{Binding IsSet, Converter={StaticResource BoolToVis}}" AutomationProperties.Name="Reset the HDR mod to automatic" />
+                                    </WrapPanel>
+                                    <Button Content="Import your own add-on…" Style="{StaticResource BtnGhost}" HorizontalAlignment="Left" Command="{Binding ImportAddonCommand}"
+                                            AutomationProperties.Name="Import your own HDR add-on" ToolTip="Use a .addon64 or .addon32 you have (a newer snapshot, a test build) for this game" />
+                                    <TextBlock Text="{Binding ImportProblem}" Foreground="{StaticResource Warn}" FontSize="11.5" TextWrapping="Wrap" Margin="0,4,0,0" />
+                                </StackPanel>
                                 <StackPanel Margin="0,12,0,0" Visibility="{Binding ShowBuildChoices, Converter={StaticResource BoolToVis}}">
                                     <TextBlock Text="BUILD FOR THIS GAME" Style="{StaticResource Caps}" />
                                     <ComboBox Margin="0,4,0,0" HorizontalAlignment="Left" MinWidth="260" MaxDropDownHeight="300"
                                               ItemsSource="{Binding BuildChoices}" SelectedItem="{Binding BuildChoice}"
                                               AutomationProperties.Name="RenoDX HDR build for this game" ToolTip="Which downloaded build of this mod the game installs; Default follows the catalog" />
+                                </StackPanel>
+                                <StackPanel Margin="0,12,0,0" Visibility="{Binding IsUnreal, Converter={StaticResource BoolToVis}}">
+                                    <TextBlock Text="ENGINE.INI (UNREAL)" Style="{StaticResource Caps}" />
+                                    <TextBlock Text="{Binding EngineIniNow}" Style="{StaticResource MutedText}" FontSize="11.5" TextWrapping="Wrap" Margin="0,4,0,0" />
+                                    <WrapPanel Margin="0,4,0,0">
+                                        <TextBox Width="320" Margin="0,0,8,4" Text="{Binding EngineIniText, UpdateSourceTrigger=LostFocus}" Tag="Auto"
+                                                 AutomationProperties.Name="Engine.ini path for this game" ToolTip="Leave empty for automatic. A folder or an Engine.ini under AppData, Documents or the game folder." />
+                                        <Button Content="Browse…" Style="{StaticResource BtnGhost}" Margin="0,0,8,4" Command="{Binding BrowseEngineIniCommand}" AutomationProperties.Name="Browse for Engine.ini" />
+                                        <Button Content="Reset to auto" Style="{StaticResource BtnGhost}" Margin="0,0,8,4" Command="{Binding ResetEngineIniCommand}"
+                                                Visibility="{Binding HasEngineIniOverride, Converter={StaticResource BoolToVis}}" AutomationProperties.Name="Reset the Engine.ini path to automatic" />
+                                    </WrapPanel>
+                                    <TextBlock Text="{Binding EngineIniProblem}" Foreground="{StaticResource Warn}" FontSize="11.5" TextWrapping="Wrap" />
+                                </StackPanel>
+                                <StackPanel Margin="0,12,0,0" Visibility="{Binding ShowManual, Converter={StaticResource BoolToVis}}">
+                                    <TextBlock Text="YOUR INI VALUES" Style="{StaticResource Caps}" />
+                                    <TextBlock Text="Written to the file on install and update; they win over the values the app writes. reshade.ini takes [renodx...] sections only." Style="{StaticResource MutedText}" FontSize="11.5" TextWrapping="Wrap" Margin="0,2,0,0" />
+                                    <ItemsControl ItemsSource="{Binding IniRows}">
+                                        <ItemsControl.ItemTemplate>
+                                            <DataTemplate>
+                                                <StackPanel Margin="0,6,0,0">
+                                                    <WrapPanel>
+                                                        <ComboBox Width="90" Margin="0,0,6,4" ItemsSource="{x:Static vm:HdrIniRow.Files}" SelectedItem="{Binding File}" AutomationProperties.Name="Ini file" />
+                                                        <TextBox Width="130" Margin="0,0,6,4" Text="{Binding Section, UpdateSourceTrigger=LostFocus}" Tag="Section" AutomationProperties.Name="Ini section" />
+                                                        <TextBox Width="170" Margin="0,0,6,4" Text="{Binding Key, UpdateSourceTrigger=LostFocus}" Tag="Key" AutomationProperties.Name="Ini key" />
+                                                        <TextBox Width="130" Margin="0,0,6,4" Text="{Binding Value, UpdateSourceTrigger=LostFocus}" Tag="Value" AutomationProperties.Name="Ini value" />
+                                                        <Button Content="Remove" Style="{StaticResource BtnGhost}" Margin="0,0,6,4" AutomationProperties.Name="Remove this ini value"
+                                                                Command="{Binding DataContext.RemoveIniRowCommand, RelativeSource={RelativeSource AncestorType=ItemsControl}}" CommandParameter="{Binding}" />
+                                                    </WrapPanel>
+                                                    <TextBlock Text="{Binding Problem}" Foreground="{StaticResource Warn}" FontSize="11.5" TextWrapping="Wrap"
+                                                               Visibility="{Binding HasProblem, Converter={StaticResource BoolToVis}}" />
+                                                </StackPanel>
+                                            </DataTemplate>
+                                        </ItemsControl.ItemTemplate>
+                                    </ItemsControl>
+                                    <Button Content="Add a value" Style="{StaticResource BtnGhost}" HorizontalAlignment="Left" Margin="0,6,0,0" Command="{Binding AddIniRowCommand}" AutomationProperties.Name="Add an ini value" />
                                 </StackPanel>
                                 <StackPanel Margin="0,12,0,0" Visibility="{Binding ShowUeToggle, Converter={StaticResource BoolToVis}}">
                                     <CheckBox IsChecked="{Binding UeExtended}" AutomationProperties.Name="Use Unreal Extended">

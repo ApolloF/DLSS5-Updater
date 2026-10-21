@@ -204,7 +204,17 @@ public sealed partial class GameViewModel : ObservableObject
     }
 
     [ObservableProperty] private TargetOption? _selectedTarget;
-    [ObservableProperty] private string _proxy = "dxgi.dll";
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(ProxyDiffersFromAuto))]
+    private string _proxy = "dxgi.dll";
+
+    /// <summary>The proxy name the app would pick: from the graphics API in ReShade-only mode, else the default of the settings.</summary>
+    private string AutoProxy => IsReShadeOnly ? AutoReShadeProxy : _s.Settings.DefaultProxy;
+    public string ProxyAutoText => $"Auto: {AutoProxy}";
+    public bool ProxyDiffersFromAuto => !Proxy.Equals(AutoProxy, StringComparison.OrdinalIgnoreCase);
+
+    [RelayCommand]
+    private void ResetProxy() => Proxy = AutoProxy;
     [ObservableProperty] private InstallManifest? _manifest;
     [ObservableProperty] private DlssChoice? _dlssChoice;
     [ObservableProperty] private DlssChoice? _nrChoice;

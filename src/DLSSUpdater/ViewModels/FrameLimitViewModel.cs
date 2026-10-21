@@ -214,7 +214,7 @@ public sealed partial class FrameLimitViewModel(GameViewModel game, Services ser
             bool Arch(string arch) => catalog?.File(arch) is { IsInstallable: true } || services.Store.LimiterBuildsOf(id, arch).Count > 0;
             return (Arch("x64"), Arch("x86"));
         }
-        var hint = services.Catalog?.Document?.Sections.Renodx?.Overrides.EngineIniPath(game.Info.SteamAppId, game.Info.Name);
+        var hint = EngineIniLocator.HintFor(Over, services.Catalog?.Document?.Sections.Renodx?.Overrides.EngineIniPath(game.Info.SteamAppId, game.Info.Name));
         return new LimitEnvironment(services.FrameLimit?.NvidiaAvailable == true,
             new Dictionary<LimitMethod, (bool, bool)>
             {
@@ -293,7 +293,7 @@ public sealed partial class FrameLimitViewModel(GameViewModel game, Services ser
         var exe = game.DriverExe ?? throw new InvalidOperationException("No game executable was found, so there is no driver profile to write.");
         var id = LimitMethods.ComponentOf(method);
         var pick = FrameLimitSettings.Osd(over.PickOf(ComponentRegistry.FrameLimit));
-        var hint = services.Catalog?.Document?.Sections.Renodx?.Overrides.EngineIniPath(game.Info.SteamAppId, game.Info.Name);
+        var hint = EngineIniLocator.HintFor(over, services.Catalog?.Document?.Sections.Renodx?.Overrides.EngineIniPath(game.Info.SteamAppId, game.Info.Name));
         var reshade = new HdrReShade(game.ReShadeChoice?.Tag, over.Proxy, GameConfig.EffectiveReShade(settings, game.Id), ReShadeIniTemplate.Load());
         return new FrameLimitRequest(game.Info, target.Dir, new NvidiaGame(exe, game.Name, over), method, fps, pick,
             FrameLimitSettings.IniText(over.PickOf(ComponentRegistry.FrameLimit)), id is null ? null : PinFor(id),

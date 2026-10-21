@@ -127,6 +127,35 @@ public sealed partial class ComponentStore
         return build;
     }
 
+    /// <summary>
+    /// Adds an add-on the user has (a .addon64 or .addon32) to the library under the "custom" mod. There is no catalog hash to check it
+    /// against, so the copy's own SHA-256 becomes its id and every install checks the stored file against it.
+    /// </summary>
+    public HdrBuild ImportHdrBuild(string path)
+    {
+        var name = Path.GetFileName(path);
+        if (!ValidHdrFile(name)) throw new InvalidDataException($"{name} isn't a ReShade add-on (.addon64 or .addon32).");
+        var info = new FileInfo(path);
+        if (!info.Exists) throw new FileNotFoundException("The add-on file wasn't found.", path);
+        if (info.Length is 0 or > 200L * 1024 * 1024) throw new InvalidDataException($"{name} has an unexpected size.");
+        using (var f = File.OpenRead(path))
+            if (f.ReadByte() != 'M' || f.ReadByte() != 'Z') throw new InvalidDataException($"{name} isn't a Windows dll (an add-on is one with a different extension).");
+
+        var sha = FileUtil.Sha256(path).ToLowerInvariant();
+        if (HdrBuildFor(sha) is { } have && File.Exists(HdrPathOf(have))) return have;
+
+        var dir = Path.Combine(HdrRoot, sha);
+        Directory.CreateDirectory(dir);
+        File.Copy(path, Path.Combine(dir, name), overwrite: true);
+        var arch = name.EndsWith(".addon32", StringComparison.OrdinalIgnoreCase) ? "x86" : "x64";
+        var build = new HdrBuild(sha, name, arch, HdrManual.ImportedModId, Path.GetFileNameWithoutExtension(name), "imported " + sha[..8], null, null, null, DateTime.UtcNow);
+        FileUtil.AtomicWriteText(Path.Combine(dir, BuildRecordFile), JsonSerializer.Serialize(build, JsonCtx.Default.HdrBuild));
+        ForgetHdr();
+        NoteAdded(sha);
+        Log.Info($"RenoDX HDR: imported {name}");
+        return build;
+    }
+
     public void RemoveHdr(string id)
     {
         if (!ValidId(id)) throw new InvalidDataException("Invalid RenoDX HDR build id.");

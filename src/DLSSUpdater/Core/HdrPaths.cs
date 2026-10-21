@@ -39,6 +39,17 @@ public static class EngineIniLocator
         return new EngineIniTarget(System.IO.Path.Combine(localAppData, project, "Saved", "Config", platform, "Engine.ini"), false, "new, in AppData");
     }
 
+    /// <summary>The Engine.ini hint of a game: the path the user typed, else the catalog's.</summary>
+    public static string? HintFor(GameOverride? game, string? catalogHint) => string.IsNullOrWhiteSpace(game?.EngineIniPath) ? catalogHint : game.EngineIniPath;
+
+    /// <summary>
+    /// Why a typed path can't be used, or null when it can: it has to be a folder or an .ini file under AppData, Documents or the game
+    /// folder, the only places the install record can name (so the edit can be undone).
+    /// </summary>
+    public static string? Problem(GameInfo game, string path, string localAppData, string documents) =>
+        string.IsNullOrWhiteSpace(path) || FromOverride(game, path, localAppData, documents) is not null ? null
+            : "Engine.ini has to be in AppData, Documents or the game folder; that is where the app can undo its changes.";
+
     private static EngineIniTarget? FromOverride(GameInfo game, string? hint, string localAppData, string documents)
     {
         if (string.IsNullOrWhiteSpace(hint)) return null;
@@ -49,7 +60,7 @@ public static class EngineIniLocator
         var file = path.EndsWith(".ini", StringComparison.OrdinalIgnoreCase) ? path : System.IO.Path.Combine(path, "Engine.ini");
         // Only places the install record may name: AppData, Documents or the game.
         var allowed = new[] { localAppData, documents, game.Root }.Any(root => FileUtil.IsUnder(file, root));
-        return allowed ? new EngineIniTarget(file, File.Exists(file), "the catalog's path for this game") : null;
+        return allowed ? new EngineIniTarget(file, File.Exists(file), "the path set for this game") : null;
     }
 
     private static string? FirstConfigDir(string projectRoot)

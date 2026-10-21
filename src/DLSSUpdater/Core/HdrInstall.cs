@@ -12,12 +12,13 @@ public static class HdrPlanner
 
     /// <param name="engineIniHint">The catalog's Engine.ini path for this game (<see cref="CatalogOverrides.EngineIniPath"/>).</param>
     public static HdrPlan Build(GameInfo game, string targetDir, HdrChoice choice, HdrBuild build, string buildFile, int? peakNits,
-        string? engineIniHint, InstalledComponent? existing)
+        string? engineIniHint, InstalledComponent? existing, IReadOnlyList<HdrIniEdit>? userEdits = null)
     {
         if (!choice.IsOffered) throw new InvalidOperationException(choice.Reason);
         targetDir = FileUtil.Normalize(targetDir);
         var warnings = new List<string>();
         var peak = HdrIni.ClampPeak(peakNits);
+        var mine = HdrUserEdits.Clean(userEdits);
 
         var addonDir = ReShadeAddonPath.Resolve(targetDir, game.Root);
         var addonFile = Path.Combine(addonDir, build.FileName);
@@ -31,10 +32,15 @@ public static class HdrPlanner
         foreach (var (s, k, v) in HdrIni.MissingOnly(reshadeDoc, existing, reshadeEntry, HdrIni.ReShadeKeys(choice))) edits.Add((reshadeIni, s, k, v));
         // The peak brightness is the user's own setting in this app, so it replaces whatever the preset holds.
         foreach (var (s, k, v) in HdrIni.PeakKeys(peak)) edits.Add((reshadeIni, s, k, v));
+        // Values typed on the game page win over ours and over what the file holds.
+        foreach (var e in mine.Where(e => e.IsReShade))
+            ReplaceOrAdd(edits, reshadeIni, e);
 
         var readOnly = new List<string>();
         EngineIniTarget? engine = null;
-        if (HdrIni.EngineKeys(choice) is { Count: > 0 } engineKeys)
+        var engineKeys = HdrIni.EngineKeys(choice);
+        var engineMine = mine.Where(e => e.IsEngine).ToList();
+        if (engineKeys.Count > 0 || engineMine.Count > 0)
         {
             var local = InstallManifest.KnownFolder("|localappdata|") ?? Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData);
             var docs = InstallManifest.KnownFolder("|documents|") ?? Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments);
@@ -45,6 +51,7 @@ public static class HdrPlanner
             {
                 var entry = EntryOf(engine.Path, targetDir, game.Root);
                 foreach (var (s, k, v) in HdrIni.MissingOnly(Read(engine.Path), existing, entry, engineKeys)) edits.Add((engine.Path, s, k, v));
+                foreach (var e in engineMine) ReplaceOrAdd(edits, engine.Path, e);
                 readOnly.Add(engine.Path);
             }
         }
@@ -58,7 +65,7 @@ public static class HdrPlanner
             ReadOnly = readOnly,
             Extras = new Dictionary<string, string>
             {
-                [SignatureKey] = choice.Signature(peak),
+                [SignatureKey] = choice.Signature(peak, HdrUserEdits.Signature(mine)),
                 [ModKey] = choice.ModId ?? "",
                 ["kind"] = choice.Kind.ToString(),
                 ["file"] = build.FileName,
@@ -68,6 +75,13 @@ public static class HdrPlanner
             },
         };
         return new HdrPlan(plan, addonFile, engine, warnings);
+    }
+
+    private static void ReplaceOrAdd(List<(string File, string Section, string Key, string Value)> edits, string file, HdrIniEdit e)
+    {
+        var i = edits.FindIndex(x => x.File.Equals(file, StringComparison.OrdinalIgnoreCase) && x.Section.Equals(e.Section, StringComparison.OrdinalIgnoreCase) && x.Key.Equals(e.Key, StringComparison.OrdinalIgnoreCase));
+        if (i >= 0) edits[i] = (file, edits[i].Section, edits[i].Key, e.Value);
+        else edits.Add((file, e.Section, e.Key, e.Value));
     }
 
     /// <summary>The record's name for a config file: game-relative, install-folder-relative or behind a known-folder tag.</summary>
@@ -104,7 +118,7 @@ public sealed record HdrStatus(HdrState State, string? Installed, string? Latest
     /// Compares what the record says is installed with what the pick would install now. A newer catalog build (another SHA-256), a
     /// different mod, another method and a changed peak brightness all count: the signature covers them.
     /// </summary>
-    public static HdrStatus Of(HdrChoice choice, InstalledComponent? installed, int? peakNits)
+    public static HdrStatus Of(HdrChoice choice, InstalledComponent? installed, int? peakNits, IEnumerable<HdrIniEdit>? userEdits = null)
     {
         if (installed is null)
             return choice.IsOffered
@@ -114,7 +128,7 @@ public sealed record HdrStatus(HdrState State, string? Installed, string? Latest
         if (!choice.IsOffered)
             return new HdrStatus(HdrState.Orphaned, have, null, $"Installed {have}, but nothing is offered for this game now: {choice.Reason}");
         var latest = choice.File!.Version;
-        var signature = choice.Signature(HdrIni.ClampPeak(peakNits));
+        var signature = choice.Signature(HdrIni.ClampPeak(peakNits), HdrUserEdits.Signature(userEdits));
         if (installed.Extras.GetValueOrDefault(HdrPlanner.SignatureKey) == signature && installed.BuildId == choice.File.Sha256)
             return new HdrStatus(HdrState.Current, have, latest, $"Installed {have} · up to date");
         if (installed.BuildId != choice.File.Sha256)
@@ -144,7 +158,7 @@ public sealed class HdrService(ComponentStore store, Installer installer, Catalo
     /// OptiScaler, where the user decides about ReShade.
     /// </summary>
     public async Task<HdrInstallResult> InstallAsync(GameInfo game, string targetDir, HdrChoice choice, int? peakNits, string? engineIniHint,
-        HdrReShade? reshade, IProgress<TransferProgress>? progress, CancellationToken ct)
+        HdrReShade? reshade, IProgress<TransferProgress>? progress, CancellationToken ct, IReadOnlyList<HdrIniEdit>? userEdits = null)
     {
         if (game.AntiCheat is { } ac) throw new InvalidOperationException($"{game.Name} has {ac} anti-cheat: no add-on is installed in games with anti-cheat.");
         if (!choice.IsOffered) throw new InvalidOperationException(choice.Reason);
@@ -155,7 +169,7 @@ public sealed class HdrService(ComponentStore store, Installer installer, Catalo
         await EnsureReShadeAsync(game, targetDir, reshade ?? new HdrReShade(), progress, ct);
 
         var existing = InstallManifest.Read(targetDir)?.Component(ComponentRegistry.RenoDxHdr);
-        var plan = HdrPlanner.Build(game, targetDir, choice, build, ComponentStore.HdrPathOf(build), peakNits, engineIniHint, existing);
+        var plan = HdrPlanner.Build(game, targetDir, choice, build, ComponentStore.HdrPathOf(build), peakNits, engineIniHint, existing, userEdits);
         foreach (var w in plan.Warnings) Log.Warn($"{game.Name}: {w}");
         progress?.Report(new TransferProgress($"Installing {choice.Title} to {game.Name}", null));
         var undo = await installer.InstallComponentAsync(game, targetDir, plan.Plan, ct);
