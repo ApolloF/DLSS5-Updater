@@ -5,7 +5,7 @@ namespace DLSSUpdater.Scan;
 
 public static class GameScanner
 {
-    private static readonly string[] SourcePriority = ["Steam", "Epic", "GOG", "EA", "Ubisoft", "Xbox", "Manual", "Library"];
+    internal static readonly string[] SourcePriority = ["Steam", "Epic", "GOG", "EA", "Ubisoft", "Battle.net", "Rockstar", "Xbox", "Manual", "Library"];
 
     /// <summary>
     /// All known game folders, deduplicated by path; launcher names win over manual entries. Hidden games are left out,
@@ -82,6 +82,7 @@ public static class GameScanner
             });
         var list = results.OrderBy(g => g.Name, StringComparer.OrdinalIgnoreCase).ToList();
         SaveCache(list);
+        DetectCache.Save();
         return list;
     }
 

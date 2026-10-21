@@ -491,6 +491,10 @@ public sealed partial class GameViewModel : ObservableObject
     public bool HasFeatureBadge => FeatureBadge.Length > 0;
     /// <summary>The NVIDIA driver profile tab; the demo never opens the driver.</summary>
     public bool ShowDriverTab => !Demo.Active;
+    /// <summary>"DX12 · 64-bit · Unreal 5.4": what the game's files say about how it renders.</summary>
+    public string TechBadge => Info.Tech.Label;
+    public bool HasTechBadge => TechBadge.Length > 0;
+    public string TechTip => Info.Tech.Details;
     public bool HasAntiCheat => Info.AntiCheat is not null;
     public string? AntiCheat => Info.AntiCheat;
     public bool IsInstalled => Manifest is not null || Info.Installs.Count > 0;

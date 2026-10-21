@@ -47,11 +47,14 @@ public static partial class GameInspector
         ["vgk.sys"] = "Vanguard",
     };
 
-    private enum HitKind { None, Exe, Dlss, Streamline, AntiCheat, Manifest }
+    private enum HitKind { None, Exe, Dlss, Streamline, AntiCheat, Manifest, D3D12Core, Ue3File, Upscaler, UePlugin }
 
     private readonly record struct Hit(HitKind Kind, string Path, long Size, string? Tag);
 
-    public static void Inspect(GameInfo game)
+    public static void Inspect(GameInfo game) => Inspect(game, FileUtil.ReadVersion);
+
+    /// <param name="versionOf">Reads an exe's file version; swapped in tests, which can't build version resources.</param>
+    internal static void Inspect(GameInfo game, Func<string, Version?> versionOf)
     {
         var root = FileUtil.Normalize(game.Root);
         var rootLen = root.Length;
@@ -79,6 +82,7 @@ public static partial class GameInspector
         game.Streamline = [];
         game.Installs = [];
         game.AntiCheat = null;
+        var signals = new GameSignals();
 
         foreach (var h in hits)
         {
@@ -92,6 +96,10 @@ public static partial class GameInspector
                     game.Streamline.Add(new DlssDll { Path = h.Path, Name = Path.GetFileName(h.Path), Version = FileUtil.ReadVersion(h.Path) });
                     break;
                 case HitKind.AntiCheat: game.AntiCheat ??= h.Tag; break;
+                case HitKind.D3D12Core: signals.D3D12Core = true; break;
+                case HitKind.Ue3File: signals.Ue3File = true; break;
+                case HitKind.Upscaler: signals.Upscalers |= UpscalerFiles.OfFile(Path.GetFileName(h.Path)); break;
+                case HitKind.UePlugin: signals.Upscalers |= UpscalerFiles.OfPluginFolder(Path.GetFileName(h.Path)); break;
                 case HitKind.Manifest:
                     var dir = Path.GetDirectoryName(h.Path)!;
                     if (File.Exists(InstallManifest.PathFor(dir))) game.Installs.Add(dir);
@@ -102,6 +110,7 @@ public static partial class GameInspector
         game.Dlss = game.Dlss.OrderBy(d => d.Path, StringComparer.OrdinalIgnoreCase).ToList();
         game.Streamline = game.Streamline.OrderBy(d => d.Path, StringComparer.OrdinalIgnoreCase).ToList();
         game.Exes = RankExes(root, exes, game.Name);
+        game.Tech = GameDetector.Detect(root, game.Exes, exes, signals, versionOf);
         game.Scanned = DateTime.UtcNow;
     }
 
@@ -117,7 +126,12 @@ public static partial class GameInspector
         if (e.IsDirectory)
         {
             if (name.Equals(InstallManifest.DirName, StringComparison.OrdinalIgnoreCase)) return (HitKind.Manifest, null);
-            return AntiCheatDirs.TryGetValue(name.ToString(), out var ac) ? (HitKind.AntiCheat, ac) : (HitKind.None, null);
+            if (AntiCheatDirs.TryGetValue(name.ToString(), out var ac)) return (HitKind.AntiCheat, ac);
+            // Unreal plugin folders (Engine\Plugins\...\DLSS, FSR, XeSS) show which upscalers the game was built with.
+            return UpscalerFiles.OfPluginFolder(name.ToString()) != UpscalerSignals.None &&
+                   e.Directory.Contains("\\Plugins", StringComparison.OrdinalIgnoreCase)
+                ? (HitKind.UePlugin, null)
+                : (HitKind.None, null);
         }
 
         if (name.StartsWith("nvngx_dlss", StringComparison.OrdinalIgnoreCase))
@@ -131,14 +145,23 @@ public static partial class GameInspector
             return (HitKind.Streamline, null);
 
         var ext = Path.GetExtension(name);
-        var interestingExt = ext.Equals(".exe", StringComparison.OrdinalIgnoreCase) ||
-                             ext.Equals(".dll", StringComparison.OrdinalIgnoreCase) ||
+        // .u and .upk are Unreal Engine 3 packages.
+        if (ext.Equals(".u", StringComparison.OrdinalIgnoreCase) || ext.Equals(".upk", StringComparison.OrdinalIgnoreCase))
+            return (HitKind.Ue3File, null);
+        var isDll = ext.Equals(".dll", StringComparison.OrdinalIgnoreCase);
+        var interestingExt = isDll ||
+                             ext.Equals(".exe", StringComparison.OrdinalIgnoreCase) ||
                              ext.Equals(".sys", StringComparison.OrdinalIgnoreCase) ||
                              ext.Equals(".des", StringComparison.OrdinalIgnoreCase);
         if (!interestingExt) return (HitKind.None, null);
 
         var s = name.ToString();
         if (AntiCheatFiles.TryGetValue(s, out var tag)) return (HitKind.AntiCheat, tag);
+        if (isDll)
+        {
+            if (name.Equals("D3D12Core.dll", StringComparison.OrdinalIgnoreCase)) return (HitKind.D3D12Core, null);
+            return UpscalerFiles.IsUpscalerFile(s) ? (HitKind.Upscaler, null) : (HitKind.None, null);
+        }
         return ext.Equals(".exe", StringComparison.OrdinalIgnoreCase) ? (HitKind.Exe, null) : (HitKind.None, null);
     }
 
@@ -150,6 +173,9 @@ public static partial class GameInspector
 
     [GeneratedRegex(@"-(Win64|WinGDK)-Shipping$", RegexOptions.IgnoreCase)]
     private static partial Regex UnrealShipping();
+
+    /// <summary>Installers, crash reporters, servers and other exes that are never the game.</summary>
+    internal static bool IsHelperExe(string path) => ExcludedExe().IsMatch(Path.GetFileNameWithoutExtension(path));
 
     internal static List<string> RankExes(string root, IEnumerable<(string Path, long Size)> exes, string? gameName = null)
     {
