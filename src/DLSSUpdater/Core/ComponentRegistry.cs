@@ -46,6 +46,8 @@ public static class ComponentRegistry
     public const string Lecram = "lecram-dlss5";
     public const string Dfc = "dfc";
     public const string Uplift = "gitc-uplift";
+    /// <summary>DLSS5-Feeder (MIT, downloaded): makes the DLSS calls for games without DLSS; recorded the generic way (<see cref="FeederLibrary"/>).</summary>
+    public const string Feeder = "dlss5-feeder";
     /// <summary>Not a component with files: the per-game record of what the app wrote into the NVIDIA driver profile (<see cref="NvidiaRecord"/>).</summary>
     public const string NvidiaDriver = "nvidia-driver";
 
@@ -69,6 +71,7 @@ public static class ComponentRegistry
         Register(new(Streamline, "Streamline") { Legacy = true, OwnedFiles = ["sl.*.dll"] });
         Register(new(DlssNr, "NR runtime") { Library = LibraryKind.DlssNr, Legacy = true, OwnedFiles = [ComponentStore.DlssNrFile, Path.Combine(ComponentStore.UpliftNrDir, ComponentStore.DlssNrFile)] });
         Register(new(Dlss, "DLSS") { Legacy = true, OwnedFiles = ComponentStore.DlssFiles });
+        Register(new(Feeder, "DLSS5-Feeder") { Library = LibraryKind.Feeder, Label = "Feeder", OwnedFiles = FeederLibrary.OwnedFiles });
     }
 
     /// <summary>

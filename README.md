@@ -49,6 +49,7 @@ Settings for all games. Every option has a short explanation, and the help butto
 | [RenoDX DLSS add-on](https://github.com/clshortfuse/renodx) | ShortFuse's ReShade add-on for neural rendering. | You import the file yourself. |
 | Lecram DLSS5 add-on | A ReShade add-on for neural rendering by Lecram. | You import it yourself. The builds are available to supporters on the author's Buy Me a Coffee. |
 | Deep Fried Chicken | A neural rendering add-on. Its licence allows personal use only. | You import the extracted release folder (or a .zip) yourself. Every import is kept, and each game can use its own version. |
+| DLSS5-Feeder | An MIT ReShade add-on that makes the DLSS calls for games without DLSS, so Deep Fried Chicken can run in them. DLAA only. | Downloaded from its GitHub releases and checked against the SHA-256 GitHub publishes. Single-player games only. |
 
 The app only replaces files in a game with files from the sources above or files you imported. Which of these you use is up to you. Most people only need the OptiScaler mode or **DLSS only**.
 
