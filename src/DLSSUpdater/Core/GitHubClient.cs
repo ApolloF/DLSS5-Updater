@@ -106,6 +106,9 @@ public sealed class GitHubClient
             .ToList();
     }
 
+    /// <summary>Body of any api.github.com URL (workflow runs, artifacts ...) through the ETag cache; Stale = served from the cache because GitHub failed.</summary>
+    public Task<(string Body, bool Stale)> GetApiJsonAsync(string url, CancellationToken ct) => GetApiAsync(url, ct);
+
     /// <summary>Plain GET of a web page (not the GitHub API), 30 s timeout.</summary>
     public async Task<string> GetStringAsync(string url, CancellationToken ct)
     {

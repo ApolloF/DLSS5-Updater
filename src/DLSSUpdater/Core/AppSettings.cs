@@ -19,6 +19,8 @@ public sealed partial class GameOverride
     public string? LecramId { get; set; }
     /// <summary>Deep Fried Chicken build (library id) pinned for this game; null follows the global choice.</summary>
     public string? DfcId { get; set; }
+    /// <summary>ReShade build (library id or "channel:...") chosen for this game; null follows the default.</summary>
+    public string? ReShadeId { get; set; }
     /// <summary>OptiScaler build (app tag, either source) chosen for this game; null follows the default.</summary>
     public string? OptiTag { get; set; }
     /// <summary>GITC Uplift build (release tag) chosen for this game; null follows the default.</summary>
@@ -63,7 +65,7 @@ public sealed partial class AppSettings
 
     /// <summary>Names ReShade loads under when it is the proxy itself (ReShade-only mode).</summary>
     public static readonly string[] ReShadeProxyNames =
-        ["dxgi.dll", "d3d12.dll", "d3d11.dll", "d3d9.dll", "dinput8.dll", "opengl32.dll"];
+        ["dxgi.dll", "d3d12.dll", "d3d11.dll", "d3d9.dll", "d3d8.dll", "dinput8.dll", "opengl32.dll"];
 
     /// <summary>A proxy name DLSS5 Updater would ever install under (OptiScaler or ReShade-only).</summary>
     public static bool IsKnownProxy(string? name) =>
@@ -166,6 +168,8 @@ public sealed partial class AppSettings
     /// <summary>Default Deep Fried Chicken build (library id); null follows the newest build in the library.</summary>
     public string? DfcId { get; set; }
     public List<AddonPairTest> AddonPairTests { get; set; } = [];
+    /// <summary>Default ReShade build: a library id, or "channel:nightly" (see <see cref="ReShadePick"/>); null follows the newest Stable add-on build.</summary>
+    public string? ReShadeId { get; set; }
     /// <summary>Default OptiScaler build (app tag, either source); null follows the newest release of the selected source.</summary>
     public string? OptiTag { get; set; }
     /// <summary>Default GITC Uplift build (release tag); null follows the newest release.</summary>
@@ -367,6 +371,7 @@ public sealed partial class AppSettings
 [JsonSerializable(typeof(CachedComponent))]
 [JsonSerializable(typeof(NrVersion))]
 [JsonSerializable(typeof(AddonBuild))]
+[JsonSerializable(typeof(ReShadeBuild))]
 [JsonSerializable(typeof(AddonPairTest))]
 [JsonSerializable(typeof(Dictionary<string, InstallRefs>))]
 [JsonSerializable(typeof(Dictionary<string, PeScanResult>))]

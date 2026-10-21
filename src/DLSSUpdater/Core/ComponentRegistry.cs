@@ -53,7 +53,7 @@ public static class ComponentRegistry
     {
         // The components that keep their own fields in the install record.
         Register(new(OptiScaler, "OptiScaler") { Library = LibraryKind.OptiScaler, Legacy = true, OwnedFiles = ["OptiScaler.ini", @"OptiScaler\*", @"Licenses\*"] });
-        Register(new(ReShade, "ReShade") { Legacy = true, OwnedFiles = [ComponentStore.ReShadeFile, "ReShade.ini"] });
+        Register(new(ReShade, "ReShade") { Library = LibraryKind.ReShade, Legacy = true, OwnedFiles = [ComponentStore.ReShadeFile, "ReShade.ini"] });
         Register(new(RenoDx, "ShortFuse RenoDX DLSS") { Library = LibraryKind.RenoDx, Legacy = true, OwnedFiles = [ComponentStore.RenoDxFile, .. ComponentStore.LegacyRenoDxFiles] });
         Register(new(Lecram, "Lecram DLSS5") { Library = LibraryKind.Lecram, Legacy = true, OwnedFiles = ComponentStore.LecramFiles });
         Register(new(Dfc, "Deep Fried Chicken")

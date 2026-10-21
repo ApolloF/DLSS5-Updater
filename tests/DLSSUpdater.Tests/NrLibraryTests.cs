@@ -253,9 +253,11 @@ internal static class FakeVersionDll
     [DllImport("kernel32.dll", SetLastError = true)]
     private static extern bool EndUpdateResource(IntPtr update, bool discard);
 
-    public static void Write(string path, Version v, string original, string? internalName = null)
+    /// <param name="baseFile">The PE file the resource goes into; default the test assembly (32-bit). A native system dll gives another bitness.</param>
+    public static void Write(string path, Version v, string original, string? internalName = null, string? baseFile = null, string? product = null, string? company = null)
     {
-        File.Copy(typeof(FakeVersionDll).Assembly.Location, path, true);
+        File.Copy(baseFile ?? typeof(FakeVersionDll).Assembly.Location, path, true);
+        File.SetAttributes(path, FileAttributes.Normal);
         var info = new uint[] { 0xFEEF04BD, 0x10000, (uint)(v.Major << 16 | v.Minor), (uint)(v.Build << 16 | v.Revision),
             (uint)(v.Major << 16 | v.Minor), (uint)(v.Build << 16 | v.Revision), 0x3f, 0, 0x40004, 2, 0, 0, 0 };
         var fixedInfo = info.SelectMany(BitConverter.GetBytes).ToArray();

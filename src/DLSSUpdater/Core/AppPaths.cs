@@ -36,6 +36,8 @@ public static class AppPaths
     public static string LegacyApiCacheFile => Path.Combine(Cache, "api.json");
     /// <summary>Last good copy of the catalog repository's catalog.json, for when GitHub can't be reached.</summary>
     public static string CatalogFile => Path.Combine(Cache, "catalog.json");
+    /// <summary>The user-editable ReShade.ini template merged into each game's ReShade.ini (see <see cref="ReShadeIniTemplate"/>).</summary>
+    public static string ReShadeTemplate => Path.Combine(Root, "reshade-template.ini");
     public static string LogFile => Path.Combine(Root, "log.txt");
 
     public static void Ensure()
