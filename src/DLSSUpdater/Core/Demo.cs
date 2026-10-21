@@ -331,6 +331,7 @@ public static class Demo
             m.Uplift = o.Uplift;
             m.Dfc = o.Dfc;
             m.AntiCheatConfirmed = o.AntiCheatConfirmed;
+            m.ConfirmedConflict = o.ConfirmedConflict;
             m.OptiTag = o.Opti ? o.OptiTag ?? store.Opti?.Tag : null;
             m.MfgTag = o.Mfg ? o.MfgTag ?? store.Mfg?.Tag : null;
             m.UpliftTag = o.Uplift ? o.UpliftTag ?? store.Uplift?.Tag : null;

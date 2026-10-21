@@ -53,6 +53,8 @@ public enum Availability
 public sealed record MethodOption(Method Method, string Title, Availability Availability, string Reason,
     IReadOnlyList<string> Components, IReadOnlyList<string> Needs, InstallMode? Mode, bool Unverified)
 {
+    /// <summary>Set when the method adds files to a game that is risky to add them to (anti-cheat, Store install): installing asks for a confirmation and auto never picks it.</summary>
+    public string? Warning { get; init; }
     /// <summary>True when the game page can select this method's components.</summary>
     public bool Selectable => (Availability is Availability.Available or Availability.NeedsSetup) && Components.Count > 0;
 }
@@ -63,8 +65,10 @@ public sealed record MethodOption(Method Method, string Title, Availability Avai
 /// </summary>
 public sealed record MethodAdvice(IReadOnlyList<MethodOption> Methods, IReadOnlyList<int> Rows, string? Blocked)
 {
-    /// <summary>The best method the game page can select.</summary>
-    public MethodOption? Top => Methods.FirstOrDefault(m => m.Selectable);
+    /// <summary>Shown above the methods when adding files to this game is risky; each such method also carries it as its <see cref="MethodOption.Warning"/>.</summary>
+    public string? Caution { get; init; }
+    /// <summary>The best method the game page can select: never one that carries a warning.</summary>
+    public MethodOption? Top => Methods.FirstOrDefault(m => m.Selectable && m.Warning is null);
     public IEnumerable<MethodOption> Possible => Methods.Where(m => m.Availability is Availability.Available or Availability.NeedsSetup);
     public IEnumerable<MethodOption> Unavailable => Methods.Where(m => m.Availability is Availability.NotPossible or Availability.Coming);
 }
@@ -76,6 +80,8 @@ public sealed record AdvisorInput(GameInfo Game, GpuInfo Gpu)
     public bool? NativeDlss { get; init; }
     /// <summary>A Microsoft Store / Xbox install whose folder is protected (<see cref="MethodAdvisor.IsProtectedStoreInstall"/>).</summary>
     public bool ProtectedInstall { get; init; }
+    /// <summary>A Store / Xbox install whose folder the app can write to: allowed after a confirmation (<see cref="MethodAdvisor.IsStoreInstall"/>).</summary>
+    public bool StoreInstall { get; init; }
     public CatalogOptiGame? OptiCompat { get; init; }
     public bool HudfixIncompatible { get; init; }
     /// <summary>The game's entry on RenoDX's list, when the catalog has one.</summary>
@@ -116,35 +122,68 @@ public static class MethodAdvisor
     };
 
     /// <summary>
-    /// A Store install the app can't write to: under WindowsApps, or a MicrosoftGame.config game whose exe could not be read.
-    /// (docs/research/methods-2026-10.md section 6.3: the folder is unwritable and the exe unreadable.)
+    /// A Store / Xbox layout: under WindowsApps, or a MicrosoftGame.config game whose exe could not be read
+    /// (docs/research/methods-2026-10.md section 6.3).
     /// </summary>
-    public static bool IsProtectedStoreInstall(GameInfo game, Func<string, bool>? fileExists = null)
+    public static bool IsStoreInstall(GameInfo game, Func<string, bool>? fileExists = null)
     {
         fileExists ??= File.Exists;
         if (game.Root.Contains(@"\WindowsApps\", StringComparison.OrdinalIgnoreCase)) return true;
         return game.Tech.Bits == 0 && game.Exes.Count > 0 && fileExists(Path.Combine(game.Root, "MicrosoftGame.config"));
     }
 
+    /// <summary>A Store install whose folder the app can't write to (a probe file fails): nothing can be added, whatever the user confirms.</summary>
+    public static bool IsProtectedStoreInstall(GameInfo game, Func<string, bool>? fileExists = null, Func<string, bool>? canWrite = null) =>
+        IsStoreInstall(game, fileExists) && !(canWrite ?? FolderWritable)(game.Root);
+
+    /// <summary>Creates and deletes a probe file in <paramref name="dir"/>.</summary>
+    public static bool FolderWritable(string dir)
+    {
+        try
+        {
+            var probe = Path.Combine(dir, ".dlssu-probe-" + Guid.NewGuid().ToString("N")[..8]);
+            File.WriteAllBytes(probe, []);
+            File.Delete(probe);
+            return true;
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or System.Security.SecurityException) { return false; }
+    }
+
+    public const string StoreCaution = "Microsoft Store install: Store updates can undo changes in this folder and the game may refuse to start modified. The folder is writable here, so you can install anyway.";
+
+    public static string AntiCheatCaution(string ac) =>
+        $"{ac} anti-cheat found: injecting files into this game can get your account banned. Online play is the risk; offline and single-player use is fine. A driver frame limit is still safe.";
+
     public static MethodAdvice Advise(AdvisorInput input)
     {
         var game = input.Game;
-        // Row 20: nothing may be added to the game.
-        if (game.AntiCheat is { } ac)
-            return Blocked(20, $"{ac} anti-cheat found: injecting files into the game can get you banned, so no method that adds files is offered. A driver frame limit is still safe.");
+        // Row 20: the folder is locked, so nothing can be added whatever the user says.
         if (input.ProtectedInstall)
             return Blocked(20, "Microsoft Store install: the game folder is protected, so the app can't add files to it. The driver frame limit still works.");
 
         // Row 19: a GPU without tensor cores or from another vendor.
+        MethodAdvice advice;
         if (!input.Gpu.MayRunNvidiaMethods)
-            return NonNvidia(input);
+            advice = NonNvidia(input);
+        else
+        {
+            var ctx = new Ctx(input);
+            var rows = new List<int>();
+            var methods = new List<MethodOption>();
+            Shape(ctx, rows, methods);
+            AddExtras(ctx, rows, methods);
+            advice = new MethodAdvice(Rank(methods), rows, null);
+        }
 
-        var ctx = new Ctx(input);
-        var rows = new List<int>();
-        var methods = new List<MethodOption>();
-        Shape(ctx, rows, methods);
-        AddExtras(ctx, rows, methods);
-        return new MethodAdvice(Rank(methods), rows, null);
+        // Row 20, the risky kind: adding files stays possible, after a confirmation; auto never picks it.
+        var caution = string.Join(" ", new[] { game.AntiCheat is { } ac ? AntiCheatCaution(ac) : null, input.StoreInstall ? StoreCaution : null }.Where(x => x is not null));
+        if (caution.Length == 0) return advice;
+        return advice with
+        {
+            Methods = [.. advice.Methods.Select(m => m.Selectable ? m with { Warning = caution } : m)],
+            Rows = [.. advice.Rows.Append(20).Distinct()],
+            Caution = caution,
+        };
     }
 
     private static MethodAdvice Blocked(int row, string reason) => new([], [row], reason);
@@ -381,8 +420,8 @@ public static class MethodAdvisor
                     Method.OptiScalerNr => NrAddon.OptiScaler,
                     _ => null,
                 };
-                if (adds is { } a && NrAddons.Refusal(a, [NrAddon.Bridge], false) is { } why)
-                    list[i] = list[i] with { Availability = Availability.NotPossible, Reason = why + " Remove the bridge files first." };
+                if (adds is { } a && NrAddons.Conflict(a, [NrAddon.Bridge]) is { } why)
+                    list[i] = list[i] with { Warning = why + " Installing it asks you to confirm, or remove the bridge files first." };
             }
         }
         else if (c.In.InstalledRoutes.Count > 0)

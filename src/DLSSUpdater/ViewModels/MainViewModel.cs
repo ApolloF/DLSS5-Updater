@@ -551,6 +551,8 @@ public sealed partial class MainViewModel : ObservableObject
                     var o = g.UpdateOptions(m);
                     if (g.HasAntiCheat && g.NeedsInjection(o) && !m.AntiCheatConfirmed)
                         Log.Info($"{g.Name}: skipped because it has anti-cheat. Install it once from its own page to confirm.");
+                    else if (Installer.Conflicts(g.SelectedTarget!.Dir, o) is { Count: > 0 } clash && o.ConfirmedConflict != Installer.ConflictKey(clash))
+                        Log.Info($"{g.Name}: skipped because its mods clash and the warning isn't confirmed. Install it once from its own page to confirm.");
                     else
                     {
                         Log.Info($"Updating {g.Name}");
@@ -866,7 +868,7 @@ public sealed partial class MainViewModel : ObservableObject
     {
         var g = SelectedGame;
         if (g?.SelectedTarget is null) return;
-        var o = g.BuildOptions(dlssOnly, acConfirmed: g.Manifest?.AntiCheatConfirmed == true);
+        var o = g.BuildOptions(dlssOnly, acConfirmed: g.Manifest?.AntiCheatConfirmed == true, g.Manifest?.ConfirmedConflict);
 
         if (g.HasAntiCheat && g.NeedsInjection(o) && !o.AntiCheatConfirmed)
         {
@@ -876,6 +878,19 @@ public sealed partial class MainViewModel : ObservableObject
                 "Install anyway", danger: true);
             if (!ok) return;
             o = g.BuildOptions(dlssOnly, acConfirmed: true);
+        }
+
+        if (!dlssOnly && Installer.Conflicts(g.SelectedTarget.Dir, o) is { Count: > 0 } conflicts)
+        {
+            var key = Installer.ConflictKey(conflicts);
+            if (o.ConfirmedConflict != key)
+            {
+                var ok = Dialog.Confirm("Check before installing",
+                    string.Join(Environment.NewLine + Environment.NewLine, conflicts) + Environment.NewLine + Environment.NewLine + "You can install them anyway, for example to compare. The warning stays on the game.",
+                    "Install anyway", danger: true);
+                if (!ok) return;
+                o = g.BuildOptions(dlssOnly, acConfirmed: o.AntiCheatConfirmed, key);
+            }
         }
 
         if (o.Opti && !ConfirmCompat()) return;

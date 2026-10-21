@@ -101,8 +101,6 @@ public sealed partial class AppSettings
     public bool InstallRenoDx { get; set; }
     public bool InstallUplift { get; set; }
     public bool InstallLecram { get; set; }
-    /// <summary>Lets ShortFuse's and Lecram's add-ons be on together (NR then runs twice); off keeps one NR add-on per game (<see cref="NrAddons"/>).</summary>
-    public bool AllowSeveralNrAddons { get; set; }
     /// <summary>The OptiScaler build's repo. New installs start on F5; a saved choice is always kept.</summary>
     public string OptiSource { get; set; } = OptiSources.F5.Repo;
     public string? PreviousDlssNrId { get; set; }
@@ -229,9 +227,8 @@ public sealed partial class AppSettings
                     if (sourceMigrated) s.OptiSource = ComponentStore.OptiRepo;
                     s.Presets.RemoveAll(p => p.Name.Equals(ConfigProfile.RecommendedName, StringComparison.OrdinalIgnoreCase));
                     var renoDxMigrated = RenoDxIni.Migrate(s);
-                    var addonsMigrated = NrAddons.Migrate(s);
                     var lecramMigrated = s.MigrateLecramNewest();
-                    if (s._legacyTokenRead || sourceMigrated || renoDxMigrated || addonsMigrated || lecramMigrated) s.Save();
+                    if (s._legacyTokenRead || sourceMigrated || renoDxMigrated || lecramMigrated) s.Save();
                     return s;
                 }
             }

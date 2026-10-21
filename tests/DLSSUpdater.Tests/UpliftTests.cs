@@ -222,7 +222,7 @@ public sealed class UpliftTests : IDisposable
     }
 
     [Fact]
-    public void ViewModel_UpliftAndOtherRoutesExcludeEachOther_AndModeHidesUplift()
+    public void ViewModel_UpliftAndOtherRoutesCanBeBothOn_WithAWarning_AndModeHidesUplift()
     {
         var settings = new AppSettings { DefaultMode = InstallMode.ReShadeOnly, InstallUplift = true };
         var vm = new GameViewModel(_game, new Services { Settings = settings, Store = _store, Installer = new Installer(_store) });
@@ -232,9 +232,10 @@ public sealed class UpliftTests : IDisposable
         foreach (var key in new[] { "renodx", "lecram", "dfc" })
         {
             Row(key).Enabled = true;
-            Assert.False(Row("uplift").Enabled);
-            Row("uplift").Enabled = true;
-            Assert.False(Row(key).Enabled);
+            Assert.True(Row("uplift").Enabled);
+            Assert.NotNull(vm.ConflictWarning);
+            Row(key).Enabled = false;
+            Assert.Null(vm.ConflictWarning);
             Assert.True(Row("reshade").Enabled);
             Assert.True(Row("dlssnr").Enabled);
         }
@@ -245,10 +246,10 @@ public sealed class UpliftTests : IDisposable
     }
 
     [Fact]
-    public async Task Install_RejectsConflictingRoutesAnd32BitGames_BeforeChangingGameFiles()
+    public async Task Install_NeedsConfirmationForConflictingRoutes_AndRejects32BitGames_BeforeChangingGameFiles()
     {
         var installer = new Installer(_store);
-        foreach (var options in new[] { Options with { Lecram = true }, Options with { RenoDx = true }, Options with { Dfc = true }, Options with { Mode = InstallMode.OptiScaler }, Options with { Opti = true }, Options with { DlssNr = false } })
+        foreach (var options in new[] { Options with { Lecram = true }, Options with { RenoDx = true }, Options with { Dfc = true }, Options with { DlssNr = false } })
             await Assert.ThrowsAsync<InvalidOperationException>(() => installer.InstallAsync(_game, _root, options, null, default));
         WriteExe(_game.Exes[0], Machine.I386);
         var ex = await Assert.ThrowsAsync<InvalidOperationException>(() => installer.InstallAsync(_game, _root, Options, null, default));

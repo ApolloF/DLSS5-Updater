@@ -1175,6 +1175,88 @@ public class InstallerTests : IDisposable
     }
 
     [Fact]
+    public async Task MfgAddonWithOpti_WritesOptiScalersOwnMfgOff_ByDefault()
+    {
+        await new Installer(_store).InstallAsync(Game(), _target, Full, null, default);
+
+        var ini = IniFile.Load(Path.Combine(_target, "OptiScaler.ini"));
+        Assert.Equal("false", ini.Get("DLSSG", "AdaMfgUnlock"));
+        Assert.Equal("false", ini.Get("DLSSG", "AmpereMfgUnlock"));
+        Assert.Equal("MFG-1", T(ComponentStore.MfgFile));
+        Assert.Empty(Installer.Conflicts(_target, Full));
+        Assert.Null(InstallManifest.Read(_target)!.ConfirmedConflict);
+    }
+
+    [Fact]
+    public async Task MfgAddonWithOpti_UserValueWins_RuleFires_AndNothingChangesUntilConfirmed()
+    {
+        File.WriteAllText(Path.Combine(_target, "OptiScaler.ini"), "[DLSSG]\nAdaMfgUnlock=true\n");
+        var before = Snapshot();
+
+        var conflicts = Installer.Conflicts(_target, Full);
+        Assert.Contains("AdaMfgUnlock", Assert.Single(conflicts));
+        Assert.DoesNotContain("AmpereMfgUnlock", conflicts[0]);
+        await Assert.ThrowsAsync<InvalidOperationException>(() => new Installer(_store).InstallAsync(Game(), _target, Full, null, default));
+        Assert.Equal(before, Snapshot());
+    }
+
+    [Fact]
+    public async Task MfgAddonWithOpti_ConfirmedOverride_KeepsBoth_AndTheWarningStays()
+    {
+        var keepBoth = Full with { Overrides = [.. ConfigProfile.Recommended(), new("DLSSG", "AdaMfgUnlock", "true")] };
+        var key = Installer.ConflictKey(Installer.Conflicts(_target, keepBoth));
+        Assert.NotEmpty(key);
+        var installer = new Installer(_store);
+
+        await installer.InstallAsync(Game(), _target, keepBoth with { ConfirmedConflict = key }, null, default);
+
+        Assert.Equal("true", IniFile.Load(Path.Combine(_target, "OptiScaler.ini")).Get("DLSSG", "AdaMfgUnlock"));
+        Assert.Equal("MFG-1", T(ComponentStore.MfgFile));
+        var m = InstallManifest.Read(_target)!;
+        Assert.Equal(key, m.ConfirmedConflict);
+
+        // "Update all" reproduces the record and stays confirmed; a changed selection is asked again.
+        var again = keepBoth with { ConfirmedConflict = m.ConfirmedConflict };
+        await installer.InstallAsync(Game(), _target, again, null, default);
+        Assert.Equal(key, InstallManifest.Read(_target)!.ConfirmedConflict);
+        await Assert.ThrowsAsync<InvalidOperationException>(() => installer.InstallAsync(Game(), _target,
+            again with { Overrides = [.. again.Overrides, new("DLSSG", "AmpereMfgUnlock", "true")] }, null, default));
+
+        // Dropping the clash clears the stored confirmation.
+        await installer.InstallAsync(Game(), _target, Full with { Mfg = false, Overrides = [.. ConfigProfile.Recommended(), new("DLSSG", "AdaMfgUnlock", "true")] }, null, default);
+        Assert.Null(InstallManifest.Read(_target)!.ConfirmedConflict);
+    }
+
+    [Fact]
+    public void WritableStoreFolder_IsAConfirmableWarning_NotARefusal()
+    {
+        var store = @"C:\Program Files\WindowsApps\Studio.Game_1.0\Game";
+
+        Assert.Contains("Microsoft Store", Assert.Single(Installer.Conflicts(store, Full with { Mfg = false })));
+        Assert.Empty(Installer.Conflicts(store, new InstallOptions { Dlss = true }));
+        Assert.Empty(Installer.Conflicts(_target, Full));
+    }
+
+    [Fact]
+    public async Task StoreFolderThatIsWritable_InstallsOnlyAfterConfirmation_AndTheWarningStays()
+    {
+        var game = Path.Combine(_tmp, "WindowsApps", "Studio.Game_1.0", "Game");
+        Write(Path.Combine(game, "Game.exe"), "BOOT");
+        var info = GameScanner.Inspect(new GameEntry("Store game", game, "Manual"));
+        var o = Full with { Mfg = false, Dlss = false, AddMissingDlss = false };
+        var installer = new Installer(_store);
+
+        await Assert.ThrowsAsync<InvalidOperationException>(() => installer.InstallAsync(info, game, o, null, default));
+        Assert.False(File.Exists(Path.Combine(game, "dxgi.dll")));
+
+        var key = Installer.ConflictKey(Installer.Conflicts(game, o));
+        await installer.InstallAsync(info, game, o with { ConfirmedConflict = key }, null, default);
+        Assert.Equal("OPTI-1", File.ReadAllText(Path.Combine(game, "dxgi.dll")));
+        Assert.Equal(key, InstallManifest.Read(game)!.ConfirmedConflict);
+        Assert.NotEmpty(Installer.Conflicts(game, o));
+    }
+
+    [Fact]
     public async Task ReShadeOnly_ToOptiScalerWithoutReShade_ClearsTheReShadeRecord()
     {
         var installer = new Installer(_store);

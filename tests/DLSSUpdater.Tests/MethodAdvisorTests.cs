@@ -385,7 +385,7 @@ public sealed class MethodAdvisorTests
     }
 
     [Fact]
-    public void Row18_ABridgeInTheGame_RefusesEveryNeuralMethod_WithTheOneConsumerReason()
+    public void Row18_ABridgeInTheGame_WarnsOnEveryNeuralMethod_AndAutoNeverPicksThem()
     {
         var input = Input(Game(dlss: true)) with { InstalledRoutes = [NrAddon.Bridge] };
 
@@ -395,22 +395,23 @@ public sealed class MethodAdvisorTests
         foreach (var m in new[] { Method.NeuralAddon, Method.OptiScalerNr })
         {
             var o = Option(a, m);
-            Assert.Equal(Availability.NotPossible, o.Availability);
-            Assert.Contains("can't be in the same game", o.Reason);
-            Assert.Contains("DX11 bridge", o.Reason);
+            Assert.True(o.Selectable);
+            Assert.Contains("don't work well in the same game", o.Warning);
+            Assert.Contains("DX11 bridge", o.Warning);
         }
+        Assert.DoesNotContain(a.Top?.Method, new Method?[] { Method.NeuralAddon, Method.OptiScalerNr });
         Assert.Equal(Availability.Available, Option(a, Method.DlssUpdate).Availability);
     }
 
     [Fact]
-    public void Row18_FeederNextToABridge_IsRefused()
+    public void Row18_FeederNextToABridge_IsWarned()
     {
         var input = Input(Game()) with { InstalledRoutes = [NrAddon.Bridge] };
 
         var feeder = Option(MethodAdvisor.Advise(input), Method.Feeder);
 
-        Assert.Equal(Availability.NotPossible, feeder.Availability);
-        Assert.False(feeder.Selectable);
+        Assert.NotNull(feeder.Warning);
+        Assert.DoesNotContain("remove the bridge files first", feeder.Reason);
     }
 
     [Fact]
@@ -488,28 +489,45 @@ public sealed class MethodAdvisorTests
     // ---------- row 20: pre-checks ----------
 
     [Fact]
-    public void Row20_AntiCheat_NothingIsOffered_AndTheReasonNamesIt()
+    public void Row20_AntiCheat_MethodsStayOffered_WithAStrongWarning_AndAutoNeverPicksThem()
     {
         var a = Advise(Game(dlss: true, antiCheat: "EasyAntiCheat"));
 
-        Assert.Equal([20], a.Rows);
-        Assert.Empty(a.Methods);
+        Assert.Contains(20, a.Rows);
+        Assert.Null(a.Blocked);
+        Assert.NotEmpty(a.Methods);
         Assert.Null(a.Top);
-        Assert.Contains("EasyAntiCheat", a.Blocked);
-        Assert.Contains("banned", a.Blocked);
+        Assert.Contains("EasyAntiCheat", a.Caution);
+        Assert.Contains("banned", a.Caution);
+        Assert.Contains("Online", a.Caution);
+        var selectable = a.Methods.Where(m => m.Selectable).ToList();
+        Assert.NotEmpty(selectable);
+        Assert.All(selectable, m => Assert.Equal(a.Caution, m.Warning));
     }
 
     [Fact]
-    public void Row20_AntiCheatWinsOverANonNvidiaGpu()
+    public void Row20_NoAntiCheat_NoWarningAndATopMethod()
+    {
+        var a = Advise(Game(dlss: true));
+
+        Assert.Null(a.Caution);
+        Assert.All(a.Methods, m => Assert.Null(m.Warning));
+        Assert.NotNull(a.Top);
+    }
+
+    [Fact]
+    public void Row20_AntiCheatOnANonNvidiaGpu_IsWarnedToo()
     {
         var a = Advise(Game(antiCheat: "BattlEye"), new GpuInfo(GpuVendor.Amd, RtxTier.None, "Radeon"));
 
-        Assert.Equal([20], a.Rows);
-        Assert.Contains("BattlEye", a.Blocked);
+        Assert.Contains(20, a.Rows);
+        Assert.Contains("BattlEye", a.Caution);
+        Assert.Null(a.Top);
+        Assert.All(a.Methods.Where(m => m.Selectable), m => Assert.NotNull(m.Warning));
     }
 
     [Fact]
-    public void Row20_ProtectedStoreInstall_NothingIsOffered()
+    public void Row20_LockedStoreInstall_NothingIsOffered_AndCannotBeConfirmed()
     {
         var a = MethodAdvisor.Advise(Input(Game(dlss: true)) with { ProtectedInstall = true });
 
@@ -518,27 +536,65 @@ public sealed class MethodAdvisorTests
         Assert.Contains("Microsoft Store", a.Blocked);
     }
 
+    [Fact]
+    public void Row20_WritableStoreInstall_IsOfferedWithAWarning_AndAutoNeverPicksIt()
+    {
+        var a = MethodAdvisor.Advise(Input(Game(dlss: true)) with { StoreInstall = true });
+
+        Assert.Null(a.Blocked);
+        Assert.Contains(20, a.Rows);
+        Assert.Null(a.Top);
+        Assert.Contains("Microsoft Store", a.Caution);
+        Assert.All(a.Methods.Where(m => m.Selectable), m => Assert.Equal(MethodAdvisor.StoreCaution, m.Warning));
+    }
+
     [Theory]
     [InlineData(@"C:\Program Files\WindowsApps\Studio.Game_1.0\Game", true)]
     [InlineData(@"D:\XboxGames\Game\Content", false)]
-    public void ProtectedStoreInstall_IsTheWindowsAppsFolder(string root, bool expected)
+    public void StoreInstall_IsTheWindowsAppsFolder(string root, bool expected)
     {
         var g = Game();
         g.Root = root;
 
-        Assert.Equal(expected, MethodAdvisor.IsProtectedStoreInstall(g, _ => false));
+        Assert.Equal(expected, MethodAdvisor.IsStoreInstall(g, _ => false));
     }
 
     [Fact]
-    public void ProtectedStoreInstall_AlsoAnUnreadableExeNextToMicrosoftGameConfig()
+    public void StoreInstall_AlsoAnUnreadableExeNextToMicrosoftGameConfig()
     {
         var g = Game(bits: 0);
         g.Root = @"D:\XboxGames\Game\Content";
 
-        Assert.True(MethodAdvisor.IsProtectedStoreInstall(g, p => p.EndsWith("MicrosoftGame.config")));
-        Assert.False(MethodAdvisor.IsProtectedStoreInstall(g, _ => false));
+        Assert.True(MethodAdvisor.IsStoreInstall(g, p => p.EndsWith("MicrosoftGame.config")));
+        Assert.False(MethodAdvisor.IsStoreInstall(g, _ => false));
         g.Tech.Bits = 64;
-        Assert.False(MethodAdvisor.IsProtectedStoreInstall(g, p => p.EndsWith("MicrosoftGame.config")));
+        Assert.False(MethodAdvisor.IsStoreInstall(g, p => p.EndsWith("MicrosoftGame.config")));
+    }
+
+    [Fact]
+    public void ProtectedStoreInstall_IsAStoreFolderTheAppCannotWriteTo()
+    {
+        var g = Game();
+        g.Root = @"C:\Program Files\WindowsApps\Studio.Game_1.0\Game";
+
+        Assert.True(MethodAdvisor.IsProtectedStoreInstall(g, _ => false, canWrite: _ => false));
+        Assert.False(MethodAdvisor.IsProtectedStoreInstall(g, _ => false, canWrite: _ => true));
+        g.Root = @"D:\Games\Plain";
+        Assert.False(MethodAdvisor.IsProtectedStoreInstall(g, _ => false, canWrite: _ => false));
+    }
+
+    [Fact]
+    public void FolderWritable_ProbesWithAFileAndLeavesNothingBehind()
+    {
+        var dir = Path.Combine(Path.GetTempPath(), "dlssu-probe-" + Guid.NewGuid().ToString("N")[..8]);
+        Directory.CreateDirectory(dir);
+        try
+        {
+            Assert.True(MethodAdvisor.FolderWritable(dir));
+            Assert.Empty(Directory.GetFiles(dir));
+            Assert.False(MethodAdvisor.FolderWritable(Path.Combine(dir, "missing")));
+        }
+        finally { Directory.Delete(dir, true); }
     }
 
     // ---------- shape of the result ----------

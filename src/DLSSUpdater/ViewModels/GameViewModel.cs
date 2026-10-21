@@ -117,19 +117,13 @@ public sealed partial class GameViewModel : ObservableObject
             {
                 Components.First(r => r.Key == "dlssnr").Enabled = true;
                 Components.First(r => r.Key == "reshade").Enabled = true;
-                // One NR add-on per game unless Settings allows several; loading shows what is installed as it is.
-                if (!_loading)
-                {
-                    var enabled = Components.Where(r => r.Enabled && AddonOf(r.Key) is not null).Select(r => AddonOf(r.Key)!.Value);
-                    foreach (var other in NrAddons.ToSwitchOff(AddonOf(c.Key)!.Value, enabled, _s.Settings.AllowSeveralNrAddons))
-                        Components.First(r => AddonOf(r.Key) == other).Enabled = false;
-                }
             }
             OnPropertyChanged(nameof(AnyEnabled));
             OnPropertyChanged(nameof(RenoDxEnabled));
             OnPropertyChanged(nameof(LecramEnabled));
             OnPropertyChanged(nameof(BothAddonsEnabled));
             OnPropertyChanged(nameof(NrAddonWarning));
+            RefreshConflicts();
             RefreshAddonPairStatus();
             NotifyDfcHint();
             RefreshModPick();
@@ -268,7 +262,17 @@ public sealed partial class GameViewModel : ObservableObject
     public bool RenoDxEnabled => On("renodx");
     public bool LecramEnabled => On("lecram");
     public bool BothAddonsEnabled => RenoDxEnabled && LecramEnabled;
-    public string? NrAddonWarning => NrAddons.Warning(RenoDxEnabled, LecramEnabled);
+    public string? NrAddonWarning => BothAddonsEnabled ? NrAddons.Conflict(NrAddon.RenoDx, [NrAddon.Lecram]) : null;
+
+    /// <summary>What clashes in the current selection (<see cref="Installer.Conflicts"/>); stays visible after the user confirmed it.</summary>
+    public string? ConflictWarning => SelectedTarget is null ? null : Installer.Conflicts(SelectedTarget.Dir, BuildOptions(false, false)) is { Count: > 0 } c ? string.Join(Environment.NewLine, c) : null;
+    public bool HasConflictWarning => ConflictWarning is not null;
+
+    private void RefreshConflicts()
+    {
+        OnPropertyChanged(nameof(ConflictWarning));
+        OnPropertyChanged(nameof(HasConflictWarning));
+    }
 
     private static NrAddon? AddonOf(string key) => key switch
     {
@@ -889,6 +893,7 @@ public sealed partial class GameViewModel : ObservableObject
     /// <summary>Recomputes installed-vs-latest for every component and DLSS file.</summary>
     public void RefreshStatus()
     {
+        RefreshConflicts();
         var m = Manifest;
         var store = _s.Store;
 
@@ -1051,7 +1056,7 @@ public sealed partial class GameViewModel : ObservableObject
     private string? InstalledVersion(string file) =>
         SelectedTarget is null ? null : FileUtil.Format(FileUtil.ReadVersion(Path.Combine(SelectedTarget.Dir, file)));
 
-    public InstallOptions BuildOptions(bool dlssOnly, bool acConfirmed) => new()
+    public InstallOptions BuildOptions(bool dlssOnly, bool acConfirmed, string? confirmedConflict = null) => new()
     {
         Mode = Mode,
         Opti = !dlssOnly && !IsReShadeOnly && On("opti"),
@@ -1059,9 +1064,9 @@ public sealed partial class GameViewModel : ObservableObject
         Mfg = !dlssOnly && On("mfg"),
         DlssNr = !dlssOnly && On("dlssnr"),
         DlssNrId = EffectiveNrId,
-        RenoDx = !dlssOnly && IsReShadeOnly && On("renodx") && !On("dfc"),
+        RenoDx = !dlssOnly && IsReShadeOnly && On("renodx"),
         RenoDxId = EffectiveRenoDxId,
-        Lecram = !dlssOnly && IsReShadeOnly && On("lecram") && !On("dfc"),
+        Lecram = !dlssOnly && IsReShadeOnly && On("lecram"),
         LecramId = EffectiveLecramId,
         Uplift = !dlssOnly && IsReShadeOnly && On("uplift"),
         UpliftTag = EffectiveUpliftTag,
@@ -1083,6 +1088,7 @@ public sealed partial class GameViewModel : ObservableObject
         Proxy = IsReShadeOnly && ReShadeTargetNow.DllName is { } autoName ? autoName : Proxy,
         Overrides = GameConfig.EffectiveOpti(_s.Settings, Id),
         AntiCheatConfirmed = acConfirmed,
+        ConfirmedConflict = confirmedConflict,
         OptiTag = EffectiveOptiTag,
     };
 
@@ -1118,6 +1124,7 @@ public sealed partial class GameViewModel : ObservableObject
         Proxy = m.Proxy ?? Proxy,
         Overrides = GameConfig.EffectiveOpti(_s.Settings, Id),
         AntiCheatConfirmed = m.AntiCheatConfirmed,
+        ConfirmedConflict = m.ConfirmedConflict,
         OptiTag = EffectiveOptiTag,
     };
 

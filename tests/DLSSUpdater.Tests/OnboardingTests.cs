@@ -199,7 +199,7 @@ public sealed class OnboardingTests : IDisposable
     [Fact]
     public void UnchangedAddon_KeepsAnAllowedPair()
     {
-        var s = new AppSettings { AllowSeveralNrAddons = true, InstallRenoDx = true, InstallLecram = true, DefaultMode = InstallMode.ReShadeOnly };
+        var s = new AppSettings { InstallRenoDx = true, InstallLecram = true, DefaultMode = InstallMode.ReShadeOnly };
         var setup = new OnboardingViewModel(s);
         Assert.Equal(NrAddon.Lecram, setup.Addon.Value);
         setup.Finish();
