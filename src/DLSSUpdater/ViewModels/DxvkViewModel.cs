@@ -208,7 +208,8 @@ public sealed partial class DxvkViewModel(GameViewModel game, Services services)
     internal async Task RemoveAsync(CancellationToken ct)
     {
         if (services.Dxvk is not { } service || game.SelectedTarget is not { } target || game.DriverExe is not { } exe) return;
-        var undo = await service.RemoveAsync(game.Info, target.Dir, new NvidiaGame(exe, game.Name, services.Settings.For(game.Id)), services.Settings.Save, ct);
+        var undo = await service.RemoveAsync(game.Info, target.Dir, new NvidiaGame(exe, game.Name, services.Settings.For(game.Id)),
+            game.Manifest is { ReShade: true, ReShadeVulkan: true } m ? game.UpdateOptions(m) : null, services.Settings.Save, ct);
         if (!undo.Clean) Log.Warn($"{game.Name}: some DXVK files or keys changed since they were installed and were left as they are.");
         Log.Info($"{game.Name}: DXVK removed");
     }

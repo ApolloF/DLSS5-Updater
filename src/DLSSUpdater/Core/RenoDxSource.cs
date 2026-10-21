@@ -58,7 +58,7 @@ public sealed partial class ComponentStore
         try
         {
             Directory.CreateDirectory(work);
-            var zip = Path.Combine(work, newest.File.Name);
+            var zip = Path.Combine(work, newest.File.FileName);
             var result = await downloader.DownloadAsync(newest.File, zip, progress, ct);
             if (!result.Ok)
             {

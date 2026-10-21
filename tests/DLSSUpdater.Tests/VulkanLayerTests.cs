@@ -20,11 +20,22 @@ public sealed class VulkanLayerTests : IDisposable
         public bool FileExists(string path) => Texts.ContainsKey(path) || Copies.ContainsKey(path);
         public string? ReadText(string path) => Texts.GetValueOrDefault(path);
         public void Copy(string source, string dest) => Copies[dest] = CorruptCopies ? "corrupt" : source;
-        public void WriteText(string path, string text) => Texts[path] = text;
+        public void WriteText(string path, string text)
+        {
+            if (FailWriteOf is not null && path.EndsWith(FailWriteOf)) throw new IOException("disk full");
+            Texts[path] = text;
+        }
         public void Delete(string path) { Texts.Remove(path); Copies.Remove(path); }
         public void DeleteDirectoryIfEmpty(string dir) => DirectoryRemoved = Texts.Count == 0 && Copies.Count == 0;
         public string Sha256(string path) => Copies[path] == "corrupt" ? "00" : FileUtil.Sha256(Copies[path]);
-        public void AllowAppPackages(string dir) => AppPackagesAllowed = true;
+        public void SecureLayerDir(string dir) => AppPackagesAllowed = true;
+        public HashSet<string> UntrustedFiles { get; } = new(StringComparer.OrdinalIgnoreCase);
+        public string? FailWriteOf { get; set; }
+        public void VerifyFile(string path)
+        {
+            if (UntrustedFiles.Contains(path)) throw new VulkanLayerException("owned by someone else");
+        }
+        public void Move(string from, string to) { Copies[to] = Copies[from]; Copies.Remove(from); }
         public bool IsRegistered(string manifestPath, int bits) => Registry.Contains((manifestPath, bits));
         public void Register(string manifestPath, int bits) => Registry.Add((manifestPath, bits));
         public void Unregister(string manifestPath, int bits) => Registry.Remove((manifestPath, bits));
@@ -119,6 +130,41 @@ public sealed class VulkanLayerTests : IDisposable
     }
 
     [Fact]
+    public void Install_AFileOwnedByAnotherAccount_IsRefused_AndNothingIsRegistered()
+    {
+        _host.UntrustedFiles.Add(Dir("ReShade64.dll.new"));
+        Assert.Throws<VulkanLayerException>(() => VulkanLayer.Install(_host, Files()));
+        Assert.Empty(_host.Registry);
+        Assert.Empty(_host.Copies);
+        Assert.Equal(VulkanLayerState.NotInstalled, VulkanLayer.Status(_host).State);
+    }
+
+    [Fact]
+    public void Install_FailingOnOneBitness_KeepsTheLayerThatWasWorking()
+    {
+        VulkanLayer.Install(_host, Files());
+        var old32 = _host.Copies[Dir("ReShade32.dll")];
+        _host.FailWriteOf = "ReShade32.json";
+        Assert.Throws<IOException>(() => VulkanLayer.Install(_host, Files()));
+
+        Assert.Equal(2, _host.Registry.Count);
+        Assert.Contains(Dir("ReShade32.dll"), _host.Copies.Keys);
+        Assert.Equal(old32, _host.Copies[Dir("ReShade32.dll")]);
+        var status = VulkanLayer.Status(_host);
+        Assert.Equal(VulkanLayerState.Installed, status.State);
+        Assert.Contains("64-bit and 32-bit", status.Text);
+    }
+
+    [Fact]
+    public void Install_FailingOnAFreshInstall_RemovesWhatThisRunAdded()
+    {
+        _host.FailWriteOf = "ReShade32.json";
+        Assert.Throws<IOException>(() => VulkanLayer.Install(_host, Files()));
+        Assert.Empty(_host.Registry);
+        Assert.Equal(VulkanLayerState.NotInstalled, VulkanLayer.Status(_host).State);
+    }
+
+    [Fact]
     public void ALayerFromReShadesOwnSetup_IsNeverReplacedOrRemoved()
     {
         _host.Registry.Add((Dir("ReShade64.json"), 64));
@@ -155,6 +201,17 @@ public sealed class VulkanLayerTests : IDisposable
         Assert.False(VulkanLayer.Status(_host).IsInstalled);
         VulkanLayer.Install(_host, Files());
         Assert.Equal(VulkanLayerState.Installed, VulkanLayer.Status(_host).State);
+    }
+
+    [Theory]
+    [InlineData(ReShadeChannel.Nightly, ReShadeVerification.RecordedAtDownload, false)]
+    [InlineData(ReShadeChannel.Nightly, ReShadeVerification.PublishedDigest, true)]
+    [InlineData(ReShadeChannel.Stable, ReShadeVerification.RecordedAtDownload, true)]
+    [InlineData(ReShadeChannel.Custom, ReShadeVerification.Imported, true)]
+    public void ANightlyWithoutAGitHubDigest_CannotBecomeTheSystemWideLayer(ReShadeChannel channel, ReShadeVerification verification, bool allowed)
+    {
+        var build = new ReShadeBuild("id", "6.8.0", channel, "aa", null, verification, null, DateTime.UtcNow);
+        Assert.Equal(allowed, VulkanLayer.WhyNotLayer(build) is null);
     }
 
     // ---- the elevated command line ----

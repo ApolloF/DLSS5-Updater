@@ -17,11 +17,19 @@ public interface IVulkanLayerHost
     void Copy(string source, string dest);
     void WriteText(string path, string text);
     void Delete(string path);
+    /// <summary>Renames a staged file over its destination.</summary>
+    void Move(string from, string to);
     /// <summary>Removes the folder when nothing is left in it.</summary>
     void DeleteDirectoryIfEmpty(string dir);
     string Sha256(string path);
-    /// <summary>Lets packaged (UWP / Store) apps read the layer files, which ReShade's setup does too.</summary>
-    void AllowAppPackages(string dir);
+    /// <summary>
+    /// Creates the folder with a protected DACL (SYSTEM and Administrators full control, Users and ALL APPLICATION PACKAGES read+execute;
+    /// the latter lets Store games load the layer) or tightens an existing one. Throws <see cref="VulkanLayerException"/> when an
+    /// existing folder is owned by anyone but Administrators or SYSTEM: a standard user can pre-create folders in ProgramData.
+    /// </summary>
+    void SecureLayerDir(string dir);
+    /// <summary>Throws <see cref="VulkanLayerException"/> unless the file is owned by SYSTEM or Administrators and not writable by others.</summary>
+    void VerifyFile(string path);
     bool IsRegistered(string manifestPath, int bits);
     void Register(string manifestPath, int bits);
     void Unregister(string manifestPath, int bits);
@@ -63,6 +71,15 @@ public static class VulkanLayer
     public const string LayerName = "VK_LAYER_reshade";
     /// <summary>Our own record next to the layer, so a layer installed by ReShade's setup is never removed by us.</summary>
     public const string MarkerFile = "DLSS5Updater.layer.json";
+
+    /// <summary>
+    /// Why a build must not become the system-wide layer, or null. A nightly without the digest GitHub publishes was only fetched through
+    /// nightly.link and has nothing to check it against, and the layer is loaded into every Vulkan process.
+    /// </summary>
+    public static string? WhyNotLayer(ReShadeBuild build) =>
+        build.Channel == ReShadeChannel.Nightly && build.Verification != ReShadeVerification.PublishedDigest
+            ? "This ReShade nightly has no digest from GitHub to check it against, so it can't become the Vulkan layer for the whole PC. Pick a stable build, or a nightly that has a digest."
+            : null;
 
     public static string DllName(int bits) => bits == 32 ? ReShadeBuild.File32 : ReShadeBuild.File64;
     public static string ManifestName(int bits) => bits == 32 ? "ReShade32.json" : "ReShade64.json";
@@ -112,7 +129,8 @@ public static class VulkanLayer
         if (files.Dll64 is null && files.Dll32 is null) throw new VulkanLayerException("This ReShade build has no DLL to install as a layer.");
         if (Status(host).State == VulkanLayerState.InstalledByOther)
             throw new VulkanLayerException("The Vulkan layer was installed by ReShade's own setup. Remove it there first, or keep using it.", VulkanLayerCommand.OtherOwner);
-        host.AllowAppPackages(host.LayerDir);
+        host.SecureLayerDir(host.LayerDir);
+        var before = ReadMarker(host);
         var done = new List<int>();
         try
         {
@@ -121,33 +139,71 @@ public static class VulkanLayer
                 if (src is null) continue;
                 if (sha is null) throw new VulkanLayerException($"No SHA-256 for {DllName(bits)}.");
                 var dest = Path.Combine(host.LayerDir, DllName(bits));
-                // Hashed after the copy, so a file swapped between the check and the copy cannot get in.
-                host.Copy(src, dest);
-                if (!host.Sha256(dest).Equals(sha, StringComparison.OrdinalIgnoreCase))
+                // Staged and hashed after the copy, so a file swapped between the check and the copy cannot get in, and a
+                // failed copy leaves the layer that was working untouched.
+                var manifest = ManifestPath(host, bits);
+                host.WriteText(manifest, Manifest(bits));
+                host.VerifyFile(manifest);
+                if (host.ReadText(manifest) != Manifest(bits))
+                    throw new VulkanLayerException($"{ManifestName(bits)} does not read back as written; nothing was installed.");
+                var staged = dest + ".new";
+                host.Copy(src, staged);
+                if (!host.Sha256(staged).Equals(sha, StringComparison.OrdinalIgnoreCase))
                 {
-                    host.Delete(dest);
+                    host.Delete(staged);
                     throw new VulkanLayerException($"{DllName(bits)} does not match the build it should be a copy of; nothing was installed.");
                 }
-                host.WriteText(ManifestPath(host, bits), Manifest(bits));
-                host.Register(ManifestPath(host, bits), bits);
+                try { host.VerifyFile(staged); }
+                catch
+                {
+                    host.Delete(staged);
+                    throw;
+                }
+                host.Move(staged, dest);
+                host.VerifyFile(dest);
+                host.Register(manifest, bits);
                 done.Add(bits);
             }
             // Replacing an older install: a bitness this build lacks is no longer ours.
             foreach (var bits in new[] { 64, 32 }.Except(done)) RemoveBits(host, bits);
-            host.WriteText(Path.Combine(host.LayerDir, MarkerFile), new JsonObject
-            {
-                ["version"] = files.Version,
-                ["dll64"] = files.Dll64 is null ? null : files.Sha64,
-                ["dll32"] = files.Dll32 is null ? null : files.Sha32,
-            }.ToJsonString());
+            WriteMarker(host, files.Version, files.Dll64 is null ? null : files.Sha64, files.Dll32 is null ? null : files.Sha32);
         }
         catch
         {
-            foreach (var bits in done) RemoveBits(host, bits);
-            host.DeleteDirectoryIfEmpty(host.LayerDir);
+            KeepWhatWorks(host, before, done, files);
             throw;
         }
     }
+
+    /// <summary>
+    /// After a failed install: a bitness that was not there before goes again; one that was working before stays (new build if it
+    /// got replaced, the old one if it did not), and the record says which version each bitness is.
+    /// </summary>
+    private static void KeepWhatWorks(IVulkanLayerHost host, Marker? before, List<int> done, VulkanLayerFiles files)
+    {
+        var keep64 = before?.Dll64 is not null && host.FileExists(Path.Combine(host.LayerDir, DllName(64)));
+        var keep32 = before?.Dll32 is not null && host.FileExists(Path.Combine(host.LayerDir, DllName(32)));
+        if (!keep64) RemoveBits(host, 64);
+        if (!keep32) RemoveBits(host, 32);
+        if (before is null || (!keep64 && !keep32))
+        {
+            host.Delete(Path.Combine(host.LayerDir, MarkerFile));
+            host.DeleteDirectoryIfEmpty(host.LayerDir);
+            return;
+        }
+        var sha64 = done.Contains(64) ? files.Sha64 : keep64 ? before.Dll64 : null;
+        var sha32 = done.Contains(32) ? files.Sha32 : keep32 ? before.Dll32 : null;
+        var allNew = done.Contains(64) == keep64 && done.Contains(32) == keep32;
+        WriteMarker(host, allNew ? files.Version : $"{before.Version} and {files.Version}", sha64, sha32);
+    }
+
+    private static void WriteMarker(IVulkanLayerHost host, string version, string? sha64, string? sha32) =>
+        host.WriteText(Path.Combine(host.LayerDir, MarkerFile), new JsonObject
+        {
+            ["version"] = version,
+            ["dll64"] = sha64,
+            ["dll32"] = sha32,
+        }.ToJsonString());
 
     /// <summary>Unregisters and deletes what this app installed; a layer from ReShade's setup is refused.</summary>
     public static void Remove(IVulkanLayerHost host)

@@ -80,6 +80,30 @@ public static class ReShadeLayout
         return items.Any(i => SameFolder(i, entry)) ? string.Join(",", items) : string.Join(",", [.. items, entry]);
     }
 
+    /// <summary>The Extras key under which a component records the search path entry of <paramref name="iniKey"/> it needs, even when another component already added it.</summary>
+    public static string OwnedEntryKey(string iniKey) => "searchpath:" + iniKey;
+
+    public static bool IsSearchPathKey(string section, string key) =>
+        section.Equals("GENERAL", StringComparison.OrdinalIgnoreCase) && key is "EffectSearchPaths" or "TextureSearchPaths";
+
+    /// <summary>The entries <paramref name="value"/> holds that <paramref name="previous"/> did not: what one component's edit added.</summary>
+    public static IReadOnlyList<string> AddedEntries(string value, string? previous)
+    {
+        var before = Split(previous);
+        return Split(value).Where(i => !before.Any(b => SameFolder(b, i))).ToList();
+    }
+
+    /// <summary><paramref name="current"/> without the entries naming the same folders as <paramref name="remove"/>; null when nothing is left.</summary>
+    public static string? RemoveEntries(string? current, IEnumerable<string> remove)
+    {
+        var gone = remove.ToList();
+        var left = Split(current).Where(i => !gone.Any(g => SameFolder(g, i))).ToList();
+        return left.Count == 0 ? null : string.Join(",", left);
+    }
+
+    private static List<string> Split(string? list) =>
+        (list ?? "").Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries).ToList();
+
     private static string Canon(string path) =>
         path.Replace('/', '\\').Trim().TrimEnd('*').TrimEnd('\\').TrimStart('.').TrimStart('\\').ToLowerInvariant();
 

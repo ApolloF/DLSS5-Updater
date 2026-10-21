@@ -1,8 +1,6 @@
 using System.ComponentModel;
 using System.Diagnostics;
 using System.Security;
-using System.Security.AccessControl;
-using System.Security.Principal;
 using Microsoft.Win32;
 
 namespace DLSSUpdater.Core;
@@ -19,35 +17,22 @@ public sealed class WindowsVulkanLayerHost : IVulkanLayerHost
 
     public string? ReadText(string path) => File.Exists(path) ? File.ReadAllText(path) : null;
 
-    public void Copy(string source, string dest)
-    {
-        Directory.CreateDirectory(Path.GetDirectoryName(dest)!);
-        FileUtil.AtomicCopy(source, dest);
-    }
+    // Fresh temp files only: the folder is secured first (SecureLayerDir), and a planted temp is never reused.
+    public void Copy(string source, string dest) => VulkanLayerSecurity.CopyFresh(source, dest);
 
-    public void WriteText(string path, string text)
-    {
-        Directory.CreateDirectory(Path.GetDirectoryName(path)!);
-        FileUtil.AtomicWriteText(path, text);
-    }
+    public void WriteText(string path, string text) => VulkanLayerSecurity.WriteTextFresh(path, text);
 
     public void Delete(string path) => FileUtil.DeleteFile(path);
+
+    public void Move(string from, string to) => File.Move(from, to, true);
 
     public void DeleteDirectoryIfEmpty(string dir) => FileUtil.TryDeleteEmptyDir(dir);
 
     public string Sha256(string path) => FileUtil.Sha256(path);
 
-    public void AllowAppPackages(string dir)
-    {
-        Directory.CreateDirectory(dir);
-        // ALL APPLICATION PACKAGES: without it a Store (UWP) game cannot load the layer.
-        var sid = new SecurityIdentifier("S-1-15-2-1");
-        var info = new DirectoryInfo(dir);
-        var security = info.GetAccessControl();
-        security.AddAccessRule(new FileSystemAccessRule(sid, FileSystemRights.ReadAndExecute,
-            InheritanceFlags.ContainerInherit | InheritanceFlags.ObjectInherit, PropagationFlags.None, AccessControlType.Allow));
-        info.SetAccessControl(security);
-    }
+    public void SecureLayerDir(string dir) => VulkanLayerSecurity.SecureDirectory(dir);
+
+    public void VerifyFile(string path) => VulkanLayerSecurity.VerifyFile(path);
 
     private static RegistryKey Hklm() => RegistryKey.OpenBaseKey(RegistryHive.LocalMachine, RegistryView.Registry64);
 

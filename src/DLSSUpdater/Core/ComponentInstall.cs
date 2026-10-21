@@ -22,7 +22,7 @@ public sealed partial class Installer
             {
                 var m = InstallManifest.Read(targetDir) ?? new InstallManifest();
                 m.Contain(targetDir, game.Root);
-                var ctx = new Ctx(FileUtil.Normalize(game.Root), targetDir, m);
+                var ctx = new Ctx(FileUtil.Normalize(game.Root), targetDir, m, null, game);
                 try
                 {
                     var undo = ApplyPlan(ctx, plan);
@@ -51,7 +51,7 @@ public sealed partial class Installer
             var m = InstallManifest.Read(targetDir) ?? throw new InvalidOperationException("No DLSS5 Updater install found here.");
             m.Contain(targetDir, game.Root);
             var c = m.Component(id) ?? throw new InvalidOperationException($"{ComponentRegistry.Find(id)?.Name ?? id} is not installed here.");
-            var ctx = new Ctx(FileUtil.Normalize(game.Root), targetDir, m);
+            var ctx = new Ctx(FileUtil.Normalize(game.Root), targetDir, m, null, game);
             try
             {
                 var undo = UndoComponent(ctx, c);
@@ -151,6 +151,22 @@ public sealed partial class Installer
         var entry = InstallManifest.ConfigEntry(full, ctx.Target, ctx.Root);
         EnsureNoLink(ctx, entry, full);
         return entry;
+    }
+
+    /// <summary>
+    /// A record can name a config file in AppData or Documents, which is where Unreal keeps its Engine.ini. A hand-edited or crafted
+    /// record must not make us edit another app's config there, so such a file is only changed when it lies in the Unreal config
+    /// folder worked out for this game. Files in the game or install folder are always ours.
+    /// </summary>
+    private static bool MayChangeConfig(Ctx ctx, string entry, string full)
+    {
+        if (!InstallManifest.KnownFolderTags.Any(t => entry.StartsWith(t, StringComparison.Ordinal))) return true;
+        if (ctx.Game is not { } game) return false;
+        var local = InstallManifest.KnownFolder("|localappdata|") ?? Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData);
+        var docs = InstallManifest.KnownFolder("|documents|") ?? Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments);
+        return EngineIniLocator.Resolve(game, null, local, docs) is { } target
+            && string.Equals(Path.GetDirectoryName(Path.GetFullPath(target.Path)), Path.GetDirectoryName(full), StringComparison.OrdinalIgnoreCase)
+            && full.EndsWith(".ini", StringComparison.OrdinalIgnoreCase);
     }
 
     private static string ConfigFull(Ctx ctx, string entry)
@@ -302,12 +318,24 @@ public sealed partial class Installer
         foreach (var group in edits.GroupBy(e => e.File, StringComparer.OrdinalIgnoreCase))
         {
             var full = ConfigFull(ctx, group.Key);
+            if (!MayChangeConfig(ctx, group.Key, full))
+            {
+                Log.Warn($"  {group.Key}: not the Unreal config folder of this game, left as it is");
+                foreach (var e in group) c.ConfigEdits.Remove(e);
+                Persist(ctx);
+                continue;
+            }
             if (File.Exists(full))
             {
                 var text = File.ReadAllText(full);
                 var ini = IniFile.Parse(text, keepFinalNewlineAsIs: true);
                 foreach (var e in group.Reverse())
                 {
+                    if (ReShadeLayout.IsSearchPathKey(e.Section, e.Key))
+                    {
+                        UndoSearchPaths(ctx, c, ini, e);
+                        continue;
+                    }
                     // IniFile reads values trimmed.
                     if (!string.Equals(ini.Get(e.Section, e.Key), e.Value.Trim(), StringComparison.Ordinal))
                     {
@@ -325,6 +353,30 @@ public sealed partial class Installer
             foreach (var e in group) c.ConfigEdits.Remove(e);
             Persist(ctx);
         }
+    }
+
+    /// <summary>
+    /// Search path lists are shared: the add-ons and the shader packs both need the same shaders folder on them. Undo takes out only
+    /// the entries this component's edit added and no other installed component still needs, instead of putting the old list back.
+    /// </summary>
+    private static void UndoSearchPaths(Ctx ctx, InstalledComponent c, IniFile ini, ConfigEdit e)
+    {
+        var added = ReShadeLayout.AddedEntries(e.Value, e.Previous);
+        var mine = new List<string>();
+        foreach (var entry in added)
+        {
+            var needer = ctx.M.Components.FirstOrDefault(o => o != c
+                && o.Extras.GetValueOrDefault(ReShadeLayout.OwnedEntryKey(e.Key)) is { } n && ReShadeLayout.AddedEntries(entry, n).Count == 0);
+            if (needer is null) mine.Add(entry);
+            // The entry stays, and the other component takes over undoing it, so it goes when that one is removed.
+            else if (needer.EditOf(e.File, e.Section, e.Key) is null)
+                needer.ConfigEdits.Add(new ConfigEdit { File = e.File, Section = e.Section, Key = e.Key, Previous = e.Previous, Value = e.Value, FileCreated = e.FileCreated, SectionCreated = e.SectionCreated });
+        }
+        var current = ini.Get(e.Section, e.Key);
+        if (current is null) return;
+        var left = ReShadeLayout.RemoveEntries(current, mine);
+        if (left is null && e.Previous is null) ini.Remove(e.Section, e.Key);
+        else ini.Set(e.Section, e.Key, left ?? e.Previous ?? "");
     }
 
     private static void SetReadOnly(Ctx ctx, InstalledComponent c, string entry)
@@ -354,7 +406,9 @@ public sealed partial class Installer
     private static void UndoAttributes(Ctx ctx, InstalledComponent c, AttributeChange a, UndoReport report)
     {
         var full = ConfigFull(ctx, a.Path);
-        if (File.Exists(full))
+        if (!MayChangeConfig(ctx, a.Path, full))
+            Log.Warn($"  {a.Path}: not the Unreal config folder of this game, left as it is");
+        else if (File.Exists(full))
         {
             var all = File.GetAttributes(full);
             if ((all & AttributeChange.Managed) != a.After)

@@ -182,8 +182,8 @@ public sealed class DxvkTests : IDisposable
         bool force = true, bool confirmed = false, string? defaultPick = null) =>
         s.ApplyAsync(Req(g, pick, tier, present, conf, reshade, force, confirmed), defaultPick, () => _saves++, null, default);
 
-    private Task Remove(GameInfo g, DxvkService? s = null) =>
-        (s ?? Service()).RemoveAsync(g, _target, new NvidiaGame(FakeDrs.Exe, "Game", _over), () => { }, default);
+    private Task Remove(GameInfo g, DxvkService? s = null, InstallOptions? reShadeBack = null) =>
+        (s ?? Service()).RemoveAsync(g, _target, new NvidiaGame(FakeDrs.Exe, "Game", _over), reShadeBack, () => { }, default);
 
     private string T(string rel) => Path.Combine(_target, rel);
     private InstalledComponent? Record() => InstallManifest.Read(_target)?.Component(ComponentRegistry.Dxvk);
@@ -756,6 +756,27 @@ public sealed class DxvkTests : IDisposable
         Assert.NotNull(m.Component(ComponentRegistry.Dxvk));
         Assert.Equal(["d3d9.dll"], DxvkDlls.InstalledIn(m));
         Assert.True(ReShadeNaming.Resolve(g.Effective, optiScalerLoads: false, null, DxvkDlls.InstalledIn(m)).VulkanLayer);
+    }
+
+    [Fact]
+    public async Task Removing_DXVK_installs_ReShade_under_its_proxy_name_again_when_DXVK_had_moved_it_to_the_layer()
+    {
+        var rs = ImportReShade();
+        var installer = new Installer(_store) { VulkanHost = new ReShadeInstallTests.FakeLayer(VulkanLayerState.Installed) };
+        var g = Game(GraphicsApis.Dx9);
+        await installer.InstallAsync(g, _target, ReShadeOpts("d3d9.dll"), null, default);
+        var service = new DxvkService(installer, new GitHubClient(_web), new NvidiaProfile(_drs));
+        await service.ApplyAsync(Req(g, Stub("v1").Id, reshade: ReShadeOpts("d3d9.dll"), confirmed: true), null, () => { }, null, default);
+        Assert.True(InstallManifest.Read(_target)!.ReShadeVulkan);
+
+        await Remove(g, service, ReShadeOpts("d3d9.dll") with { ReShadeVulkan = true });
+
+        var m = InstallManifest.Read(_target)!;
+        Assert.False(m.ReShadeVulkan);
+        Assert.True(m.ReShade);
+        Assert.Equal("d3d9.dll", m.Proxy);
+        Assert.Equal(rs.Sha64, FileUtil.Sha256(T("d3d9.dll")));
+        Assert.Null(m.Component(ComponentRegistry.Dxvk));
     }
 
     [Fact]

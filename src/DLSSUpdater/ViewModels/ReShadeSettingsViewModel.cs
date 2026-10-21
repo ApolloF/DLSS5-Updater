@@ -242,6 +242,11 @@ public sealed partial class ReShadeSettingsViewModel : ObservableObject
             catch (Exception ex) when (ex is InvalidOperationException or InvalidDataException or HttpRequestException)
             { Log.Info($"Vulkan layer: no 32-bit ReShade for this build ({ex.Message}); 64-bit games only"); }
             var build = Store.ReShadeBuilds.First(b => b.Id == file.Build.Id);
+            if (VulkanLayer.WhyNotLayer(build) is { } why)
+            {
+                Views.Dialog.Show("Vulkan layer", why);
+                return;
+            }
             await RunElevated(VulkanLayerCommand.InstallArguments(ComponentStore.ReShadeBuildDir(build), build), "installed");
         });
     }
