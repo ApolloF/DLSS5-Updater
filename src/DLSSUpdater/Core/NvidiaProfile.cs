@@ -165,6 +165,27 @@ public sealed class NvidiaProfile(IDrsProvider drs)
     /// <summary>Puts the game's driver limiter back to what it was before <see cref="SetFrameRateLimit"/>.</summary>
     public NvidiaResult RestoreFrameRateLimit(NvidiaGame game) => Restore(game, [NvidiaProfileCatalog.FrameRateLimit]);
 
+    /// <summary>
+    /// The driver profile the Lilium HDR build of DXVK is run with: the Vulkan present method layered on the DXGI swap chain, and the flag that
+    /// treats DXVK as a native renderer. What the profile held before is recorded like every other write.
+    /// </summary>
+    public NvidiaResult SetLiliumPresentMethod(NvidiaGame game) => Apply(game, new Dictionary<uint, uint?>
+    {
+        [NvidiaProfileCatalog.PresentMethod] = NvidiaProfileCatalog.PresentLayeredOnDxgi,
+        [NvidiaProfileCatalog.PresentFlags] = NvidiaProfileCatalog.PresentTreatDxvkAsNative,
+    });
+
+    /// <summary>Puts both present settings back to what the profile held before <see cref="SetLiliumPresentMethod"/>.</summary>
+    public NvidiaResult RestoreLiliumPresentMethod(NvidiaGame game) => Restore(game, [NvidiaProfileCatalog.PresentMethod, NvidiaProfileCatalog.PresentFlags]);
+
+    /// <summary>True when the profile holds the values <see cref="SetLiliumPresentMethod"/> writes.</summary>
+    public bool HasLiliumPresentMethod(NvidiaGame game)
+    {
+        var user = Read(game.Exe, [NvidiaProfileCatalog.PresentMethod, NvidiaProfileCatalog.PresentFlags]).User;
+        return user.GetValueOrDefault(NvidiaProfileCatalog.PresentMethod) == NvidiaProfileCatalog.PresentLayeredOnDxgi
+               && user.GetValueOrDefault(NvidiaProfileCatalog.PresentFlags) == NvidiaProfileCatalog.PresentTreatDxvkAsNative;
+    }
+
     private NvidiaResult Verify(string exe, IReadOnlyDictionary<uint, uint?> expected)
     {
         var after = Read(exe, expected.Keys);

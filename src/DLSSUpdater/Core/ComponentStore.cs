@@ -32,6 +32,8 @@ public sealed class CachedComponent
     public bool Imported { get; set; }
     /// <summary>The version of an imported build, as read from its files.</summary>
     public string? Label { get; set; }
+    /// <summary>The channel a build belongs to, for libraries that have several (DXVK: stable, development, lilium).</summary>
+    public string? Channel { get; set; }
 }
 
 /// <summary>Resolves the latest releases, downloads them once per tag and holds the user-supplied files.</summary>

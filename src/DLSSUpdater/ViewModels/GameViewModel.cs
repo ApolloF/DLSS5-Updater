@@ -241,7 +241,7 @@ public sealed partial class GameViewModel : ObservableObject
         {
             var over = _s.Settings.Games.GetValueOrDefault(Id);
             var manual = IsReShadeOnly && Manifest?.ReShadeVulkan != true ? Manifest?.Proxy ?? over?.Proxy : null;
-            return ReShadeNaming.Resolve(Info.Effective, optiScalerLoads: !IsReShadeOnly, manual);
+            return ReShadeNaming.Resolve(Info.Effective, optiScalerLoads: !IsReShadeOnly, manual, DxvkDlls.InstalledIn(Manifest));
         }
     }
 
