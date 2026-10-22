@@ -46,7 +46,7 @@ if (load.Document?.Sections.Renodx is { } renodx)
 and Engine.ini work (`docs/addons/renodx-hdr.md`). `Sections.RenodxDlss.Builds` lists ShortFuse's DLSS add-on releases, newest first, each
 `File` a zip with its SHA-256 (mirrored, the author's URL as the fallback): `ComponentStore.CheckRenoDxCatalogAsync` downloads the newest, takes `renodx-dlss.addon64` out
 and imports it (`docs/design.md` section 3, the exception). The same goes for `Sections.Neural.Dlssnr` and `Sections.Neural.Lecram` (`Current` plus `History`, newest first; raw
-binaries, told apart by `Sha256`, labelled by `CatalogNeuralLine.LabelOf`). Only the newest downloads on its own; `ComponentStore.OfferedBuilds` lists the others the library
+binaries, told apart by `Sha256`, labelled by `CatalogNeuralLine.LabelOf`: the version, and when several builds share it `<version> · <fileVersion>` like the library's label, else the short hash; `fileVersion` is the optional PE FileVersion, and the catalog orders same-version builds by it, newest first, which the app keeps). Only the newest downloads on its own; `ComponentStore.OfferedBuilds` lists the others the library
 lacks and `DownloadCatalogBuildAsync` fetches one on demand when the user picks it in a build picker (`CatalogBuildPicker.cs`, tags `catalog:<sha256>`).
 
 A build's identity for the library is `file.Sha256`; `file.Version` is its label; `file.History` lists earlier builds.

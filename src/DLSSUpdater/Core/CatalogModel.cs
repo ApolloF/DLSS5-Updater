@@ -70,11 +70,19 @@ public sealed class CatalogNeuralLine
     /// <summary>Newest first.</summary>
     public IEnumerable<CatalogNeuralBuild> All => Current is null ? History : [Current, .. History];
 
-    /// <summary>The version, plus the short hash when another build of the line carries the same version (variants share a PE version).</summary>
-    public string LabelOf(CatalogNeuralBuild build) =>
-        All.Count(b => string.Equals(b.Version, build.Version, StringComparison.OrdinalIgnoreCase)) > 1
-            ? $"{build.Version} · {build.ShortHash}"
-            : build.Version;
+    /// <summary>
+    /// The version, plus what tells it from another build of the line with the same version (variants share a PE version): the file version
+    /// when the catalog gives one (the library's "&lt;version&gt; · &lt;file version&gt;" form), else the short hash.
+    /// </summary>
+    public string LabelOf(CatalogNeuralBuild build)
+    {
+        var sameVersion = All.Where(b => string.Equals(b.Version, build.Version, StringComparison.OrdinalIgnoreCase)).ToList();
+        if (sameVersion.Count <= 1) return build.Version;
+        var fileVersion = build.FileVersion?.Trim();
+        var usable = !string.IsNullOrEmpty(fileVersion) && !string.Equals(fileVersion, build.Version, StringComparison.OrdinalIgnoreCase)
+            && sameVersion.Count(b => string.Equals(b.FileVersion?.Trim(), fileVersion, StringComparison.OrdinalIgnoreCase)) == 1;
+        return $"{build.Version} · {(usable ? fileVersion : build.ShortHash)}";
+    }
 }
 
 /// <summary>A raw binary (not a zip) in the mirror. Builds are told apart by <see cref="Sha256"/>, never by version.</summary>
@@ -90,6 +98,8 @@ public sealed class CatalogNeuralBuild
     public string? Url { get; set; }
     /// <summary>Lecram only: "v10" or "v11".</summary>
     public string? Generation { get; set; }
+    /// <summary>The PE FileVersion (digits like "0.2026.828.517"), which tells same-version builds apart; absent in older catalogs.</summary>
+    public string? FileVersion { get; set; }
 
     public string ShortHash => Sha256.Length >= 8 ? Sha256[..8] : Sha256;
 

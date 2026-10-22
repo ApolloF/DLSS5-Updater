@@ -132,6 +132,20 @@ public sealed class CatalogBuildPickerTests : IDisposable
     }
 
     [Fact]
+    public void Shared_versions_are_offered_in_catalog_order_with_their_file_version()
+    {
+        var newest = Entry(ComponentStore.DlssNrFile, "310.8.0", NrDll(new Version(310, 8, 0, 0), "one"));
+        var older = Entry(ComponentStore.DlssNrFile, "310.8.0", NrDll(new Version(310, 8, 0, 0), "two"));
+        newest.FileVersion = "0.2026.828.517";
+        older.FileVersion = "0.2026.828.400";
+
+        var offers = _store.OfferedBuilds(CatalogBuildKind.DlssNr, Sections(Line(newest, older)), false);
+
+        Assert.Equal(["310.8.0 · 0.2026.828.517", "310.8.0 · 0.2026.828.400"], offers.Select(o => o.Label));
+        Assert.Equal("310.8.0 · 0.2026.828.517 (download)", offers[0].ChoiceLabel);
+    }
+
+    [Fact]
     public void A_catalog_without_the_section_offers_nothing()
     {
         Assert.Empty(_store.OfferedBuilds(CatalogBuildKind.DlssNr, null, false));
