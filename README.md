@@ -10,7 +10,7 @@ Formerly called DLSS Updater. Updating keeps your settings: the app moves `%Loca
 
 ## Screenshots
 
-![DLSS5 Updater with the game list on the left and one game selected. The top bar shows the latest version of each component next to Check for updates and Update all. The selected game lists its components with installed and latest versions and a switch for each.](docs/images/games.png)
+![DLSS5 Updater with the game list on the left and one game selected. The top bar shows the latest version of each component next to Check for updates and Update all. The selected game shows what works in it, with a short reason for each option and a Select button.](docs/images/games.png)
 
 The game list and one game's components. Badges show what each game has installed, and an arrow marks an outdated DLSS version.
 
@@ -18,7 +18,7 @@ The game list and one game's components. Badges show what each game has installe
 
 Settings for one game. Anything you don't change here follows your global settings.
 
-![The Settings page on the OptiScaler-NR tab, with neural rendering options, each with a short explanation and a help button.](docs/images/settings.png)
+![The Settings page on the OptiScaler F5 tab, with neural rendering options, each with a short explanation and a help button.](docs/images/settings.png)
 
 Settings for all games. Every option has a short explanation, and the help button next to it tells you more.
 
