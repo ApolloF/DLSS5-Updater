@@ -15,7 +15,7 @@
 - Official channel: RenoDX Discord, DLSS 5 thread. Third-party mirror: `github.com/RankFTW/rhi-repo` releases,
   tags `renodx-dlss-SF-<YY.MMDD.HHMM>` (older ones `renodx-dlss-SF-0.55`), one zip per release holding `renodx-dlss.addon64`;
   the releases publish no hashes and the repository has no licence.
-- The catalog (`renodxDlss` section, [catalog.md](../catalog.md)) lists the newest ten of those releases with the SHA-256 the
+- The catalog (`renodxDlss` section) lists the newest ten of those releases with the SHA-256 the
   catalog generator computed, each with a mirror copy. The app downloads and installs the newest build automatically (mirror
   first, the author's URL as the fallback), refuses a hash mismatch, and imports the add-on from it (`docs/design.md` section 3).
 - Framework is MIT (RenoDX).

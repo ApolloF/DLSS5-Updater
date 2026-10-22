@@ -2,7 +2,7 @@ namespace DLSSUpdater.Core;
 
 /// <summary>
 /// The config keys the RenoDX HDR component writes: the reshade.ini [renodx] section for the generic add-ons, Unreal Extended's
-/// Engine.ini HDR keys and the global peak brightness. Facts: docs/addons/renodx-hdr.md. Only keys that are missing are written
+/// Engine.ini HDR keys and the global peak brightness. Only keys that are missing are written
 /// (<see cref="MissingOnly"/>), apart from the peak brightness, which the user set in this app.
 /// </summary>
 public static class HdrIni

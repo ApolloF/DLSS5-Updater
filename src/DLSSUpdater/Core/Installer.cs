@@ -414,7 +414,7 @@ public sealed partial class Installer(ComponentStore store)
     /// <summary>
     /// Why this selection is a poor mix, one line each; empty when it is fine. Never blocks by itself: the user confirms the
     /// lines (<see cref="InstallOptions.ConfirmedConflict"/>), the install goes ahead and the warning stays on the game.
-    /// Covers the one-neural-consumer rule (docs/research/methods-2026-10.md section 2 and 8 row 18), DLSS5-Feeder's partner and
+    /// Covers the one-neural-consumer rule, DLSS5-Feeder's partner and
     /// OptiScaler's built-in MFG unlock next to the MFG Unlock add-on.
     /// </summary>
     public static IReadOnlyList<string> Conflicts(string targetDir, InstallOptions o)

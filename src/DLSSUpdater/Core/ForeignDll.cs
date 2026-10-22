@@ -25,7 +25,7 @@ public sealed record DllIdentity(DllKind Kind, string? Version, string Evidence)
 
 /// <summary>
 /// Tells which mod a dll under a proxy name (dxgi.dll, d3d9.dll ...) belongs to, before ReShade is placed there. Signs, checked
-/// against real builds (see docs/addons/reshade.md):
+/// against real builds:
 /// <list type="bullet">
 /// <item>ReShade: version resource ProductName "ReShade" (OriginalFilename ReShade64.dll / ReShade32.dll); strings "reshade.me" and "crosire".</item>
 /// <item>OptiScaler: OriginalFilename "OptiScaler.dll".</item>

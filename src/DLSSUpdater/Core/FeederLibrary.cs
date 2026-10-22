@@ -13,7 +13,7 @@ public sealed record FeederRelease(string Tag, DateTime? Published, bool Beta, s
 /// makes, so a neural consumer (Deep Fried Chicken here) has something to act on. Downloaded from that one repository's releases and
 /// verified against the digest GitHub publishes for the asset (no digest = no install); copycat repositories exist, so the owner and
 /// name are pinned exactly. Every release is a build of <see cref="LibraryKind.Feeder"/>: components\dlss5-feeder\&lt;tag&gt;\pkg\
-/// holds the files the app places, and the folder's .complete record is the build's metadata. docs/addons/dlss5-feeder.md has the layout.
+/// holds the files the app places, and the folder's .complete record is the build's metadata.
 /// </summary>
 public sealed partial class FeederLibrary(GitHubClient github)
 {

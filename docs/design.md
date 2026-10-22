@@ -121,7 +121,7 @@ Measured against this guideline on main (after #63, #66 and #67). Each is fixed 
   to a newer import (`AdoptImportedAddon`); by section 2 a pin should stay until the user changes it.
 - **Cache-only components**: DLSS, Streamline and MFG Unlock live in the download cache or as a single imported file
   in the components root, not in libraries; MFG Unlock imports replace each other. (ReShade has a library since 3.0;
-  its install fields are still the pre-3.0 ones, see `docs/addons/reshade.md`.)
+  its install fields are still the pre-3.0 ones.)
 - **Two library implementations** scan builds the same way (`BuildLibrary` for downloads, `AddonLibrary`/`NrLibrary`
   for imports). Target: one library type with a source flag.
 - **Verification differs**: GitHub digests, Uplift's `SHA256SUMS.txt` (skipped when absent), the MediaFire listing hash.
