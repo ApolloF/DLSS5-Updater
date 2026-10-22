@@ -41,7 +41,7 @@ public static class HelpTopics
         // ---------- General ----------
         new("install-mode", "General", "Install mode",
             "OptiScaler (default; the build chosen under OptiScaler build) is the main use: OptiScaler is the proxy, loads ReShade and its add-ons, and runs the NR runtime. " +
-            "ReShade + add-ons installs ReShade itself as the proxy (dxgi.dll by default) with MFG Unlock, the DLSS and Streamline updates, and one NR route instead of OptiScaler's: the ShortFuse RenoDX DLSS add-on, the Lecram DLSS5 add-on, Deep Fried Chicken or GITC Uplift. Turning one on turns the others off; ShortFuse and Lecram can run together only with Allow more than one NR add-on. Each needs an imported NR runtime. " +
+            "ReShade + add-ons installs ReShade itself as the proxy (dxgi.dll by default) with MFG Unlock, the DLSS and Streamline updates, and one NR route instead of OptiScaler's: the ShortFuse RenoDX DLSS add-on, the Lecram DLSS5 add-on, Deep Fried Chicken or GITC Uplift. One NR route per game is the rule: turning on a second one shows a warning, and Install asks you to confirm it. Each needs the NR runtime. " +
             "Switching a game between the two removes the other mode's files and puts back what they replaced. Each game can use its own mode."),
         new("proxy", "General", "Proxy DLL name",
             "The file name the game loads the mod as: OptiScaler's in OptiScaler mode, ReShade's in ReShade + add-ons mode (dxgi.dll for DirectX 10-12, d3d9.dll for DirectX 9, opengl32.dll for OpenGL). dxgi.dll works for most DX12 games. " +
@@ -121,7 +121,7 @@ public static class HelpTopics
             "There are two generations: v10 and older (renodx-dlss5.addon64, recognised by its version resource) and v11 and newer (dlss5-nr.addon64, recognised by strings in the file because it has no version resource). " +
             "Every import is kept as its own build, named by the highest vX.Y.Z string in the file or by you; a game only ever gets one file, because v11 goes inert when a renodx-dlss5.addon64 file sits next to it (from v11 beta.22 not when ReShade has that add-on disabled). Settings picks the default build and each game can pick its own, whose generation decides the options shown. " +
             "It needs ReShade + add-ons mode, ReShade 6+ with add-on support, a game with native DLSS and the NR runtime nvngx_dlssnr.dll, and it replaces OptiScaler-NR and Deep Fried Chicken. " +
-            "It can run next to ShortFuse's RenoDX add-on when Allow more than one NR add-on is on (NR then runs twice): the app then sets ForeignNr=observe. The 0928 pair (ShortFuse 0.2026.0928 and Lecram v8.5.0-rc10) was tested working. Each exact pair of builds has a status (Works, Crashed or not tested together yet); only Crashed shows a warning. Mark the current build pair on the Install tab. " +
+            "It can run next to ShortFuse's RenoDX add-on once you confirm the warning (NR then runs twice): the app then sets ForeignNr=observe. The 0928 pair (ShortFuse 0.2026.0928 and Lecram v8.5.0-rc10) was tested working. Each exact pair of builds has a status (Works, Crashed or not tested together yet); only Crashed shows a warning. Mark the current build pair on the Install tab. " +
             "A copy of either Lecram file already in the game is moved to the backup folder and restored by Uninstall. Options that exist in only one generation are hidden for the other, following the build the game uses. " +
             "From v11 Patch 4 (beta.18) the author also ships its own installer (DLSS5 NR Setup). It finds the add-on in every game on every drive and its Update all replaces it there, games this app manages included, so manage a game with one of the two. " +
             "It keeps a shared nvngx_dlssnr.dll in %LOCALAPPDATA%\\DLSS5-NR\\runtime, which v11 also finds by itself."),
@@ -483,13 +483,13 @@ public static class HelpTopics
             "NVIDIA's original needs an RTX 50 card; for RTX 20/30/40 use a compat build (import it if it isn't in the library). OptiScaler's NR and every NR add-on need it. " +
             "Turn it off to install without neural rendering."),
         new("comp-renodx", "Components", "ShortFuse RenoDX DLSS add-on",
-            "ShortFuse's ReShade add-on (renodx-dlss.addon64) that runs DLSS neural rendering itself. You import it; the dropdown picks which imported build this game gets. " +
+            "ShortFuse's ReShade add-on (renodx-dlss.addon64) that runs DLSS neural rendering itself. The app downloads it automatically, or you import it; the dropdown picks which build this game gets. " +
             "Needs ReShade + add-ons mode, ReShade 6+ with add-on support, a game with its own DLSS and the NR runtime. " +
-            "It is one NR route: turning it on turns Lecram, GITC Uplift and Deep Fried Chicken off, unless Allow more than one NR add-on lets Lecram run next to it."),
+            "It is one NR route: next to Lecram, GITC Uplift or Deep Fried Chicken it shows a warning and Install asks you to confirm. With Lecram, NR then runs twice."),
         new("comp-lecram", "Components", "Lecram DLSS5 add-on",
             "Lecram's ReShade add-on that runs DLSS neural rendering itself: renodx-dlss5.addon64 (v10 and older) or dlss5-nr.addon64 (v11). The app downloads and installs it automatically, or you import it; the dropdown picks the build. " +
             "Needs ReShade + add-ons mode, ReShade 6+ with add-on support, a game with its own DLSS and the NR runtime. " +
-            "It is one NR route: turning it on turns the others off. With Allow more than one NR add-on it can run next to ShortFuse's add-on, then NR runs twice."),
+            "It is one NR route: next to another one it shows a warning and Install asks you to confirm. Next to ShortFuse's add-on NR then runs twice."),
         new("comp-dlss", "Components", "DLSS (SR · RR · FG)",
             "NVIDIA's DLSS files from NVIDIA's GitHub: Super Resolution (nvngx_dlss.dll), Ray Reconstruction (nvngx_dlssd.dll) and Frame Generation (nvngx_dlssg.dll). The game's own files are backed up before they are replaced. " +
             "Latest only ever upgrades; a pinned version is installed exactly. Restore DLSS puts the game's own files back. " +

@@ -511,10 +511,13 @@ public static class MethodAdvisor
         return Opt(Method.OptiScaler, Availability.Available, reason, [ComponentRegistry.OptiScaler], null, InstallMode.OptiScaler);
     }
 
+    // The add-on the app installs (mavismmg's MFGAdaUnlock) targets RTX 40 only; an unreadable GPU never hides it.
     private static MethodOption MfgUnlock(Ctx c) =>
         c.Gpu.Tier == RtxTier.Rtx50
             ? Opt(Method.MfgUnlock, Availability.NotPossible, "Not needed: RTX 50 has multi frame generation built in.")
-            : Opt(Method.MfgUnlock, Availability.Available, "Unlocks DLSS multi frame generation on RTX 20/30/40 in a game that ships DLSS-G.", [ComponentRegistry.MfgUnlock]);
+            : c.Gpu.IsKnown && c.Gpu.Tier != RtxTier.Rtx40
+                ? Opt(Method.MfgUnlock, Availability.NotPossible, "Only for RTX 40 cards: it unlocks the multi frame generation they leave out.")
+                : Opt(Method.MfgUnlock, Availability.Available, "Unlocks DLSS multi frame generation on RTX 40 in a game that ships DLSS-G.", [ComponentRegistry.MfgUnlock]);
 
     private static MethodOption SmoothMotion(Ctx c, string reason)
     {

@@ -39,6 +39,10 @@ public sealed partial class AddonLibraryViewModel : ObservableObject
     /// <summary>Only Lecram has a channel, and only the private build is allowed to use it.</summary>
     internal static bool CanCheck(AddonKind kind, bool channelEnabled) => kind == AddonKind.Lecram && channelEnabled;
 
+    /// <summary>Lecram's row has the automatic download switch: the MediaFire check in the private build, the catalog mirror otherwise.</summary>
+    public bool HasAutoDownload => _kind == AddonKind.Lecram;
+    public string AutoDownloadLabel => CanCheckUpdates ? "Check for new builds automatically" : "Download Lecram's add-on from the catalog";
+
     /// <summary>Deep Fried Chicken ships as a folder: its row also imports the extracted release folder.</summary>
     public bool CanImportFolder => IsDfc;
 

@@ -95,6 +95,16 @@ public sealed class MethodAdvisorTests
         Assert.Equal(Method.MfgUnlock, a.Unavailable.First().Method);
     }
 
+    [Fact]
+    public void Row4_OnRtx30_MfgUnlockIsOnlyForRtx40_ButAnUnknownGpuKeepsIt()
+    {
+        var mfg = Option(Advise(Game(dlss: true, fg: true), Rtx30), Method.MfgUnlock);
+        Assert.Equal(Availability.NotPossible, mfg.Availability);
+        Assert.Contains("RTX 40", mfg.Reason);
+
+        Assert.Equal(Availability.Available, Option(Advise(Game(dlss: true, fg: true), GpuInfo.Unknown), Method.MfgUnlock).Availability);
+    }
+
     // ---------- row 5-6: no DLSS on DX11/12 ----------
 
     [Fact]
