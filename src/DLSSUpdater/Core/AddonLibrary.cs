@@ -41,6 +41,8 @@ public sealed record AddonBuild(
         }
     }
 
+    public PickerEntry ToPickerEntry() => new(Id, DetectedLabel, Label, Id, ParsedVersion);
+
     /// <summary>"{detected label}-{sha[..12]}", what an install records and the Installed column shows.</summary>
     [JsonIgnore]
     public string Tag => $"{DetectedLabel}-{Id[..12]}";

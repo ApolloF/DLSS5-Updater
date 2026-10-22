@@ -4,16 +4,22 @@ namespace DLSSUpdater.Core;
 public enum CatalogBuildKind { DlssNr, Lecram, RenoDx }
 
 /// <summary>
-/// A catalog build the library doesn't have, offered in a build picker as "&lt;label&gt; (download)". Its choice tag is
+/// A catalog build the library doesn't have, offered in a build picker as "&lt;version&gt; · download". Its choice tag is
 /// <see cref="Tag"/>: the catalog's SHA-256 behind a prefix no library id or release tag can carry, so a picker tells it from a library build.
 /// For ShortFuse's add-on that hash is the zip's (the library id is the hash of the add-on inside).
 /// </summary>
-public sealed record CatalogOffer(CatalogBuildKind Kind, string Sha256, string Label)
+public sealed record CatalogOffer(CatalogBuildKind Kind, string Sha256, string Label, string Version = "")
 {
     public const string TagPrefix = "catalog:";
 
     public string Tag => TagPrefix + Sha256;
-    public string ChoiceLabel => $"{Label} (download)";
+
+    /// <summary>The picker entry: the plain version, since the picker offers one build per version.</summary>
+    public PickerEntry ToEntry()
+    {
+        var version = Version.Length > 0 ? Version : Label;
+        return new PickerEntry(Tag, version, version, Sha256);
+    }
 
     public static bool IsOffer(string? tag) => tag is not null && tag.StartsWith(TagPrefix, StringComparison.Ordinal);
 
@@ -49,7 +55,7 @@ public sealed partial class ComponentStore
                     if (!b.File.IsInstallable) continue;
                     var sha = b.File.Sha256!.ToLowerInvariant();
                     if (HasRenoDxCatalogBuild(sha) || offers.Any(o => o.Sha256 == sha)) continue;
-                    offers.Add(new CatalogOffer(kind, sha, RenoDxLabel(section, b)));
+                    offers.Add(new CatalogOffer(kind, sha, RenoDxLabel(section, b), string.IsNullOrWhiteSpace(b.Version) ? b.Tag : b.Version));
                 }
                 return offers;
         }
@@ -65,7 +71,7 @@ public sealed partial class ComponentStore
             if (!b.ToBinary().IsInstallable) continue;
             var sha = b.Sha256.ToLowerInvariant();
             if (!have.Add(sha)) continue;
-            offers.Add(new CatalogOffer(kind, sha, line.LabelOf(b)));
+            offers.Add(new CatalogOffer(kind, sha, line.LabelOf(b), b.Version));
         }
         return offers;
     }

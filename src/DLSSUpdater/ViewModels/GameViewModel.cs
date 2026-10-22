@@ -85,7 +85,7 @@ public sealed class Services
     public FrameLimitService? FrameLimit { get; init; }
     /// <summary>DXVK and its Lilium HDR build; null hides the DXVK section.</summary>
     public DxvkService? Dxvk { get; init; }
-    /// <summary>The catalog builds of a component the library doesn't have; the build pickers list them as "(download)". None in the demo or without a catalog.</summary>
+    /// <summary>The catalog builds of a component the library doesn't have; the build pickers list them as "· download". None in the demo or without a catalog.</summary>
     public IReadOnlyList<CatalogOffer> CatalogOffers(CatalogBuildKind kind) =>
         Demo.Active || Catalog?.Document?.Sections is not { } sections ? [] : Store.OfferedBuilds(kind, sections, BuildFlags.LecramChannel);
 
@@ -705,8 +705,8 @@ public sealed partial class GameViewModel : ObservableObject
         var global = _s.Settings.DlssNrId;
         var follows = versions.FirstOrDefault(v => v.Id == global) ?? (global is null ? versions.FirstOrDefault() : null);
         NrChoices.Add(new DlssChoice(null, $"Default ({follows?.Version ?? "none in library"})"));
-        foreach (var nr in versions) NrChoices.Add(new DlssChoice(nr.Id, nr.Label));
-        foreach (var o in _s.CatalogOffers(CatalogBuildKind.DlssNr)) NrChoices.Add(new DlssChoice(o.Tag, o.ChoiceLabel));
+        foreach (var c in BuildPickerList.Merge(versions.Select(v => v.ToPickerEntry()), _s.CatalogOffers(CatalogBuildKind.DlssNr).Select(o => o.ToEntry())))
+            NrChoices.Add(new DlssChoice(c.Tag, c.Label));
         if (pin is not null && NrChoices.All(c => c.Tag != pin)) NrChoices.Add(new DlssChoice(pin, "Missing NR file · import again"));
         NrChoice = NrChoices.FirstOrDefault(c => c.Tag == pin) ?? NrChoices[0];
         _loading = loading;
@@ -779,8 +779,8 @@ public sealed partial class GameViewModel : ObservableObject
         var follows = builds.FirstOrDefault(b => b.Id == global) ?? builds.FirstOrDefault();
         list.Clear();
         list.Add(new DlssChoice(null, $"Default ({follows?.Name ?? "none imported"})"));
-        foreach (var b in builds) list.Add(new DlssChoice(b.Id, b.Label));
-        if (catalogKind is { } ck) foreach (var o in _s.CatalogOffers(ck)) list.Add(new DlssChoice(o.Tag, o.ChoiceLabel));
+        var offers = catalogKind is { } ck ? _s.CatalogOffers(ck).Select(o => o.ToEntry()) : [];
+        foreach (var c in BuildPickerList.Merge(builds.Select(b => b.ToPickerEntry()), offers)) list.Add(new DlssChoice(c.Tag, c.Label));
         if (pin is not null && list.All(c => c.Tag != pin)) list.Add(new DlssChoice(pin, "Missing add-on file · import again"));
         return list.FirstOrDefault(c => c.Tag == pin) ?? list[0];
     }
@@ -811,7 +811,7 @@ public sealed partial class GameViewModel : ObservableObject
     }
 
     /// <summary>
-    /// The user picked "(download)": the build comes first, then it becomes this game's pick. A download that doesn't come puts the
+    /// The user picked a "· download" entry: the build comes first, then it becomes this game's pick. A download that doesn't come puts the
     /// lists back to the saved picks. The default is never touched.
     /// </summary>
     private async Task DownloadPickAsync(CatalogBuildKind kind, string offerTag, Action<string> select)

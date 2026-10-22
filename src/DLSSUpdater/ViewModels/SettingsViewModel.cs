@@ -419,8 +419,8 @@ public sealed partial class SettingsViewModel : ObservableObject
     private void FillNrChoices()
     {
         NrChoices.Clear();
-        foreach (var nr in _main.S.Store.DlssNrVersions) NrChoices.Add(new DlssChoice(nr.Id, nr.Label));
-        foreach (var o in _main.S.CatalogOffers(CatalogBuildKind.DlssNr)) NrChoices.Add(new DlssChoice(o.Tag, o.ChoiceLabel));
+        var offers = _main.S.CatalogOffers(CatalogBuildKind.DlssNr).Select(o => o.ToEntry());
+        foreach (var c in BuildPickerList.Merge(_main.S.Store.DlssNrVersions.Select(v => v.ToPickerEntry()), offers)) NrChoices.Add(new DlssChoice(c.Tag, c.Label));
     }
 
     /// <summary>The catalog arrived or changed: the "(download)" entries of the default pickers follow.</summary>

@@ -125,7 +125,7 @@ public sealed class CatalogBuildPickerTests : IDisposable
         var offers = _store.OfferedBuilds(CatalogBuildKind.DlssNr, Sections(Line(newest, a, b, owned, noHash, noUrl)), false);
 
         Assert.Equal(["310.8.3", "310.8.0 · " + a.Sha256[..8], "310.8.0 · " + b.Sha256[..8]], offers.Select(o => o.Label));
-        Assert.All(offers, o => Assert.EndsWith(" (download)", o.ChoiceLabel));
+        Assert.Equal(["310.8.3", "310.8.0", "310.8.0"], offers.Select(o => o.Version));
         Assert.Equal(["catalog:" + newest.Sha256, "catalog:" + a.Sha256, "catalog:" + b.Sha256], offers.Select(o => o.Tag));
         Assert.Equal(newest.Sha256, CatalogOffer.ShaOf(offers[0].Tag));
         Assert.Null(CatalogOffer.ShaOf(newest.Sha256));
@@ -142,7 +142,7 @@ public sealed class CatalogBuildPickerTests : IDisposable
         var offers = _store.OfferedBuilds(CatalogBuildKind.DlssNr, Sections(Line(newest, older)), false);
 
         Assert.Equal(["310.8.0 · 0.2026.828.517", "310.8.0 · 0.2026.828.400"], offers.Select(o => o.Label));
-        Assert.Equal("310.8.0 · 0.2026.828.517 (download)", offers[0].ChoiceLabel);
+        Assert.Equal("310.8.0", offers[0].ToEntry().Label);
     }
 
     [Fact]
@@ -382,10 +382,10 @@ public sealed class CatalogBuildPickerTests : IDisposable
             return true;
         }, sections);
 
-        Assert.Equal([null, own.Id, "catalog:" + newest.Sha256, "catalog:" + older.Sha256], vm.NrChoices.Select(c => c.Tag));
-        Assert.Equal("310.8.0 (download)", vm.NrChoices[^1].Label);
+        Assert.Equal([null, "catalog:" + newest.Sha256, "catalog:" + older.Sha256, own.Id], vm.NrChoices.Select(c => c.Tag));
+        Assert.Equal("310.8.0 · download", vm.NrChoices[2].Label);
 
-        vm.NrChoice = vm.NrChoices[^1];
+        vm.NrChoice = vm.NrChoices[2];
         await WaitFor(() => _settings.Games.GetValueOrDefault(vm.Id)?.DlssNrId == older.Sha256);
         vm.RebuildNrChoices();
 

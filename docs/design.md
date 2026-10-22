@@ -47,7 +47,7 @@ Each component has exactly these parts. A part that doesn't apply is explicitly 
   size or SHA-256 mismatch, checks it is a PE file, and keeps it in the library like an import. Imports stay possible and a
   Settings switch turns each download off. If the source ever has to change, it is a catalog edit, not an app release.
   Only the newest build downloads on its own. The catalog keeps the older ones (`history`), and the build pickers (the Settings default
-  and each game's pick) list those the library lacks as "<label> (download)" after the library builds. Picking one fetches it on demand
+  and each game's pick) list the versions the library lacks as "<version> · download", mixed with the library builds by version (newest first, one entry per version). Picking one fetches it on demand
   (`ComponentStore.DownloadCatalogBuildAsync`, same checks and library as the auto-check, works with the switch off), then selects it as
   that pick. A refused or offline download only logs and sets the status; the pick stays as it was. The "newest fetched" markers
   (`CatalogDlssNrFetched`, `CatalogLecramFetched`, the RenoDX `CatalogSha`) and the default are only touched by the newest check or by the

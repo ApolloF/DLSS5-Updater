@@ -1081,12 +1081,12 @@
                                                       Visibility="{Binding Key, Converter={StaticResource EqualsToVis}, ConverterParameter=renodx}"
                                                       ItemsSource="{Binding DataContext.RenoDxChoices, RelativeSource={RelativeSource AncestorType=ItemsControl}}"
                                                       SelectedItem="{Binding DataContext.RenoDxChoice, RelativeSource={RelativeSource AncestorType=ItemsControl}}"
-                                                      AutomationProperties.Name="ShortFuse RenoDX DLSS version for this game" ToolTip="Which ShortFuse build this game installs. Builds marked (download) are older catalog builds; picking one downloads it first." />
+                                                      AutomationProperties.Name="ShortFuse RenoDX DLSS version for this game" ToolTip="Which ShortFuse build this game installs. Builds marked download are older catalog builds; picking one downloads it first." />
                                             <ComboBox Grid.Column="3" Margin="0,0,8,0" MaxDropDownHeight="300"
                                                       Visibility="{Binding Key, Converter={StaticResource EqualsToVis}, ConverterParameter=lecram}"
                                                       ItemsSource="{Binding DataContext.LecramChoices, RelativeSource={RelativeSource AncestorType=ItemsControl}}"
                                                       SelectedItem="{Binding DataContext.LecramChoice, RelativeSource={RelativeSource AncestorType=ItemsControl}}"
-                                                      AutomationProperties.Name="Lecram DLSS5 version for this game" ToolTip="Which Lecram build this game installs; its generation decides which Lecram options apply. Builds marked (download) are older catalog builds; picking one downloads it first." />
+                                                      AutomationProperties.Name="Lecram DLSS5 version for this game" ToolTip="Which Lecram build this game installs; its generation decides which Lecram options apply. Builds marked download are older catalog builds; picking one downloads it first." />
                                             <ComboBox Grid.Column="3" Margin="0,0,8,0" MaxDropDownHeight="300"
                                                       Visibility="{Binding Key, Converter={StaticResource EqualsToVis}, ConverterParameter=dfc}"
                                                       ItemsSource="{Binding DataContext.DfcChoices, RelativeSource={RelativeSource AncestorType=ItemsControl}}"
@@ -1157,7 +1157,7 @@
                     <TextBlock Text="NR RUNTIME VERSION" Style="{StaticResource SectionTitle}" />
                     <Border Style="{StaticResource Card}" Padding="16">
                         <StackPanel>
-                            <TextBlock Text="Which NR runtime this game gets when you install or update it. Default uses the one chosen in Settings → Local components. Switch NR puts your choice into the installed game now; Switch back restores the previous file. With a 310.9 runtime, compare models with the Preset option instead of switching versions. Runtimes marked (download) are older catalog builds; picking one downloads it first."
+                            <TextBlock Text="Which NR runtime this game gets when you install or update it. Default uses the one chosen in Settings → Local components. Switch NR puts your choice into the installed game now; Switch back restores the previous file. With a 310.9 runtime, compare models with the Preset option instead of switching versions. Runtimes marked download are older catalog builds; picking one downloads it first."
                                        Style="{StaticResource MutedText}" TextWrapping="Wrap" Margin="0,0,0,8" />
                             <ComboBox ItemsSource="{Binding NrChoices}" SelectedItem="{Binding NrChoice}" MaxDropDownHeight="300"
                                       AutomationProperties.Name="NR runtime version for this game" />
@@ -1674,6 +1674,9 @@
                                                                             <Button Content="Remove" Style="{StaticResource BtnGhost}" Command="{Binding RemoveCommand}" Margin="12,0,0,0"
                                                                                     Visibility="{Binding HasBuilds, Converter={StaticResource BoolToVis}}"
                                                                                     ToolTip="Remove the selected build from the library; other builds stay" />
+                                                                            <Button Content="Rename…" Style="{StaticResource BtnGhost}" Command="{Binding ToggleRenameCommand}" Margin="12,0,0,0"
+                                                                                    Visibility="{Binding HasBuilds, Converter={StaticResource BoolToVis}}"
+                                                                                    ToolTip="Give the selected build your own name" />
                                                                             <Button Content="Folder…" Style="{StaticResource BtnGhost}" Command="{Binding ImportFolderCommand}" Margin="12,0,0,0"
                                                                                     Visibility="{Binding CanImportFolder, Converter={StaticResource BoolToVis}}"
                                                                                     ToolTip="Add the extracted release folder or its 64-bit folder to the library" />
@@ -1684,7 +1687,7 @@
                                                                     <StackPanel Visibility="{Binding HasBuilds, Converter={StaticResource BoolToVis}}">
                                                                         <ComboBox ItemsSource="{Binding Choices}" SelectedItem="{Binding Selected}" MaxDropDownHeight="300" Margin="0,8,0,0"
                                                                                   AutomationProperties.Name="{Binding AutomationName}" ToolTip="{Binding PickerTip}" />
-                                                                        <Grid Margin="0,6,0,0">
+                                                                        <Grid Margin="0,6,0,0" Visibility="{Binding IsRenaming, Converter={StaticResource BoolToVis}}">
                                                                             <Grid.ColumnDefinitions>
                                                                                 <ColumnDefinition Width="*" />
                                                                                 <ColumnDefinition Width="Auto" />
@@ -1696,6 +1699,8 @@
                                                                         </Grid>
                                                                     </StackPanel>
                                                                     <TextBlock Text="{Binding Info}" Style="{StaticResource MutedText}" TextWrapping="Wrap" FontSize="12" Margin="0,6,0,0" />
+                                                                    <TextBlock Text="{Binding ImportOnlyNote}" Style="{StaticResource MutedText}" TextWrapping="Wrap" FontSize="12" Margin="0,4,0,0"
+                                                                               Visibility="{Binding IsImportOnly, Converter={StaticResource BoolToVis}}" />
                                                                     <StackPanel Visibility="{Binding HasAutoDownload, Converter={StaticResource BoolToVis}}" Margin="0,8,0,0">
                                                                         <WrapPanel>
                                                                             <CheckBox Content="{Binding AutoDownloadLabel}" IsChecked="{Binding AutoDownload}" VerticalAlignment="Center" Margin="0,0,12,0"
@@ -1721,7 +1726,7 @@
                                                     <CheckBox IsChecked="{Binding AutoDownloadDlssNr}" Margin="0,0,0,10" AutomationProperties.Name="Download the NR runtime automatically">
                                                         <StackPanel>
                                                             <TextBlock Text="Download the NR runtime automatically" TextWrapping="Wrap" />
-                                                            <TextBlock Text="Each build is checked against its SHA-256 before it joins the library. You can still import one by hand. Older builds the catalog has show up in the pickers as (download); picking one fetches it first."
+                                                            <TextBlock Text="Each build is checked against its SHA-256 before it joins the library. You can still import one by hand. Older builds the catalog has show up in the pickers as download; picking one fetches it first."
                                                                        Style="{StaticResource MutedText}" FontSize="11.5" TextWrapping="Wrap" Margin="0,2,0,0" />
                                                         </StackPanel>
                                                     </CheckBox>

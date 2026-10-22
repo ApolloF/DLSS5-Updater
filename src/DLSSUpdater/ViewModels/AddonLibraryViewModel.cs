@@ -102,15 +102,15 @@ public sealed partial class AddonLibraryViewModel : ObservableObject
         }
     }
 
-    /// <summary>The tooltip of the default picker; names the "(download)" entries only where this add-on has them.</summary>
+    /// <summary>The tooltip of the default picker; names the "· download" entries only where this add-on has them.</summary>
     public string PickerTip => CatalogKind is null || (_kind == AddonKind.Lecram && BuildFlags.LecramChannel)
         ? "Default build: games without their own pick install it"
-        : "Default build: games without their own pick install it. Builds marked (download) are older catalog builds; picking one downloads it first.";
+        : "Default build: games without their own pick install it. Builds marked download are older catalog builds; picking one downloads it first.";
 
     /// <summary>The older catalog builds of this add-on; Deep Fried Chicken has none, and Lecram none in the private build.</summary>
     private CatalogBuildKind? CatalogKind => _kind switch { AddonKind.RenoDx => CatalogBuildKind.RenoDx, AddonKind.Lecram => CatalogBuildKind.Lecram, _ => null };
 
-    /// <summary>"(download)" picked as the default: the build comes first, then it becomes the default. If it doesn't come the list goes back to the current default.</summary>
+    /// <summary>A "· download" entry picked as the default: the build comes first, then it becomes the default. If it doesn't come the list goes back to the current default.</summary>
     private async Task DownloadAsync(string offerTag)
     {
         var picked = await _main.PickCatalogBuildAsync(CatalogKind!.Value, offerTag, id => { Settings.SetAddonId(_kind, id); Settings.Save(); });
@@ -118,7 +118,12 @@ public sealed partial class AddonLibraryViewModel : ObservableObject
         else Reload();
     }
 
-    internal static string NewestLabel(string newestBuild) => $"Newest ({newestBuild})";
+    /// <summary>"Newest · 5.0.0 (2026-10-20)"; the build's own label may already end in a parenthesis, so no second pair.</summary>
+    internal static string NewestLabel(string newestBuild) => $"Newest · {newestBuild}";
+
+    /// <summary>Deep Fried Chicken's licence forbids downloads, so new builds only come in by import. No author URL is known to the app, so there is no link.</summary>
+    public bool IsImportOnly => IsDfc;
+    public string ImportOnlyNote => "Import only: its licence doesn't allow downloads. Get new builds from the author's page.";
 
     internal static string NoLecramBuilds(bool channelEnabled) => channelEnabled
         ? $"No builds yet. Use Check now to fetch the latest v11 build, or import your own copy ({ComponentStore.Lecram10File} for v10 and older, {ComponentStore.Lecram11File} for v11 and newer)."
@@ -144,6 +149,12 @@ public sealed partial class AddonLibraryViewModel : ObservableObject
 
     /// <summary>The user's name for the selected build, edited in a text box and applied with Save name.</summary>
     [ObservableProperty] private string _labelText = "";
+
+    /// <summary>The name box and Save name only show after Rename…</summary>
+    [ObservableProperty] private bool _isRenaming;
+
+    [RelayCommand]
+    private void ToggleRename() => IsRenaming = !IsRenaming;
 
     public string Info
     {
@@ -173,9 +184,10 @@ public sealed partial class AddonLibraryViewModel : ObservableObject
         var builds = Store.AddonBuilds(_kind);
         _buildCount = builds.Count;
         if (HasNewestChoice && builds.Count > 0) Choices.Add(new DlssChoice(null, NewestLabel(builds[0].Label)));
-        foreach (var b in builds) Choices.Add(new DlssChoice(b.Id, b.Label));
-        if (CatalogKind is { } kind) foreach (var o in _main.S.CatalogOffers(kind)) Choices.Add(new DlssChoice(o.Tag, o.ChoiceLabel));
+        var offers = CatalogKind is { } kind ? _main.S.CatalogOffers(kind).Select(o => o.ToEntry()) : [];
+        foreach (var c in BuildPickerList.Merge(builds.Select(b => b.ToPickerEntry()), offers)) Choices.Add(new DlssChoice(c.Tag, c.Label));
         LabelText = SelectedBuild?.UserLabel ?? "";
+        IsRenaming = false;
         _reloading = false;
         OnPropertyChanged(nameof(Selected));
         OnPropertyChanged(nameof(HasBuilds));

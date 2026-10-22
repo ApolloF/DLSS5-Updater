@@ -5,6 +5,15 @@ namespace DLSSUpdater.Core;
 public sealed record NrVersion(string Id, string Version, string Sha256)
 {
     public string Label => $"{Version} · {(ComponentStore.KnownDlssNr.GetValueOrDefault(Sha256) ?? "Unverified build")} · {Sha256[..8]}";
+
+    /// <summary>The picker's short form: "310.9.16 · ShortFuse compat (RTX 20–50, CUDA 13.4.3)", or just the version for an unknown build.</summary>
+    public PickerEntry ToPickerEntry()
+    {
+        var parts = (ComponentStore.KnownDlssNr.GetValueOrDefault(Sha256) ?? "").Split(" · ", StringSplitOptions.RemoveEmptyEntries);
+        var detail = parts.Length switch { 0 => "", 1 => $" · {parts[0]}", _ => $" · {parts[0]} ({string.Join(", ", parts[1..])})" };
+        return new PickerEntry(Id, Version, Version + detail, Sha256);
+    }
+
     public string? Hint
     {
         get
