@@ -71,8 +71,8 @@ public static class HelpTopics
         new("presets", "General", "Presets and defaults",
             "Out of the box every setting is what the upstream projects ship: the release's OptiScaler.ini untouched, ReShade and MFG Unlock without an ini. " +
             "Only two keys are added because the components would otherwise do nothing: LoadReshade=true when ReShade is installed with OptiScaler and " +
-            "[DlssNr] Enabled=true when the NR runtime is installed. '" + Core.ConfigProfile.RecommendedName + "' is a built-in preset with the tuned setup " +
-            "(DLSS upscaler, preset override, Delete menu key, NR strengths and HDR tone mapping, ReShade tutorial skipped). Load it here or assign it to single games."),
+            "[DlssNr] Enabled=true when the NR runtime is installed. '" + Core.ConfigProfile.DefaultName + "' is the only built-in preset: exactly these upstream defaults. " +
+            "Load it here to start over, or assign it to single games; save your own variations as presets."),
         new("nr-library", "General", "NR versions and sources",
             "OptiScaler-NR updates come from ShyVortex/OptiScaler-DLSSNR-PreSR-Multipass. Existing cached releases still work. " +
             "The RenoDX DLSS add-on (ShortFuse's renodx-dlss.addon64) is downloaded and installed automatically from the app's catalog (or imported by you). It needs ReShade + add-ons mode, ReShade 6+ with full add-on support, a game with native DLSS and the NR runtime. " +
@@ -665,7 +665,7 @@ public static class HelpTopics
         ["rdx-encoding"] = "Add-on default. In HDR games with wrong colours, try HDR10 or scRGB.",
         ["nr-enabled"] = "Automatic; toggle it in-game with the DLSSNR key to compare.",
         ["install-mode"] = "OptiScaler for everything it supports. ReShade + add-ons for games where OptiScaler causes trouble but you still want MFG Unlock or ReShade effects.",
-        ["presets"] = "Start from the upstream defaults and load the Recommended preset if you want the tuned setup; save your own variations as presets.",
+        ["presets"] = "Start from the upstream defaults (the Default preset); save your own variations as presets.",
         ["nr-before-sr"] = "On (cheaper, cleaner). Turn off if a game shows smeared detail or odd colours with RR, and compare.",
         ["nr-finished"] = "Off. Try on for games whose post-processing (bloom, grading) fights the model, and accept that the HUD may change.",
         ["nr-passes"] = "1. 2 only for a deliberately stronger look with headroom to spare; 3 is mostly for experiments.",
@@ -673,7 +673,7 @@ public static class HelpTopics
         ["rdx-preset"] = "Preset A for the full look; Preset B when the model costs too much on RTX 20/30/40.",
         ["nr-preset"] = "Preset A for the full look; Preset B when the model costs too much on RTX 20/30/40.",
         ["nr-style"] ="Standard. Natural if the result looks over-processed, Cinematic for a graded look.",
-        ["nr-strengths"] = "Start at the Recommended preset (local structure 0.7, local tone 0.25, skin 0.5): detail without changing the game's lighting too much. " +
+        ["nr-strengths"] = "A good start is local structure 0.7, local tone 0.25, skin 0.5: detail without changing the game's lighting too much. " +
                            "Lower local tone first if the image looks re-lit; lower skin structure if faces look aged.",
         ["nr-colour"] = "Low (0.2) keeps the game's art direction. Raise toward 1 only if you like the model's colour grading.",
         ["tm-mode"] = "SDR games: leave it, it doesn't apply. HDR games: Hybrid composed as the safe default; Neutwo composed if highlights look dull; " +

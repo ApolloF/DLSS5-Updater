@@ -79,6 +79,7 @@ public partial class App : Application
         // Inside the handler's reach: a locked demo folder shows a message instead of crashing the process.
         if (demo) Demo.Enable(screenshotDir: Demo.ScreenshotArg(e.Args));
         base.OnStartup(e);
+        Views.WheelGuard.Register();
         MainWindow = new MainWindow();
         MainWindow.Show();
     }

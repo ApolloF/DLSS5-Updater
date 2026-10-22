@@ -690,7 +690,7 @@ public sealed partial class SettingsViewModel : ObservableObject
     {
         if (!Views.Dialog.Confirm("Reset to defaults",
                 "Reset all OptiScaler.ini and ReShade.ini settings, keybinds and options to the upstream defaults (what OptiScaler-NR, ReShade and MFG Unlock ship with)? " +
-                "Saved presets are kept; load '" + ConfigProfile.RecommendedName + "' for the tuned setup.", "Reset", danger: true))
+                "Saved presets are kept.", "Reset", danger: true))
             return;
         ResetOverrides();
         _reloading = true;

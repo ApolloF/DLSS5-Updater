@@ -72,7 +72,7 @@ public sealed partial record GpuInfo(GpuVendor Vendor, RtxTier Tier, string Name
 /// <summary>Reads the installed graphics cards from the display adapter class in the registry.</summary>
 public static class GpuDetector
 {
-    private const string DisplayClass = @"SYSTEM\CurrentControlSet\Control\Class\{4d36e968-e325-11cd-bff6-08002be10318}";
+    private const string DisplayClass = @"SYSTEM\CurrentControlSet\Control\Class\{4d36e968-e325-11ce-bfc1-08002be10318}";
 
     /// <summary>The card the games run on: the best NVIDIA card, else any other discrete vendor, else whatever is there.</summary>
     public static GpuInfo Detect()
@@ -92,7 +92,7 @@ public static class GpuDetector
             .ThenByDescending(a => a.Tier)
             .FirstOrDefault() ?? GpuInfo.Unknown;
 
-    private static List<GpuInfo> ReadAdapters()
+    internal static List<GpuInfo> ReadAdapters()
     {
         var found = new List<GpuInfo>();
         using var cls = Registry.LocalMachine.OpenSubKey(DisplayClass);

@@ -83,4 +83,11 @@ public sealed class GpuInfoTests
     {
         _ = GpuDetector.Detect();
     }
+
+    [Fact]
+    public void ReadAdapters_FindsTheDisplayAdaptersOfThisMachine()
+    {
+        // Every Windows machine, CI included, lists at least one display adapter; a wrong class key finds none.
+        Assert.NotEmpty(GpuDetector.ReadAdapters());
+    }
 }

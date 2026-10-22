@@ -105,7 +105,7 @@ On a fresh install a short setup opens over the window: a welcome, the default i
 4. Press **DLSS only** if you just want the game's DLSS files replaced and nothing else added.
 5. After a new release or a game patch, press **Update all** at the top to re-apply everything to every managed game.
 6. Change settings in the game's own tabs (**Install**, **Game config**, **NVIDIA profile**, **Add-ons & shaders**), or in **Settings** for all games. Hover the info icons or open the guide on the About page when you are unsure what an option does.
-7. In the game, the OptiScaler menu opens with the **Insert** key by default (the Recommended preset uses **Delete**), and the ReShade overlay with **Home**. Both can be changed in the Keybinds tab.
+7. In the game, the OptiScaler menu opens with the **Insert** key by default, and the ReShade overlay with **Home**. Both can be changed in the Keybinds tab.
 
 Existing config files are handled in the way you choose under **Existing game configs**: keep the game's values (the default), apply your app settings over them, or start from a fresh config.
 

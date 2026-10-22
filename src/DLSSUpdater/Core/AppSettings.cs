@@ -53,7 +53,7 @@ public sealed class ConfigPreset
     public string Name { get; set; } = "";
     public List<IniOverride> Opti { get; set; } = [];
     public List<IniOverride> ReShade { get; set; } = [];
-    /// <summary>Shipped with the app (the Recommended preset): can be loaded and assigned, not saved over or deleted.</summary>
+    /// <summary>Shipped with the app (the Default preset): can be loaded and assigned, not saved over or deleted.</summary>
     [JsonIgnore] public bool BuiltIn { get; init; }
 }
 
@@ -155,7 +155,7 @@ public sealed partial class AppSettings
 
     /// <summary>Built-in presets first, then the user's.</summary>
     [JsonIgnore]
-    public IEnumerable<ConfigPreset> AllPresets => [ConfigProfile.RecommendedPreset(), .. Presets];
+    public IEnumerable<ConfigPreset> AllPresets => [ConfigProfile.DefaultPreset(), .. Presets];
 
     /// <summary>The game's chosen preset; its own game-only presets are looked at before the global and built-in ones.</summary>
     public ConfigPreset? PresetFor(string gameId) =>
@@ -235,10 +235,10 @@ public sealed partial class AppSettings
                     s.CarryOverGameIni = true;
                     var sourceMigrated = s.OptiSource == ComponentStore.LegacyOptiRepo;
                     if (sourceMigrated) s.OptiSource = ComponentStore.OptiRepo;
-                    s.Presets.RemoveAll(p => p.Name.Equals(ConfigProfile.RecommendedName, StringComparison.OrdinalIgnoreCase));
+                    var presetsMigrated = s.MigratePresets();
                     var renoDxMigrated = RenoDxIni.Migrate(s);
                     var lecramMigrated = s.MigrateLecramNewest();
-                    if (s._legacyTokenRead || sourceMigrated || renoDxMigrated || lecramMigrated) s.Save();
+                    if (s._legacyTokenRead || sourceMigrated || presetsMigrated || renoDxMigrated || lecramMigrated) s.Save();
                     return s;
                 }
             }
@@ -249,6 +249,47 @@ public sealed partial class AppSettings
             KeepUnreadable();
         }
         return new AppSettings { LecramNewestMigrated = true };
+    }
+
+    /// <summary>
+    /// The built-in preset is now "Default": games that used the retired Recommended preset fall back to the current
+    /// settings, and a user preset called "Default" is renamed so it doesn't clash. Returns true when the settings changed.
+    /// </summary>
+    internal bool MigratePresets()
+    {
+        var changed = Presets.RemoveAll(p => IsName(p.Name, ConfigProfile.RetiredRecommendedName)) > 0;
+        foreach (var g in Games.Values)
+        {
+            if (g.Presets is not null) changed |= g.Presets.RemoveAll(p => IsName(p.Name, ConfigProfile.RetiredRecommendedName)) > 0;
+            if (IsName(g.Preset, ConfigProfile.RetiredRecommendedName))
+            {
+                g.Preset = null;
+                changed = true;
+            }
+        }
+        changed |= RenameClashing(Presets.Where(p => IsName(p.Name, ConfigProfile.DefaultName)).ToList(), Presets, null);
+        foreach (var g in Games.Values)
+            if (g.Presets is not null)
+                changed |= RenameClashing(g.Presets.Where(p => IsName(p.Name, ConfigProfile.DefaultName)).ToList(), g.Presets, g);
+        return changed;
+
+        static bool IsName(string? a, string b) => a is not null && a.Equals(b, StringComparison.OrdinalIgnoreCase);
+
+        // Presets named "Default" get a free "Default (mine)" name; games pointing at one follow the rename.
+        bool RenameClashing(List<ConfigPreset> clashing, List<ConfigPreset> list, GameOverride? owner)
+        {
+            foreach (var p in clashing)
+            {
+                var old = p.Name;
+                var name = "Default (mine)";
+                for (var i = 2; list.Any(x => IsName(x.Name, name)); i++) name = $"Default (mine {i})";
+                p.Name = name;
+                IEnumerable<GameOverride> users = owner is null ? Games.Values.Where(x => x.Presets?.Any(q => q.Name == old) != true) : new[] { owner };
+                foreach (var g in users)
+                    if (g.Preset == old) g.Preset = name;
+            }
+            return clashing.Count > 0;
+        }
     }
 
     /// <summary>One time: the Lecram default goes back to "Newest". Returns true when the settings changed.</summary>

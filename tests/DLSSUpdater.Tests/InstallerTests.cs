@@ -95,7 +95,7 @@ public class InstallerTests : IDisposable
     private static InstallOptions Full => new()
     {
         Opti = true, ReShade = true, Mfg = true, DlssNr = true, Dlss = true, AddMissingDlss = true,
-        Proxy = "dxgi.dll", Overrides = ConfigProfile.Recommended(), CarryOverIni = true,
+        Proxy = "dxgi.dll", Overrides = TestProfiles.Recommended(), CarryOverIni = true,
     };
 
     private string T(string rel) => File.ReadAllText(Path.Combine(_target, rel));
@@ -284,7 +284,7 @@ public class InstallerTests : IDisposable
     public async Task IniModes(bool carryOver, bool overwrite, string menuKey, string? polling)
     {
         Write(Path.Combine(_target, "OptiScaler.ini"), "[Menu]\nShortcutKey=0x24\n[Hotfix]\nManualInputPolling=true\n");
-        var o = new InstallOptions { Opti = true, Proxy = "dxgi.dll", Overrides = ConfigProfile.Recommended(), CarryOverIni = carryOver, OverwriteIni = overwrite };
+        var o = new InstallOptions { Opti = true, Proxy = "dxgi.dll", Overrides = TestProfiles.Recommended(), CarryOverIni = carryOver, OverwriteIni = overwrite };
         await new Installer(_store).InstallAsync(Game(), _target, o, null, default);
 
         var ini = IniFile.Load(Path.Combine(_target, "OptiScaler.ini"));
@@ -319,7 +319,7 @@ public class InstallerTests : IDisposable
     {
         var before = Snapshot();
         var installer = new Installer(_store);
-        var o = new InstallOptions { Opti = true, Proxy = "dxgi.dll", Overrides = ConfigProfile.Recommended() };
+        var o = new InstallOptions { Opti = true, Proxy = "dxgi.dll", Overrides = TestProfiles.Recommended() };
 
         SeedOpti("v0.1.32-f5", "OPTI-F5");
         Write(Path.Combine(ComponentStore.TagDir(Component.OptiScaler, "v0.1.32-f5"), "pkg", "nvngx.dll_dlssnr.dll"), "FORWARDER");
@@ -376,19 +376,45 @@ public class InstallerTests : IDisposable
     }
 
     [Fact]
-    public void RecommendedPreset_IsBuiltIn_AndNotSaved()
+    public void DefaultPreset_IsTheOnlyBuiltIn_WithoutOverrides_AndNotSaved()
     {
         var s = new AppSettings();
         Assert.Empty(s.IniOverrides);
         Assert.Empty(s.ReShadeOverrides);
-        var rec = Assert.Single(s.AllPresets);
-        Assert.True(rec.BuiltIn);
-        Assert.Contains(rec.Opti, x => x.Id == "Menu/ShortcutKey" && x.Value == "0x2e");
+        var def = Assert.Single(s.AllPresets);
+        Assert.True(def.BuiltIn);
+        Assert.Equal(ConfigProfile.DefaultName, def.Name);
+        Assert.Empty(def.Opti);
+        Assert.Empty(def.ReShade);
 
-        s.Games["g"] = new GameOverride { Preset = ConfigProfile.RecommendedName };
-        Assert.Same(rec.Name, s.PresetFor("g")!.Name);
+        s.Games["g"] = new GameOverride { Preset = ConfigProfile.DefaultName };
+        Assert.Same(def.Name, s.PresetFor("g")!.Name);
         s.Save();
         Assert.Empty(AppSettings.Load().Presets);
+    }
+
+    [Fact]
+    public void MigratePresets_ClearsRetiredRecommendedRefs_AndRenamesAClashingDefault()
+    {
+        var s = new AppSettings();
+        s.Presets.Add(new ConfigPreset { Name = "Recommended (ApolloF)", Opti = [new("A", "b", "1")] });
+        s.Presets.Add(new ConfigPreset { Name = "default", Opti = [new("A", "c", "2")] });
+        s.Games["rec"] = new GameOverride { Preset = "Recommended (ApolloF)" };
+        s.Games["def"] = new GameOverride { Preset = "default" };
+        s.Games["local"] = new GameOverride { Preset = "Default", Presets = [new ConfigPreset { Name = "Default" }] };
+        s.Games["other"] = new GameOverride { Preset = "Mine" };
+
+        Assert.True(s.MigratePresets());
+
+        Assert.Null(s.Games["rec"].Preset);
+        var renamed = Assert.Single(s.Presets);
+        Assert.Equal("Default (mine)", renamed.Name);
+        Assert.Equal("A/c", Assert.Single(renamed.Opti).Id);
+        Assert.Equal("Default (mine)", s.Games["def"].Preset);
+        Assert.Equal("Default (mine)", s.Games["local"].Presets![0].Name);
+        Assert.Equal("Default (mine)", s.Games["local"].Preset);
+        Assert.Equal("Mine", s.Games["other"].Preset);
+        Assert.False(s.MigratePresets());
     }
 
     [Fact]
@@ -1142,7 +1168,7 @@ public class InstallerTests : IDisposable
         await installer.InstallAsync(Game(), _target, Full, null, default);
         Assert.Equal("MFG-1", T(ComponentStore.MfgFile));
 
-        var builtIn = Full with { Mfg = false, Overrides = [.. ConfigProfile.Recommended(), new("DLSSG", "AdaMfgUnlock", "true")] };
+        var builtIn = Full with { Mfg = false, Overrides = [.. TestProfiles.Recommended(), new("DLSSG", "AdaMfgUnlock", "true")] };
         await installer.InstallAsync(Game(), _target, builtIn, null, default);
         Assert.False(File.Exists(Path.Combine(_target, ComponentStore.MfgFile)));
         Assert.Equal("true", IniFile.Load(Path.Combine(_target, "OptiScaler.ini")).Get("DLSSG", "AdaMfgUnlock"));
@@ -1170,7 +1196,7 @@ public class InstallerTests : IDisposable
         Assert.Equal("MFG-1", T(ComponentStore.MfgFile));
         Assert.True(InstallManifest.Read(_target)!.Mfg);
 
-        var withBuiltIn = o with { Overrides = [.. ConfigProfile.Recommended(), new("DLSSG", "AdaMfgUnlock", "true")] };
+        var withBuiltIn = o with { Overrides = [.. TestProfiles.Recommended(), new("DLSSG", "AdaMfgUnlock", "true")] };
         await Assert.ThrowsAsync<InvalidOperationException>(() => installer.InstallAsync(Game(), _target, withBuiltIn, null, default));
     }
 
@@ -1203,7 +1229,7 @@ public class InstallerTests : IDisposable
     [Fact]
     public async Task MfgAddonWithOpti_ConfirmedOverride_KeepsBoth_AndTheWarningStays()
     {
-        var keepBoth = Full with { Overrides = [.. ConfigProfile.Recommended(), new("DLSSG", "AdaMfgUnlock", "true")] };
+        var keepBoth = Full with { Overrides = [.. TestProfiles.Recommended(), new("DLSSG", "AdaMfgUnlock", "true")] };
         var key = Installer.ConflictKey(Installer.Conflicts(_target, keepBoth));
         Assert.NotEmpty(key);
         var installer = new Installer(_store);
@@ -1223,7 +1249,7 @@ public class InstallerTests : IDisposable
             again with { Overrides = [.. again.Overrides, new("DLSSG", "AmpereMfgUnlock", "true")] }, null, default));
 
         // Dropping the clash clears the stored confirmation.
-        await installer.InstallAsync(Game(), _target, Full with { Mfg = false, Overrides = [.. ConfigProfile.Recommended(), new("DLSSG", "AdaMfgUnlock", "true")] }, null, default);
+        await installer.InstallAsync(Game(), _target, Full with { Mfg = false, Overrides = [.. TestProfiles.Recommended(), new("DLSSG", "AdaMfgUnlock", "true")] }, null, default);
         Assert.Null(InstallManifest.Read(_target)!.ConfirmedConflict);
     }
 
@@ -1263,7 +1289,7 @@ public class InstallerTests : IDisposable
         await installer.InstallAsync(Game(), _target, new InstallOptions { Mode = InstallMode.ReShadeOnly, ReShade = true, Proxy = "dxgi.dll" }, null, default);
         Assert.True(InstallManifest.Read(_target)!.ReShade);
 
-        await installer.InstallAsync(Game(), _target, new InstallOptions { Opti = true, Proxy = "dxgi.dll", Overrides = ConfigProfile.Recommended() }, null, default);
+        await installer.InstallAsync(Game(), _target, new InstallOptions { Opti = true, Proxy = "dxgi.dll", Overrides = TestProfiles.Recommended() }, null, default);
         var m = InstallManifest.Read(_target)!;
         Assert.Equal(InstallMode.OptiScaler, m.Mode);
         Assert.Equal("OPTI-1", T("dxgi.dll"));
@@ -1324,7 +1350,7 @@ public class InstallerTests : IDisposable
     {
         var path = proxy ? Path.Combine(_target, "dxgi.dll") : Engine("nvngx_dlss.dll");
         var original = File.ReadAllText(path);
-        var o = proxy ? new InstallOptions { Opti = true, Proxy = "dxgi.dll", Overrides = ConfigProfile.Recommended() } : new InstallOptions { Dlss = true };
+        var o = proxy ? new InstallOptions { Opti = true, Proxy = "dxgi.dll", Overrides = TestProfiles.Recommended() } : new InstallOptions { Dlss = true };
         var installer = new Installer(_store);
 
         // Readable but not replaceable, like a file an antivirus scanner holds open.
