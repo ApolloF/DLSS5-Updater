@@ -5,13 +5,13 @@ using DLSSUpdater.Core;
 
 namespace DLSSUpdater.ViewModels;
 
-/// <summary>One line of the "Works in this game" panel.</summary>
-public sealed record MethodRow(MethodOption Option, bool IsTop)
+/// <summary>One line of the "Works in this game" panel. A warning the panel already shows above the list (<paramref name="PanelCaution"/>) isn't repeated on the line.</summary>
+public sealed record MethodRow(MethodOption Option, bool IsTop, string? PanelCaution = null)
 {
     public string Title => Option.Title;
     public string Reason => Option.Reason;
-    public bool HasWarning => Option.Warning is not null;
-    public string? Warning => Option.Warning;
+    public bool HasWarning => Warning is not null;
+    public string? Warning => Option.Warning == PanelCaution ? null : Option.Warning;
     public string StateText => Option.Availability switch
     {
         Availability.Available => "Available",
@@ -135,7 +135,7 @@ public sealed partial class GameViewModel
         }
         var top = advice.Top;
         Methods.Clear();
-        foreach (var m in advice.Methods) Methods.Add(new MethodRow(m, ReferenceEquals(m, top)));
+        foreach (var m in advice.Methods) Methods.Add(new MethodRow(m, ReferenceEquals(m, top), advice.Caution));
         AdviceBlocked = advice.Blocked;
         AdviceCaution = advice.Caution;
         SelectTopLabel = top is null ? "" : $"Select: {top.Title}";

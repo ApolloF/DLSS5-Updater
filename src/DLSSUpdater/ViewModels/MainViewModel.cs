@@ -312,11 +312,8 @@ public sealed partial class MainViewModel : ObservableObject
                 });
             }
             await RefreshLocalComponentsAsync();
-            if (!Demo.Active)
-            {
-                S.Gpu = await Task.Run(GpuDetector.Detect);
-                RefreshAdvice();
-            }
+            S.Gpu = Demo.Active ? Demo.Gpu : await Task.Run(GpuDetector.Detect);
+            RefreshAdvice();
 
             var cached = GameScanner.LoadCache();
             if (cached.Count > 0) ApplyScan(cached);

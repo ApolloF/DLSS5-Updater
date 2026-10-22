@@ -18,6 +18,9 @@ public static class Demo
     /// <summary>Folder for the automatic screenshot export (<c>--screenshots</c>); null = no export.</summary>
     public static string? ScreenshotDir { get; private set; }
 
+    /// <summary>The graphics card the demo pretends to have, so the advisor shows what an RTX owner sees.</summary>
+    public static readonly GpuInfo Gpu = GpuInfo.Parse("NVIDIA GeForce RTX 4080", 0x10DE);
+
     public const string LatestDlss = "v310.10.0";
     public const string LatestStreamline = "v2.14.1";
     // DLSSU_DEMO_OPTI_NR=1 pretends OptiScaler-NR (ShyVortex) is selected instead of the default F5 build, to check its labels.
