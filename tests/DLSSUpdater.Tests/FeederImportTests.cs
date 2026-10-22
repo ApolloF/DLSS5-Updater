@@ -219,7 +219,7 @@ public sealed class FeederImportTests : IDisposable
     [Fact]
     public void Auto_WithAnEmptyLibrary_SaysItDownloadsTheNewest()
     {
-        Assert.Equal("Auto (the newest release, downloaded on install)", FeederLibrary.AutoLabel(null));
+        Assert.Equal("Auto (newest, downloaded on install)", FeederLibrary.AutoLabel(null));
     }
 
     private (GameViewModel Vm, AppSettings Settings, string GameId) Game()

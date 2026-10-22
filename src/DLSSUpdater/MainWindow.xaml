@@ -1015,7 +1015,7 @@
                                     <ColumnDefinition Width="18" />
                                     <ColumnDefinition Width="*" />
                                     <ColumnDefinition Width="150" />
-                                    <ColumnDefinition Width="210" />
+                                    <ColumnDefinition Width="280" />
                                     <ColumnDefinition Width="58" />
                                 </Grid.ColumnDefinitions>
                                 <TextBlock Grid.Column="1" Text="COMPONENT" Style="{StaticResource Caps}" />
@@ -1032,7 +1032,7 @@
                                                 <ColumnDefinition Width="18" />
                                                 <ColumnDefinition Width="*" />
                                                 <ColumnDefinition Width="150" />
-                                                <ColumnDefinition Width="210" />
+                                                <ColumnDefinition Width="280" />
                                                 <ColumnDefinition Width="58" />
                                             </Grid.ColumnDefinitions>
                                             <Ellipse Width="7" Height="7" HorizontalAlignment="Left" Fill="{Binding State, Converter={StaticResource StateToBrush}}"

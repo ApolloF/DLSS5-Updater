@@ -111,7 +111,7 @@ public sealed partial class FeederLibrary(GitHubClient github)
     public static string PackageOf(LibraryBuild build) => Path.Combine(build.Dir, PackageDir);
 
     /// <summary>"Auto (1.19.0)" for the pickers: what the default installs now. The newest release is fetched on the first install when the library is empty.</summary>
-    public static string AutoLabel(string? defaultPick) => $"Auto ({Choose(defaultPick)?.Label ?? "the newest release, downloaded on install"})";
+    public static string AutoLabel(string? defaultPick) => $"Auto ({Choose(defaultPick)?.Label ?? "newest, downloaded on install"})";
 
     // ---------- import ----------
 
