@@ -397,6 +397,7 @@ public sealed partial class SettingsViewModel : ObservableObject
         set
         {
             if (value?.Tag is null || value.Tag == Settings.DlssNrId) return;
+            if (CatalogOffer.IsOffer(value.Tag)) { _ = DownloadNrAsync(value.Tag); return; }
             Settings.SelectDlssNr(value.Tag);
             Save();
             _ = _main.RefreshLocalComponentsAsync();
@@ -404,6 +405,31 @@ public sealed partial class SettingsViewModel : ObservableObject
             OnPropertyChanged(nameof(SelectedNrHint));
             OnPropertyChanged(nameof(DlssNrInfo));
         }
+    }
+
+    /// <summary>"(download)" picked as the default: the build comes first, then it becomes the default. If it doesn't come the picker goes back to the current default.</summary>
+    private async Task DownloadNrAsync(string offerTag)
+    {
+        var picked = await _main.PickCatalogBuildAsync(CatalogBuildKind.DlssNr, offerTag, id => { Settings.SelectDlssNr(id); Save(); });
+        if (picked) return;
+        FillNrChoices();
+        OnPropertyChanged(nameof(SelectedNr));
+    }
+
+    private void FillNrChoices()
+    {
+        NrChoices.Clear();
+        foreach (var nr in _main.S.Store.DlssNrVersions) NrChoices.Add(new DlssChoice(nr.Id, nr.Label));
+        foreach (var o in _main.S.CatalogOffers(CatalogBuildKind.DlssNr)) NrChoices.Add(new DlssChoice(o.Tag, o.ChoiceLabel));
+    }
+
+    /// <summary>The catalog arrived or changed: the "(download)" entries of the default pickers follow.</summary>
+    public void ReloadCatalogOffers()
+    {
+        FillNrChoices();
+        OnPropertyChanged(nameof(SelectedNr));
+        RenoDx.Reload();
+        Lecram.Reload();
     }
 
     /// <summary>Plain advice for the chosen NR build (known hashes only).</summary>
@@ -766,8 +792,7 @@ public sealed partial class SettingsViewModel : ObservableObject
 
         ReloadPresets(SelectedPreset is { } sp && Settings.AllPresets.Any(p => p.Name == sp) ? sp : null);
 
-        NrChoices.Clear();
-        foreach (var nr in _main.S.Store.DlssNrVersions) NrChoices.Add(new DlssChoice(nr.Id, nr.Label));
+        FillNrChoices();
         DlssChoices.Clear();
         var store = _main.S.Store;
         DlssChoices.Add(new DlssChoice(null, $"Latest{(store.Dlss is { } l ? " · " + l.Tag : "")}"));

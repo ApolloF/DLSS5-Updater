@@ -3,57 +3,77 @@ namespace DLSSUpdater.Core;
 /// <summary>
 /// nvngx_dlssnr.dll and Lecram's DLSS5 add-on come from the catalog mirror as raw binaries: downloaded, checked (size, SHA-256,
 /// PE header) and kept in the same libraries an import fills, so "Newest", per-game picks and imports work as before.
-/// Only the catalog's newest build is fetched on its own; older ones stay in the libraries once they are there. Offline or
+/// Only the catalog's newest build is fetched on its own; older ones are fetched when the user picks one (CatalogBuildPicker.cs). Offline or
 /// refused downloads are logged and change nothing.
 /// </summary>
 public sealed partial class ComponentStore
 {
-    public Task<NrVersion?> CheckDlssNrCatalogAsync(AppSettings settings, CatalogNeuralLine? line, ICatalogFetch fetch,
+    public async Task<NrVersion?> CheckDlssNrCatalogAsync(AppSettings settings, CatalogNeuralLine? line, ICatalogFetch fetch,
         IProgress<TransferProgress>? progress, CancellationToken ct)
     {
-        if (!settings.AutoDownloadDlssNr || line?.Current is not { } newest || newest.ToBinary() is not { IsInstallable: true } file) return Task.FromResult<NrVersion?>(null);
+        if (!settings.AutoDownloadDlssNr || line?.Current is not { } newest || newest.ToBinary() is not { IsInstallable: true }) return null;
         var sha = newest.Sha256.ToLowerInvariant();
-        if (sha == settings.CatalogDlssNrFetched || DlssNrVersions.Any(v => v.Id.Equals(sha, StringComparison.OrdinalIgnoreCase))) return Task.FromResult<NrVersion?>(null);
+        if (sha == settings.CatalogDlssNrFetched || DlssNrVersions.Any(v => v.Id.Equals(sha, StringComparison.OrdinalIgnoreCase))) return null;
 
-        var what = $"nvngx_dlssnr.dll {line.LabelOf(newest)}";
+        var version = await FetchDlssNrAsync(line, newest, fetch, progress, ct);
+        if (version is null) return null;
+        settings.CatalogDlssNrFetched = sha;
+        if (AdoptNewerDlssNr(settings) is { } adopted) Log.Info($"NR runtime default is now {adopted.Version}");
+        return version;
+    }
+
+    /// <summary>One catalog build of nvngx_dlssnr.dll into the library: downloaded, size and SHA-256 checked, PE checked. Null (logged) when refused.</summary>
+    private Task<NrVersion?> FetchDlssNrAsync(CatalogNeuralLine line, CatalogNeuralBuild build, ICatalogFetch fetch,
+        IProgress<TransferProgress>? progress, CancellationToken ct)
+    {
+        var sha = build.Sha256.ToLowerInvariant();
+        var what = $"nvngx_dlssnr.dll {line.LabelOf(build)}";
         return InNeuralWorkAsync(what, sha, async work =>
         {
             var path = Path.Combine(work, DlssNrFile);
-            var result = await fetch.DownloadAsync(file, path, progress, ct);
+            var result = await fetch.DownloadAsync(build.ToBinary(), path, progress, ct);
             if (!result.Ok) { Log.Info($"{what} not downloaded: {result.Refusal}"); return null; }
             RequirePe(path, DlssNrFile);
             if (!IsDlssNr(path)) Log.Warn($"{what}: the file doesn't name itself DLSSNR, but its hash matches the catalog");
             var version = RetainDlssNr(path);
-            settings.CatalogDlssNrFetched = sha;
-            if (AdoptNewerDlssNr(settings) is { } adopted) Log.Info($"NR runtime default is now {adopted.Version}");
             Log.Info($"{what} downloaded from the catalog");
             return version;
         }, ct);
     }
 
     /// <summary>The newest Lecram build from the catalog into the Lecram library; the file decides v10 or v11, like an import.</summary>
-    public Task<AddonBuild?> CheckLecramCatalogAsync(AppSettings settings, CatalogNeuralLine? line, ICatalogFetch fetch,
+    public async Task<AddonBuild?> CheckLecramCatalogAsync(AppSettings settings, CatalogNeuralLine? line, ICatalogFetch fetch,
         IProgress<TransferProgress>? progress, CancellationToken ct)
     {
-        if (!settings.AutoDownloadLecram || line?.Current is not { } newest || newest.ToBinary() is not { IsInstallable: true } file) return Task.FromResult<AddonBuild?>(null);
+        if (!settings.AutoDownloadLecram || line?.Current is not { } newest || newest.ToBinary() is not { IsInstallable: true }) return null;
         var sha = newest.Sha256.ToLowerInvariant();
-        if (sha == settings.CatalogLecramFetched || AddonBuilds(AddonKind.Lecram).Any(b => b.Id.Equals(sha, StringComparison.OrdinalIgnoreCase))) return Task.FromResult<AddonBuild?>(null);
+        if (sha == settings.CatalogLecramFetched || AddonBuilds(AddonKind.Lecram).Any(b => b.Id.Equals(sha, StringComparison.OrdinalIgnoreCase))) return null;
 
-        var what = $"Lecram's add-on {line.LabelOf(newest)}";
+        var build = await FetchLecramAsync(line, newest, fetch, progress, ct);
+        if (build is null) return null;
+        settings.CatalogLecramFetched = sha;
+        if (AdoptImportedAddon(settings, AddonKind.Lecram, build)) Log.Info($"Lecram's add-on default is now {build.Label}");
+        settings.LecramLastResult = $"Downloaded {build.DetectedLabel} from the catalog.";
+        return build;
+    }
+
+    /// <summary>One catalog build of Lecram's add-on into the library; its own file decides v10 or v11, not the catalog. Null (logged) when refused.</summary>
+    private Task<AddonBuild?> FetchLecramAsync(CatalogNeuralLine line, CatalogNeuralBuild build, ICatalogFetch fetch,
+        IProgress<TransferProgress>? progress, CancellationToken ct)
+    {
+        var sha = build.Sha256.ToLowerInvariant();
+        var what = $"Lecram's add-on {line.LabelOf(build)}";
         return InNeuralWorkAsync(what, sha, async work =>
         {
-            var path = Path.Combine(work, string.IsNullOrWhiteSpace(newest.Name) ? Lecram11File : Path.GetFileName(newest.Name));
-            var result = await fetch.DownloadAsync(file, path, progress, ct);
+            var path = Path.Combine(work, string.IsNullOrWhiteSpace(build.Name) ? Lecram11File : Path.GetFileName(build.Name));
+            var result = await fetch.DownloadAsync(build.ToBinary(), path, progress, ct);
             if (!result.Ok) { Log.Info($"{what} not downloaded: {result.Refusal}"); return null; }
             RequirePe(path, Path.GetFileName(path));
-            var build = ImportLecram(path, downloaded: true);
-            if (newest.Generation is { } g && !g.Equals(build.Generation.ToString(), StringComparison.OrdinalIgnoreCase))
-                Log.Warn($"{what}: the catalog says {g}, the file is {build.Generation}; going by the file");
-            settings.CatalogLecramFetched = sha;
-            if (AdoptImportedAddon(settings, AddonKind.Lecram, build)) Log.Info($"Lecram's add-on default is now {build.Label}");
-            settings.LecramLastResult = $"Downloaded {build.DetectedLabel} from the catalog.";
+            var imported = ImportLecram(path, downloaded: true);
+            if (build.Generation is { } g && !g.Equals(imported.Generation.ToString(), StringComparison.OrdinalIgnoreCase))
+                Log.Warn($"{what}: the catalog says {g}, the file is {imported.Generation}; going by the file");
             Log.Info($"{what} downloaded from the catalog");
-            return build;
+            return imported;
         }, ct);
     }
 

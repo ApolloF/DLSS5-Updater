@@ -44,8 +44,10 @@ if (load.Document?.Sections.Renodx is { } renodx)
 `EngineGames` entries for Unreal Extended carry what the generator read out of the wiki notes: `method` (`native`, `ini`, `upgrade`), `upgrades`
 (`format` + `mode` `output-size`/`output-ratio`/`any-size`), `copyDestinations` and `engineIni` keys; `HdrPick.cs` turns them into the `[renodx]`
 and Engine.ini work (`docs/addons/renodx-hdr.md`). `Sections.RenodxDlss.Builds` lists ShortFuse's DLSS add-on releases, newest first, each
-`File` a zip with its SHA-256 (pinned, no mirror): `ComponentStore.CheckRenoDxCatalogAsync` downloads the newest, takes `renodx-dlss.addon64` out
-and imports it (`docs/design.md` section 3, the exception).
+`File` a zip with its SHA-256 (mirrored, the author's URL as the fallback): `ComponentStore.CheckRenoDxCatalogAsync` downloads the newest, takes `renodx-dlss.addon64` out
+and imports it (`docs/design.md` section 3, the exception). The same goes for `Sections.Neural.Dlssnr` and `Sections.Neural.Lecram` (`Current` plus `History`, newest first; raw
+binaries, told apart by `Sha256`, labelled by `CatalogNeuralLine.LabelOf`). Only the newest downloads on its own; `ComponentStore.OfferedBuilds` lists the others the library
+lacks and `DownloadCatalogBuildAsync` fetches one on demand when the user picks it in a build picker (`CatalogBuildPicker.cs`, tags `catalog:<sha256>`).
 
 A build's identity for the library is `file.Sha256`; `file.Version` is its label; `file.History` lists earlier builds.
 `renodx.Overrides` offers `OptsOutOfUeExtended(appId, name)` and `EngineIniPath(appId, name)` for the Unreal Extended path.

@@ -530,6 +530,7 @@ public static class HelpTopics
             "Changing it marks installed games as having an update; Update all or the game's Update button writes it. The mods also have their own peak setting in the ReShade overlay (Home), which wins once you change it there."),
         new("hdr-catalog-addon", "General", "ShortFuse's DLSS add-on from the catalog",
             "The catalog lists ShortFuse's RenoDX DLSS add-on with a SHA-256 for each build. With this on, each update check downloads a newer build, verifies the hash, checks that the file is the add-on and adds it to the ShortFuse library; a newer build becomes the default like an import does. " +
+            "Older builds the catalog has appear in the build pickers (Settings and each game) marked (download): picking one downloads it then, with the same checks, and uses it for that pick only. That works with this switch off, and it needs no update check. " +
             "A build that fails the hash check is thrown away. Offline checks change nothing. Games keep the build they have until you update them. " +
             "Turn it off to manage the library by hand: importing a file in Local components works either way. The NR runtime download is a separate switch."),
         // ---------- Frame limit ----------

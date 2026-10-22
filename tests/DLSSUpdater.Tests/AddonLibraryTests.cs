@@ -326,7 +326,7 @@ public sealed class AddonLibraryTests : IDisposable
     }
 
     [Fact]
-    public void LecramDefault_APinStaysPinned_ANewerImportTakesItOver_ARemovedPinGoesBackToNewest()
+    public void LecramDefault_APinStaysPinned_EvenForANewerImport_ARemovedPinGoesBackToNewest()
     {
         var pinned = LecramV11("v11.0.0-beta.22");
         _settings.LecramId = pinned.Id;
@@ -335,13 +335,13 @@ public sealed class AddonLibraryTests : IDisposable
         Assert.Equal(pinned.Id, _settings.LecramId);
 
         var newer = LecramV11("v11.0.0-beta.45");
-        Assert.True(_store.AdoptImportedAddon(_settings, AddonKind.Lecram, newer));
-        Assert.Equal(newer.Id, _settings.LecramId);
+        Assert.False(_store.AdoptImportedAddon(_settings, AddonKind.Lecram, newer));
+        Assert.Equal(pinned.Id, _settings.LecramId);
 
-        _store.RemoveAddon(AddonKind.Lecram, newer.Id);
+        _store.RemoveAddon(AddonKind.Lecram, pinned.Id);
         Assert.True(_store.EnsureAddonDefaults(_settings));
         Assert.Null(_settings.LecramId);
-        Assert.Equal(pinned.Id, _store.LecramBuildFor(null)!.Id);
+        Assert.Equal(newer.Id, _store.LecramBuildFor(null)!.Id);
     }
 
     [Fact]

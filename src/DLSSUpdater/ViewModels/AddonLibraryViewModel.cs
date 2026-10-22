@@ -91,10 +91,27 @@ public sealed partial class AddonLibraryViewModel : ObservableObject
         set
         {
             if (_reloading || value is null || (value.Tag is null && !HasNewestChoice) || value.Tag == Settings.AddonId(_kind)) return;
+            if (CatalogOffer.IsOffer(value.Tag)) { _ = DownloadAsync(value.Tag!); return; }
             Settings.SetAddonId(_kind, value.Tag);
             Settings.Save();
             _ = _changed();
         }
+    }
+
+    /// <summary>The tooltip of the default picker; names the "(download)" entries only where this add-on has them.</summary>
+    public string PickerTip => CatalogKind is null || (_kind == AddonKind.Lecram && BuildFlags.LecramChannel)
+        ? "Default build: games without their own pick install it"
+        : "Default build: games without their own pick install it. Builds marked (download) are older catalog builds; picking one downloads it first.";
+
+    /// <summary>The older catalog builds of this add-on; Deep Fried Chicken has none, and Lecram none in the private build.</summary>
+    private CatalogBuildKind? CatalogKind => _kind switch { AddonKind.RenoDx => CatalogBuildKind.RenoDx, AddonKind.Lecram => CatalogBuildKind.Lecram, _ => null };
+
+    /// <summary>"(download)" picked as the default: the build comes first, then it becomes the default. If it doesn't come the list goes back to the current default.</summary>
+    private async Task DownloadAsync(string offerTag)
+    {
+        var picked = await _main.PickCatalogBuildAsync(CatalogKind!.Value, offerTag, id => { Settings.SetAddonId(_kind, id); Settings.Save(); });
+        if (picked) await _changed();
+        else Reload();
     }
 
     internal static string NewestLabel(string newestBuild) => $"Newest ({newestBuild})";
@@ -153,6 +170,7 @@ public sealed partial class AddonLibraryViewModel : ObservableObject
         _buildCount = builds.Count;
         if (HasNewestChoice && builds.Count > 0) Choices.Add(new DlssChoice(null, NewestLabel(builds[0].Label)));
         foreach (var b in builds) Choices.Add(new DlssChoice(b.Id, b.Label));
+        if (CatalogKind is { } kind) foreach (var o in _main.S.CatalogOffers(kind)) Choices.Add(new DlssChoice(o.Tag, o.ChoiceLabel));
         LabelText = SelectedBuild?.UserLabel ?? "";
         _reloading = false;
         OnPropertyChanged(nameof(Selected));

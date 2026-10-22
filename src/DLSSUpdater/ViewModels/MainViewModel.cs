@@ -48,6 +48,7 @@ public sealed partial class MainViewModel : ObservableObject
         S.RunJob = RunJob;
         S.Progress = TransferProgress;
         S.Rescan = RescanOne;
+        S.PickCatalogBuild = PickCatalogBuildAsync;
         S.Extras.Changed += () =>
         {
             foreach (var game in Games) game.RefreshExtrasUpdate();
@@ -370,6 +371,48 @@ public sealed partial class MainViewModel : ObservableObject
     });
 
     /// <summary>
+    /// A build picker's "(download)" entry: fetches that older catalog build as a run of its own (status line, progress, one
+    /// download at a time), lets <paramref name="select"/> set the pick from its library id, then refreshes everything that lists
+    /// builds. A refused or offline download only logs and sets the status; nothing is selected and false comes back, so the
+    /// caller puts its list back.
+    /// </summary>
+    internal async Task<bool> PickCatalogBuildAsync(CatalogBuildKind kind, string offerTag, Action<string> select)
+    {
+        var name = kind switch { CatalogBuildKind.DlssNr => "nvngx_dlssnr.dll", CatalogBuildKind.Lecram => "Lecram's DLSS5 add-on", _ => "ShortFuse's DLSS add-on" };
+        var offer = S.CatalogOffers(kind).FirstOrDefault(o => o.Tag == offerTag);
+        if (offer is null || S.Catalog?.Document?.Sections is not { } sections)
+        {
+            Log.Info($"{name}: that build is no longer on offer from the catalog");
+            Status = $"{name} not downloaded. See the log.";
+            return false;
+        }
+        if (IsBusy)
+        {
+            Log.Info($"{name} {offer.Label}: not downloaded, another task is still running. Pick it again when that is done");
+            Status = $"{name} not downloaded: another task is running.";
+            return false;
+        }
+        string? id = null;
+        var fetch = new CatalogDownloader(Gh);
+        await Run($"Downloading {name} {offer.Label}", async ct =>
+        {
+            try { id = await S.Store.DownloadCatalogBuildAsync(kind, sections, offer.Sha256, fetch, TransferProgress(), BuildFlags.LecramChannel, ct); }
+            catch (Exception ex) when (!ct.IsCancellationRequested && ex is HttpRequestException or IOException or UnauthorizedAccessException or InvalidDataException)
+            { Log.Warn($"{name} {offer.Label} was not downloaded ({ex.Message})"); }
+        });
+        if (id is null)
+        {
+            Status = $"{name} {offer.Label} not downloaded. See the log.";
+            return false;
+        }
+        select(id);
+        await RefreshLocalComponentsAsync();
+        SettingsVm.Reload();
+        await AutoCleanUpAfterImportAsync();
+        return true;
+    }
+
+    /// <summary>
     /// Refreshes the mod catalog, then downloads what it has newer: ShortFuse's DLSS add-on, nvngx_dlssnr.dll and (public build)
     /// Lecram's add-on. Offline or refused downloads are logged and change nothing.
     /// </summary>
@@ -399,7 +442,8 @@ public sealed partial class MainViewModel : ObservableObject
     /// <summary>The catalog has a new document: every game picks again and the update count follows.</summary>
     private void CatalogChanged()
     {
-        foreach (var g in Games) g.RefreshHdr();
+        foreach (var g in Games) { g.RefreshHdr(); g.RebuildNrChoices(); g.RebuildAddonChoices(); }
+        SettingsVm.ReloadCatalogOffers();
         RefreshAdvice();
         CountUpdates();
     }

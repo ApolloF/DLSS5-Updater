@@ -46,6 +46,12 @@ Each component has exactly these parts. A part that doesn't apply is explicitly 
   and `neural` sections). The app downloads from the mirror (the author's URL is the fallback for ShortFuse's add-on), refuses a
   size or SHA-256 mismatch, checks it is a PE file, and keeps it in the library like an import. Imports stay possible and a
   Settings switch turns each download off. If the source ever has to change, it is a catalog edit, not an app release.
+  Only the newest build downloads on its own. The catalog keeps the older ones (`history`), and the build pickers (the Settings default
+  and each game's pick) list those the library lacks as "<label> (download)" after the library builds. Picking one fetches it on demand
+  (`ComponentStore.DownloadCatalogBuildAsync`, same checks and library as the auto-check, works with the switch off), then selects it as
+  that pick. A refused or offline download only logs and sets the status; the pick stays as it was. The "newest fetched" markers
+  (`CatalogDlssNrFetched`, `CatalogLecramFetched`, the RenoDX `CatalogSha`) and the default are only touched by the newest check or by the
+  picker the user used. The private build (`BuildFlags.LecramChannel`) offers no Lecram downloads, as its auto-check skips the mirror too.
 - Owner-only conveniences that a public build must not have (today: fetching Lecram's paid builds from his channel)
   sit behind a compile-time switch (`-p:<Name>=true`, default off, `BuildFlags.<Name>`), are compiled in both variants
   and tested in both. Public releases build with the switch off; `tools/build-private.ps1` builds the private
@@ -59,6 +65,9 @@ Each component has exactly these parts. A part that doesn't apply is explicitly 
 3. Else nothing: the component can't be installed, and the game page says what to import or download.
 
 A pinned build that was removed falls back to "Newest" and the settings are cleared, never re-pinned to another id.
+
+A picked older mirrored build is protected by the cleanup like any pick (default, game pick, installed). Once it loses its pick, the
+automatic cleanup may remove it like any downloaded build, and the picker offers it again.
 
 ## 5. UI rules
 
@@ -117,8 +126,10 @@ It does not undo config keys or attribute changes of generic components. Fields 
 Measured against this guideline on main (after #63, #66 and #67). Each is fixed when its component is next touched, or in its own PR.
 
 - **Defaults pin themselves**: RenoDX via `EnsureAddonDefaults`/`AdoptImportedAddon`; the NR runtime has its own
-  legacy-first adoption rule (`NrLibrary`). Lecram and DFC follow "Newest", but a default the user pinned still moves
-  to a newer import (`AdoptImportedAddon`); by section 2 a pin should stay until the user changes it.
+  legacy-first adoption rule (`NrLibrary`). Lecram and DFC follow "Newest" and keep a pinned default.
+- **Older mirrored builds**: ShortFuse's offers are told apart from the library by the catalog hash stamped on a build (`CatalogSha`), so a
+  copy imported by hand, or downloaded before the stamp existed, is offered once more (downloading stamps it, no new file). The Settings
+  picker of an add-on is hidden while its library is empty; the game page picker is not.
 - **Cache-only components**: DLSS, Streamline and MFG Unlock live in the download cache or as a single imported file
   in the components root, not in libraries; MFG Unlock imports replace each other. (ReShade has a library since 3.0;
   its install fields are still the pre-3.0 ones, see `docs/addons/reshade.md`.)

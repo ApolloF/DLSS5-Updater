@@ -52,17 +52,29 @@ public sealed partial class ComponentStore
         var newest = section?.Builds.FirstOrDefault(b => b.File.IsInstallable);
         if (newest is null) return null;
         var zipSha = newest.File.Sha256!.ToLowerInvariant();
-        if (AddonBuilds(AddonKind.RenoDx).Any(b => string.Equals(b.CatalogSha, zipSha, StringComparison.OrdinalIgnoreCase))) return null;
+        if (HasRenoDxCatalogBuild(zipSha)) return null;
 
+        var build = await FetchRenoDxAsync(newest, downloader, progress, ct);
+        if (build is not null && AdoptImportedAddon(settings, AddonKind.RenoDx, build)) Log.Info($"ShortFuse's add-on default is now {build.Label}");
+        return build;
+    }
+
+    private bool HasRenoDxCatalogBuild(string zipSha) =>
+        AddonBuilds(AddonKind.RenoDx).Any(b => string.Equals(b.CatalogSha, zipSha, StringComparison.OrdinalIgnoreCase));
+
+    /// <summary>One catalog build of the add-on into the library, stamped with the catalog hash it came from. Null (logged) when refused.</summary>
+    private async Task<AddonBuild?> FetchRenoDxAsync(CatalogDlssBuild entry, ICatalogFetch downloader, IProgress<TransferProgress>? progress, CancellationToken ct)
+    {
+        var zipSha = entry.File.Sha256!.ToLowerInvariant();
         var work = Path.Combine(AppPaths.Cache, "renodx-dlss-" + zipSha[..12]);
         try
         {
             Directory.CreateDirectory(work);
-            var zip = Path.Combine(work, newest.File.FileName);
-            var result = await downloader.DownloadAsync(newest.File, zip, progress, ct);
+            var zip = Path.Combine(work, entry.File.FileName);
+            var result = await downloader.DownloadAsync(entry.File, zip, progress, ct);
             if (!result.Ok)
             {
-                Log.Info($"ShortFuse's add-on {newest.Version} not downloaded: {result.Refusal}");
+                Log.Info($"ShortFuse's add-on {entry.Version} not downloaded: {result.Refusal}");
                 return null;
             }
             // Builds from the catalog's incoming folder are the bare add-on, not a zip.
@@ -74,13 +86,12 @@ public sealed partial class ComponentStore
                 FileUtil.AtomicWriteText(Path.Combine(AddonRoot(AddonKind.RenoDx), build.Id, BuildRecordFile), JsonSerializer.Serialize(build, JsonCtx.Default.AddonBuild));
                 ForgetAddons(AddonKind.RenoDx);
             }
-            if (AdoptImportedAddon(settings, AddonKind.RenoDx, build)) Log.Info($"ShortFuse's add-on default is now {build.Label}");
-            Log.Info($"ShortFuse's add-on {newest.Version}: {build.Label} downloaded from the catalog");
+            Log.Info($"ShortFuse's add-on {entry.Version}: {build.Label} downloaded from the catalog");
             return build;
         }
         catch (Exception ex) when (!ct.IsCancellationRequested && ex is InvalidDataException or IOException or UnauthorizedAccessException)
         {
-            Log.Warn($"ShortFuse's add-on {newest.Version} from the catalog was not usable: {ex.Message}");
+            Log.Warn($"ShortFuse's add-on {entry.Version} from the catalog was not usable: {ex.Message}");
             return null;
         }
         finally

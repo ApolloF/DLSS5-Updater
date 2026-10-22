@@ -327,11 +327,12 @@ public sealed partial class ComponentStore
     /// <summary>
     /// An imported build becomes the default only when it is newer than the current default, so importing an older build
     /// to keep it around doesn't silently downgrade every game. Lecram and Deep Fried Chicken on "Newest" (no pinned id) follow
-    /// the library by themselves. Returns true when the default changed.
+    /// the library by themselves, and a build pinned there was picked over "Newest", so it stays. Returns true when the default
+    /// changed.
     /// </summary>
     public bool AdoptImportedAddon(AppSettings s, AddonKind kind, AddonBuild imported)
     {
-        if (FollowsNewest(kind) && s.AddonId(kind) is null) return false;
+        if (FollowsNewest(kind)) return false;
         var current = AddonBuilds(kind).FirstOrDefault(b => b.Id == s.AddonId(kind));
         if (current is not null && imported.Order.CompareTo(current.Order) <= 0) return false;
         s.SetAddonId(kind, imported.Id);

@@ -243,7 +243,7 @@ Since the builds went behind the author's Buy Me a Coffee, the public DLSS5 Upda
 
 The default Lecram build (`AppSettings.LecramId`) is unset by default, shown as "Newest (<label>)" in Settings: it follows the newest build in
 the library, so an import or download of a newer build needs no settings write and an older import changes nothing. Picking a concrete build
-pins it; a newer import then takes over the pin, as for ShortFuse's add-on. A pinned build that is removed goes back to Newest. Settings from
+pins it, and it stays pinned when newer builds arrive (unlike ShortFuse's add-on, which has no "Newest"). A pinned build that is removed goes back to Newest. Settings from
 before this reset the pin once (`LecramNewestMigrated`), since pins written by the old automatic logic can't be told from the user's picks.
 Per-game build picks are untouched.
 
