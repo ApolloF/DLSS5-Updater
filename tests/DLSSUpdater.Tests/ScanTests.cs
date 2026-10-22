@@ -61,6 +61,20 @@ public class ScanTests : IDisposable
     }
 
     [Fact]
+    public void Inspect_SkipsOurOwnBackupFolders()
+    {
+        Touch(@"Game.exe", 100);
+        var real = Touch(@"Bin\nvngx_dlss.dll");
+        Touch(@"_DLSS5_Backup\originals\0b1c\nvngx_dlss.dll");
+        Touch(@".dlssupdater\backup\nvngx_dlss.dll");
+
+        var g = new GameInfo { Root = _root, Name = "Game" };
+        GameInspector.Inspect(g);
+
+        Assert.Equal(real, Assert.Single(g.Dlss).Path);
+    }
+
+    [Fact]
     public void Inspect_UnityPlayerBeatsBiggerModTool()
     {
         var game = Touch(@"Beat Saber.exe", 10);

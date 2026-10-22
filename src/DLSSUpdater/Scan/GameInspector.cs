@@ -15,6 +15,8 @@ public static partial class GameInspector
         "__Installer", "Installers", "vcredist", "DotNetFX", "dotnet", "PhysX", "$RECYCLE.BIN",
         "__overlay", "ShaderCache", "Movies", "Videos", "Localization",
         InstallManifest.DirName,
+        // Backup folder another DLSS5 tool leaves in the game; its copies of the game's dlls are not the game's own.
+        "_DLSS5_Backup",
     };
 
     private static readonly Dictionary<string, string> AntiCheatDirs = new(StringComparer.OrdinalIgnoreCase)
