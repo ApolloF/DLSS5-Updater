@@ -6,10 +6,24 @@ using DLSSUpdater.Core;
 namespace DLSSUpdater.ViewModels;
 
 /// <summary>One line of the "Works in this game" panel. A warning the panel already shows above the list (<paramref name="PanelCaution"/>) isn't repeated on the line.</summary>
-public sealed record MethodRow(MethodOption Option, bool IsTop, string? PanelCaution = null)
+public sealed partial class MethodRow(MethodOption option, bool isTop, string? panelCaution = null) : ObservableObject
 {
+    public MethodOption Option { get; } = option;
+    public bool IsTop { get; } = isTop;
+    public string? PanelCaution { get; } = panelCaution;
     public string Title => Option.Title;
+    public string Summary => Option.Summary;
     public string Reason => Option.Reason;
+    /// <summary>The row is the method the green button applies.</summary>
+    [ObservableProperty] private bool _isPicked;
+    /// <summary>The long reason is open below the row.</summary>
+    [ObservableProperty] private bool _isExpanded;
+    public string DetailsLabel => IsExpanded ? "Hide details" : "Details";
+    partial void OnIsExpandedChanged(bool value) => OnPropertyChanged(nameof(DetailsLabel));
+
+    [RelayCommand]
+    private void ToggleDetails() => IsExpanded = !IsExpanded;
+
     public bool HasWarning => Warning is not null;
     public string? Warning => Option.Warning == PanelCaution ? null : Option.Warning;
     public string StateText => Option.Availability switch
@@ -36,11 +50,12 @@ public sealed partial class GameViewModel
     [ObservableProperty] private string? _adviceCaution;
     [ObservableProperty] private string _adviceFooter = "";
     [ObservableProperty] private string _selectTopLabel = "";
+    [ObservableProperty] private string _selectTopHint = "";
 
     public bool HasAdviceBlocked => AdviceBlocked is not null;
     public bool HasAdviceCaution => AdviceCaution is not null;
     public bool HasMethods => Methods.Count > 0;
-    public bool CanSelectTop => Methods.Any(m => m.IsTop);
+    public bool CanSelectTop => Methods.Any(m => m.IsPicked);
 
     partial void OnAdviceBlockedChanged(string? value) => OnPropertyChanged(nameof(HasAdviceBlocked));
     partial void OnAdviceCautionChanged(string? value) => OnPropertyChanged(nameof(HasAdviceCaution));
@@ -134,29 +149,53 @@ public sealed partial class GameViewModel
             advice = new MethodAdvice([], [], null);
         }
         var top = advice.Top;
+        var keep = Methods.FirstOrDefault(m => m.IsPicked)?.Option.Method;
+        var rows = advice.Methods.Select(m => new MethodRow(m, ReferenceEquals(m, top), advice.Caution)).ToList();
+        // The user's pick survives a refresh while the method is still offered; otherwise the recommendation is picked, or nothing.
+        var picked = rows.FirstOrDefault(r => r.Option.Method == keep && r.IsSelectable) ?? rows.FirstOrDefault(r => r.IsTop);
+        if (picked is not null) picked.IsPicked = true;
         Methods.Clear();
-        foreach (var m in advice.Methods) Methods.Add(new MethodRow(m, ReferenceEquals(m, top), advice.Caution));
+        foreach (var r in rows) Methods.Add(r);
         AdviceBlocked = advice.Blocked;
         AdviceCaution = advice.Caution;
-        SelectTopLabel = top is null ? "" : $"Select: {top.Title}";
+        UpdatePickedLabel();
         AdviceFooter = advice.Methods.Any(m => m.Method is Method.NeuralAddon or Method.OptiScalerNr or Method.Feeder)
             ? $"{_s.Gpu.Label}. Neural rendering is the leaked DLSS 5 build and needs community DLLs; the app downloads and installs nvngx_dlssnr.dll automatically."
             : _s.Gpu.IsKnown ? _s.Gpu.Label : "";
         OnPropertyChanged(nameof(HasMethods));
+    }
+
+    /// <summary>The green button reads "Use: X" for the picked method, and says so when it needs setup or carries a warning.</summary>
+    private void UpdatePickedLabel()
+    {
+        var row = Methods.FirstOrDefault(m => m.IsPicked);
+        SelectTopLabel = row is null ? "" : $"Use: {row.Title}";
+        SelectTopHint = row is null ? ""
+            : row.Option.Warning is not null ? "Read the warning on this method first: installing asks you to confirm."
+            : row.Option.Availability == Availability.NeedsSetup ? "Needs setup first: see \"Needs\" on the method."
+            : "";
         OnPropertyChanged(nameof(CanSelectTop));
+    }
+
+    /// <summary>Marks a method as the one the green button applies. Nothing is changed on the page until that button is pressed.</summary>
+    [RelayCommand]
+    private void PickMethod(MethodRow? row)
+    {
+        if (row is null || !row.IsSelectable) return;
+        foreach (var m in Methods) m.IsPicked = ReferenceEquals(m, row);
+        UpdatePickedLabel();
     }
 
     [RelayCommand]
     private void SelectTopMethod()
     {
-        if (Methods.FirstOrDefault(m => m.IsTop) is { } row) SelectMethod(row);
+        if (Methods.FirstOrDefault(m => m.IsPicked) is { } row) SelectMethod(row);
     }
 
     /// <summary>Turns on the rows of the method (and the install mode it needs). Nothing is installed until the user presses Install.</summary>
-    [RelayCommand]
-    private void SelectMethod(MethodRow? row)
+    private void SelectMethod(MethodRow row)
     {
-        if (row is null || !row.IsSelectable) return;
+        if (!row.IsSelectable) return;
         if (row.Option.Mode is { } mode && mode != Mode) Mode = mode;
         foreach (var id in row.Option.Components)
             if (RowKeys.TryGetValue(id, out var key) && Components.FirstOrDefault(c => c.Key == key) is { Visible: true, Editable: true } component)

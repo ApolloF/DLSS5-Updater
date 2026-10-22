@@ -936,43 +936,62 @@
                             <ItemsControl ItemsSource="{Binding Methods}" Visibility="{Binding HasMethods, Converter={StaticResource BoolToVis}}">
                                 <ItemsControl.ItemTemplate>
                                     <DataTemplate>
-                                        <Grid Margin="0,0,0,10">
-                                            <Grid.Style>
-                                                <Style TargetType="Grid">
-                                                    <Style.Triggers>
-                                                        <DataTrigger Binding="{Binding IsDim}" Value="True"><Setter Property="Opacity" Value="0.65" /></DataTrigger>
-                                                    </Style.Triggers>
-                                                </Style>
-                                            </Grid.Style>
-                                            <Grid.ColumnDefinitions>
-                                                <ColumnDefinition Width="*" />
-                                                <ColumnDefinition Width="Auto" />
-                                            </Grid.ColumnDefinitions>
-                                            <StackPanel>
-                                                <StackPanel Orientation="Horizontal">
-                                                    <TextBlock Text="{Binding Title}" FontWeight="SemiBold" Foreground="{StaticResource Text}" />
-                                                    <Border Style="{StaticResource Badge}" Margin="8,0,0,0">
-                                                        <TextBlock Text="{Binding StateText}" Style="{StaticResource BadgeText}" />
-                                                    </Border>
-                                                </StackPanel>
-                                                <TextBlock Text="{Binding Reason}" Style="{StaticResource MutedText}" FontSize="11.5" TextWrapping="Wrap" Margin="0,2,0,0" />
-                                                <TextBlock Text="{Binding Warning}" Style="{StaticResource MutedText}" FontSize="11.5" TextWrapping="Wrap" Margin="0,2,0,0"
-                                                           Foreground="{StaticResource Danger}" Visibility="{Binding HasWarning, Converter={StaticResource BoolToVis}}" />
-                                                <TextBlock Text="{Binding NeedsText}" Style="{StaticResource MutedText}" FontSize="11.5" TextWrapping="Wrap" Margin="0,2,0,0"
-                                                           Foreground="{StaticResource Warn}" Visibility="{Binding HasNeeds, Converter={StaticResource BoolToVis}}" />
-                                            </StackPanel>
-                                            <Button Grid.Column="1" Content="Select" Style="{StaticResource BtnGhost}" VerticalAlignment="Top" Margin="12,0,0,0"
-                                                    Visibility="{Binding IsSelectable, Converter={StaticResource BoolToVis}}"
-                                                    Command="{Binding DataContext.SelectMethodCommand, RelativeSource={RelativeSource AncestorType=ItemsControl}}"
-                                                    CommandParameter="{Binding}" AutomationProperties.Name="{Binding Title, StringFormat='Select the components for {0}'}"
-                                                    ToolTip="Turns on the components below; nothing is installed until you press Install" />
+                                        <Grid Margin="0,0,0,8">
+                                            <Button Style="{StaticResource MethodCard}" IsEnabled="{Binding IsSelectable}"
+                                                    Command="{Binding DataContext.PickMethodCommand, RelativeSource={RelativeSource AncestorType=ItemsControl}}"
+                                                    CommandParameter="{Binding}" AutomationProperties.Name="{Binding Title, StringFormat='Pick {0}'}"
+                                                    ToolTip="Pick this method, then press the green button to turn its components on">
+                                                <Grid>
+                                                    <Grid.ColumnDefinitions>
+                                                        <ColumnDefinition Width="Auto" />
+                                                        <ColumnDefinition Width="*" />
+                                                    </Grid.ColumnDefinitions>
+                                                    <TextBlock Margin="0,2,10,0" VerticalAlignment="Top" FontSize="14"
+                                                               Visibility="{Binding IsSelectable, Converter={StaticResource BoolToVis}}">
+                                                        <TextBlock.Style>
+                                                            <Style TargetType="TextBlock" BasedOn="{StaticResource Icon}">
+                                                                <Setter Property="Text" Value="&#xECCA;" />
+                                                                <Setter Property="Foreground" Value="{StaticResource Muted}" />
+                                                                <Style.Triggers>
+                                                                    <DataTrigger Binding="{Binding IsPicked}" Value="True">
+                                                                        <Setter Property="Text" Value="&#xECCB;" />
+                                                                        <Setter Property="Foreground" Value="{StaticResource Accent}" />
+                                                                    </DataTrigger>
+                                                                </Style.Triggers>
+                                                            </Style>
+                                                        </TextBlock.Style>
+                                                    </TextBlock>
+                                                    <StackPanel Grid.Column="1">
+                                                        <StackPanel Orientation="Horizontal">
+                                                            <TextBlock Text="{Binding Title}" FontWeight="SemiBold" Foreground="{StaticResource Text}" />
+                                                            <Border Style="{StaticResource Badge}" Margin="8,0,0,0">
+                                                                <TextBlock Text="{Binding StateText}" Style="{StaticResource BadgeText}" />
+                                                            </Border>
+                                                        </StackPanel>
+                                                        <TextBlock Text="{Binding Summary}" Foreground="{StaticResource Text}" FontSize="12" TextWrapping="Wrap" Margin="0,3,0,0" />
+                                                        <TextBlock Text="{Binding Warning}" Style="{StaticResource MutedText}" FontSize="11.5" TextWrapping="Wrap" Margin="0,3,0,0"
+                                                                   Foreground="{StaticResource Danger}" Visibility="{Binding HasWarning, Converter={StaticResource BoolToVis}}" />
+                                                        <TextBlock Text="{Binding NeedsText}" Style="{StaticResource MutedText}" FontSize="11.5" TextWrapping="Wrap" Margin="0,3,0,0"
+                                                                   Foreground="{StaticResource Warn}" Visibility="{Binding HasNeeds, Converter={StaticResource BoolToVis}}" />
+                                                        <TextBlock Text="{Binding Reason}" Style="{StaticResource MutedText}" FontSize="11.5" TextWrapping="Wrap" Margin="0,6,0,0"
+                                                                   Visibility="{Binding IsExpanded, Converter={StaticResource BoolToVis}}" />
+                                                        <Border Height="14" />
+                                                    </StackPanel>
+                                                </Grid>
+                                            </Button>
+                                            <Button Content="{Binding DetailsLabel}" Style="{StaticResource BtnGhost}" HorizontalAlignment="Right" VerticalAlignment="Bottom"
+                                                    Margin="0,0,6,4" Padding="8,1" FontSize="11.5" Command="{Binding ToggleDetailsCommand}"
+                                                    AutomationProperties.Name="{Binding Title, StringFormat='Show or hide the details of {0}'}" />
                                         </Grid>
                                     </DataTemplate>
                                 </ItemsControl.ItemTemplate>
                             </ItemsControl>
-                            <Button Content="{Binding SelectTopLabel}" Style="{StaticResource BtnPrimary}" HorizontalAlignment="Left" Margin="0,4,0,0"
-                                    Command="{Binding SelectTopMethodCommand}" Visibility="{Binding CanSelectTop, Converter={StaticResource BoolToVis}}"
-                                    ToolTip="Turns on the components of the best method; nothing is installed until you press Install" />
+                            <StackPanel Orientation="Horizontal" Margin="0,6,0,0" Visibility="{Binding CanSelectTop, Converter={StaticResource BoolToVis}}">
+                                <Button Content="{Binding SelectTopLabel}" Style="{StaticResource BtnPrimary}" Command="{Binding SelectTopMethodCommand}"
+                                        ToolTip="Turns on the components of the picked method; nothing is installed until you press Install" />
+                                <TextBlock Text="{Binding SelectTopHint}" Style="{StaticResource MutedText}" FontSize="11.5" Foreground="{StaticResource Warn}"
+                                           VerticalAlignment="Center" Margin="12,0,0,0" />
+                            </StackPanel>
                             <TextBlock Text="{Binding AdviceFooter}" Style="{StaticResource MutedText}" FontSize="11" TextWrapping="Wrap" Margin="0,10,0,0" />
                         </StackPanel>
                     </Border>

@@ -57,6 +57,10 @@ public sealed record MethodOption(Method Method, string Title, Availability Avai
 {
     /// <summary>Set when the method adds files to a game that is risky to add them to (anti-cheat, Store install): installing asks for a confirmation and auto never picks it.</summary>
     public string? Warning { get; init; }
+    /// <summary>The neural route this method leaves in the game (null when it adds none); the advisor checks it against the routes already there.</summary>
+    public NrAddon? Route { get; init; }
+    /// <summary>One plain line on what the method does for the player; the longer <see cref="Reason"/> is the detail.</summary>
+    public string Summary => MethodAdvisor.SummaryOf(Method);
     /// <summary>True when the game page can select this method's components.</summary>
     public bool Selectable => (Availability is Availability.Available or Availability.NeedsSetup) && Components.Count > 0;
 }
@@ -69,7 +73,11 @@ public sealed record MethodAdvice(IReadOnlyList<MethodOption> Methods, IReadOnly
 {
     /// <summary>Shown above the methods when adding files to this game is risky; each such method also carries it as its <see cref="MethodOption.Warning"/>.</summary>
     public string? Caution { get; init; }
-    /// <summary>The best method the game page can select: never one that carries a warning.</summary>
+    /// <summary>
+    /// The method to recommend: the first the game page can select without a warning. <see cref="MethodAdvisor.Advise"/> ranks
+    /// Available before NeedsSetup, so a method that needs setup is only recommended when nothing available fits. A method that
+    /// clashes with a neural route already in the game carries a warning, so it is never recommended; null when nothing qualifies.
+    /// </summary>
     public MethodOption? Top => Methods.FirstOrDefault(m => m.Selectable && m.Warning is null);
     public IEnumerable<MethodOption> Possible => Methods.Where(m => m.Availability is Availability.Available or Availability.NeedsSetup);
     public IEnumerable<MethodOption> Unavailable => Methods.Where(m => m.Availability is Availability.NotPossible or Availability.Coming);
@@ -124,6 +132,24 @@ public static class MethodAdvisor
         Method.AioAddon => "All-in-one add-on",
         Method.Dxvk => "DXVK (Vulkan translation, Lilium HDR)",
         _ => "RenoDX HDR mod",
+    };
+
+    /// <summary>What a method does for the player, in one line (the row's headline; <see cref="MethodOption.Reason"/> has the detail).</summary>
+    public static string SummaryOf(Method m) => m switch
+    {
+        Method.DlssUpdate => "Newer DLSS files for a sharper, steadier image. The safest first step.",
+        Method.NeuralAddon => "Adds neural rendering on top of the game's own DLSS, through a ReShade add-on.",
+        Method.OptiScalerNr => "OptiScaler with neural rendering: swaps the game's upscaler and adds the neural look.",
+        Method.OptiScaler => "Swaps the game's upscaler for FSR or XeSS and adds frame generation.",
+        Method.Feeder => "Neural rendering for a game with no DLSS. Better image, no FPS gain.",
+        Method.MfgUnlock => "Multi frame generation on RTX 40 in a game that has DLSS frame generation.",
+        Method.SmoothMotion => "NVIDIA's driver frame generation, switched on in the game's NVIDIA tab. Adds no files.",
+        Method.Dx11Bridge => "Neural rendering for a DX11 game that has DLSS. Not in the app yet.",
+        Method.UpscalerMod => "A community mod that gives this game an upscaler. Not in the app yet.",
+        Method.Luma => "A framework mod that reworks the game's rendering, with better HDR and optional DLSS.",
+        Method.AioAddon => "One add-on for neural rendering, upscaling and frame generation. Not in the app yet.",
+        Method.Dxvk => "Runs an older Direct3D game on Vulkan, with optional HDR output.",
+        _ => "Real HDR output for this game.",
     };
 
     /// <summary>
@@ -425,26 +451,15 @@ public static class MethodAdvisor
                 if (list[i].Method is Method.OptiScaler or Method.OptiScalerNr)
                     list[i] = list[i] with { Reason = list[i].Reason + " OptiFG can't work here: OptiScaler's wiki lists the game as HUDfix-incompatible, use the game's own frame generation or Smooth Motion." };
         }
-        // Row 18: a second neural consumer. The app replaces its own routes when it switches; one it didn't place can't be replaced.
-        if (c.In.InstalledRoutes.Contains(NrAddon.Bridge))
+        // Row 18: a second neural consumer. A method whose route clashes with one already in the game (NrAddons.Conflict, the rule the
+        // game page's conflict banner uses) carries the reason as a warning: installing it asks for a confirmation and it is never recommended.
+        if (c.In.InstalledRoutes.Count > 0)
         {
             rows.Add(18);
+            var tail = c.In.InstalledRoutes.Contains(NrAddon.Bridge) ? " Installing it asks you to confirm, or remove the bridge files first." : " Installing it asks you to confirm.";
             for (var i = 0; i < list.Count; i++)
-            {
-                var adds = list[i].Method switch
-                {
-                    Method.NeuralAddon => (NrAddon?)NrAddon.RenoDx,
-                    Method.Feeder => NrAddon.Dfc,
-                    Method.OptiScalerNr => NrAddon.OptiScaler,
-                    _ => null,
-                };
-                if (adds is { } a && NrAddons.Conflict(a, [NrAddon.Bridge]) is { } why)
-                    list[i] = list[i] with { Warning = why + " Installing it asks you to confirm, or remove the bridge files first." };
-            }
-        }
-        else if (c.In.InstalledRoutes.Count > 0)
-        {
-            rows.Add(18);
+                if (list[i].Route is { } route && NrAddons.Conflict(route, c.In.InstalledRoutes) is { } why)
+                    list[i] = list[i] with { Warning = why + tail };
         }
     }
 
@@ -489,16 +504,17 @@ public static class MethodAdvisor
         if (extraNeed is not null) needs.Add(extraNeed);
         var cost = NrCost(c.Gpu);
         if (unverifiedWhy is not null) reason += $" Unverified: {unverifiedWhy}.";
+        var route = addon == ComponentRegistry.RenoDx ? NrAddon.RenoDx : addon == ComponentRegistry.Lecram ? NrAddon.Lecram : addon == ComponentRegistry.Dfc ? NrAddon.Dfc : NrAddon.Uplift;
         return Opt(Method.NeuralAddon, needs.Count == 0 ? Availability.Available : Availability.NeedsSetup,
             $"{reason} {cost}".Trim() + (addon == ComponentRegistry.Uplift ? " GITC Uplift downloads itself; ShortFuse's, Lecram's and Deep Fried Chicken's are imported." : ""),
-            [ComponentRegistry.ReShade, ComponentRegistry.DlssNr, addon], needs, InstallMode.ReShadeOnly, unverified);
+            [ComponentRegistry.ReShade, ComponentRegistry.DlssNr, addon], needs, InstallMode.ReShadeOnly, unverified) with { Route = route };
     }
 
     private static MethodOption OptiNr(Ctx c, string reason)
     {
         var needs = NrRuntimeNeed(c) is { } nr ? new List<string> { nr } : [];
         return Opt(Method.OptiScalerNr, needs.Count == 0 ? Availability.Available : Availability.NeedsSetup, $"{reason} {NrCost(c.Gpu)}".Trim(),
-            [ComponentRegistry.OptiScaler, ComponentRegistry.DlssNr], needs, InstallMode.OptiScaler);
+            [ComponentRegistry.OptiScaler, ComponentRegistry.DlssNr], needs, InstallMode.OptiScaler) with { Route = NrAddon.OptiScaler };
     }
 
     private static MethodOption Opti(Ctx c, string reason)
@@ -508,7 +524,7 @@ public static class MethodAdvisor
             return Opt(Method.OptiScaler, Availability.NotPossible, "OptiScaler's own list says it does not work in this game" + (string.IsNullOrWhiteSpace(compat.Notes) ? "." : $": {compat.Notes}"));
         if (compat is { Compat: "single-os" }) reason += " OptiScaler's list says it works on a single OS only.";
         if (compat is { Notes.Length: > 0 }) reason += $" Wiki note: {compat.Notes}";
-        return Opt(Method.OptiScaler, Availability.Available, reason, [ComponentRegistry.OptiScaler], null, InstallMode.OptiScaler);
+        return Opt(Method.OptiScaler, Availability.Available, reason, [ComponentRegistry.OptiScaler], null, InstallMode.OptiScaler) with { Route = NrAddon.OptiScaler };
     }
 
     // The add-on the app installs (mavismmg's MFGAdaUnlock) targets RTX 40 only; an unreadable GPU never hides it.
@@ -542,11 +558,17 @@ public static class MethodAdvisor
         if (unverifiedWhy is not null) reason += $" Unverified: {unverifiedWhy}.";
         if (unverified && unverifiedWhy is null) reason += " Unverified: low confidence in the research.";
         return Opt(Method.Feeder, needs.Count == 0 ? Availability.Available : Availability.NeedsSetup, reason,
-            [ComponentRegistry.ReShade, ComponentRegistry.DlssNr, ComponentRegistry.Dfc, ComponentRegistry.Feeder], needs, InstallMode.ReShadeOnly, unverified);
+            [ComponentRegistry.ReShade, ComponentRegistry.DlssNr, ComponentRegistry.Dfc, ComponentRegistry.Feeder], needs, InstallMode.ReShadeOnly, unverified) with { Route = NrAddon.Dfc };
     }
 
-    /// <summary>The order of the table, with what can't be done last (still shown, with its reason).</summary>
+    /// <summary>
+    /// The order of the table: what can be used first (Available before NeedsSetup, ties in table order), then what the app doesn't
+    /// install yet, then what can't be done (still shown, with its reason). The HDR and DXVK add-ons that work next to a method stay behind the methods.
+    /// </summary>
     private static List<MethodOption> Rank(List<MethodOption> methods) =>
-        methods.Select((m, i) => (m, i)).OrderBy(x => x.m.Availability is Availability.NotPossible ? 2 : x.m.Availability is Availability.Coming ? 1 : 0)
+        methods.Select((m, i) => (m, i))
+            .OrderBy(x => x.m.Availability switch { Availability.NotPossible => 3, Availability.Coming => 2, _ => 0 })
+            .ThenBy(x => x.m.Method is Method.RenoDxHdr or Method.Dxvk ? 1 : 0)
+            .ThenBy(x => x.m.Availability == Availability.NeedsSetup ? 1 : 0)
             .ThenBy(x => x.i).Select(x => x.m).ToList();
 }

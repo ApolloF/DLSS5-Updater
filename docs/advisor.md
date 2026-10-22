@@ -30,10 +30,18 @@ OptiScaler (row 19).
 Methods the app does not install yet (Luma, third-party upscaler mods, the DX11 bridge, the all-in-one add-on, the RenoDX HDR
 mod) are listed as **coming**, so the answer is complete without promising an install.
 
-## The button
+## The panel
 
-"Select" turns on the components of a method on the game page (and the install mode it needs). It never installs; the user
-presses Install. Smooth Motion has no components: it is a driver setting on the game's NVIDIA tab.
+Each method is a clickable card: a one-line plain summary (`MethodAdvisor.SummaryOf`), the availability badge, the warning and the
+"Needs:" line; the long reason opens under **Details**. Clicking a card picks it; the green **Use: X** button turns on the
+components of the picked method on the game page (and the install mode it needs). It never installs; the user presses Install.
+Smooth Motion has no components: it is a driver setting on the game's NVIDIA tab, so its card isn't pickable.
+
+The recommended method (`MethodAdvice.Top`, picked at first) is the first selectable one without a warning. `Rank` puts Available
+before NeedsSetup (ties keep table order), so a method that needs setup is only recommended when nothing available fits, and the
+button then says "Needs setup first". A method whose neural route clashes with one already in the game (`NrAddons.Conflict`,
+the rule behind the page's conflict banner) carries that reason as a warning and is never recommended; when nothing qualifies, no
+method is picked and the button is hidden.
 
 ## One neural consumer
 

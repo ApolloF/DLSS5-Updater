@@ -39,7 +39,7 @@ public sealed class MethodAdvisorTests
         var a = Advise(Game(dlss: true));
 
         Assert.Equal([1], a.Rows);
-        Assert.Equal([Method.DlssUpdate, Method.NeuralAddon, Method.OptiScalerNr, Method.OptiScaler], Order(a));
+        Assert.Equal([Method.DlssUpdate, Method.OptiScaler, Method.NeuralAddon, Method.OptiScalerNr], Order(a));
         Assert.Equal(Method.DlssUpdate, a.Top!.Method);
         Assert.Contains("cheapest and safest", Option(a, Method.DlssUpdate).Reason);
         Assert.Equal([ComponentRegistry.Dlss], Option(a, Method.DlssUpdate).Components);
@@ -114,7 +114,7 @@ public sealed class MethodAdvisorTests
 
         Assert.Equal([5], a.Rows);
         Assert.Equal(Method.Feeder, a.Top!.Method);
-        Assert.Equal([Method.Feeder, Method.SmoothMotion, Method.AioAddon], Order(a));
+        Assert.Equal([Method.SmoothMotion, Method.Feeder, Method.AioAddon], Order(a));
         var feeder = Option(a, Method.Feeder);
         Assert.Equal(Availability.NeedsSetup, feeder.Availability);
         Assert.Equal([ComponentRegistry.ReShade, ComponentRegistry.DlssNr, ComponentRegistry.Dfc, ComponentRegistry.Feeder], feeder.Components);
@@ -296,7 +296,7 @@ public sealed class MethodAdvisorTests
         var a = Advise(Game(GraphicsApis.Dx11, engine: GameEngine.Unity));
 
         Assert.Equal([9], a.Rows);
-        Assert.Equal([Method.Feeder, Method.SmoothMotion, Method.Dxvk], Order(a));
+        Assert.Equal([Method.SmoothMotion, Method.Feeder, Method.Dxvk], Order(a));
         Assert.Contains("Fell & Sell", Option(a, Method.Feeder).Reason);
     }
 
@@ -479,6 +479,69 @@ public sealed class MethodAdvisorTests
 
         Assert.Contains(18, a.Rows);
         Assert.NotEqual(Availability.NotPossible, Option(a, Method.NeuralAddon).Availability);
+    }
+
+    [Fact]
+    public void Row18_OuterWilds_UpliftInstalled_FeederNeedsSetupAndClashes_SoNothingIsRecommended()
+    {
+        var game = Game(GraphicsApis.Dx11, engine: GameEngine.Unity, name: "Outer Wilds");
+        var input = Input(game) with { InstalledRoutes = [NrAddon.Uplift] };
+
+        var a = MethodAdvisor.Advise(input);
+
+        Assert.Contains(9, a.Rows);
+        Assert.Contains(18, a.Rows);
+        var feeder = Option(a, Method.Feeder);
+        Assert.Equal(Availability.NeedsSetup, feeder.Availability);
+        Assert.Contains(feeder.Needs, n => n.Contains("motion-vector"));
+        Assert.Equal(NrAddons.Conflict(NrAddon.Dfc, [NrAddon.Uplift]), feeder.Warning![..^" Installing it asks you to confirm.".Length]);
+        Assert.Null(a.Top);
+    }
+
+    [Fact]
+    public void Row18_UpliftInstalled_AUpliftRouteIsNotAClash_ButOtherNeuralRoutesAre()
+    {
+        var input = Input(Game(dlss: true)) with { InstalledRoutes = [NrAddon.Uplift] };
+
+        var a = MethodAdvisor.Advise(input);
+
+        Assert.Null(Option(a, Method.NeuralAddon).Warning);
+        Assert.Contains("GITC Uplift", Option(a, Method.OptiScalerNr).Warning);
+        Assert.Contains("GITC Uplift", Option(a, Method.OptiScaler).Warning);
+        Assert.Equal(Method.DlssUpdate, a.Top!.Method);
+    }
+
+    [Fact]
+    public void Row18_AnImportedAddonThatIsNotTheInstalledOne_IsWarned_AndNeverRecommendedOverAnAvailableMethod()
+    {
+        var input = Input(Game(dlss: true)) with { InstalledRoutes = [NrAddon.Uplift], Imported = new HashSet<string> { ComponentRegistry.DlssNr, ComponentRegistry.RenoDx } };
+
+        var a = MethodAdvisor.Advise(input);
+
+        Assert.Contains("ShortFuse", Option(a, Method.NeuralAddon).Warning);
+        Assert.Equal(Method.DlssUpdate, a.Top!.Method);
+    }
+
+    [Fact]
+    public void Rank_AvailableComesBeforeNeedsSetup_AndWhatCannotBeUsedComesLast()
+    {
+        foreach (var game in new[] { Game(), Game(dlss: true), Game(GraphicsApis.Dx11, engine: GameEngine.Unity), Game(GraphicsApis.Vulkan, dlss: true) })
+        {
+            var order = Advise(game).Methods.Where(m => m.Method is not (Method.Dxvk or Method.RenoDxHdr)).Select(m => m.Availability switch { Availability.Available => 0, Availability.NeedsSetup => 1, Availability.Coming => 2, _ => 3 }).ToList();
+            Assert.Equal(order.OrderBy(x => x), order);
+        }
+    }
+
+    [Fact]
+    public void EveryMethodHasAPlainSummary()
+    {
+        foreach (var m in Enum.GetValues<Method>())
+        {
+            var summary = MethodAdvisor.SummaryOf(m);
+            Assert.False(string.IsNullOrWhiteSpace(summary));
+            Assert.EndsWith(".", summary);
+        }
+        Assert.Equal(MethodAdvisor.SummaryOf(Method.MfgUnlock), Option(Advise(Game(dlss: true, fg: true)), Method.MfgUnlock).Summary);
     }
 
     // ---------- row 19 and the GPU ----------
