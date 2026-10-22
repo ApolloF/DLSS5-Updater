@@ -4,7 +4,7 @@ using DLSSUpdater.Scan;
 namespace DLSSUpdater.Tests;
 
 /// <summary>
-/// The decision table of docs/research/methods-2026-10.md section 8, row by row (the name of each test says which), plus the
+/// The decision table of docs/advisor.md "Decision table", row by row (the name of each test says which), plus the
 /// pre-checks (anti-cheat, Store install, GPU). Games are built in memory; nothing touches a disk or a GPU.
 /// </summary>
 public sealed class MethodAdvisorTests

@@ -2,7 +2,7 @@ using DLSSUpdater.Core;
 
 namespace DLSSUpdater.Tests;
 
-/// <summary>The one-neural-consumer rule (docs/research/methods-2026-10.md section 2 and 8 row 18), as one conflict line per clash.</summary>
+/// <summary>The one-neural-consumer rule (docs/advisor.md, decision table row 18), as one conflict line per clash.</summary>
 public sealed class NrConsumerTests : IDisposable
 {
     private readonly string _dir = Path.Combine(Path.GetTempPath(), "dlssu-nrc-" + Guid.NewGuid().ToString("N")[..8]);

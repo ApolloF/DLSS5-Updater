@@ -3,8 +3,7 @@
 ReShade add-on by Jean-Laurent Rouzies (`jlrouzies-fr/DLSS5-Feeder`). It makes the DLSS calls a game without DLSS never
 makes: it takes the backbuffer, ReShade's depth (Generic Depth add-on) and estimated motion vectors from a ReShade shader,
 and hands them to NVIDIA's DLSS as a DLAA frame, so a neural consumer (Deep Fried Chicken here) has something to run on.
-DLAA only: no upscaling, no performance gain, a few ms per frame at 4K. Facts below are from its README and release notes
-(docs/research/methods-2026-10.md section 1); nothing was reverse engineered.
+DLAA only: no upscaling, no performance gain, a few ms per frame at 4K. Facts below are from its README and release notes; nothing was reverse engineered.
 
 ## Component model (docs/design.md section 2)
 

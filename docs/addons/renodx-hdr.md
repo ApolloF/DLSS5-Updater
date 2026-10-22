@@ -60,7 +60,6 @@ The engine, bitness and Unreal version come from the game scan (`GameInfo.Tech`)
 
 Source for the add-on side: `src/games/ue-extended/addon.cpp` and `src/utils/settings.hpp` of
 [marat569/renodx](https://github.com/marat569/renodx) (MIT, read 2026-10-21), which is the code behind `renodx-ue-extended.addon64`.
-The other facts are in `docs/research/rhi-2026-10.md` section 3.1 (what the ecosystem writes, not code).
 
 | Key | Meaning (C = from the add-on source) | App writes |
 |---|---|---|

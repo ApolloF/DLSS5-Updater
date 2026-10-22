@@ -167,7 +167,7 @@ public static class NvidiaProfileCatalog
         // ---- Smooth Motion. Source: CustomSettingNames.xml 0xB0D384C0 (driver 571.86+), 0xB0CC0875 (bitfield 1 DX12, 2 DX11, 4 Vulkan).
         new("smooth-motion", NvGroup.SmoothMotion, "Smooth Motion", "Driver frame generation for games without DLSS FG.", "nv-smooth-motion", [SmoothMotion],
             OnOff(SmoothMotion, "Off for this game.", "The driver interpolates frames (RTX 40 / 50, driver 571.86+)."))
-            { MayNeedAdmin = true, Source = "CustomSettingNames.xml 0xB0D384C0; admin note from docs/research/rhi-2026-10.md 9.2" },
+            { MayNeedAdmin = true, Source = "CustomSettingNames.xml 0xB0D384C0" },
         new("smooth-motion-apis", NvGroup.SmoothMotion, "Smooth Motion graphics APIs", "Which graphics APIs Smooth Motion may act on.", "nv-smooth-motion-apis", [SmoothMotionApis],
         [
             C("DX12 + DX11", "Not Vulkan. Use this for Vulkan games that run the neural-rendering add-ons.", (SmoothMotionApis, 3)),
@@ -213,7 +213,7 @@ public static class NvidiaProfileCatalog
             C("Off", "Both low-latency settings off.", (LowLatencyState, 0), (LowLatencyEnabled, 0)),
             C("On", "Control Panel state 'On'; the Ultra flag stays off.", (LowLatencyState, 1), (LowLatencyEnabled, 0)),
             C("Ultra", "Control Panel state 'Ultra'; the Ultra flag is on.", (LowLatencyState, 2), (LowLatencyEnabled, 1)),
-        ]) { MayNeedAdmin = true, Source = "CustomSettingNames.xml 0x0005F543, 0x10835000; admin note from docs/research/rhi-2026-10.md 9.2" },
+        ]) { MayNeedAdmin = true, Source = "CustomSettingNames.xml 0x0005F543, 0x10835000" },
         new("frame-limit", NvGroup.Sync, "Max frame rate", "Driver FPS limiter (Frame Rate Limiter V3).", "nv-fps", [FrameRateLimit],
         [
             C("Off", "No limit for this game.", (FrameRateLimit, 0)),

@@ -39,8 +39,8 @@ public enum UpscalerSignals
 
 public static class UpscalerFiles
 {
-    // The file names below come from docs/research/methods-2026-10.md section 6.1, where the exact FSR and XeSS names are
-    // marked [U] (unverified): they are the names those SDKs ship under, but no game was checked for each one.
+    // The exact FSR and XeSS file names below are unverified: they are the names those SDKs ship under, but no game was checked
+    // for each one.
 
     /// <summary>The signal a dll in a game folder stands for, or None.</summary>
     public static UpscalerSignals OfFile(string fileName)

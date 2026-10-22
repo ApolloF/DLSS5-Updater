@@ -28,7 +28,7 @@ public static class NrAddons
 
     /// <summary>
     /// Why <paramref name="adding"/> clashes with the routes already in the game (<paramref name="present"/>), as one line; null
-    /// when it doesn't. One neural consumer per game is the rule (docs/research/methods-2026-10.md section 2 and section 8 row 18):
+    /// when it doesn't. One neural consumer per game is the rule (docs/advisor.md, decision table row 18):
     /// they all detour the game's NGX calls, and Deep Fried Chicken does nothing at all when another one is loaded beside it.
     /// </summary>
     public static string? Conflict(NrAddon adding, IEnumerable<NrAddon> present)
@@ -77,7 +77,7 @@ public static class NrAddons
 
     private static string Capitalize(string s) => char.ToUpperInvariant(s[0]) + s[1..];
 
-    /// <summary>File names of the DX11 bridge add-on (docs/research/methods-2026-10.md section 6.1).</summary>
+    /// <summary>File names of the DX11 bridge add-on.</summary>
     public static readonly string[] BridgeFiles = ["dlss5-bridge.addon64", "dlss5-dx11-bridge.addon64"];
 
     /// <summary>

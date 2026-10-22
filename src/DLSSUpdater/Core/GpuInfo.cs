@@ -5,7 +5,7 @@ namespace DLSSUpdater.Core;
 
 public enum GpuVendor { Unknown, Nvidia, Amd, Intel }
 
-/// <summary>NVIDIA generation as far as the neural-rendering methods care (docs/research/methods-2026-10.md section 8).</summary>
+/// <summary>NVIDIA generation as far as the neural-rendering methods care (decision table in docs/advisor.md).</summary>
 public enum RtxTier
 {
     /// <summary>No RTX: a GTX card, or a GPU of another vendor.</summary>

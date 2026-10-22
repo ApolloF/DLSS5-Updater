@@ -4,7 +4,7 @@ namespace DLSSUpdater.Core;
 
 /// <summary>
 /// The ways the app can improve upscaling, frame generation or neural rendering (NR) in a game. Letters in the comments are the
-/// method letters of docs/research/methods-2026-10.md section 7.
+/// method letters of docs/advisor.md "Methods".
 /// </summary>
 public enum Method
 {
@@ -62,7 +62,7 @@ public sealed record MethodOption(Method Method, string Title, Availability Avai
 }
 
 /// <summary>
-/// Ranked methods for one game. <see cref="Rows"/> are the decision-table rows (methods-2026-10.md section 8) that applied, the
+/// Ranked methods for one game. <see cref="Rows"/> are the decision-table rows (docs/advisor.md) that applied, the
 /// shape first and the additive ones (15, 17, 18) after; <see cref="Blocked"/> is set when nothing may be added to the game.
 /// </summary>
 public sealed record MethodAdvice(IReadOnlyList<MethodOption> Methods, IReadOnlyList<int> Rows, string? Blocked)
@@ -102,7 +102,7 @@ public sealed record AdvisorInput(GameInfo Game, GpuInfo Gpu)
 
 /// <summary>
 /// Which methods fit a game, best first, with the reason in one line. Pure: the caller reads the game, the GPU, the catalog and the
-/// library and passes them in. The rules are the decision table of docs/research/methods-2026-10.md section 8 (20 rows), whose
+/// library and passes them in. The rules are the decision table of docs/advisor.md (20 rows), whose
 /// numbers <see cref="MethodAdvice.Rows"/> reports.
 /// </summary>
 public static class MethodAdvisor
@@ -127,8 +127,7 @@ public static class MethodAdvisor
     };
 
     /// <summary>
-    /// A Store / Xbox layout: under WindowsApps, or a MicrosoftGame.config game whose exe could not be read
-    /// (docs/research/methods-2026-10.md section 6.3).
+    /// A Store / Xbox layout: under WindowsApps, or a MicrosoftGame.config game whose exe could not be read.
     /// </summary>
     public static bool IsStoreInstall(GameInfo game, Func<string, bool>? fileExists = null)
     {
