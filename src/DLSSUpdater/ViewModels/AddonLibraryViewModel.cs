@@ -105,7 +105,7 @@ public sealed partial class AddonLibraryViewModel : ObservableObject
     /// <summary>The tooltip of the default picker; names the "· download" entries only where this add-on has them.</summary>
     public string PickerTip => CatalogKind is null || (_kind == AddonKind.Lecram && BuildFlags.LecramChannel)
         ? "Default build: games without their own pick install it"
-        : "Default build: games without their own pick install it. Builds marked download are older catalog builds; picking one downloads it first.";
+        : "Default build: games without their own pick install it. Builds marked download are fetched when picked.";
 
     /// <summary>The older catalog builds of this add-on; Deep Fried Chicken has none, and Lecram none in the private build.</summary>
     private CatalogBuildKind? CatalogKind => _kind switch { AddonKind.RenoDx => CatalogBuildKind.RenoDx, AddonKind.Lecram => CatalogBuildKind.Lecram, _ => null };

@@ -357,7 +357,7 @@
                 <Border Style="{StaticResource Card}" Padding="16">
                     <StackPanel>
                         <ComboBox Width="320" HorizontalAlignment="Left" ItemsSource="{Binding Presets}" SelectedValue="{Binding PresetPick}" SelectedValuePath="Value" DisplayMemberPath="Label"
-                                  AutomationProperties.Name="Preset for this game" ToolTip="A preset from the library (Settings, Add-ons &amp; shaders). Applying it copies it into the game and points ReShade at it." />
+                                  AutomationProperties.Name="Preset for this game" ToolTip="A preset from the library. Applying it copies it into the game and points ReShade at it." />
                         <TextBlock Text="{Binding PresetInstalled}" Style="{StaticResource MutedText}" FontSize="12" Margin="0,10,0,0" />
                         <TextBlock Text="{Binding PresetNeeds}" Foreground="{StaticResource Warn}" FontSize="12" TextWrapping="Wrap" Margin="0,8,0,0"
                                    Visibility="{Binding PresetNeeds, Converter={StaticResource NullToVis}}" />
@@ -1094,23 +1094,23 @@
                                                       Visibility="{Binding Key, Converter={StaticResource EqualsToVis}, ConverterParameter=reshade}"
                                                       ItemsSource="{Binding DataContext.ReShadeChoices, RelativeSource={RelativeSource AncestorType=ItemsControl}}"
                                                       SelectedItem="{Binding DataContext.ReShadeChoice, RelativeSource={RelativeSource AncestorType=ItemsControl}}"
-                                                      AutomationProperties.Name="ReShade build for this game" ToolTip="Which ReShade build this game installs: Default follows Settings, or a channel (Stable, no add-ons, nightly) or one build from the library" />
+                                                      AutomationProperties.Name="ReShade build for this game" ToolTip="Which ReShade build this game installs; Default follows Settings" />
                                             <!-- The add-on rows pick the imported build this game installs. -->
                                             <ComboBox Grid.Column="3" Margin="0,0,8,0" MaxDropDownHeight="300"
                                                       Visibility="{Binding Key, Converter={StaticResource EqualsToVis}, ConverterParameter=renodx}"
                                                       ItemsSource="{Binding DataContext.RenoDxChoices, RelativeSource={RelativeSource AncestorType=ItemsControl}}"
                                                       SelectedItem="{Binding DataContext.RenoDxChoice, RelativeSource={RelativeSource AncestorType=ItemsControl}}"
-                                                      AutomationProperties.Name="ShortFuse RenoDX DLSS version for this game" ToolTip="Which ShortFuse build this game installs. Builds marked download are older catalog builds; picking one downloads it first." />
+                                                      AutomationProperties.Name="ShortFuse RenoDX DLSS version for this game" ToolTip="Which ShortFuse build this game installs; builds marked download are fetched when picked" />
                                             <ComboBox Grid.Column="3" Margin="0,0,8,0" MaxDropDownHeight="300"
                                                       Visibility="{Binding Key, Converter={StaticResource EqualsToVis}, ConverterParameter=lecram}"
                                                       ItemsSource="{Binding DataContext.LecramChoices, RelativeSource={RelativeSource AncestorType=ItemsControl}}"
                                                       SelectedItem="{Binding DataContext.LecramChoice, RelativeSource={RelativeSource AncestorType=ItemsControl}}"
-                                                      AutomationProperties.Name="Lecram DLSS5 version for this game" ToolTip="Which Lecram build this game installs; its generation decides which Lecram options apply. Builds marked download are older catalog builds; picking one downloads it first." />
+                                                      AutomationProperties.Name="Lecram DLSS5 version for this game" ToolTip="Which Lecram build this game installs; its generation decides which options apply" />
                                             <ComboBox Grid.Column="3" Margin="0,0,8,0" MaxDropDownHeight="300"
                                                       Visibility="{Binding Key, Converter={StaticResource EqualsToVis}, ConverterParameter=dfc}"
                                                       ItemsSource="{Binding DataContext.DfcChoices, RelativeSource={RelativeSource AncestorType=ItemsControl}}"
                                                       SelectedItem="{Binding DataContext.DfcChoice, RelativeSource={RelativeSource AncestorType=ItemsControl}}"
-                                                      AutomationProperties.Name="Deep Fried Chicken version for this game" ToolTip="Which imported Deep Fried Chicken build this game installs; it decides the files, the default cfg and whether games without DLSS work" />
+                                                      AutomationProperties.Name="Deep Fried Chicken version for this game" ToolTip="Which imported Deep Fried Chicken build this game installs; it decides the files and default cfg" />
                                             <DockPanel Grid.Column="3" Margin="0,0,8,0" Visibility="{Binding Key, Converter={StaticResource EqualsToVis}, ConverterParameter=feeder}">
                                                 <Button DockPanel.Dock="Right" Content="Reset to auto" Style="{StaticResource BtnGhost}" Margin="6,0,0,0" Padding="8,0"
                                                         Command="{Binding DataContext.ResetFeederToAutoCommand, RelativeSource={RelativeSource AncestorType=ItemsControl}}"
@@ -1166,7 +1166,7 @@
                                     <TextBlock Text="{x:Static vm:GameViewModel.DfcNoDlssHint}" Style="{StaticResource MutedText}" TextWrapping="Wrap" FontSize="12" />
                                 </DockPanel>
                                 <CheckBox IsChecked="{Binding DfcFrameGen}" Margin="0,8,0,0" AutomationProperties.Name="Add NVIDIA's frame generation file (nvngx_dlssg.dll) for Deep Fried Chicken (RTX 40/50)"
-                                          ToolTip="NVIDIA's frame generation runtime from the DLSS release, placed beside the exe and removed with DFC. FSR 3.1 frame generation needs AMD's amd_fidelityfx_*_dx12.dll, which this app does not provide.">
+                                          ToolTip="NVIDIA's frame generation file from the DLSS release, placed beside the exe and removed with DFC">
                                     <TextBlock Text="Add NVIDIA's frame generation file (nvngx_dlssg.dll) for Deep Fried Chicken (RTX 40/50)" TextWrapping="Wrap" />
                                 </CheckBox>
                             </StackPanel>
@@ -1420,7 +1420,7 @@
                                 <StackPanel Margin="0,12,0,0" Visibility="{Binding ShowHdrChoice, Converter={StaticResource BoolToVis}}">
                                     <TextBlock Text="HDR OUTPUT" Style="{StaticResource Caps}" />
                                     <ComboBox Margin="0,4,0,0" HorizontalAlignment="Left" MinWidth="260" ItemsSource="{Binding HdrChoices}" SelectedItem="{Binding HdrChoice}"
-                                              AutomationProperties.Name="Luma HDR output for this game" ToolTip="{Binding HdrHint}" />
+                                              AutomationProperties.Name="Luma HDR output for this game" ToolTip="Auto writes nothing; On or Off set the HDR output in ReShade.ini" />
                                     <TextBlock Text="{Binding HdrHint}" Style="{StaticResource MutedText}" FontSize="11.5" TextWrapping="Wrap" Margin="0,4,0,0" />
                                 </StackPanel>
                                 <StackPanel Margin="0,12,0,0" Visibility="{Binding HasEngineIni, Converter={StaticResource BoolToVis}}">
@@ -1503,7 +1503,7 @@
                                                 ToolTip="{Binding Source=frame-limit-ini, Converter={StaticResource HelpTip}}" AutomationProperties.Name="About the extra ini lines" />
                                     </StackPanel>
                                     <TextBox Margin="0,4,0,0" MinHeight="48" MaxHeight="140" AcceptsReturn="True" TextWrapping="Wrap" VerticalScrollBarVisibility="Auto"
-                                             Text="{Binding IniText, UpdateSourceTrigger=LostFocus}" AutomationProperties.Name="Extra ini lines for the frame limiter" ToolTip="{Binding IniHint}" />
+                                             Text="{Binding IniText, UpdateSourceTrigger=LostFocus}" AutomationProperties.Name="Extra ini lines for the frame limiter" ToolTip="Extra key=value lines; they win over this app's values" />
                                     <TextBlock Text="{Binding IniHint}" Style="{StaticResource MutedText}" FontSize="11.5" TextWrapping="Wrap" Margin="0,4,0,0" />
                                 </StackPanel>
                                 <TextBlock Text="{Binding StatusLine}" Style="{StaticResource MutedText}" TextWrapping="Wrap" Margin="0,12,0,0" />
@@ -1555,7 +1555,7 @@
                                         <TextBlock Text="{Binding TierDescription}" Style="{StaticResource MutedText}" FontSize="11.5" TextWrapping="Wrap" Margin="0,4,0,0" />
                                         <CheckBox IsChecked="{Binding PresentMethod}" Margin="0,8,0,0" Visibility="{Binding ShowPresentMethod, Converter={StaticResource BoolToVis}}"
                                                   AutomationProperties.Name="Set the NVIDIA present method for this game"
-                                                  ToolTip="Writes two settings into this game's NVIDIA driver profile (present method layered on DXGI, treat DXVK as native); they go back to what they were when DXVK is removed.">
+                                                  ToolTip="Writes two settings to this game's NVIDIA driver profile; removing DXVK puts them back">
                                             <TextBlock Text="Set the NVIDIA present method in this game's driver profile" TextWrapping="Wrap" />
                                         </CheckBox>
                                     </StackPanel>
@@ -1566,7 +1566,7 @@
                                                     ToolTip="{Binding Source=dxvk-conf, Converter={StaticResource HelpTip}}" AutomationProperties.Name="About the dxvk.conf lines" />
                                         </StackPanel>
                                         <TextBox Margin="0,4,0,0" MinHeight="48" MaxHeight="140" AcceptsReturn="True" TextWrapping="Wrap" VerticalScrollBarVisibility="Auto"
-                                                 Text="{Binding ConfText, UpdateSourceTrigger=LostFocus}" AutomationProperties.Name="Extra dxvk.conf lines" ToolTip="{Binding ConfHint}" />
+                                                 Text="{Binding ConfText, UpdateSourceTrigger=LostFocus}" AutomationProperties.Name="Extra dxvk.conf lines" ToolTip="Extra key = value lines; they win over this app's values" />
                                         <TextBlock Text="{Binding ConfHint}" Style="{StaticResource MutedText}" FontSize="11.5" TextWrapping="Wrap" Margin="0,4,0,0" />
                                     </StackPanel>
                                     <TextBlock Text="{Binding Blockers}" Style="{StaticResource MutedText}" Foreground="{StaticResource Warn}" FontSize="11.5" TextWrapping="Wrap" Margin="0,8,0,0"
@@ -2326,7 +2326,7 @@
                                                         <Button Content="Import…" Command="{Binding ImportCommand}" Margin="0,0,8,0" ToolTip="Add a DXVK release (.tar.gz, .zip or .7z) to the library" />
                                                         <Button Content="Folder…" Style="{StaticResource BtnGhost}" Command="{Binding ImportFolderCommand}" Margin="0,0,8,0" ToolTip="Add an extracted DXVK folder (with x32 and x64) to the library" />
                                                         <ComboBox ItemsSource="{Binding ChannelChoices}" SelectedItem="{Binding DownloadChannel}" MinWidth="130" Margin="0,0,8,0"
-                                                                  AutomationProperties.Name="DXVK channel to download" ToolTip="Stable: doitsujin/dxvk releases. Development: the newest master build. Lilium HDR: EndlesslyFlowering's HDR fork." />
+                                                                  AutomationProperties.Name="DXVK channel to download" ToolTip="Stable: doitsujin/dxvk releases. Development: newest master build. Lilium HDR: the HDR fork." />
                                                         <Button Content="Download newest" Style="{StaticResource BtnGhost}" Command="{Binding DownloadCommand}" ToolTip="Download the newest build of that channel now; its SHA-256 is checked against GitHub's" />
                                                     </WrapPanel>
                                                     <StackPanel Visibility="{Binding HasBuilds, Converter={StaticResource BoolToVis}}" Margin="0,10,0,0">

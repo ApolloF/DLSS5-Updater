@@ -28,7 +28,7 @@ public sealed partial class TechOverrideViewModel : ObservableObject
             v => Set(t => t with { Engine = v is null ? null : Enum.Parse<GameEngine>(v), EngineVersion = null }));
         UeVersion = new AutoPick("Unreal version", "Unreal 5 games get HDR switched on in Engine.ini; Unreal 4 games take the upgrade path.",
             v => Set(t => t with { EngineVersion = v }));
-        MainExe = new AutoPick("Main executable", "The exe the app treats as the game: the next scan reads API and bitness from it, and the driver profile matches on it.",
+        MainExe = new AutoPick("Main executable", "The exe treated as the game; the next scan reads API and bitness from it.",
             v => Set(t => t with { MainExe = v }, rescan: true));
         ModFolder = new AutoPick("Mod folder", "Where mods and ReShade go by default.",
             v => Set(t => t with { ModFolder = v }));
