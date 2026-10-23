@@ -26,7 +26,7 @@ public sealed partial class MethodRow(MethodOption option, bool isTop, string? p
 
     public bool HasWarning => Warning is not null;
     public string? Warning => Option.Warning == PanelCaution ? null : Option.Warning;
-    public string StateText => Option.Availability switch
+    public string StateText => IsAdviceOnly ? "Own section below" : Option.Availability switch
     {
         Availability.Available => "Available",
         Availability.NeedsSetup => "Needs setup",
@@ -36,6 +36,11 @@ public sealed partial class MethodRow(MethodOption option, bool isTop, string? p
     public bool HasNeeds => Option.Needs.Count > 0;
     public string NeedsText => "Needs: " + string.Join("; ", Option.Needs);
     public bool IsSelectable => Option.Selectable;
+    /// <summary>A usable method with no components (RenoDX HDR, Luma, DXVK): it is installed from its own section further down the page, so the card only opens its details.</summary>
+    public bool IsAdviceOnly => Option.Availability is Availability.Available or Availability.NeedsSetup && Option.Components.Count == 0;
+    /// <summary>Dim and disabled cards are the ones that can neither be picked nor opened.</summary>
+    public bool IsClickable => IsSelectable || IsAdviceOnly;
+    public string CardTip => IsAdviceOnly ? "Installed from its own section further down this page" : "Pick this method, then press the green button to turn its components on";
     /// <summary>Methods that can't be used are shown dimmed, with the reason they can't.</summary>
     public bool IsDim => Option.Availability is Availability.NotPossible or Availability.Coming;
     public bool IsUnavailable => Option.Availability == Availability.NotPossible;
@@ -181,7 +186,13 @@ public sealed partial class GameViewModel
     [RelayCommand]
     private void PickMethod(MethodRow? row)
     {
-        if (row is null || !row.IsSelectable) return;
+        if (row is null) return;
+        if (row.IsAdviceOnly)
+        {
+            row.IsExpanded = !row.IsExpanded;
+            return;
+        }
+        if (!row.IsSelectable) return;
         foreach (var m in Methods) m.IsPicked = ReferenceEquals(m, row);
         UpdatePickedLabel();
     }

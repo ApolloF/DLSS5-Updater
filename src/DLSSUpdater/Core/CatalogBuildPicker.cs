@@ -36,17 +36,17 @@ public sealed partial class ComponentStore
 {
     /// <summary>
     /// The catalog builds of <paramref name="kind"/> the library doesn't have, newest first, with the label the picker shows.
-    /// Entries without a hash, a plain file name or a download URL are skipped. Lecram has none while its private channel is on:
-    /// the auto-check skips the mirror there too.
+    /// Entries without a hash, a plain file name or a download URL are skipped. Lecram has none while <paramref name="lecramOff"/> is set
+    /// (<see cref="BuildFlags.LecramCatalogOff"/>: the private channel, or public builds that import Lecram); the auto-check skips the mirror then too.
     /// </summary>
-    public IReadOnlyList<CatalogOffer> OfferedBuilds(CatalogBuildKind kind, CatalogSections? sections, bool lecramChannel)
+    public IReadOnlyList<CatalogOffer> OfferedBuilds(CatalogBuildKind kind, CatalogSections? sections, bool lecramOff)
     {
         switch (kind)
         {
             case CatalogBuildKind.DlssNr:
                 return NeuralOffers(kind, sections?.Neural?.Dlssnr, DlssNrVersions.Select(v => v.Id));
             case CatalogBuildKind.Lecram:
-                return lecramChannel ? [] : NeuralOffers(kind, sections?.Neural?.Lecram, AddonBuilds(AddonKind.Lecram).Select(b => b.Id));
+                return lecramOff ? [] : NeuralOffers(kind, sections?.Neural?.Lecram, AddonBuilds(AddonKind.Lecram).Select(b => b.Id));
             default:
                 var offers = new List<CatalogOffer>();
                 if (sections?.RenodxDlss is not { } section) return offers;
@@ -90,9 +90,9 @@ public sealed partial class ComponentStore
     /// refused (size, hash, not a Windows binary or not the right add-on) or the network is gone. Never throws for those; only a cancel does.
     /// </summary>
     public async Task<string?> DownloadCatalogBuildAsync(CatalogBuildKind kind, CatalogSections? sections, string sha256, ICatalogFetch fetch,
-        IProgress<TransferProgress>? progress, bool lecramChannel, CancellationToken ct)
+        IProgress<TransferProgress>? progress, bool lecramOff, CancellationToken ct)
     {
-        if (!OfferedBuilds(kind, sections, lecramChannel).Any(o => o.Sha256.Equals(sha256, StringComparison.OrdinalIgnoreCase)))
+        if (!OfferedBuilds(kind, sections, lecramOff).Any(o => o.Sha256.Equals(sha256, StringComparison.OrdinalIgnoreCase)))
         {
             Log.Info("That build is no longer on offer from the catalog.");
             return null;

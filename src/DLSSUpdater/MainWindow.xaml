@@ -937,10 +937,10 @@
                                 <ItemsControl.ItemTemplate>
                                     <DataTemplate>
                                         <Grid Margin="0,0,0,8">
-                                            <Button Style="{StaticResource MethodCard}" IsEnabled="{Binding IsSelectable}"
+                                            <Button Style="{StaticResource MethodCard}" IsEnabled="{Binding IsClickable}"
                                                     Command="{Binding DataContext.PickMethodCommand, RelativeSource={RelativeSource AncestorType=ItemsControl}}"
                                                     CommandParameter="{Binding}" AutomationProperties.Name="{Binding Title, StringFormat='Pick {0}'}"
-                                                    ToolTip="Pick this method, then press the green button to turn its components on">
+                                                    ToolTip="{Binding CardTip}">
                                                 <Grid>
                                                     <Grid.ColumnDefinitions>
                                                         <ColumnDefinition Width="Auto" />

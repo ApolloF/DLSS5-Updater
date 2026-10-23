@@ -8,7 +8,7 @@ namespace DLSSUpdater.Core;
 public enum LecramGeneration { V10, V11 }
 
 /// <summary>
-/// Lecram's DLSS5 Neural Rendering add-on is downloaded from the catalog mirror (see NeuralSource.cs) or imported and, in the private build only (BuildFlags.LecramChannel), also taken from the author's v11 update channel.
+/// Lecram's DLSS5 Neural Rendering add-on is imported and, in the private build only (BuildFlags.LecramChannel), also taken from the author's v11 update channel.
 /// v10 and older (renodx-dlss5.addon64) name themselves in the version resource; v11+
 /// (dlss5-nr.addon64) has no version resource and is recognised by strings in the binary. Every imported build stays in the
 /// library; a game gets the one chosen for it, under its generation's file name.

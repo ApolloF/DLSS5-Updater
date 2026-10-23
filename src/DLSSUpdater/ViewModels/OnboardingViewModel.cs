@@ -109,7 +109,7 @@ public sealed partial class OnboardingViewModel : ObservableObject
 
     internal static string LecramHint(bool channelEnabled) => channelEnabled
         ? "Lecram's DLSS5 add-on. New v11 builds are fetched automatically."
-        : "Lecram's DLSS5 add-on. Downloaded and installed automatically.";
+        : "Lecram's DLSS5 add-on. Import only: you add the file yourself.";
 
     /// <summary>The automatic Lecram check only exists in the private build; the stored choice is left alone elsewhere.</summary>
     public bool ShowLecramChannel => BuildFlags.LecramChannel;

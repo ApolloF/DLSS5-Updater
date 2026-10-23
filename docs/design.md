@@ -41,8 +41,8 @@ Each component has exactly these parts. A part that doesn't apply is explicitly 
 - Licence forbids redistribution, or builds are paid: **import-only** in the public build. The app accepts the files
   the user got from the author (the release folder, the main file, or a .zip of the release) and copies them byte for
   byte. No probes or reverse engineering where the licence forbids it (see `docs/addons/README.md`).
-- **Downloaded and installed automatically from the catalog mirror:** ShortFuse's `renodx-dlss.addon64`, Lecram's DLSS5 add-on
-  and NVIDIA's `nvngx_dlssnr.dll`. They have no official channel the app can use, so the catalog hosts each build (`renodxDlss`
+- **Downloaded and installed automatically from the catalog mirror:** ShortFuse's `renodx-dlss.addon64` and NVIDIA's `nvngx_dlssnr.dll`
+  (Lecram's DLSS5 add-on too once `BuildFlags.LecramCatalog` is on; off for now, so public builds import it). They have no official channel the app can use, so the catalog hosts each build (`renodxDlss`
   and `neural` sections). The app downloads from the mirror (the author's URL is the fallback for ShortFuse's add-on), refuses a
   size or SHA-256 mismatch, checks it is a PE file, and keeps it in the library like an import. Imports stay possible and a
   Settings switch turns each download off. If the source ever has to change, it is a catalog edit, not an app release.
@@ -51,7 +51,7 @@ Each component has exactly these parts. A part that doesn't apply is explicitly 
   (`ComponentStore.DownloadCatalogBuildAsync`, same checks and library as the auto-check, works with the switch off), then selects it as
   that pick. A refused or offline download only logs and sets the status; the pick stays as it was. The "newest fetched" markers
   (`CatalogDlssNrFetched`, `CatalogLecramFetched`, the RenoDX `CatalogSha`) and the default are only touched by the newest check or by the
-  picker the user used. The private build (`BuildFlags.LecramChannel`) offers no Lecram downloads, as its auto-check skips the mirror too.
+  picker the user used. The private build (`BuildFlags.LecramChannel`) and, for now, the public build (`BuildFlags.LecramCatalog` off) offer no Lecram downloads (`BuildFlags.LecramCatalogOff`); the auto-check skips the mirror too.
 - Owner-only conveniences that a public build must not have (today: fetching Lecram's paid builds from his channel)
   sit behind a compile-time switch (`-p:<Name>=true`, default off, `BuildFlags.<Name>`), are compiled in both variants
   and tested in both. Public releases build with the switch off; `tools/build-private.ps1` builds the private

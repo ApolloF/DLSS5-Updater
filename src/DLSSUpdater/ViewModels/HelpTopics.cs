@@ -16,7 +16,7 @@ public static class HelpTopics
 {
     internal static string LecramSourceIntro(bool channelEnabled) => channelEnabled
         ? "Lecram v11 builds are fetched from the author's public MediaFire channel during update checks. In Local components, turn automatic checks on or off, use Check now and see the last result. Older builds can still be imported. "
-        : "Lecram's builds are downloaded and installed automatically from the app's catalog during update checks; the file itself tells v10 from v11. In Local components you can turn that off or import a build (dlss5-nr.addon64 or renodx-dlss5.addon64). ";
+        : "Lecram's builds are import only: get new ones from the author's page and import them in Local components (dlss5-nr.addon64 or renodx-dlss5.addon64); the file itself tells v10 from v11. ";
 
     internal static string LecramUpdates(bool channelEnabled) => channelEnabled
         ? "The public MediaFire folder is the same source used by the author's DLSS5-NR-Setup installer. " +
@@ -24,10 +24,9 @@ public static class HelpTopics
           "Only dlss5-nr.addon64 is extracted; downloaded installers are never run and are removed afterwards. Channel moves are followed once. " +
           "Builds enter the existing library and only a newer build becomes its default. Games keep their installed build until you choose to change it. " +
           "Offline or failed checks keep the library. New builds can have options this app does not list; tune those in the ReShade overlay."
-        : "Lecram's builds are downloaded and installed automatically from the app's catalog during update checks. Each is checked against its SHA-256 and size first. " +
-          "You can also import a build in Local components (the add-on file itself; extract archives first). " +
+        : "Lecram's builds are import only: the app does not download them. Get a new build from the author's page and import it in Local components (the add-on file itself; extract archives first). " +
           "Builds enter the existing library and only a newer build becomes its default. Games keep their installed build until you choose to change it. " +
-          "Older catalog builds appear in the build pickers marked download; picking one downloads it first. Builds already in the library keep working. New builds can have options this app does not list; tune those in the ReShade overlay.";
+          "Builds already in the library keep working. New builds can have options this app does not list; tune those in the ReShade overlay.";
 
     public static readonly HelpTopic[] All =
     [
@@ -86,7 +85,7 @@ public static class HelpTopics
             "ShortFuse's renodx-dlss.addon64 is imported the same way and only accepted when the file identifies itself as renodx-dlss.addon64; every import stays in a library of builds, with a default here, an optional pick per game and your own name per build. " +
             "Deep Fried Chicken is imported from its extracted release folder or its 64-bit folder (Folder…), from deep-fried-chicken.addon64 in that folder or from a .zip of the release (Import…); the NGX bridge deep-fried-chicken-nvngx.dll must be beside the add-on. From 4.x the whole 64-bit folder is taken, as the package's README asks. A .7z can't be read: extract it first. " +
             "Each import is kept as a build of its own, so several DFC versions sit side by side; importing the same add-on again replaces that build's files. The default is Newest unless you pick a build. " +
-            "Lecram's DLSS5 add-on is downloaded and installed automatically (or imported) as renodx-dlss5.addon64 (v10 and older) or dlss5-nr.addon64 (v11 and newer); all builds are kept side by side and each game picks its own."),
+            "Lecram's DLSS5 add-on is imported (the app does not download it) as renodx-dlss5.addon64 (v10 and older) or dlss5-nr.addon64 (v11 and newer); all builds are kept side by side and each game picks its own."),
         new("dfc", "General", "Deep Fried Chicken", "Closed-source ReShade add-on for DLSS neural rendering; you import your own copy.",
             "Deep Fried Chicken (DFC) is a closed-source ReShade add-on that runs NVIDIA DLSS neural rendering. 2.x needs a game with native DLSS; 4.x and newer also run in games without their own DLSS (see Deep Fried Chicken without DLSS). " +
             "Its licence is personal use only, so this app never downloads or redistributes it: you import your own copy (add-on, NGX bridge and default config) in Local components, and the files are copied into games unchanged. " +
@@ -487,7 +486,7 @@ public static class HelpTopics
             "Needs ReShade + add-ons mode, ReShade 6+ with add-on support, a game with its own DLSS and the NR runtime. " +
             "It is one NR route: next to Lecram, GITC Uplift or Deep Fried Chicken it shows a warning and Install asks you to confirm. With Lecram, NR then runs twice."),
         new("comp-lecram", "Components", "Lecram DLSS5 add-on", "Lecram's ReShade add-on that runs DLSS neural rendering; one NR route per game.",
-            "Lecram's ReShade add-on that runs DLSS neural rendering itself: renodx-dlss5.addon64 (v10 and older) or dlss5-nr.addon64 (v11). The app downloads and installs it automatically, or you import it; the dropdown picks the build. " +
+            "Lecram's ReShade add-on that runs DLSS neural rendering itself: renodx-dlss5.addon64 (v10 and older) or dlss5-nr.addon64 (v11). Import only: you import it, and the dropdown picks the build. " +
             "Needs ReShade + add-ons mode, ReShade 6+ with add-on support, a game with its own DLSS and the NR runtime. " +
             "It is one NR route: next to another one it shows a warning and Install asks you to confirm. Next to ShortFuse's add-on NR then runs twice."),
         new("comp-dlss", "Components", "DLSS (SR · RR · FG)", "NVIDIA's DLSS files (SR, RR, FG) for the game; the game's own files are backed up first.",
@@ -596,7 +595,7 @@ public static class HelpTopics
         ["add-missing"] = "Leave on. It only adds a file to games that have none, and Uninstall removes it again.",
         ["ini-mode"] = "Keep game settings for everyday use: updates never undo tuning you did in-game. Apply app settings once after you changed something here and want " +
                        "it everywhere, then switch back. Fresh config when a mod's config got messy or a new release changed a lot.",
-        ["local-components"] = "The NR runtime is downloaded automatically; import any other nvngx_dlssnr.dll to keep it in the local library too. Choose the default here or a version on a game, then use Switch NR. Switch back restores its previous file. The ShortFuse and Lecram add-ons and Deep Fried Chicken keep a library too: downloaded or imported builds all stay, pick the default, and name builds yourself.",
+        ["local-components"] = "The NR runtime is downloaded automatically; import any other nvngx_dlssnr.dll to keep it in the local library too. Choose the default here or a version on a game, then use Switch NR. Switch back restores its previous file. The ShortFuse and Lecram add-ons and Deep Fried Chicken keep a library too: downloaded or imported builds all stay (Lecram's add-on is import only), pick the default, and name builds yourself.",
         ["keybinds"] = "Pick keys the game doesn't use: Delete, Insert, End, Page Up/Down and \\ are usually free. Avoid Home if you use ReShade's default overlay key.",
         ["skip-tutorial"] = "On, unless you are new to ReShade.",
         ["performance-mode"] = "Off while you set up effects, on for playing. With only add-ons (RenoDX, MFG Unlock) and no effects it makes no difference.",

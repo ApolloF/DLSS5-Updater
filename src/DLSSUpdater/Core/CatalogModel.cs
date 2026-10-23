@@ -20,7 +20,7 @@ public sealed class CatalogSections
     public CatalogOptiCompat? OptiscalerCompat { get; set; }
     /// <summary>ShortFuse's renodx-dlss add-on: hash-checked builds, downloaded from the catalog mirror (the author's URL is the fallback).</summary>
     public CatalogRenodxDlss? RenodxDlss { get; set; }
-    /// <summary>nvngx_dlssnr.dll and Lecram's DLSS5 add-on: raw binaries in the catalog mirror, downloaded and installed automatically.</summary>
+    /// <summary>nvngx_dlssnr.dll and Lecram's DLSS5 add-on: raw binaries in the catalog mirror; nvngx_dlssnr.dll is downloaded and installed automatically, Lecram's add-on is import-only for now (BuildFlags.LecramCatalog).</summary>
     public CatalogNeural? Neural { get; set; }
     /// <summary>ReLimiter and Display Commander add-on files (ReLimiter mirrored, Display Commander pinned to the author's URL).</summary>
     public CatalogFrameLimiters? FrameLimiters { get; set; }

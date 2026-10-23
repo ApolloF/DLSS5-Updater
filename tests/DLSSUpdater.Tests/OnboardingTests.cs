@@ -72,14 +72,25 @@ public sealed class OnboardingTests : IDisposable
     public void LecramTexts_SayWhereTheBuildsComeFrom()
     {
         Assert.Contains("fetched automatically", OnboardingViewModel.LecramHint(true));
-        Assert.Contains("installed automatically", OnboardingViewModel.LecramHint(false));
-        Assert.DoesNotContain("fetch", OnboardingViewModel.LecramHint(false));
+        Assert.Contains("Import only", OnboardingViewModel.LecramHint(false));
+        Assert.DoesNotContain("automatically", OnboardingViewModel.LecramHint(false));
         Assert.Contains("MediaFire", HelpTopics.LecramUpdates(true));
         Assert.DoesNotContain("MediaFire", HelpTopics.LecramUpdates(false));
         Assert.DoesNotContain("MediaFire", HelpTopics.LecramSourceIntro(false));
-        Assert.Contains("installed automatically", HelpTopics.LecramSourceIntro(false));
+        Assert.Contains("import only", HelpTopics.LecramSourceIntro(false));
+        Assert.Contains("import only", HelpTopics.LecramUpdates(false));
+        Assert.DoesNotContain("automatically", HelpTopics.LecramSourceIntro(false));
+        Assert.DoesNotContain("automatically", HelpTopics.LecramUpdates(false));
+        Assert.DoesNotContain("automatically", AddonLibraryViewModel.NoLecramBuilds(false));
         Assert.DoesNotContain("Check now", AddonLibraryViewModel.NoLecramBuilds(false));
         Assert.Contains("Check now", AddonLibraryViewModel.NoLecramBuilds(true));
+    }
+
+    [Fact]
+    public void LecramCatalogDownloads_AreOffInEveryBuildForNow()
+    {
+        Assert.False(BuildFlags.LecramCatalog);
+        Assert.True(BuildFlags.LecramCatalogOff);
     }
 
     [Theory]

@@ -93,7 +93,7 @@ Legend for methods = section 7 letters. "SR" = upscaling gain. Items in [] are o
 | 15 | Game on **RenoDX games-index** (`steam_appid` match, `compatibility: working`) | additionally offer RenoDX HDR mod (`renodx-<id>.addon64`) | independent of upscaling; ensure DX11/12 and `architecture` match |
 | 16 | Game on **Luma wiki** (DX11 mods) | offer Luma mod + (optionally) its DLSS/FSR option; do not stack with RenoDX HDR | DX11 only |
 | 17 | Game on **OptiScaler "Hudfix-incompatible"** | do not offer OptiFG; offer native FG route (row 4) or I | 24 titles list |
-| 18 | OptiScaler already present (`OptiScaler.ini`) or any `renodx-dlss5` / DFC / Alex's Toolkit / DX11 bridge | enforce "one neural consumer": refuse to add a second; stock OptiScaler blocks Feeder consumers; only DLSS-NR forks cooperate | DFC silently does nothing if conflict |
+| 18 | OptiScaler already present (`OptiScaler.ini`) or any `renodx-dlss5` / DFC / Alex's Toolkit / DX11 bridge | enforce "one neural consumer": an install replaces the add-ons it doesn't keep (the neural method reuses the add-on already in the game), so only a DX11 bridge left in the folder is warned about; stock OptiScaler blocks Feeder consumers; only DLSS-NR forks cooperate | DFC silently does nothing if conflict |
 | 19 | Non-NVIDIA GPU (AMD/Intel) | **E** only (FSR/XeSS inputs; spoof DXGI or OptiPatcher if game has DLSS-only input); **H/J/B/C/D/F** unavailable | OptiScaler FSR4 officially RDNA3/4 |
 | 20 | Anti-cheat marker or protected Store install | **none** (show reason); optional frame limiter via driver profile | matches existing `GameInspector` behaviour |
 

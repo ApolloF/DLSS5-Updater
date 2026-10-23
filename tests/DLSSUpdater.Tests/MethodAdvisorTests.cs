@@ -471,18 +471,24 @@ public sealed class MethodAdvisorTests
     }
 
     [Fact]
-    public void Row18_AnAddonOfOurOwn_IsReplacedNotRefused()
+    public void Row18_AnAddonOfOurOwn_IsKeptByTheNeuralMethod_AndNothingIsWarned()
     {
-        var input = Input(Game(dlss: true)) with { InstalledRoutes = [NrAddon.RenoDx] };
+        var input = Input(Game(dlss: true)) with { InstalledRoutes = [NrAddon.Lecram], Imported = new HashSet<string> { ComponentRegistry.DlssNr, ComponentRegistry.RenoDx, ComponentRegistry.Lecram } };
 
         var a = MethodAdvisor.Advise(input);
 
         Assert.Contains(18, a.Rows);
-        Assert.NotEqual(Availability.NotPossible, Option(a, Method.NeuralAddon).Availability);
+        var neural = Option(a, Method.NeuralAddon);
+        Assert.Equal(Availability.Available, neural.Availability);
+        Assert.Equal(NrAddon.Lecram, neural.Route);
+        Assert.Contains(ComponentRegistry.Lecram, neural.Components);
+        Assert.DoesNotContain(ComponentRegistry.RenoDx, neural.Components);
+        foreach (var m in new[] { Method.NeuralAddon, Method.OptiScalerNr, Method.OptiScaler })
+            Assert.Null(Option(a, m).Warning);
     }
 
     [Fact]
-    public void Row18_OuterWilds_UpliftInstalled_FeederNeedsSetupAndClashes_SoNothingIsRecommended()
+    public void Row18_OuterWilds_UpliftInstalled_FeederNeedsSetup_ButTheInstallReplacesUplift_SoNoWarning()
     {
         var game = Game(GraphicsApis.Dx11, engine: GameEngine.Unity, name: "Outer Wilds");
         var input = Input(game) with { InstalledRoutes = [NrAddon.Uplift] };
@@ -494,32 +500,29 @@ public sealed class MethodAdvisorTests
         var feeder = Option(a, Method.Feeder);
         Assert.Equal(Availability.NeedsSetup, feeder.Availability);
         Assert.Contains(feeder.Needs, n => n.Contains("motion-vector"));
-        Assert.Equal(NrAddons.Conflict(NrAddon.Dfc, [NrAddon.Uplift]), feeder.Warning![..^" Installing it asks you to confirm.".Length]);
-        Assert.Null(a.Top);
+        Assert.Null(feeder.Warning);
     }
 
     [Fact]
-    public void Row18_UpliftInstalled_AUpliftRouteIsNotAClash_ButOtherNeuralRoutesAre()
+    public void Row18_UpliftInstalled_NeuralMethodKeepsUplift_AndNoMethodIsWarned()
     {
         var input = Input(Game(dlss: true)) with { InstalledRoutes = [NrAddon.Uplift] };
 
         var a = MethodAdvisor.Advise(input);
 
-        Assert.Null(Option(a, Method.NeuralAddon).Warning);
-        Assert.Contains("GITC Uplift", Option(a, Method.OptiScalerNr).Warning);
-        Assert.Contains("GITC Uplift", Option(a, Method.OptiScaler).Warning);
-        Assert.Equal(Method.DlssUpdate, a.Top!.Method);
+        Assert.Equal(NrAddon.Uplift, Option(a, Method.NeuralAddon).Route);
+        Assert.All(a.Methods, m => Assert.Null(m.Warning));
     }
 
     [Fact]
-    public void Row18_AnImportedAddonThatIsNotTheInstalledOne_IsWarned_AndNeverRecommendedOverAnAvailableMethod()
+    public void Row18_AnImportedAddonThatIsNotTheInstalledOne_IsNotUsed_TheInstalledOneStays()
     {
         var input = Input(Game(dlss: true)) with { InstalledRoutes = [NrAddon.Uplift], Imported = new HashSet<string> { ComponentRegistry.DlssNr, ComponentRegistry.RenoDx } };
 
-        var a = MethodAdvisor.Advise(input);
+        var neural = Option(MethodAdvisor.Advise(input), Method.NeuralAddon);
 
-        Assert.Contains("ShortFuse", Option(a, Method.NeuralAddon).Warning);
-        Assert.Equal(Method.DlssUpdate, a.Top!.Method);
+        Assert.Equal(NrAddon.Uplift, neural.Route);
+        Assert.Null(neural.Warning);
     }
 
     [Fact]
@@ -632,6 +635,38 @@ public sealed class MethodAdvisorTests
         Assert.All(a.Methods, m => Assert.False(new DLSSUpdater.ViewModels.MethodRow(m, false, a.Caution).HasWarning));
         var other = a.Methods.First() with { Warning = "Something else" };
         Assert.Equal("Something else", new DLSSUpdater.ViewModels.MethodRow(other, false, a.Caution).Warning);
+    }
+
+    [Fact]
+    public void MethodRow_AdviceOnlyMethods_AreClickableCardsThatSayWhereTheyAreInstalled()
+    {
+        var advice = new MethodOption(Method.RenoDxHdr, "RenoDX HDR mod", Availability.Available, "reason", [], [], null, false);
+        var row = new DLSSUpdater.ViewModels.MethodRow(advice, false);
+
+        Assert.True(row.IsAdviceOnly);
+        Assert.True(row.IsClickable);
+        Assert.False(row.IsSelectable);
+        Assert.Equal("Own section below", row.StateText);
+        Assert.Contains("own section", row.CardTip);
+        Assert.True(new DLSSUpdater.ViewModels.MethodRow(advice with { Availability = Availability.NeedsSetup }, false).IsAdviceOnly);
+    }
+
+    [Fact]
+    public void MethodRow_MethodsWithComponents_AndDimOnes_KeepTheirBehaviour()
+    {
+        var picked = new MethodOption(Method.DlssUpdate, "DLSS", Availability.Available, "reason", [ComponentRegistry.Dlss], [], null, false);
+        var row = new DLSSUpdater.ViewModels.MethodRow(picked, false);
+        Assert.False(row.IsAdviceOnly);
+        Assert.True(row.IsClickable);
+        Assert.Equal("Available", row.StateText);
+
+        foreach (var a in new[] { Availability.NotPossible, Availability.Coming })
+        {
+            var dim = new DLSSUpdater.ViewModels.MethodRow(picked with { Availability = a, Components = [] }, false);
+            Assert.False(dim.IsClickable);
+            Assert.False(dim.IsAdviceOnly);
+            Assert.True(dim.IsDim);
+        }
     }
 
     [Fact]

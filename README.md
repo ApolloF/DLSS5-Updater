@@ -53,7 +53,7 @@ Settings for all games. Every option has a short explanation, and the help butto
 | [GITC Uplift](https://github.com/ghostinthecamera/GITC-Uplift) | A ReShade add-on that runs DLSS neural rendering. Replaces the other neural rendering routes. | Downloaded from GitHub. |
 | NVIDIA DLSS neural rendering runtime | `nvngx_dlssnr.dll`, the file the neural rendering routes run on. | Downloaded and installed automatically. You can also import your own. |
 | [RenoDX DLSS add-on](https://github.com/clshortfuse/renodx) | ShortFuse's ReShade add-on for neural rendering. | Downloaded and installed automatically, or imported. |
-| Lecram DLSS5 add-on | A ReShade add-on for neural rendering by Lecram. | Downloaded and installed automatically, or imported. |
+| Lecram DLSS5 add-on | A ReShade add-on for neural rendering by Lecram. | You import it yourself; get new builds from the author's page. |
 | Deep Fried Chicken | A neural rendering add-on. Its licence allows personal use only. | You import the extracted release folder (or a .zip) yourself. Every import is kept, and each game can use its own version. |
 | DLSS5-Feeder | An MIT ReShade add-on that makes the DLSS calls for games without DLSS, so Deep Fried Chicken can run in them. DLAA only. | Downloaded from its GitHub releases and checked against the SHA-256 GitHub publishes. Single-player games only. |
 | [RenoDX HDR mods](https://github.com/clshortfuse/renodx) | ShortFuse's and the community's per-game HDR mods, plus generic Unreal and Unity ones. ReShade add-ons. | From the catalog. |

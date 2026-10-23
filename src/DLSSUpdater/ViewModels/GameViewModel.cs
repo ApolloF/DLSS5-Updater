@@ -87,7 +87,7 @@ public sealed class Services
     public DxvkService? Dxvk { get; init; }
     /// <summary>The catalog builds of a component the library doesn't have; the build pickers list them as "· download". None in the demo or without a catalog.</summary>
     public IReadOnlyList<CatalogOffer> CatalogOffers(CatalogBuildKind kind) =>
-        Demo.Active || Catalog?.Document?.Sections is not { } sections ? [] : Store.OfferedBuilds(kind, sections, BuildFlags.LecramChannel);
+        Demo.Active || Catalog?.Document?.Sections is not { } sections ? [] : Store.OfferedBuilds(kind, sections, BuildFlags.LecramCatalogOff);
 
     /// <summary>The primary display's refresh rate for the frame-limit hint; 0 = unknown.</summary>
     public Func<int> RefreshHz { get; init; } = DisplayRefresh.Hz;

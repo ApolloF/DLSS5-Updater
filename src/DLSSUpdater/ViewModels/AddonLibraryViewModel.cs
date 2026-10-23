@@ -39,9 +39,9 @@ public sealed partial class AddonLibraryViewModel : ObservableObject
     /// <summary>Only Lecram has a channel, and only the private build is allowed to use it.</summary>
     internal static bool CanCheck(AddonKind kind, bool channelEnabled) => kind == AddonKind.Lecram && channelEnabled;
 
-    /// <summary>Lecram's row has the automatic download switch: the MediaFire check in the private build, the catalog mirror otherwise.</summary>
-    public bool HasAutoDownload => _kind == AddonKind.Lecram;
-    public string AutoDownloadLabel => CanCheckUpdates ? "Check for new builds automatically" : "Download Lecram's add-on from the catalog";
+    /// <summary>Lecram's row has the automatic check switch in the private build (MediaFire); public builds import it, so there is nothing to switch.</summary>
+    public bool HasAutoDownload => CanCheckUpdates;
+    public string AutoDownloadLabel => "Check for new builds automatically";
 
     /// <summary>Deep Fried Chicken ships as a folder: its row also imports the extracted release folder.</summary>
     public bool CanImportFolder => IsDfc;
@@ -103,11 +103,11 @@ public sealed partial class AddonLibraryViewModel : ObservableObject
     }
 
     /// <summary>The tooltip of the default picker; names the "· download" entries only where this add-on has them.</summary>
-    public string PickerTip => CatalogKind is null || (_kind == AddonKind.Lecram && BuildFlags.LecramChannel)
+    public string PickerTip => CatalogKind is null || (_kind == AddonKind.Lecram && BuildFlags.LecramCatalogOff)
         ? "Default build: games without their own pick install it"
         : "Default build: games without their own pick install it. Builds marked download are fetched when picked.";
 
-    /// <summary>The older catalog builds of this add-on; Deep Fried Chicken has none, and Lecram none in the private build.</summary>
+    /// <summary>The older catalog builds of this add-on; Deep Fried Chicken has none, and Lecram none while its catalog downloads are off (BuildFlags.LecramCatalogOff).</summary>
     private CatalogBuildKind? CatalogKind => _kind switch { AddonKind.RenoDx => CatalogBuildKind.RenoDx, AddonKind.Lecram => CatalogBuildKind.Lecram, _ => null };
 
     /// <summary>A "· download" entry picked as the default: the build comes first, then it becomes the default. If it doesn't come the list goes back to the current default.</summary>
@@ -121,13 +121,18 @@ public sealed partial class AddonLibraryViewModel : ObservableObject
     /// <summary>"Newest · 5.0.0 (2026-10-20)"; the build's own label may already end in a parenthesis, so no second pair.</summary>
     internal static string NewestLabel(string newestBuild) => $"Newest · {newestBuild}";
 
-    /// <summary>Deep Fried Chicken's licence forbids downloads, so new builds only come in by import. No author URL is known to the app, so there is no link.</summary>
-    public bool IsImportOnly => IsDfc;
-    public string ImportOnlyNote => "Import only: its licence doesn't allow downloads. Get new builds from the author's page.";
+    /// <summary>
+    /// Deep Fried Chicken's licence forbids downloads, and the public build imports Lecram's add-on, so new builds only come in by import.
+    /// No author URL is known to the app, so there is no link.
+    /// </summary>
+    public bool IsImportOnly => IsDfc || (_kind == AddonKind.Lecram && !CanCheckUpdates);
+    public string ImportOnlyNote => IsDfc
+        ? "Import only: its licence doesn't allow downloads. Get new builds from the author's page."
+        : "Import only: get new builds from the author's page.";
 
     internal static string NoLecramBuilds(bool channelEnabled) => channelEnabled
         ? $"No builds yet. Use Check now to fetch the latest v11 build, or import your own copy ({ComponentStore.Lecram10File} for v10 and older, {ComponentStore.Lecram11File} for v11 and newer)."
-        : $"No builds yet. They are downloaded and installed automatically at the next update check, or import the add-on ({ComponentStore.Lecram10File} for v10 and older, {ComponentStore.Lecram11File} for v11 and newer).";
+        : $"No builds yet. Import the add-on ({ComponentStore.Lecram10File} for v10 and older, {ComponentStore.Lecram11File} for v11 and newer).";
 
     private const string NoDfcBuilds =
         "Not imported. Its licence is personal use only, so import your own copy: extract the release and choose its folder (Folder…), " +

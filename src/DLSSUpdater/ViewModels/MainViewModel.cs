@@ -393,7 +393,7 @@ public sealed partial class MainViewModel : ObservableObject
         var fetch = new CatalogDownloader(Gh);
         await Run($"Downloading {name} {offer.Label}", async ct =>
         {
-            try { id = await S.Store.DownloadCatalogBuildAsync(kind, sections, offer.Sha256, fetch, TransferProgress(), BuildFlags.LecramChannel, ct); }
+            try { id = await S.Store.DownloadCatalogBuildAsync(kind, sections, offer.Sha256, fetch, TransferProgress(), BuildFlags.LecramCatalogOff, ct); }
             catch (Exception ex) when (!ct.IsCancellationRequested && ex is HttpRequestException or IOException or UnauthorizedAccessException or InvalidDataException)
             { Log.Warn($"{name} {offer.Label} was not downloaded ({ex.Message})"); }
         });
@@ -410,8 +410,8 @@ public sealed partial class MainViewModel : ObservableObject
     }
 
     /// <summary>
-    /// Refreshes the mod catalog, then downloads what it has newer: ShortFuse's DLSS add-on, nvngx_dlssnr.dll and (public build)
-    /// Lecram's add-on. Offline or refused downloads are logged and change nothing.
+    /// Refreshes the mod catalog, then downloads what it has newer: ShortFuse's DLSS add-on and nvngx_dlssnr.dll
+    /// (Lecram's add-on too when <see cref="BuildFlags.LecramCatalog"/> is on). Offline or refused downloads are logged and change nothing.
     /// </summary>
     private async Task CheckCatalogAsync(CancellationToken ct)
     {
@@ -423,8 +423,8 @@ public sealed partial class MainViewModel : ObservableObject
             var sections = catalog.Document?.Sections;
             var build = await S.Store.CheckRenoDxCatalogAsync(S.Settings, sections?.RenodxDlss, fetch, TransferProgress(), ct);
             var nr = await S.Store.CheckDlssNrCatalogAsync(S.Settings, sections?.Neural?.Dlssnr, fetch, TransferProgress(), ct);
-            // The private build keeps its own MediaFire channel for Lecram.
-            var lecram = BuildFlags.LecramChannel ? null : await S.Store.CheckLecramCatalogAsync(S.Settings, sections?.Neural?.Lecram, fetch, TransferProgress(), ct);
+            // The private build keeps its own MediaFire channel for Lecram; public builds import it (BuildFlags.LecramCatalog).
+            var lecram = BuildFlags.LecramCatalogOff ? null : await S.Store.CheckLecramCatalogAsync(S.Settings, sections?.Neural?.Lecram, fetch, TransferProgress(), ct);
             if (build is null && nr is null && lecram is null) return;
             S.Settings.Save();
             await RefreshLocalComponentsAsync();

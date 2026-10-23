@@ -451,15 +451,17 @@ public static class MethodAdvisor
                 if (list[i].Method is Method.OptiScaler or Method.OptiScalerNr)
                     list[i] = list[i] with { Reason = list[i].Reason + " OptiFG can't work here: OptiScaler's wiki lists the game as HUDfix-incompatible, use the game's own frame generation or Smooth Motion." };
         }
-        // Row 18: a second neural consumer. A method whose route clashes with one already in the game (NrAddons.Conflict, the rule the
-        // game page's conflict banner uses) carries the reason as a warning: installing it asks for a confirmation and it is never recommended.
+        // Row 18: a second neural consumer. An install replaces the routes it doesn't keep (Installer.RoutesOf counts only the new selection
+        // plus the DX11 bridge), so only the bridge is a clash the install would leave. A method whose route clashes with it
+        // (NrAddons.Conflict, the rule the game page's conflict banner uses) carries the reason as a warning: installing it asks
+        // for a confirmation and it is never recommended.
         if (c.In.InstalledRoutes.Count > 0)
         {
             rows.Add(18);
-            var tail = c.In.InstalledRoutes.Contains(NrAddon.Bridge) ? " Installing it asks you to confirm, or remove the bridge files first." : " Installing it asks you to confirm.";
+            var left = c.In.InstalledRoutes.Where(r => r == NrAddon.Bridge).ToList();
             for (var i = 0; i < list.Count; i++)
-                if (list[i].Route is { } route && NrAddons.Conflict(route, c.In.InstalledRoutes) is { } why)
-                    list[i] = list[i] with { Warning = why + tail };
+                if (list[i].Route is { } route && NrAddons.Conflict(route, left) is { } why)
+                    list[i] = list[i] with { Warning = why + " Installing it asks you to confirm, or remove the bridge files first." };
         }
     }
 
@@ -497,8 +499,10 @@ public static class MethodAdvisor
 
     private static MethodOption Neural(Ctx c, string reason, string? extraNeed, bool unverified = false, string? unverifiedWhy = null)
     {
-        // The first add-on the user has imported; GITC Uplift downloads itself when none is.
-        var addon = new[] { ComponentRegistry.RenoDx, ComponentRegistry.Lecram, ComponentRegistry.Dfc }.FirstOrDefault(c.Has) ?? ComponentRegistry.Uplift;
+        // The add-on already in the game stays (the install keeps it); otherwise the first one the user has imported, and GITC Uplift downloads itself when none is.
+        var addon = new[] { (NrAddon.RenoDx, ComponentRegistry.RenoDx), (NrAddon.Lecram, ComponentRegistry.Lecram), (NrAddon.Dfc, ComponentRegistry.Dfc), (NrAddon.Uplift, ComponentRegistry.Uplift) }
+            .Where(x => c.In.InstalledRoutes.Contains(x.Item1)).Select(x => x.Item2).FirstOrDefault()
+            ?? new[] { ComponentRegistry.RenoDx, ComponentRegistry.Lecram, ComponentRegistry.Dfc }.FirstOrDefault(c.Has) ?? ComponentRegistry.Uplift;
         var needs = new List<string>();
         if (NrRuntimeNeed(c) is { } nr) needs.Add(nr);
         if (extraNeed is not null) needs.Add(extraNeed);

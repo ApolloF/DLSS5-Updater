@@ -13,4 +13,13 @@ public static class BuildFlags
 #else
         false;
 #endif
+
+    /// <summary>
+    /// Off for now: public builds import Lecram and never download it from the catalog mirror (no automatic check, no "· download"
+    /// entries in the build pickers). Set it to true to bring the public download back; the code behind it stays.
+    /// </summary>
+    public static readonly bool LecramCatalog = false;
+
+    /// <summary>True when this build fetches no Lecram builds from the catalog mirror: the private build has its own channel, the public one imports.</summary>
+    public static bool LecramCatalogOff => LecramChannel || !LecramCatalog;
 }

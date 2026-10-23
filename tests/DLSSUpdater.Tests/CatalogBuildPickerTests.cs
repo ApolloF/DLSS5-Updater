@@ -417,7 +417,7 @@ public sealed class CatalogBuildPickerTests : IDisposable
     }
 
     [Fact]
-    public async Task Lecram_and_shortfuse_picks_on_the_game_page_save_the_library_id()
+    public async Task Lecram_has_no_download_entries_and_a_shortfuse_pick_on_the_game_page_saves_the_library_id()
     {
         var lecram = Entry(ComponentStore.Lecram11File, "v11.0.0-beta.5", LecramV11("v11.0.0-beta.5"));
         var sf = RenoDxEntry(new Version(0, 2026, 928, 1), "26.0928.1");
@@ -430,12 +430,13 @@ public sealed class CatalogBuildPickerTests : IDisposable
             return true;
         }, sections);
 
-        vm.LecramChoice = vm.LecramChoices.Single(c => CatalogOffer.IsOffer(c.Tag));
+        // Lecram is import only in the public build (BuildFlags.LecramCatalog is off), so the picker offers no download.
+        Assert.DoesNotContain(vm.LecramChoices, c => CatalogOffer.IsOffer(c.Tag));
         vm.RenoDxChoice = vm.RenoDxChoices.Single(c => CatalogOffer.IsOffer(c.Tag));
-        await WaitFor(() => _settings.Games.GetValueOrDefault(vm.Id) is { LecramId: not null, RenoDxId: not null });
+        await WaitFor(() => _settings.Games.GetValueOrDefault(vm.Id) is { RenoDxId: not null });
 
         var over = _settings.Games[vm.Id];
-        Assert.Equal(_store.LecramBuilds.Single().Id, over.LecramId);
+        Assert.Null(over.LecramId);
         Assert.Equal(_store.RenoDxBuilds.Single().Id, over.RenoDxId);
         Assert.Null(_settings.LecramId);
         Assert.Null(_settings.RenoDxId);

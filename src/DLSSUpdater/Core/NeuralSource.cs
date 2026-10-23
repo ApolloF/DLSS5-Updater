@@ -1,7 +1,7 @@
 namespace DLSSUpdater.Core;
 
 /// <summary>
-/// nvngx_dlssnr.dll and Lecram's DLSS5 add-on come from the catalog mirror as raw binaries: downloaded, checked (size, SHA-256,
+/// nvngx_dlssnr.dll and, while BuildFlags.LecramCatalog is on (off for now), Lecram's DLSS5 add-on come from the catalog mirror as raw binaries: downloaded, checked (size, SHA-256,
 /// PE header) and kept in the same libraries an import fills, so "Newest", per-game picks and imports work as before.
 /// Only the catalog's newest build is fetched on its own; older ones are fetched when the user picks one (CatalogBuildPicker.cs). Offline or
 /// refused downloads are logged and change nothing.
