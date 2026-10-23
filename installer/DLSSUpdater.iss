@@ -1,18 +1,27 @@
 ; Inno Setup script for the installable DLSS5 Updater. Build after `dotnet publish`:
-;   iscc /DAppVersion=2.2.0 installer\DLSSUpdater.iss
+;   iscc /DAppVersion=3.0.0 installer\DLSSUpdater.iss
 ; The portable build is the same single-file publish\DLSS5Updater.exe, released as is.
+; The owner's private build (tools\build-private.ps1) adds /DPrivate: it packages publish-private\DLSS5Updater.exe into
+; publish-private\DLSS5Updater-Setup-<version>-private.exe. Same AppId, so it installs over the public app and back.
 
 #ifndef AppVersion
   #define AppVersion "0.0.0"
 #endif
 #define AppName "DLSS5 Updater"
 #define AppExe "DLSS5Updater.exe"
+#ifdef Private
+  #define SourceDir "..\publish-private"
+  #define Suffix "-private"
+#else
+  #define SourceDir "..\publish"
+  #define Suffix ""
+#endif
 
 [Setup]
 AppId={{6F0B8E53-1C2D-4B7A-9E4F-3A5D2C8B1E07}
 AppName={#AppName}
 AppVersion={#AppVersion}
-AppVerName={#AppName} {#AppVersion}
+AppVerName={#AppName} {#AppVersion}{#Suffix}
 AppPublisher=ApolloF
 AppPublisherURL=https://github.com/ApolloF/DLSS5-Updater
 AppSupportURL=https://github.com/ApolloF/DLSS5-Updater/issues
@@ -31,8 +40,8 @@ MinVersion=10.0
 SetupIconFile=..\src\DLSSUpdater\Assets\icon.ico
 UninstallDisplayIcon={app}\{#AppExe}
 UninstallDisplayName={#AppName}
-OutputDir=..\publish
-OutputBaseFilename=DLSS5Updater-Setup-{#AppVersion}
+OutputDir={#SourceDir}
+OutputBaseFilename=DLSS5Updater-Setup-{#AppVersion}{#Suffix}
 Compression=lzma2/max
 SolidCompression=yes
 WizardStyle=modern
@@ -53,7 +62,7 @@ Type: files; Name: "{autoprograms}\DLSS Updater\DLSS Updater.lnk"
 Type: dirifempty; Name: "{autoprograms}\DLSS Updater"
 
 [Files]
-Source: "..\publish\{#AppExe}"; DestDir: "{app}"; Flags: ignoreversion
+Source: "{#SourceDir}\{#AppExe}"; DestDir: "{app}"; Flags: ignoreversion
 
 [Icons]
 Name: "{group}\{#AppName}"; Filename: "{app}\{#AppExe}"
