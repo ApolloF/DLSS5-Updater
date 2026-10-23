@@ -11,19 +11,28 @@ public sealed partial class IniFile
 {
     private readonly List<string> _lines;
     private readonly string _newline;
+    /// <summary>False when the text this was read from had no newline after its last line; saving then leaves it off again.</summary>
+    private readonly bool _endsWithNewline;
 
-    private IniFile(List<string> lines, string newline)
+    private IniFile(List<string> lines, string newline, bool endsWithNewline)
     {
         _lines = lines;
         _newline = newline;
+        _endsWithNewline = endsWithNewline;
     }
 
-    public static IniFile Parse(string text)
+    public static IniFile Parse(string text) => Parse(text, keepFinalNewlineAsIs: false);
+
+    /// <summary>
+    /// <paramref name="keepFinalNewlineAsIs"/>: saving leaves off the newline after the last line when the text had none, so taking out
+    /// what was added gives back the original text byte for byte (the generic component record's config edits need that).
+    /// </summary>
+    public static IniFile Parse(string text, bool keepFinalNewlineAsIs)
     {
         var newline = text.Contains("\r\n") ? "\r\n" : "\n";
         var lines = text.Replace("\r\n", "\n").Split('\n').ToList();
         if (lines.Count > 0 && lines[^1].Length == 0) lines.RemoveAt(lines.Count - 1);
-        return new IniFile(lines, newline);
+        return new IniFile(lines, newline, !keepFinalNewlineAsIs || text.Length == 0 || text.EndsWith('\n'));
     }
 
     public static IniFile Load(string path) => Parse(File.ReadAllText(path));
@@ -31,7 +40,11 @@ public sealed partial class IniFile
     public override string ToString()
     {
         var sb = new StringBuilder();
-        foreach (var l in _lines) sb.Append(l).Append(_newline);
+        for (var i = 0; i < _lines.Count; i++)
+        {
+            sb.Append(_lines[i]);
+            if (i < _lines.Count - 1 || _endsWithNewline) sb.Append(_newline);
+        }
         return sb.ToString();
     }
 
@@ -63,6 +76,18 @@ public sealed partial class IniFile
             return;
         }
 
+        if (section.Length == 0)
+        {
+            var (first, top) = TopRegion();
+            var at = first;
+            for (var i = first; i < top; i++)
+                if (TryParseKey(_lines[i], out _, out _)) at = i + 1;
+            // Without a key yet it goes after the leading comments and blank lines (a file of only comments gets it at the end).
+            if (at == first) at = top;
+            _lines.Insert(at, $"{key} = {value}");
+            return;
+        }
+
         var (start, end) = FindSection(section);
         if (start < 0)
         {
@@ -88,6 +113,24 @@ public sealed partial class IniFile
         return true;
     }
 
+    /// <summary>The empty name stands for the keys above the first header (dxvk.conf has no sections at all).</summary>
+    public bool HasSection(string section) => section.Length == 0 || FindSection(section).Start >= 0;
+
+    /// <summary>
+    /// Removes a section that holds no key (comments don't count) with its header, and the blank line that was put in front of
+    /// it when it is the last section: what is left after taking out the keys of a section the app had added.
+    /// </summary>
+    public bool RemoveSectionIfEmpty(string section)
+    {
+        var (start, end) = FindSection(section);
+        if (start < 0) return false;
+        for (var i = start + 1; i < end; i++)
+            if (TryParseKey(_lines[i], out _, out _)) return false;
+        _lines.RemoveRange(start, end - start);
+        if (start == _lines.Count && start > 0 && _lines[start - 1].Trim().Length == 0) _lines.RemoveAt(start - 1);
+        return true;
+    }
+
     /// <summary>Deletes every occurrence of the section, including its comments and keys.</summary>
     public bool RemoveSection(string section)
     {
@@ -100,11 +143,25 @@ public sealed partial class IniFile
         return removed;
     }
 
+    /// <summary>The lines above the first section header: [0, index of the header).</summary>
+    private (int First, int End) TopRegion()
+    {
+        for (var i = 0; i < _lines.Count; i++)
+            if (TryParseSection(_lines[i], out _)) return (0, i);
+        return (0, _lines.Count);
+    }
+
     private int FindKey(string section, string key)
     {
-        var (start, end) = FindSection(section);
-        if (start < 0) return -1;
-        for (var i = start + 1; i < end; i++)
+        int from, end;
+        if (section.Length == 0) (from, end) = TopRegion();
+        else
+        {
+            var (start, stop) = FindSection(section);
+            if (start < 0) return -1;
+            (from, end) = (start + 1, stop);
+        }
+        for (var i = from; i < end; i++)
             if (TryParseKey(_lines[i], out var k, out _) && k.Equals(key, StringComparison.OrdinalIgnoreCase))
                 return i;
         return -1;

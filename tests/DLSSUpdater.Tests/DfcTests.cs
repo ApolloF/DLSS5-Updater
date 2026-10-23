@@ -273,7 +273,7 @@ public sealed class DfcTests : IDisposable
     }
 
     [Fact]
-    public async Task Dfc_NeedsReShadeOnlyMode_AndExcludesRenoDx()
+    public async Task Dfc_NeedsReShadeOnlyMode_AndKeepsRenoDxWhenAlsoPicked()
     {
         _store.ImportDfc(Release());
         _store.ImportRenoDx(RenoDxAddon());
@@ -356,15 +356,14 @@ public sealed class DfcTests : IDisposable
         vm.Components.First(c => c.Key == "dfc").Enabled = true;
         var options = vm.BuildOptions(false, false);
         Assert.True(options.Dfc);
-        Assert.False(options.RenoDx);
+        Assert.True(options.RenoDx);
         Assert.True(options.DlssNr);
         Assert.True(options.ReShade);
-        Assert.False(vm.Components.First(c => c.Key == "renodx").Enabled);
+        Assert.NotNull(vm.ConflictWarning);
 
-        vm.Components.First(c => c.Key == "renodx").Enabled = true;
-        Assert.False(vm.Components.First(c => c.Key == "dfc").Enabled);
-        Assert.True(vm.BuildOptions(false, false).RenoDx);
-        Assert.False(vm.BuildOptions(false, false).Dfc);
+        vm.Components.First(c => c.Key == "renodx").Enabled = false;
+        Assert.True(vm.BuildOptions(false, false).Dfc);
+        Assert.Null(vm.ConflictWarning);
     }
 
     private static IniOverride O(string key, string value) => new(DfcConfig.Section, key, value);
@@ -1216,5 +1215,102 @@ public sealed class DfcTests : IDisposable
         Assert.Null(settings.Games[vm.Id].DfcId);
         Assert.Null(vm.BuildOptions(false, false).DfcId);
         Assert.True(Hud().IsAvailable);
+    }
+
+    // ---------- DLSS5-Feeder next to Deep Fried Chicken ----------
+
+    private const string FeederTag = "v1.19.0";
+
+    /// <summary>A Feeder build already in the library (what the download leaves), so the install needs no network.</summary>
+    private void SeedFeeder()
+    {
+        var dir = Path.Combine(FeederLibrary.Root, FeederTag);
+        foreach (var (rel, text) in new[]
+        {
+            ("dlss5-feed.addon64", "F64"), ("dlss5-feed.addon32", "F32"), (@"host64\dlss5-feed-host64.exe", "HOST"), (@"reshade-shaders\Shaders\DLSS5_Feed.fx", "FX"),
+        })
+        {
+            var path = Path.Combine(dir, "pkg", rel);
+            Directory.CreateDirectory(Path.GetDirectoryName(path)!);
+            File.WriteAllText(path, text);
+        }
+        File.WriteAllText(Path.Combine(dir, ".complete"),
+            System.Text.Json.JsonSerializer.Serialize(new CachedComponent { Tag = FeederTag, Fetched = DateTime.UtcNow }, JsonCtx.Default.CachedComponent));
+    }
+
+    [Fact]
+    public async Task Feeder_InstallsAfterDfc_InTheSameRun_AndUninstallLeavesTheGameAsItWas()
+    {
+        SeedDlss("v310.9.1", "NEW");
+        SeedFeeder();
+        _store.ImportDfc(Package());
+        var game = PlainGame();
+        var installer = new Installer(_store);
+
+        await installer.InstallAsync(game, PlainRoot, Dfc() with { Feeder = true, FeederId = FeederTag }, null, default);
+
+        Assert.Equal("F64", File.ReadAllText(P("dlss5-feed.addon64")));
+        Assert.Equal("FX", File.ReadAllText(P(@"reshade-shaders\Shaders\DLSS5_Feed.fx")));
+        Assert.True(File.Exists(P(ComponentStore.DfcFile)));
+        var m = InstallManifest.Read(PlainRoot)!;
+        Assert.True(m.Dfc);
+        Assert.Equal(FeederTag, m.Component(ComponentRegistry.Feeder)!.BuildId);
+        Assert.Contains("dlss5-feed.addon64", m.Files, StringComparer.OrdinalIgnoreCase);
+
+        // Installing again keeps both: DFC's own foreign-add-on sweep must not take Feeder's files, they are ours.
+        await installer.InstallAsync(PlainGame(), PlainRoot, Dfc() with { Feeder = true }, null, default);
+        Assert.Equal("F64", File.ReadAllText(P("dlss5-feed.addon64")));
+        Assert.NotNull(InstallManifest.Read(PlainRoot)!.Component(ComponentRegistry.Feeder));
+
+        await installer.UninstallAsync(game, PlainRoot, default);
+        Assert.Equal(["Game.exe"], Directory.EnumerateFileSystemEntries(PlainRoot).Select(Path.GetFileName));
+    }
+
+    [Fact]
+    public async Task Feeder_ARunWithoutIt_TakesItOut_AndDfcStays()
+    {
+        SeedDlss("v310.9.1", "NEW");
+        SeedFeeder();
+        _store.ImportDfc(Package());
+        var game = PlainGame();
+        var installer = new Installer(_store);
+        await installer.InstallAsync(game, PlainRoot, Dfc() with { Feeder = true }, null, default);
+
+        await installer.InstallAsync(PlainGame(), PlainRoot, Dfc(), null, default);
+
+        Assert.False(File.Exists(P("dlss5-feed.addon64")));
+        Assert.False(File.Exists(P(@"reshade-shaders\Shaders\DLSS5_Feed.fx")));
+        Assert.True(File.Exists(P(ComponentStore.DfcFile)));
+        Assert.Null(InstallManifest.Read(PlainRoot)!.Component(ComponentRegistry.Feeder));
+    }
+
+    [Fact]
+    public async Task Feeder_WithoutDfc_IsRefusedBeforeAnythingIsTouched()
+    {
+        SeedFeeder();
+        var game = PlainGame();
+        var installer = new Installer(_store);
+
+        var ex = await Assert.ThrowsAsync<InvalidOperationException>(() =>
+            installer.InstallAsync(game, PlainRoot, Dfc() with { Dfc = false, Feeder = true }, null, default));
+
+        Assert.Contains("DLSS5-Feeder needs one neural consumer", ex.Message);
+        Assert.Equal(["Game.exe"], Directory.EnumerateFileSystemEntries(PlainRoot).Select(Path.GetFileName));
+    }
+
+    [Fact]
+    public async Task Dfc_NextToAForeignDx11Bridge_NeedsConfirmation_WithTheOneConsumerReason()
+    {
+        _store.ImportDfc(Package());
+        var game = PlainGame();
+        File.WriteAllText(P("dlss5-bridge.addon64"), "BRIDGE");
+        var installer = new Installer(_store);
+
+        var ex = await Assert.ThrowsAsync<InvalidOperationException>(() => installer.InstallAsync(game, PlainRoot, Dfc(), null, default));
+
+        Assert.Contains("don't work well in the same game", ex.Message);
+        Assert.Contains("DX11 bridge", ex.Message);
+        Assert.False(File.Exists(P(ComponentStore.DfcFile)));
+
     }
 }

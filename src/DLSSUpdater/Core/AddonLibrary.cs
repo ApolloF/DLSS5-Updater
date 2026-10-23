@@ -4,14 +4,15 @@ using System.Text.Json.Serialization;
 
 namespace DLSSUpdater.Core;
 
-/// <summary>The import-only add-ons that keep a library of builds, like the NR library does for nvngx_dlssnr.dll.</summary>
+/// <summary>The add-ons (downloaded from the catalog or imported) that keep a library of builds, like the NR library does for nvngx_dlssnr.dll.</summary>
 public enum AddonKind { RenoDx, Lecram, Dfc }
 
 /// <summary>
 /// One imported build of ShortFuse's or Lecram's add-on or of Deep Fried Chicken, stored under
 /// components\&lt;add-on dir&gt;\&lt;sha256&gt;\&lt;FileName&gt; with this record next to it as version.json. <see cref="FileName"/> is the
 /// name the add-on is installed under. A Deep Fried Chicken build's folder holds its whole 64-bit set beside the add-on.
-/// <see cref="Downloaded"/>: the app fetched it from Lecram's channel; false for every import and for builds from before the flag.
+/// <see cref="Downloaded"/>: the app fetched it from Lecram's channel or the catalog; false for every import and for builds from before the flag.
+/// <see cref="CatalogSha"/>: the SHA-256 of the catalog download (a zip) this build came out of, so the next check knows it is already here.
 /// </summary>
 public sealed record AddonBuild(
     string Id,
@@ -21,7 +22,8 @@ public sealed record AddonBuild(
     string DetectedLabel,
     string? UserLabel,
     DateTime Imported,
-    bool Downloaded = false)
+    bool Downloaded = false,
+    string? CatalogSha = null)
 {
     /// <summary>The name this build goes by: the user's own label, else what was detected in the file.</summary>
     [JsonIgnore]
@@ -38,6 +40,8 @@ public sealed record AddonBuild(
             return $"{DetectedLabel}{version} ({Imported.ToLocalTime():yyyy-MM-dd})";
         }
     }
+
+    public PickerEntry ToPickerEntry() => new(Id, DetectedLabel, Label, Id, ParsedVersion);
 
     /// <summary>"{detected label}-{sha[..12]}", what an install records and the Installed column shows.</summary>
     [JsonIgnore]
@@ -325,11 +329,12 @@ public sealed partial class ComponentStore
     /// <summary>
     /// An imported build becomes the default only when it is newer than the current default, so importing an older build
     /// to keep it around doesn't silently downgrade every game. Lecram and Deep Fried Chicken on "Newest" (no pinned id) follow
-    /// the library by themselves. Returns true when the default changed.
+    /// the library by themselves, and a build pinned there was picked over "Newest", so it stays. Returns true when the default
+    /// changed.
     /// </summary>
     public bool AdoptImportedAddon(AppSettings s, AddonKind kind, AddonBuild imported)
     {
-        if (FollowsNewest(kind) && s.AddonId(kind) is null) return false;
+        if (FollowsNewest(kind)) return false;
         var current = AddonBuilds(kind).FirstOrDefault(b => b.Id == s.AddonId(kind));
         if (current is not null && imported.Order.CompareTo(current.Order) <= 0) return false;
         s.SetAddonId(kind, imported.Id);

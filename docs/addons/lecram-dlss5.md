@@ -31,7 +31,7 @@ bare) and `v11.0.0-H` once, so the label is still `v11.0.0-beta.NN` (C, test `La
 framework `v6.1.x` strings.
 
 Licence: no restriction found; THIRD-PARTY-NOTICES lists MIT RenoDX, ReShade, ImGui, Detours, nlohmann/json, gtl,
-NVIDIA DLSS/Streamline headers. Distributed by the author to supporters (sign-in with payment email): import-only.
+NVIDIA DLSS/Streamline headers. Downloaded and installed automatically from the catalog mirror (`neural.lecram`, public build too); imports stay possible.
 
 ## Files and placement
 
@@ -243,14 +243,14 @@ Since the builds went behind the author's Buy Me a Coffee, the public DLSS5 Upda
 
 The default Lecram build (`AppSettings.LecramId`) is unset by default, shown as "Newest (<label>)" in Settings: it follows the newest build in
 the library, so an import or download of a newer build needs no settings write and an older import changes nothing. Picking a concrete build
-pins it; a newer import then takes over the pin, as for ShortFuse's add-on. A pinned build that is removed goes back to Newest. Settings from
+pins it, and it stays pinned when newer builds arrive (unlike ShortFuse's add-on, which has no "Newest"). A pinned build that is removed goes back to Newest. Settings from
 before this reset the pin once (`LecramNewestMigrated`), since pins written by the old automatic logic can't be told from the user's picks.
 Per-game build picks are untouched.
 
 ## App support
 
-DLSS5 Updater imports the add-on (the private build can also fetch v11 builds from the author's channel, see "Update source") and installs it per game in ReShade-only mode, with the same
-prerequisites as ShortFuse's add-on: ReShade 6+, a game with native DLSS and an imported `nvngx_dlssnr.dll`. It excludes
+DLSS5 Updater downloads and installs the add-on automatically from the catalog mirror (`neural.lecram`; the file itself decides v10 or v11) or imports it (the private build can also fetch v11 builds from the author's channel, see "Update source") and installs it per game in ReShade-only mode, with the same
+prerequisites as ShortFuse's add-on: ReShade 6+, a game with native DLSS and the NR runtime `nvngx_dlssnr.dll`. It excludes
 OptiScaler-NR and Deep Fried Chicken. It is not added to `[ADDON] LoadFromDllMain`, since nothing here shows it needs early load.
 
 - **Library.** Every imported build is kept: `components\lecram-dlss5\<sha256>\<file name>` plus a `version.json` (id = SHA-256,

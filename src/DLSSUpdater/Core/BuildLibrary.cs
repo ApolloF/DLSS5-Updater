@@ -6,7 +6,7 @@ namespace DLSSUpdater.Core;
 /// Every library of kept builds: the downloaded OptiScaler and GITC Uplift releases, the imported add-ons and the NR runtime.
 /// Each keeps several builds side by side; settings choose a default and each game may choose its own.
 /// </summary>
-public enum LibraryKind { OptiScaler, Uplift, Lecram, RenoDx, Dfc, DlssNr }
+public enum LibraryKind { OptiScaler, Uplift, Lecram, RenoDx, Dfc, DlssNr, RenoDxHdr, ReShade, FrameLimiter, Feeder, Dxvk, Luma }
 
 /// <summary>
 /// One kept build as the lists and the cleanup see it. <see cref="Id"/> is what settings, game picks and install records name
@@ -173,6 +173,12 @@ public sealed partial class ComponentStore
     {
         LibraryKind.OptiScaler => ReleaseBuilds(Component.OptiScaler),
         LibraryKind.Uplift => ReleaseBuilds(Component.Uplift),
+        LibraryKind.RenoDxHdr => HdrLibraryBuilds(),
+        LibraryKind.Luma => LumaLibraryBuilds(),
+        LibraryKind.FrameLimiter => LimiterLibraryBuilds(),
+        LibraryKind.ReShade => ReShadeBuilds.Select(b => new LibraryBuild(kind, b.Id, b.Label, b.Version, b.Added, ReShadeBuildDir(b), Downloaded: b.Downloaded)).ToList(),
+        LibraryKind.Feeder => FeederLibrary.Builds(),
+        LibraryKind.Dxvk => DxvkLibrary.Builds(),
         _ when AddonOf(kind) is { } addon => AddonBuilds(addon)
             .Select(b => new LibraryBuild(kind, b.Id, b.Label, b.DetectedLabel, b.Imported, Path.Combine(AddonRoot(addon), b.Id), Downloaded: b.Downloaded))
             .ToList(),
@@ -354,7 +360,16 @@ public sealed partial class ComponentStore
                 }
                 if (addon == AddonKind.Lecram) Add(s.LecramLastBuildId, "last downloaded Lecram build");
                 break;
-            default:
+            case LibraryKind.ReShade:
+                if (!ReShadePick.IsChannel(s.ReShadeId)) Add(s.ReShadeId, Default);
+                Add(ReShadeBuildFor(null)?.Id, Default);
+                foreach (var c in new[] { ReShadeChannel.Stable, ReShadeChannel.StableNoAddons, ReShadeChannel.Nightly })
+                    Add(ReShadeBuilds.FirstOrDefault(b => b.Channel == c)?.Id, "latest " + ReShadeBuild.ChannelLabel(c));
+                foreach (var (id, g) in s.Games)
+                    Add(ReShadePick.IsChannel(g.ReShadeId) ? ReShadeBuildFor(g.ReShadeId)?.Id : g.ReShadeId, PickedFor(id));
+                foreach (var m in installed) Add(m.ReShadeId, InstalledIn(m));
+                break;
+            case LibraryKind.DlssNr:
                 Add(s.DlssNrId, Default);
                 Add(Path.GetFileName(Path.GetDirectoryName(DlssNrPath)), Default);
                 Add(s.PreviousDlssNrId, SwitchBack);
@@ -365,6 +380,13 @@ public sealed partial class ComponentStore
                     Add(m.PreviousDlssNrId, SwitchBack);
                 }
                 break;
+        }
+        // Components recorded the generic way: their default, every game's pick and what is installed, by component id.
+        foreach (var def in ComponentRegistry.OfLibrary(kind).Where(d => !d.Legacy))
+        {
+            Add(s.DefaultBuild(def.Id), Default);
+            foreach (var (id, g) in s.Games) Add(g.BuildPick(def.Id), PickedFor(id));
+            foreach (var m in installed) Add(m.Component(def.Id)?.BuildId, InstalledIn(m));
         }
         return found;
     }
@@ -440,7 +462,10 @@ public sealed partial class ComponentStore
         LibraryKind.Lecram => "Lecram DLSS5",
         LibraryKind.RenoDx => "ShortFuse RenoDX DLSS",
         LibraryKind.Dfc => "Deep Fried Chicken",
-        _ => "NR runtime",
+        LibraryKind.DlssNr => "NR runtime",
+        LibraryKind.ReShade => "ReShade",
+        LibraryKind.FrameLimiter => "Frame limiters",
+        _ => ComponentRegistry.OfLibrary(kind).FirstOrDefault()?.Name ?? kind.ToString(),
     };
 
     /// <summary>
@@ -549,6 +574,10 @@ public sealed partial class ComponentStore
         }
         ReleasesChanged();
         foreach (var kind in Enum.GetValues<AddonKind>()) ForgetAddons(kind);
+        ForgetHdr();
+        ForgetLuma();
+        ForgetLimiters();
+        ForgetReShade();
         if (count > 0) Log.Info($"Cleanup freed {BuildCleanup.FormatBytes(freed)} ({count} item(s))");
         return freed;
     }

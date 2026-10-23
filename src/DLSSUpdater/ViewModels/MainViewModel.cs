@@ -29,9 +29,36 @@ public sealed partial class MainViewModel : ObservableObject
         Log.TrimFile();
         var settings = AppSettings.Load();
         var gh = new GitHubClient { Token = settings.GitHubToken };
-        var store = new ComponentStore(gh, () => settings.IncludePrereleases) { AutoReShade = () => settings.AutoDownloadReShade, SelectedDlssNr = () => settings.DlssNrId, SelectedRenoDx = () => settings.RenoDxId, SelectedLecram = () => settings.LecramId, SelectedDfc = () => settings.DfcId, PairTests = () => settings.AddonPairTests, OptiSourceRepo = () => settings.OptiSource };
-        S = new Services { Settings = settings, Store = store, Installer = new Installer(store) };
+        var store = new ComponentStore(gh, () => settings.IncludePrereleases) { AutoReShade = () => settings.AutoDownloadReShade, SelectedDlssNr = () => settings.DlssNrId, SelectedRenoDx = () => settings.RenoDxId, SelectedLecram = () => settings.LecramId, SelectedDfc = () => settings.DfcId, SelectedReShade = () => settings.ReShadeId, PairTests = () => settings.AddonPairTests, OptiSourceRepo = () => settings.OptiSource };
+        var installer = new Installer(store);
+        S = new Services
+        {
+            Settings = settings, Store = store, Installer = installer,
+            Catalog = new CatalogState(new CatalogClient(gh)), Hdr = new HdrService(store, installer, new CatalogDownloader(gh)), Luma = new LumaService(store, installer, new CatalogDownloader(gh)),
+            FrameLimit = new FrameLimitService(store, installer, new CatalogDownloader(gh), NvidiaProfile.Real),
+            Dxvk = new DxvkService(installer, gh, NvidiaProfile.Real),
+        };
         Gh = gh;
+        gh.RateLimitChanged += () =>
+        {
+            if (_ui.CheckAccess()) RateLimit = gh.RateLimit;
+            else _ui.BeginInvoke(() => RateLimit = gh.RateLimit);
+        };
+        S.Extras = new ReShadeExtras(S.Installer, settings, new CatalogDownloader(gh), ct => new CatalogClient(gh).LoadAsync(ct));
+        S.RunJob = RunJob;
+        S.Progress = TransferProgress;
+        S.Rescan = RescanOne;
+        S.PickCatalogBuild = PickCatalogBuildAsync;
+        S.Extras.Changed += () =>
+        {
+            foreach (var game in Games) game.RefreshExtrasUpdate();
+            CountUpdates();
+        };
+        S.Catalog!.Changed += () =>
+        {
+            if (_ui.CheckAccess()) CatalogChanged();
+            else _ui.BeginInvoke(CatalogChanged);
+        };
         _busy.Changed += () => IsBusy = _busy.IsBusy;
         // Busy from the start: no command may take the gate before the startup scan and update check have run.
         _startup = _busy.TryEnter();
@@ -149,7 +176,7 @@ public sealed partial class MainViewModel : ObservableObject
     [ObservableProperty]
     [NotifyCanExecuteChangedFor(nameof(InstallCommand), nameof(DlssOnlyCommand), nameof(UninstallCommand),
         nameof(RestoreDlssCommand), nameof(SwitchNrCommand), nameof(UndoNrCommand), nameof(UpdateAllCommand), nameof(CheckUpdatesCommand), nameof(RescanCommand),
-        nameof(AddGameFolderCommand), nameof(AddLibraryRootCommand), nameof(RemoveGameCommand))]
+        nameof(AddGameFolderCommand), nameof(AddLibraryRootCommand), nameof(RemoveGameCommand), nameof(InstallHdrCommand), nameof(RemoveHdrCommand), nameof(InstallLumaCommand), nameof(RemoveLumaCommand), nameof(ApplyFrameLimitCommand), nameof(RemoveFrameLimitCommand), nameof(ApplyDxvkCommand), nameof(RemoveDxvkCommand))]
     private bool _isBusy;
 
     // component chips
@@ -157,11 +184,35 @@ public sealed partial class MainViewModel : ObservableObject
     [ObservableProperty] private string _dlssVersion = "—";
     [ObservableProperty] private string _upliftVersion = "\u2014";
     [ObservableProperty] private string _mfgVersion = "—";
-    [ObservableProperty] private string _dlssNrText = "not imported";
+    [ObservableProperty] private string _dlssNrText = "not downloaded yet";
     [ObservableProperty] private string _reShadeText = "not imported";
     [ObservableProperty] private bool _dlssNrOk;
     [ObservableProperty] private bool _reShadeOk;
     [ObservableProperty] private bool _online = true;
+    [ObservableProperty, NotifyPropertyChangedFor(nameof(ShowRateLimit))] private bool _rateLimitDismissed;
+    [ObservableProperty, NotifyPropertyChangedFor(nameof(ShowRateLimit), nameof(RateLimitText), nameof(CanAddGitHubToken))] private GitHubRateLimit? _rateLimit;
+
+    public bool ShowRateLimit => RateLimit is not null && !RateLimitDismissed;
+    public string RateLimitText => RateLimit?.Describe() ?? "";
+    public bool CanAddGitHubToken => RateLimit is { TokenUsed: false };
+
+    /// <summary>The Settings page is open on the General tab; the window puts the cursor in the GitHub token box.</summary>
+    public event Action? FocusGitHubToken;
+
+    [RelayCommand]
+    private void AddGitHubToken()
+    {
+        AboutOpen = false;
+        SettingsVm.Tab = "General";
+        SettingsOpen = true;
+        FocusGitHubToken?.Invoke();
+    }
+
+    [RelayCommand]
+    private void OpenGitHubTokenPage() => OpenUrl("https://github.com/settings/personal-access-tokens/new");
+
+    [RelayCommand]
+    private void DismissRateLimit() => RateLimitDismissed = true;
 
     partial void OnSearchChanged(string value) => RefreshGames();
 
@@ -221,12 +272,18 @@ public sealed partial class MainViewModel : ObservableObject
         {
             "DLSS" => g.HasDlss,
             "Installed" => g.IsInstalled,
-            "Updates" => g.NeedsUpdate,
+            "Updates" => HasUpdate(g),
             _ => true,
         };
     }
 
     // ---------- startup ----------
+
+    /// <summary>The method advice of every game, after the GPU or the catalog changed.</summary>
+    private void RefreshAdvice()
+    {
+        foreach (var g in Games) g.RefreshAdvice();
+    }
 
     public async Task InitializeAsync()
     {
@@ -240,12 +297,23 @@ public sealed partial class MainViewModel : ObservableObject
                 RefreshBuildNames();
             }
             else
+            {
+                S.Catalog?.LoadCached();
                 await Task.Run(() =>
                 {
                     HashCache.Load();
                     S.Store.AutoImport();
+                    // A ReShade64.dll imported before the library keeps being what installs use: its build becomes the pinned default once.
+                    if (S.Store.TakeLegacyReShadePin() is { } pin && S.Settings.ReShadeId is null)
+                    {
+                        S.Settings.ReShadeId = pin;
+                        S.Settings.Save();
+                    }
                 });
+            }
             await RefreshLocalComponentsAsync();
+            S.Gpu = Demo.Active ? Demo.Gpu : await Task.Run(GpuDetector.Detect);
+            RefreshAdvice();
 
             var cached = GameScanner.LoadCache();
             if (cached.Count > 0) ApplyScan(cached);
@@ -274,7 +342,7 @@ public sealed partial class MainViewModel : ObservableObject
         S.ReShadeSha = rs;
 
         DlssNrOk = nr is not null;
-        DlssNrText = nr is null ? "not imported"
+        DlssNrText = nr is null ? "not downloaded yet"
             : FileUtil.Format(FileUtil.ReadVersion(store.DlssNrPath)) +
               (ComponentStore.KnownDlssNr.TryGetValue(nr, out var variant) ? $" · {variant.Split(" · ")[0]}" : " · unverified");
         var auto = S.Settings.AutoDownloadReShade && !store.ReShadeImported;
@@ -298,6 +366,84 @@ public sealed partial class MainViewModel : ObservableObject
         await CheckLecramAsync(ct, force: true);
         await AutoCleanUpAsync();
     });
+
+    /// <summary>
+    /// A build picker's "(download)" entry: fetches that older catalog build as a run of its own (status line, progress, one
+    /// download at a time), lets <paramref name="select"/> set the pick from its library id, then refreshes everything that lists
+    /// builds. A refused or offline download only logs and sets the status; nothing is selected and false comes back, so the
+    /// caller puts its list back.
+    /// </summary>
+    internal async Task<bool> PickCatalogBuildAsync(CatalogBuildKind kind, string offerTag, Action<string> select)
+    {
+        var name = kind switch { CatalogBuildKind.DlssNr => "nvngx_dlssnr.dll", CatalogBuildKind.Lecram => "Lecram's DLSS5 add-on", _ => "ShortFuse's DLSS add-on" };
+        var offer = S.CatalogOffers(kind).FirstOrDefault(o => o.Tag == offerTag);
+        if (offer is null || S.Catalog?.Document?.Sections is not { } sections)
+        {
+            Log.Info($"{name}: that build is no longer on offer from the catalog");
+            Status = $"{name} not downloaded. See the log.";
+            return false;
+        }
+        if (IsBusy)
+        {
+            Log.Info($"{name} {offer.Label}: not downloaded, another task is still running. Pick it again when that is done");
+            Status = $"{name} not downloaded: another task is running.";
+            return false;
+        }
+        string? id = null;
+        var fetch = new CatalogDownloader(Gh);
+        await Run($"Downloading {name} {offer.Label}", async ct =>
+        {
+            try { id = await S.Store.DownloadCatalogBuildAsync(kind, sections, offer.Sha256, fetch, TransferProgress(), BuildFlags.LecramCatalogOff, ct); }
+            catch (Exception ex) when (!ct.IsCancellationRequested && ex is HttpRequestException or IOException or UnauthorizedAccessException or InvalidDataException)
+            { Log.Warn($"{name} {offer.Label} was not downloaded ({ex.Message})"); }
+        });
+        if (id is null)
+        {
+            Status = $"{name} {offer.Label} not downloaded. See the log.";
+            return false;
+        }
+        select(id);
+        await RefreshLocalComponentsAsync();
+        SettingsVm.Reload();
+        await AutoCleanUpAfterImportAsync();
+        return true;
+    }
+
+    /// <summary>
+    /// Refreshes the mod catalog, then downloads what it has newer: ShortFuse's DLSS add-on and nvngx_dlssnr.dll
+    /// (Lecram's add-on too when <see cref="BuildFlags.LecramCatalog"/> is on). Offline or refused downloads are logged and change nothing.
+    /// </summary>
+    private async Task CheckCatalogAsync(CancellationToken ct)
+    {
+        if (Demo.Active || S.Catalog is not { } catalog) return;
+        try
+        {
+            await catalog.RefreshAsync(ct);
+            var fetch = new CatalogDownloader(Gh);
+            var sections = catalog.Document?.Sections;
+            var build = await S.Store.CheckRenoDxCatalogAsync(S.Settings, sections?.RenodxDlss, fetch, TransferProgress(), ct);
+            var nr = await S.Store.CheckDlssNrCatalogAsync(S.Settings, sections?.Neural?.Dlssnr, fetch, TransferProgress(), ct);
+            // The private build keeps its own MediaFire channel for Lecram; public builds import it (BuildFlags.LecramCatalog).
+            var lecram = BuildFlags.LecramCatalogOff ? null : await S.Store.CheckLecramCatalogAsync(S.Settings, sections?.Neural?.Lecram, fetch, TransferProgress(), ct);
+            if (build is null && nr is null && lecram is null) return;
+            S.Settings.Save();
+            await RefreshLocalComponentsAsync();
+            SettingsVm.Reload();
+        }
+        catch (Exception ex) when (!ct.IsCancellationRequested)
+        {
+            Log.Warn($"Catalog check skipped ({ex.Message})");
+        }
+    }
+
+    /// <summary>The catalog has a new document: every game picks again and the update count follows.</summary>
+    private void CatalogChanged()
+    {
+        foreach (var g in Games) { g.RefreshHdr(); g.RebuildNrChoices(); g.RebuildAddonChoices(); }
+        SettingsVm.ReloadCatalogOffers();
+        RefreshAdvice();
+        CountUpdates();
+    }
 
     private async Task CheckLecramAsync(CancellationToken ct, bool force = false)
     {
@@ -325,6 +471,8 @@ public sealed partial class MainViewModel : ObservableObject
             Gh.Token = S.Settings.GitHubToken;
             await S.Store.RefreshAsync(ct);
             await CheckLecramAsync(ct);
+            await CheckCatalogAsync(ct);
+            await S.Extras!.LoadCatalogAsync(ct);
         }
         var s = S.Store;
         Online = new[] { s.Opti, s.Dlss, s.Mfg, s.Uplift }.Any(r => r is { FromCache: false, Stale: false });
@@ -366,7 +514,7 @@ public sealed partial class MainViewModel : ObservableObject
     private void ApplyScan(List<GameInfo> games)
     {
         var selectedId = SelectedGame?.Id;
-        MergeById(Games, games, g => g.Id, i => i.Id, (vm, info) => vm.Load(info), info => new GameViewModel(info, S));
+        MergeById(Games, games, g => g.Id, i => i.Id, (vm, info) => vm.Load(info), info => Track(new GameViewModel(info, S)));
         RefreshGames();
         CountUpdates();
         SelectedGame = Games.FirstOrDefault(g => g.Id == selectedId) ?? GamesView.Cast<GameViewModel>().FirstOrDefault();
@@ -397,33 +545,130 @@ public sealed partial class MainViewModel : ObservableObject
             if (!seen.Contains(itemId(list[i]))) list.RemoveAt(i);
     }
 
-    private void CountUpdates() => UpdateCount = Games.Count(g => g.NeedsUpdate);
+    /// <summary>A game has something to update: its main install, its RenoDX HDR mod or its frame limiter add-on.</summary>
+    internal static bool HasUpdate(GameViewModel g) => g.NeedsUpdate || g.NeedsHdrUpdate || g.NeedsFrameLimitUpdate || g.NeedsDxvkUpdate || g.NeedsLumaUpdate;
+
+    /// <summary>What Update all works through: games with a main update and an install record, and games whose HDR mod has an update.</summary>
+    internal static List<GameViewModel> UpdateTargets(IEnumerable<GameViewModel> games) =>
+        games.Where(g => (g.NeedsUpdate && g.Manifest is not null) || g.NeedsHdrUpdate || g.NeedsFrameLimitUpdate || g.NeedsDxvkUpdate || g.NeedsLumaUpdate).ToList();
+
+    private void CountUpdates() => UpdateCount = Games.Count(HasUpdate);
+
+    /// <summary>An HDR section changed (new pick, install, catalog): the update count and the HDR buttons follow.</summary>
+    private GameViewModel Track(GameViewModel g)
+    {
+        g.Hdr.Changed += () =>
+        {
+            CountUpdates();
+            if (ReferenceEquals(g, SelectedGame)) NotifyHdrCommands();
+        };
+        g.FrameLimit.Changed += () =>
+        {
+            CountUpdates();
+            if (ReferenceEquals(g, SelectedGame)) NotifyHdrCommands();
+        };
+        g.Luma.Changed += () =>
+        {
+            CountUpdates();
+            if (ReferenceEquals(g, SelectedGame)) NotifyHdrCommands();
+        };
+        return g;
+    }
+
+    private void NotifyHdrCommands()
+    {
+        InstallHdrCommand.NotifyCanExecuteChanged();
+        RemoveHdrCommand.NotifyCanExecuteChanged();
+        ApplyFrameLimitCommand.NotifyCanExecuteChanged();
+        RemoveFrameLimitCommand.NotifyCanExecuteChanged();
+        ApplyDxvkCommand.NotifyCanExecuteChanged();
+        RemoveDxvkCommand.NotifyCanExecuteChanged();
+        InstallLumaCommand.NotifyCanExecuteChanged();
+        RemoveLumaCommand.NotifyCanExecuteChanged();
+    }
 
     [RelayCommand(CanExecute = nameof(CanRun))]
     private Task UpdateAll() => Run("Updating", async ct =>
     {
-        var targets = Games.Where(g => g.NeedsUpdate && g.Manifest is not null).ToList();
+        var targets = UpdateTargets(Games);
         if (targets.Count == 0)
         {
             Log.Info("Everything is up to date");
             return;
         }
-        if (targets.Any(g => g.Manifest!.Opti) && !ConfirmCompat()) return;
+        if (targets.Any(g => g.CoreNeedsUpdate && g.Manifest is { Opti: true }) && !ConfirmCompat()) return;
         var failed = 0;
         foreach (var g in targets)
         {
-            var m = g.Manifest!;
-            var o = g.UpdateOptions(m);
-            if (g.HasAntiCheat && g.NeedsInjection(o) && !m.AntiCheatConfirmed)
-            {
-                Log.Info($"{g.Name}: skipped because it has anti-cheat. Install it once from its own page to confirm.");
-                continue;
-            }
             try
             {
-                Log.Info($"Updating {g.Name}");
-                await S.Installer.InstallAsync(g.Info, g.SelectedTarget!.Dir, o, TransferProgress(), ct);
-                await RescanOne(g);
+                if (g.CoreNeedsUpdate && g.Manifest is { } m)
+                {
+                    var o = g.UpdateOptions(m);
+                    if (g.HasAntiCheat && g.NeedsInjection(o) && !m.AntiCheatConfirmed)
+                        Log.Info($"{g.Name}: skipped because it has anti-cheat. Install it once from its own page to confirm.");
+                    else if (Installer.Conflicts(g.SelectedTarget!.Dir, o) is { Count: > 0 } clash && o.ConfirmedConflict != Installer.ConflictKey(clash))
+                        Log.Info($"{g.Name}: skipped because its mods clash and the warning isn't confirmed. Install it once from its own page to confirm.");
+                    else
+                    {
+                        Log.Info($"Updating {g.Name}");
+                        await S.Installer.InstallAsync(g.Info, g.SelectedTarget!.Dir, o, TransferProgress(), ct);
+                        await RescanOne(g);
+                    }
+                }
+                // The ReShade add-ons, shader packs and preset this game already has follow the catalog and Settings.
+                if (g.ExtrasToUpdate.Count > 0)
+                {
+                    foreach (var r in await S.Extras!.UpdateAsync(g.Info, g.SelectedTarget!.Dir, TransferProgress(), ct))
+                    {
+                        if (r.Ok) Log.Info($"{g.Name}: {r.Message}");
+                        else Log.Warn($"{g.Name}: {r.Message}");
+                        foreach (var n in r.Notes) Log.Info($"  {n}");
+                    }
+                    await RescanOne(g);
+                }
+                // Read again after the main update: it can change what the HDR section sees.
+                if (g.NeedsHdrUpdate)
+                {
+                    if (g.HasAntiCheat)
+                        Log.Info($"{g.Name}: the HDR mod was skipped because it has anti-cheat.");
+                    else
+                    {
+                        Log.Info($"Updating the HDR mod in {g.Name}");
+                        await g.Hdr.InstallAsync(TransferProgress(), ct);
+                        await RescanOne(g);
+                    }
+                }
+                if (g.NeedsFrameLimitUpdate)
+                {
+                    if (g.HasAntiCheat)
+                        Log.Info($"{g.Name}: the frame limiter add-on was skipped because it has anti-cheat.");
+                    else
+                    {
+                        Log.Info($"Updating the frame limiter add-on in {g.Name}");
+                        await g.FrameLimit.ApplyAsync(TransferProgress(), ct, update: true);
+                        await RescanOne(g);
+                    }
+                }
+                if (g.NeedsLumaUpdate)
+                {
+                    if (g.HasAntiCheat)
+                        Log.Info($"{g.Name}: the Luma mod was skipped because it has anti-cheat.");
+                    else if (g.Luma.ClashBlocksUpdate)
+                        Log.Info($"{g.Name}: the Luma mod was skipped because it clashes with RenoDX HDR and the warning isn't confirmed. Install it once from its own page to confirm.");
+                    else
+                    {
+                        Log.Info($"Updating the Luma mod in {g.Name}");
+                        await g.Luma.InstallAsync(TransferProgress(), ct);
+                        await RescanOne(g);
+                    }
+                }
+                if (g.NeedsDxvkUpdate)
+                {
+                    Log.Info($"Updating DXVK in {g.Name}");
+                    await g.Dxvk.ApplyAsync(TransferProgress(), ct, update: true);
+                    await RescanOne(g);
+                }
             }
             catch (NeedsAdminException ex) { failed++; Log.Error($"{g.Name}: {ex.Message}"); }
             catch (Exception ex) when (ex is not OperationCanceledException) { failed++; Log.Error(g.Name, ex); }
@@ -451,7 +696,7 @@ public sealed partial class MainViewModel : ObservableObject
                 return;
             }
             var info = await Task.Run(() => GameScanner.Inspect(new GameEntry(Path.GetFileName(path), path, "Manual")));
-            var vm = new GameViewModel(info, S);
+            var vm = Track(new GameViewModel(info, S));
             Games.Add(vm);
             OnPropertyChanged(nameof(GameListEmptyText));
             SaveGameCache();
@@ -557,7 +802,7 @@ public sealed partial class MainViewModel : ObservableObject
         S.Settings.IniOverrides.Select(o => (o.Section, o.Key))
             .Concat(S.Settings.Presets.SelectMany(p => p.Opti).Select(o => (o.Section, o.Key)))
             .Concat(S.Settings.Games.Values.SelectMany(g => (g.Opti ?? []).Concat(g.Presets?.SelectMany(p => p.Opti) ?? [])).Select(o => (o.Section, o.Key)))
-            .Concat(ConfigProfile.Recommended().Select(o => (o.Section, o.Key)))
+            .Concat(ConfigProfile.LegacyRecommendedKeys)
             .Concat(ConfigProfile.Required(new InstallOptions { Opti = true, ReShade = true, DlssNr = true }).Select(o => (o.Section, o.Key)))
             .Concat(KeybindDef.Opti.Select(k => (k.Section, k.Key)))
             .Concat(SettingsVm.NrOptions.Concat(SettingsVm.TonemapOptions).Concat(SettingsVm.HdrOptions).Where(o => o.IsAvailable).Select(o => (o.Section, o.Key)));
@@ -619,6 +864,150 @@ public sealed partial class MainViewModel : ObservableObject
         RestoreDlssCommand.NotifyCanExecuteChanged();
         SwitchNrCommand.NotifyCanExecuteChanged();
         UndoNrCommand.NotifyCanExecuteChanged();
+        NotifyHdrCommands();
+    }
+
+    private bool CanRunHdr() => !IsBusy && SelectedGame?.Hdr is { CanInstall: true };
+    private bool CanRemoveHdr() => !IsBusy && SelectedGame?.Hdr is { CanRemove: true };
+
+    /// <summary>Installs or updates the RenoDX HDR mod picked for the selected game. Anti-cheat games are never offered one, so there is nothing to confirm.</summary>
+    [RelayCommand(CanExecute = nameof(CanRunHdr))]
+    private async Task InstallHdr()
+    {
+        var g = SelectedGame;
+        if (g?.SelectedTarget is null || !g.Hdr.CanInstall) return;
+        var lumaConfirmed = false;
+        if (LumaConflict.ForRenoDx(g.Manifest) is { } clash && !LumaConflict.Confirmed(g.Manifest))
+        {
+            if (!Dialog.Confirm("Luma is already here", clash, "Install anyway", danger: true)) return;
+            lumaConfirmed = true;
+        }
+        await Run($"Installing the HDR mod to {g.Name}", async ct =>
+        {
+            await g.Hdr.InstallAsync(TransferProgress(), ct, lumaConfirmed);
+            // The install may have put ReShade into a game that had none.
+            await RescanOne(g);
+            await AutoCleanUpAsync();
+        });
+    }
+
+    [RelayCommand(CanExecute = nameof(CanRemoveHdr))]
+    private async Task RemoveHdr()
+    {
+        var g = SelectedGame;
+        if (g?.SelectedTarget is null || !g.Hdr.CanRemove) return;
+        await Run($"Removing the HDR mod from {g.Name}", async ct =>
+        {
+            await g.Hdr.RemoveAsync(ct);
+            await RescanOne(g);
+        });
+    }
+
+    private bool CanRunLuma() => !IsBusy && SelectedGame?.Luma is { CanInstall: true };
+    private bool CanRemoveLuma() => !IsBusy && SelectedGame?.Luma is { CanRemove: true };
+
+    /// <summary>Installs or updates the Luma mod picked for the selected game. Next to a RenoDX HDR mod it asks first: the warning can be confirmed past.</summary>
+    [RelayCommand(CanExecute = nameof(CanRunLuma))]
+    private async Task InstallLuma()
+    {
+        var g = SelectedGame;
+        if (g?.SelectedTarget is null || !g.Luma.CanInstall) return;
+        var confirmed = false;
+        if (g.Luma.NeedsClashConfirm)
+        {
+            if (!Dialog.Confirm("RenoDX HDR is already here", LumaConflict.Message, "Install anyway", danger: true)) return;
+            confirmed = true;
+        }
+        await Run($"Installing the Luma mod to {g.Name}", async ct =>
+        {
+            await g.Luma.InstallAsync(TransferProgress(), ct, confirmed);
+            await RescanOne(g);
+            await AutoCleanUpAsync();
+        });
+    }
+
+    [RelayCommand(CanExecute = nameof(CanRemoveLuma))]
+    private async Task RemoveLuma()
+    {
+        var g = SelectedGame;
+        if (g?.SelectedTarget is null || !g.Luma.CanRemove) return;
+        await Run($"Removing the Luma mod from {g.Name}", async ct =>
+        {
+            await g.Luma.RemoveAsync(ct);
+            await RescanOne(g);
+        });
+    }
+
+    private bool CanApplyFrameLimit() => !IsBusy && SelectedGame?.FrameLimit is { CanApply: true };
+    private bool CanRemoveFrameLimit() => !IsBusy && SelectedGame?.FrameLimit is { CanRemove: true };
+
+    /// <summary>Sets the frame limit chosen for the selected game (the method switch removes the previous limiter). Anti-cheat games only get the driver limiter, which places nothing.</summary>
+    [RelayCommand(CanExecute = nameof(CanApplyFrameLimit))]
+    private async Task ApplyFrameLimit()
+    {
+        var g = SelectedGame;
+        if (g?.SelectedTarget is null || !g.FrameLimit.CanApply) return;
+        var confirmed = false;
+        if (g.FrameLimit.NeedsAntiCheatConfirm)
+        {
+            if (!Dialog.Confirm($"{g.AntiCheat} detected", $"{g.FrameLimit.Note}\n\nOnly continue for offline / single-player use.", "Install anyway", danger: true)) return;
+            confirmed = true;
+        }
+        await Run($"Setting the frame limit for {g.Name}", async ct =>
+        {
+            await g.FrameLimit.ApplyAsync(TransferProgress(), ct, antiCheatConfirmed: confirmed);
+            // An add-on may have put ReShade into a game that had none.
+            await RescanOne(g);
+            await AutoCleanUpAsync();
+        });
+    }
+
+    private bool CanApplyDxvk() => !IsBusy && SelectedGame?.Dxvk is { CanApply: true };
+    private bool CanRemoveDxvk() => !IsBusy && SelectedGame?.Dxvk is { CanRemove: true };
+
+    /// <summary>Installs DXVK in the selected game, or updates it. The warnings (anti-cheat, a dll that belongs to another mod, ReShade moving to its Vulkan layer) are shown first.</summary>
+    [RelayCommand(CanExecute = nameof(CanApplyDxvk))]
+    private async Task ApplyDxvk()
+    {
+        var g = SelectedGame;
+        if (g?.SelectedTarget is null || !g.Dxvk.CanApply) return;
+        var confirmed = false;
+        if (g.Dxvk.NeedsConfirm)
+        {
+            if (!Dialog.Confirm(g.AntiCheat is { } ac ? $"{ac} detected" : "Before DXVK goes in", g.Dxvk.Warnings, "Install anyway", danger: true)) return;
+            confirmed = true;
+        }
+        await Run($"Installing DXVK in {g.Name}", async ct =>
+        {
+            await g.Dxvk.ApplyAsync(TransferProgress(), ct, confirmed: confirmed);
+            // ReShade may have moved to its Vulkan layer.
+            await RescanOne(g);
+            await AutoCleanUpAsync();
+        });
+    }
+
+    [RelayCommand(CanExecute = nameof(CanRemoveDxvk))]
+    private async Task RemoveDxvk()
+    {
+        var g = SelectedGame;
+        if (g?.SelectedTarget is null || !g.Dxvk.CanRemove) return;
+        await Run($"Removing DXVK from {g.Name}", async ct =>
+        {
+            await g.Dxvk.RemoveAsync(ct);
+            await RescanOne(g);
+        });
+    }
+
+    [RelayCommand(CanExecute = nameof(CanRemoveFrameLimit))]
+    private async Task RemoveFrameLimit()
+    {
+        var g = SelectedGame;
+        if (g?.SelectedTarget is null || !g.FrameLimit.CanRemove) return;
+        await Run($"Removing the frame limiter from {g.Name}", async ct =>
+        {
+            await g.FrameLimit.RemoveAsync(ct);
+            await RescanOne(g);
+        });
     }
 
     [RelayCommand(CanExecute = nameof(CanRunOnGame))]
@@ -631,7 +1020,7 @@ public sealed partial class MainViewModel : ObservableObject
     {
         var g = SelectedGame;
         if (g?.SelectedTarget is null) return;
-        var o = g.BuildOptions(dlssOnly, acConfirmed: g.Manifest?.AntiCheatConfirmed == true);
+        var o = g.BuildOptions(dlssOnly, acConfirmed: g.Manifest?.AntiCheatConfirmed == true, g.Manifest?.ConfirmedConflict);
 
         if (g.HasAntiCheat && g.NeedsInjection(o) && !o.AntiCheatConfirmed)
         {
@@ -643,7 +1032,24 @@ public sealed partial class MainViewModel : ObservableObject
             o = g.BuildOptions(dlssOnly, acConfirmed: true);
         }
 
+        if (!dlssOnly && Installer.Conflicts(g.SelectedTarget.Dir, o) is { Count: > 0 } conflicts)
+        {
+            var key = Installer.ConflictKey(conflicts);
+            if (o.ConfirmedConflict != key)
+            {
+                var ok = Dialog.Confirm("Check before installing",
+                    string.Join(Environment.NewLine + Environment.NewLine, conflicts) + Environment.NewLine + Environment.NewLine + "You can install them anyway, for example to compare. The warning stays on the game.",
+                    "Install anyway", danger: true);
+                if (!ok) return;
+                o = g.BuildOptions(dlssOnly, acConfirmed: o.AntiCheatConfirmed, key);
+            }
+        }
+
         if (o.Opti && !ConfirmCompat()) return;
+
+        // ReShade replacing a dll that belongs to another mod: say so in one line first; the original is backed up either way.
+        if (!dlssOnly && o.ReShade && g.ReShadeForeignWarning is { } foreign
+            && !Dialog.Confirm("Another mod's dll is in the way", foreign + "\n\nContinue?", "Install ReShade", danger: true)) return;
 
         if (!dlssOnly && o.Opti && g.SelectedTarget.Exe is null && !g.Info.Exes.Any())
             Log.Info($"{g.Name}: no game .exe found in the install location. OptiScaler only works next to the game's .exe; pick that folder under Install location.");
@@ -690,6 +1096,8 @@ public sealed partial class MainViewModel : ObservableObject
         await Run($"Uninstalling from {g.Name}", async ct =>
         {
             await S.Installer.UninstallAsync(g.Info, g.SelectedTarget.Dir, ct);
+            if (g.DriverExe is { } exe)
+                await Task.Run(() => UninstallDriverRestore.Run(NvidiaProfile.Real, new NvidiaGame(exe, g.Name, S.Settings.For(g.Id)), S.Settings.Save));
             var dir = g.SelectedTarget.Dir;
             await Task.Run(() => KnownInstalls.Forget([dir]));
             await RescanOne(g);
@@ -918,7 +1326,7 @@ public sealed partial class MainViewModel : ObservableObject
 
     private async Task RescanOne(GameViewModel g)
     {
-        var info = Demo.Active ? Demo.Find(g.Root)! : await Task.Run(() => GameScanner.Inspect(new GameEntry(g.Name, g.Root, g.Source)));
+        var info = Demo.Active ? Demo.Find(g.Root)! : await Task.Run(() => GameScanner.Inspect(new GameEntry(g.Name, g.Root, g.Source, g.Info.SteamAppId), S.Settings.Games.GetValueOrDefault(g.Id)?.Tech));
         g.Load(info);
         RefreshGames();
         CountUpdates();

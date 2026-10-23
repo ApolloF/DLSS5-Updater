@@ -6,7 +6,7 @@ using DLSSUpdater.Scan;
 
 namespace DLSSUpdater.Core;
 
-public sealed class GameOverride
+public sealed partial class GameOverride
 {
     public string? TargetDir { get; set; }
     public string? Proxy { get; set; }
@@ -19,6 +19,8 @@ public sealed class GameOverride
     public string? LecramId { get; set; }
     /// <summary>Deep Fried Chicken build (library id) pinned for this game; null follows the global choice.</summary>
     public string? DfcId { get; set; }
+    /// <summary>ReShade build (library id or "channel:...") chosen for this game; null follows the default.</summary>
+    public string? ReShadeId { get; set; }
     /// <summary>OptiScaler build (app tag, either source) chosen for this game; null follows the default.</summary>
     public string? OptiTag { get; set; }
     /// <summary>GITC Uplift build (release tag) chosen for this game; null follows the default.</summary>
@@ -37,6 +39,10 @@ public sealed class GameOverride
     public string? IniMode { get; set; }
     /// <summary>Presets that only this game can use.</summary>
     public List<ConfigPreset>? Presets { get; set; }
+    /// <summary>Detection values the user set by hand (graphics API, bitness, engine, main exe, mod folder); null = all automatic.</summary>
+    public TechOverride? Tech { get; set; }
+    /// <summary>ini values typed by the user for the RenoDX HDR mod ([renodx] in ReShade.ini, Engine.ini); they win over the keys the app writes.</summary>
+    public List<HdrIniEdit>? HdrIni { get; set; }
     /// <summary>Fields this version doesn't know (written by a newer one); kept so saving doesn't drop them.</summary>
     [JsonExtensionData] public Dictionary<string, JsonElement>? Unknown { get; set; }
 }
@@ -47,11 +53,11 @@ public sealed class ConfigPreset
     public string Name { get; set; } = "";
     public List<IniOverride> Opti { get; set; } = [];
     public List<IniOverride> ReShade { get; set; } = [];
-    /// <summary>Shipped with the app (the Recommended preset): can be loaded and assigned, not saved over or deleted.</summary>
+    /// <summary>Shipped with the app (the Default preset): can be loaded and assigned, not saved over or deleted.</summary>
     [JsonIgnore] public bool BuiltIn { get; init; }
 }
 
-public sealed class AppSettings
+public sealed partial class AppSettings
 {
     public static readonly string[] ProxyNames =
         ["dxgi.dll", "winmm.dll", "version.dll", "dbghelp.dll", "d3d12.dll", "wininet.dll", "winhttp.dll"];
@@ -63,7 +69,7 @@ public sealed class AppSettings
 
     /// <summary>Names ReShade loads under when it is the proxy itself (ReShade-only mode).</summary>
     public static readonly string[] ReShadeProxyNames =
-        ["dxgi.dll", "d3d12.dll", "d3d11.dll", "d3d9.dll", "dinput8.dll", "opengl32.dll"];
+        ["dxgi.dll", "d3d12.dll", "d3d11.dll", "d3d9.dll", "d3d8.dll", "dinput8.dll", "opengl32.dll"];
 
     /// <summary>A proxy name DLSS5 Updater would ever install under (OptiScaler or ReShade-only).</summary>
     public static bool IsKnownProxy(string? name) =>
@@ -76,6 +82,12 @@ public sealed class AppSettings
     public bool InstallReShade { get; set; } = true;
     /// <summary>Download the ReShade add-on build from reshade.me when no ReShade64.dll was imported.</summary>
     public bool AutoDownloadReShade { get; set; } = true;
+    /// <summary>Download nvngx_dlssnr.dll from the catalog mirror and keep it in the NR library.</summary>
+    public bool AutoDownloadDlssNr { get; set; } = true;
+    /// <summary>SHA-256 of the catalog's newest nvngx_dlssnr.dll once fetched, so a cleanup of it doesn't download it again at every check.</summary>
+    public string? CatalogDlssNrFetched { get; set; }
+    /// <summary>The same for the catalog's newest Lecram build.</summary>
+    public string? CatalogLecramFetched { get; set; }
     /// <summary>Check Lecram's public MediaFire channel for new v11 builds and add them to the library.</summary>
     public bool AutoDownloadLecram { get; set; } = true;
     public string LecramFolderKey { get; set; } = MediaFireClient.DefaultFolder;
@@ -99,8 +111,6 @@ public sealed class AppSettings
     public bool InstallRenoDx { get; set; }
     public bool InstallUplift { get; set; }
     public bool InstallLecram { get; set; }
-    /// <summary>Lets ShortFuse's and Lecram's add-ons be on together (NR then runs twice); off keeps one NR add-on per game (<see cref="NrAddons"/>).</summary>
-    public bool AllowSeveralNrAddons { get; set; }
     /// <summary>The OptiScaler build's repo. New installs start on F5; a saved choice is always kept.</summary>
     public string OptiSource { get; set; } = OptiSources.F5.Repo;
     public string? PreviousDlssNrId { get; set; }
@@ -145,7 +155,7 @@ public sealed class AppSettings
 
     /// <summary>Built-in presets first, then the user's.</summary>
     [JsonIgnore]
-    public IEnumerable<ConfigPreset> AllPresets => [ConfigProfile.RecommendedPreset(), .. Presets];
+    public IEnumerable<ConfigPreset> AllPresets => [ConfigProfile.DefaultPreset(), .. Presets];
 
     /// <summary>The game's chosen preset; its own game-only presets are looked at before the global and built-in ones.</summary>
     public ConfigPreset? PresetFor(string gameId) =>
@@ -166,6 +176,8 @@ public sealed class AppSettings
     /// <summary>Default Deep Fried Chicken build (library id); null follows the newest build in the library.</summary>
     public string? DfcId { get; set; }
     public List<AddonPairTest> AddonPairTests { get; set; } = [];
+    /// <summary>Default ReShade build: a library id, or "channel:nightly" (see <see cref="ReShadePick"/>); null follows the newest Stable add-on build.</summary>
+    public string? ReShadeId { get; set; }
     /// <summary>Default OptiScaler build (app tag, either source); null follows the newest release of the selected source.</summary>
     public string? OptiTag { get; set; }
     /// <summary>Default GITC Uplift build (release tag); null follows the newest release.</summary>
@@ -223,11 +235,10 @@ public sealed class AppSettings
                     s.CarryOverGameIni = true;
                     var sourceMigrated = s.OptiSource == ComponentStore.LegacyOptiRepo;
                     if (sourceMigrated) s.OptiSource = ComponentStore.OptiRepo;
-                    s.Presets.RemoveAll(p => p.Name.Equals(ConfigProfile.RecommendedName, StringComparison.OrdinalIgnoreCase));
+                    var presetsMigrated = s.MigratePresets();
                     var renoDxMigrated = RenoDxIni.Migrate(s);
-                    var addonsMigrated = NrAddons.Migrate(s);
                     var lecramMigrated = s.MigrateLecramNewest();
-                    if (s._legacyTokenRead || sourceMigrated || renoDxMigrated || addonsMigrated || lecramMigrated) s.Save();
+                    if (s._legacyTokenRead || sourceMigrated || presetsMigrated || renoDxMigrated || lecramMigrated) s.Save();
                     return s;
                 }
             }
@@ -238,6 +249,47 @@ public sealed class AppSettings
             KeepUnreadable();
         }
         return new AppSettings { LecramNewestMigrated = true };
+    }
+
+    /// <summary>
+    /// The built-in preset is now "Default": games that used the retired Recommended preset fall back to the current
+    /// settings, and a user preset called "Default" is renamed so it doesn't clash. Returns true when the settings changed.
+    /// </summary>
+    internal bool MigratePresets()
+    {
+        var changed = Presets.RemoveAll(p => IsName(p.Name, ConfigProfile.RetiredRecommendedName)) > 0;
+        foreach (var g in Games.Values)
+        {
+            if (g.Presets is not null) changed |= g.Presets.RemoveAll(p => IsName(p.Name, ConfigProfile.RetiredRecommendedName)) > 0;
+            if (IsName(g.Preset, ConfigProfile.RetiredRecommendedName))
+            {
+                g.Preset = null;
+                changed = true;
+            }
+        }
+        changed |= RenameClashing(Presets.Where(p => IsName(p.Name, ConfigProfile.DefaultName)).ToList(), Presets, null);
+        foreach (var g in Games.Values)
+            if (g.Presets is not null)
+                changed |= RenameClashing(g.Presets.Where(p => IsName(p.Name, ConfigProfile.DefaultName)).ToList(), g.Presets, g);
+        return changed;
+
+        static bool IsName(string? a, string b) => a is not null && a.Equals(b, StringComparison.OrdinalIgnoreCase);
+
+        // Presets named "Default" get a free "Default (mine)" name; games pointing at one follow the rename.
+        bool RenameClashing(List<ConfigPreset> clashing, List<ConfigPreset> list, GameOverride? owner)
+        {
+            foreach (var p in clashing)
+            {
+                var old = p.Name;
+                var name = "Default (mine)";
+                for (var i = 2; list.Any(x => IsName(x.Name, name)); i++) name = $"Default (mine {i})";
+                p.Name = name;
+                IEnumerable<GameOverride> users = owner is null ? Games.Values.Where(x => x.Presets?.Any(q => q.Name == old) != true) : new[] { owner };
+                foreach (var g in users)
+                    if (g.Preset == old) g.Preset = name;
+            }
+            return clashing.Count > 0;
+        }
     }
 
     /// <summary>One time: the Lecram default goes back to "Newest". Returns true when the settings changed.</summary>
@@ -367,6 +419,13 @@ public sealed class AppSettings
 [JsonSerializable(typeof(CachedComponent))]
 [JsonSerializable(typeof(NrVersion))]
 [JsonSerializable(typeof(AddonBuild))]
+[JsonSerializable(typeof(HdrBuild))]
+[JsonSerializable(typeof(LumaBuild))]
+[JsonSerializable(typeof(TechOverride))]
+[JsonSerializable(typeof(LimiterBuild))]
+[JsonSerializable(typeof(ReShadeBuild))]
 [JsonSerializable(typeof(AddonPairTest))]
 [JsonSerializable(typeof(Dictionary<string, InstallRefs>))]
+[JsonSerializable(typeof(Dictionary<string, PeScanResult>))]
+[JsonSerializable(typeof(CatalogDocument))]
 internal partial class JsonCtx : JsonSerializerContext;

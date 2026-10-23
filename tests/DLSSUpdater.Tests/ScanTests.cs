@@ -61,6 +61,20 @@ public class ScanTests : IDisposable
     }
 
     [Fact]
+    public void Inspect_SkipsOurOwnBackupFolders()
+    {
+        Touch(@"Game.exe", 100);
+        var real = Touch(@"Bin\nvngx_dlss.dll");
+        Touch(@"_DLSS5_Backup\originals\0b1c\nvngx_dlss.dll");
+        Touch(@".dlssupdater\backup\nvngx_dlss.dll");
+
+        var g = new GameInfo { Root = _root, Name = "Game" };
+        GameInspector.Inspect(g);
+
+        Assert.Equal(real, Assert.Single(g.Dlss).Path);
+    }
+
+    [Fact]
     public void Inspect_UnityPlayerBeatsBiggerModTool()
     {
         var game = Touch(@"Beat Saber.exe", 10);
@@ -179,6 +193,22 @@ public class ScanTests : IDisposable
             acl.RemoveAccessRule(deny);
             apps.SetAccessControl(acl);
         }
+    }
+
+    [Fact]
+    public void Steam_AppId_FromTheManifest_ReachesTheInspectedGame()
+    {
+        var lib = SteamLibrary("ids", "Known Game");
+        Directory.CreateDirectory(Path.Combine(lib, "steamapps", "common", "Copied Game"));
+        File.WriteAllBytes(Path.Combine(lib, "steamapps", "common", "Copied Game", "game.exe"), [(byte)'M', (byte)'Z']);
+
+        var games = Launchers.SteamLibraries([lib]).OrderBy(g => g.Name).ToList();
+
+        Assert.Equal(["Copied Game", "Known Game"], games.Select(g => g.Name).ToArray());
+        Assert.Null(games[0].SteamAppId);
+        Assert.Equal(1, games[1].SteamAppId);
+        Assert.Equal(1, GameScanner.Inspect(games[1]).SteamAppId);
+        Assert.Null(GameScanner.Inspect(new GameEntry("Other", _root, "Manual")).SteamAppId);
     }
 
     [Fact]

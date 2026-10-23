@@ -33,6 +33,10 @@ public sealed record InstallOptions
     public bool Dfc { get; init; }
     /// <summary>Deep Fried Chicken build from the library (it decides the set, the default cfg and non-DLSS support); null = the default build.</summary>
     public string? DfcId { get; init; }
+    /// <summary>DLSS5-Feeder for a game without DLSS (needs <see cref="Dfc"/>, see <see cref="NrAddons.FeederRefusal"/>); recorded as a generic component.</summary>
+    public bool Feeder { get; init; }
+    /// <summary>Feeder build from the library; null = the newest.</summary>
+    public string? FeederId { get; init; }
     public bool Dlss { get; init; }
     /// <summary>Put nvngx_dlss.dll next to OptiScaler when the game has none (independent of <see cref="Dlss"/>).</summary>
     public bool AddMissingDlss { get; init; }
@@ -51,7 +55,15 @@ public sealed record InstallOptions
     public string Proxy { get; init; } = "dxgi.dll";
     public IReadOnlyList<IniOverride> Overrides { get; init; } = [];
     public IReadOnlyList<IniOverride> ReShadeOverrides { get; init; } = [];
+    /// <summary>ReShade build for this game: a library id or "channel:..." (see <see cref="ReShadePick"/>); null = the default.</summary>
+    public string? ReShadeBuildPick { get; init; }
+    /// <summary>The user's ReShade.ini template (<see cref="ReShadeIniTemplate"/>), merged under <see cref="ReShadeOverrides"/>.</summary>
+    public IReadOnlyList<IniOverride> ReShadeTemplate { get; init; } = [];
+    /// <summary>ReShade loads through the Vulkan implicit layer: no dll goes into the game, its ReShade.ini switches ReShade on there.</summary>
+    public bool ReShadeVulkan { get; init; }
     public bool AntiCheatConfirmed { get; init; }
+    /// <summary>The clashes the user accepted for this selection (<see cref="Installer.ConflictKey"/>); an install with other clashes needs a new confirmation.</summary>
+    public string? ConfirmedConflict { get; init; }
     /// <summary>OptiScaler-NR release to install from the cache; null = the newest.</summary>
     public string? OptiTag { get; init; }
     /// <summary>MFG Unlock release to install from the cache ("local" = the imported file); null = the newest.</summary>
@@ -76,6 +88,7 @@ public sealed record InstallOptions
         RenoDxId = m.RenoDxId ?? RenoDxId,
         LecramId = m.LecramId ?? LecramId,
         DfcId = m.DfcId ?? DfcId,
+        FeederId = m.Component(ComponentRegistry.Feeder)?.BuildId ?? FeederId,
     };
 }
 
@@ -89,15 +102,18 @@ public sealed class GameFileInUseException(string gameName, Exception inner)
 public sealed class GameRunningException(string exe)
     : Exception($"{Path.GetFileName(exe)} is running. Close the game first.");
 
-public sealed class Installer(ComponentStore store)
+public sealed partial class Installer(ComponentStore store)
 {
+    /// <summary>The machine's Vulkan layer registration, read to see whether a Vulkan install can work; tests substitute a fake.</summary>
+    public IVulkanLayerHost VulkanHost { get; init; } = new WindowsVulkanLayerHost();
+
     private static readonly string[] LegacyFiles =
         ["OptiScaler.asi", "nvngx.dll_dlssnr.dll", "Remove OptiScaler.bat", "Remove_OptiScaler.bat", "OptiScaler.dll"];
 
     private static readonly string[] PackageDirs = ["OptiScaler", "Licenses"];
     private static readonly string[] LogFiles = ["OptiScaler.log", "ReShade.log", "ReShade64.log"];
 
-    private sealed record Ctx(string Root, string Target, InstallManifest M)
+    private sealed record Ctx(string Root, string Target, InstallManifest M, IReadOnlySet<string>? Keep = null, GameInfo? Game = null)
     {
         public string Rel(string full) => InstallManifest.Entry(full, Target, Root);
         /// <summary>Entries live in the game or in the install folder, which the user may have picked outside the game.</summary>
@@ -137,12 +153,10 @@ public sealed class Installer(ComponentStore store)
     {
         if (o.Uplift)
         {
-            if (!o.ReShadeOnly || o.Opti || o.RenoDx || o.Lecram || o.Dfc)
-                throw new InvalidOperationException("GITC Uplift replaces OptiScaler-NR, ShortFuse, Lecram and Deep Fried Chicken; pick one route.");
-            if (!o.DlssNr) throw new InvalidOperationException("GITC Uplift needs an imported NR runtime.");
+            if (!o.DlssNr) throw new InvalidOperationException("GITC Uplift needs the NR runtime (downloaded automatically, or import it in Settings).");
             o = o with { ReShade = true };
             var exe = game.Exes.FirstOrDefault(f => string.Equals(Path.GetDirectoryName(f), targetDir, StringComparison.OrdinalIgnoreCase))
-                ?? game.Exes.FirstOrDefault()
+                ?? game.MainExe
                 ?? throw new InvalidOperationException("GITC Uplift needs a game executable to verify that the game is 64-bit x64.");
             {
                 using var stream = File.OpenRead(exe);
@@ -153,33 +167,24 @@ public sealed class Installer(ComponentStore store)
         }
         if (o.ReShadeOnly && !o.ReShade) throw new InvalidOperationException("ReShade + add-ons mode installs ReShade as the proxy; ReShade can't be left out.");
         if (!AppSettings.IsKnownProxy(o.Proxy)) throw new InvalidOperationException($"\"{o.Proxy}\" is not a proxy name DLSS5 Updater installs under.");
-        EnsureNoDoubleMfgUnlock(targetDir, o);
+        o = WithMfgDefaults(targetDir, o);
+        var conflictKey = EnsureConflictsConfirmed(targetDir, o);
         // Fetch everything first so a network failure never leaves a half-installed game.
         var pkg = o.Opti && !o.ReShadeOnly ? await store.EnsureOptiAsync(o.OptiTag, progress, ct) : null;
         var dlssNr = o.DlssNr;
         var nrPath = dlssNr ? store.VerifiedDlssNrPath(o.DlssNrId ?? store.SelectedDlssNr()) : null;
-        if (o.RenoDx && !o.ReShadeOnly)
-            throw new InvalidOperationException("The RenoDX DLSS add-on only works in ReShade + add-ons mode: with OptiScaler-NR there would be two NR injectors.");
         if (o.RenoDx && (!o.ReShade || !dlssNr))
-            throw new InvalidOperationException("RenoDX needs ReShade with add-on support and an imported NR runtime.");
+            throw new InvalidOperationException("RenoDX needs ReShade with add-on support and the NR runtime (downloaded automatically, or import it in Settings).");
         // DLSS files an earlier install of ours added (for DFC or OptiScaler) don't make the game a DLSS game.
         var nativeDlss = (o.RenoDx || o.Lecram || o.Dfc) && HasNativeDlss(game, InstallManifest.Read(targetDir), targetDir);
         if (o.RenoDx && !nativeDlss)
             throw new InvalidOperationException("RenoDX needs a game with native DLSS.");
-        if (o.Lecram && !o.ReShadeOnly)
-            throw new InvalidOperationException("Lecram's DLSS5 add-on only works in ReShade + add-ons mode: with OptiScaler-NR there would be two NR injectors.");
         if (o.Lecram && (!o.ReShade || !dlssNr))
-            throw new InvalidOperationException("Lecram's DLSS5 add-on needs ReShade with add-on support and an imported NR runtime.");
+            throw new InvalidOperationException("Lecram's DLSS5 add-on needs ReShade with add-on support and the NR runtime (downloaded automatically, or import it in Settings).");
         if (o.Lecram && !nativeDlss)
             throw new InvalidOperationException("Lecram's DLSS5 add-on needs a game with native DLSS.");
-        if (o.Dfc && o.RenoDx)
-            throw new InvalidOperationException("Deep Fried Chicken and the RenoDX DLSS add-on can't run together: pick one.");
-        if (o.Dfc && o.Lecram)
-            throw new InvalidOperationException("Deep Fried Chicken and Lecram's DLSS5 add-on can't run together: pick one.");
-        if (o.Dfc && !o.ReShadeOnly)
-            throw new InvalidOperationException("Deep Fried Chicken only works in ReShade + add-ons mode: with OptiScaler-NR there would be two NR injectors.");
         if (o.Dfc && (!o.ReShade || !dlssNr))
-            throw new InvalidOperationException("Deep Fried Chicken needs ReShade with add-on support and an imported NR runtime.");
+            throw new InvalidOperationException("Deep Fried Chicken needs ReShade with add-on support and the NR runtime (downloaded automatically, or import it in Settings).");
         var renoDx = o.RenoDx ? store.RequireAddon(AddonKind.RenoDx, o.RenoDxId) : null;
         var lecram = o.Lecram ? store.RequireAddon(AddonKind.Lecram, o.LecramId) : null;
         var dfc = o.Dfc ? store.RequireAddon(AddonKind.Dfc, o.DfcId).Build : null;
@@ -187,6 +192,8 @@ public sealed class Installer(ComponentStore store)
             throw new InvalidOperationException(DfcNeedsNativeDlss(dfc.FileVersion));
         // INSTALL.txt: add your own nvngx_dlss.dll beside the game exe; DFC does not ship it. The game has none of its own here.
         var dfcRuntimes = dfc is not null && !nativeDlss;
+        var feeder = o.Feeder ? await store.EnsureFeederAsync(o.FeederId, progress, ct) : null;
+        if (feeder is not null && nativeDlss) Log.Warn($"{game.Name}: the game has its own DLSS, so Deep Fried Chicken works on it directly and DLSS5-Feeder isn't needed");
         var uplift = o.Uplift ? await store.EnsureUpliftAsync(o.UpliftTag, progress, ct) : null;
         if (o.Uplift && UpliftConfig.Warning(o.UpliftTag ?? store.Uplift?.Tag) is { } upliftWarning) Log.Warn($"{game.Name}: {upliftWarning}");
         var addMissing = o.AddMissingDlss && o.Opti;
@@ -199,7 +206,15 @@ public sealed class Installer(ComponentStore store)
         var swapSl = o.Streamline || mfgPlan?.SwapStreamline == true;
         var sl = swapSl && game.Streamline.Count > 0 ? await store.EnsureStreamlineAsync(progress, ct) : null;
         if (o.Streamline && game.Streamline.Count == 0) Log.Info($"{game.Name}: no Streamline files in this game, skipped");
-        var reshade = o.ReShade ? await store.EnsureReShadeFileAsync(progress, ct) : null;
+        // ReShade32.dll for a 32-bit game when ReShade is the proxy; beside OptiScaler it is always the 64-bit ReShade64.dll it loads.
+        var reshadeFile = o.ReShade ? await store.EnsureReShadeAsync(o.ReShadeBuildPick, o.ReShadeOnly && game.Effective.Bits == 32 ? 32 : 64, progress, ct) : null;
+        var reshade = reshadeFile?.Path;
+        if (o.ReShade && o.ReShadeVulkan)
+        {
+            if (!o.ReShadeOnly) throw new InvalidOperationException("The Vulkan layer route needs ReShade + add-ons mode: OptiScaler loads ReShade64.dll itself.");
+            if (!VulkanLayer.Status(VulkanHost).IsInstalled)
+                throw new InvalidOperationException("This game uses Vulkan, so ReShade loads through its Vulkan layer. Install the layer first (Settings → ReShade → Vulkan layer; one administrator prompt).");
+        }
         if (o.RenoDx && (reshade is null || FileUtil.ReadVersion(reshade) is not { Major: >= 6 }))
             throw new InvalidOperationException("RenoDX needs ReShade 6 or newer with full add-on support.");
         if (o.Lecram && (reshade is null || FileUtil.ReadVersion(reshade) is not { Major: >= 6 }))
@@ -217,7 +232,7 @@ public sealed class Installer(ComponentStore store)
         // An unreadable or unsafe record stops the install instead of starting over and burying the originals.
         var m = InstallManifest.Read(targetDir) ?? new InstallManifest();
         m.Contain(targetDir, game.Root);
-        var ctx = new Ctx(FileUtil.Normalize(game.Root), targetDir, m);
+        var ctx = new Ctx(FileUtil.Normalize(game.Root), targetDir, m, KeptAddonFiles(o), game);
         if (o.Uplift)
             foreach (var full in ComponentStore.UpliftFiles.Select(f => Path.Combine(targetDir, f)).Append(UpliftConfig.NrPath(targetDir)))
                 if (FileUtil.LinkBelow(FileUtil.IsUnder(full, ctx.Root) ? ctx.Root : ctx.Target, full) is { } link)
@@ -244,13 +259,15 @@ public sealed class Installer(ComponentStore store)
                     if (reshade is null) { m.ReShade = false; m.ReShadeSha = null; }
                 }
                 // One proxy per install: a new name takes ours out under the old one and puts back what it replaced.
-                if ((o.ReShadeOnly || pkg is not null) && m.Proxy is { } oldProxy && !oldProxy.Equals(o.Proxy, StringComparison.OrdinalIgnoreCase))
+                if ((o.ReShadeOnly || pkg is not null) && m.Proxy is { } oldProxy && (!oldProxy.Equals(o.Proxy, StringComparison.OrdinalIgnoreCase) || (o.ReShadeVulkan && reshade is not null)))
                     RemoveOwned(ctx, Path.Combine(targetDir, oldProxy));
                 if (o.ReShadeOnly || pkg is not null || reshade is not null) m.Mode = o.Mode;
 
                 // Only a run that sets up the injectors drops the add-on; a DLSS-only update keeps it.
                 if (!o.RenoDx && m.RenoDx && (o.ReShade || pkg is not null)) RemoveRenoDx(ctx);
                 if (!o.Lecram && m.Lecram && (o.ReShade || pkg is not null)) RemoveLecram(ctx);
+                // Feeder goes before the consumer it feeds; a run that doesn't ask for it takes it out.
+                if (!o.Feeder && m.Component(ComponentRegistry.Feeder) is { } oldFeeder && (o.ReShade || pkg is not null)) UndoComponent(ctx, oldFeeder);
                 if (!o.Dfc && m.Dfc && (o.ReShade || pkg is not null)) RemoveDfc(ctx);
                 if (!o.Uplift && m.Uplift && (o.ReShade || pkg is not null)) RemoveUplift(ctx);
                 if (!o.Mfg && !o.KeepMfg && m.Mfg && (o.ReShade || pkg is not null)) RemoveMfg(ctx);
@@ -268,15 +285,30 @@ public sealed class Installer(ComponentStore store)
                 {
                     WriteReShadeIni(ctx, o, addonEffects: uplift is not null || (dfc is not null && ComponentStore.DfcInstallFiles(dfc).Any(f => f.StartsWith(ComponentStore.DfcShaderDir + "\\", StringComparison.OrdinalIgnoreCase))),
                         lecram: lecram?.Build);
-                    // ReShade-only: ReShade itself is the proxy the game loads; otherwise OptiScaler loads ReShade64.dll.
-                    Place(ctx, reshade, Path.Combine(targetDir, o.ReShadeOnly ? o.Proxy : ComponentStore.ReShadeFile));
-                    if (o.ReShadeOnly)
+                    if (o.ReShadeVulkan)
                     {
-                        m.Proxy = o.Proxy;
-                        Log.Info($"  {o.Proxy} ← ReShade");
+                        // The layer in ProgramData carries ReShade; the game only gets the ReShade.ini that switches it on.
+                        m.Proxy = null;
+                        Log.Info("  ReShade loads through the Vulkan layer (ReShade.ini written, no dll placed)");
+                    }
+                    else
+                    {
+                        // ReShade-only: ReShade itself is the proxy the game loads; otherwise OptiScaler loads ReShade64.dll.
+                        var proxyName = o.ReShadeOnly ? o.Proxy : ComponentStore.ReShadeFile;
+                        var proxyPath = Path.Combine(targetDir, proxyName);
+                        if (!m.Owns(ctx.Rel(proxyPath)) && ForeignDll.Warning(proxyName, ForeignDll.Identify(proxyPath)) is { } foreign)
+                            Log.Warn($"{game.Name}: {foreign}");
+                        Place(ctx, reshade, proxyPath);
+                        if (o.ReShadeOnly)
+                        {
+                            m.Proxy = o.Proxy;
+                            Log.Info($"  {o.Proxy} ← ReShade {reshadeFile!.Build.Version}");
+                        }
                     }
                     m.ReShade = true;
                     m.ReShadeSha = HashCache.Get(reshade);
+                    m.ReShadeId = reshadeFile!.Build.Id;
+                    m.ReShadeVulkan = o.ReShadeVulkan;
                 }
                 if (mfg is not null)
                 {
@@ -286,8 +318,8 @@ public sealed class Installer(ComponentStore store)
                 }
                 if (renoDx is not null)
                 {
-                    // Lecram's add-on may stay next to ShortFuse's; its placement below sorts out its own files.
-                    foreach (var name in ComponentStore.ForeignNrAddons.Where(n => !o.Lecram || !ComponentStore.LecramFiles.Contains(n, StringComparer.OrdinalIgnoreCase)))
+                    // An add-on this run also installs stays; its placement below sorts out its own files.
+                    foreach (var name in ComponentStore.ForeignNrAddons.Where(n => !ctx.Keep!.Contains(n)))
                     {
                         var other = Path.Combine(targetDir, name);
                         if (m.Owns(ctx.Rel(other))) { RemoveOwned(ctx, other); Log.Info($"  removed {ctx.Rel(other)} (replaced by {ComponentStore.RenoDxFile})"); }
@@ -325,6 +357,7 @@ public sealed class Installer(ComponentStore store)
                     m.DfcTag = dfc.Tag;
                     m.DfcId = dfc.Id;
                 }
+                if (feeder is not null) ApplyPlan(ctx, FeederLibrary.Plan(feeder, game, targetDir));
                 if (uplift is not null)
                 {
                     DisplaceForeignNrAddons(ctx, [ComponentStore.RenoDxFile, .. ComponentStore.ForeignNrAddons.Where(f => !ComponentStore.UpliftFiles.Contains(f))]);
@@ -351,6 +384,7 @@ public sealed class Installer(ComponentStore store)
                     m.StreamlineTag = store.Streamline?.Tag;
                 }
                 m.AntiCheatConfirmed |= o.AntiCheatConfirmed;
+                m.ConfirmedConflict = conflictKey;
                 Log.Info($"{game.Name}: done ({targetDir})");
             }
             catch (UnauthorizedAccessException) { throw new NeedsAdminException(targetDir); }
@@ -360,6 +394,65 @@ public sealed class Installer(ComponentStore store)
                 if (!m.IsEmpty) m.Save(targetDir);
             }
         }, ct);
+    }
+
+    /// <summary>
+    /// The neural routes this run leaves in the game, with the DX11 bridge when one sits in the folder (nothing of ours removes it).
+    /// </summary>
+    internal static List<NrAddon> RoutesOf(InstallOptions o, string targetDir)
+    {
+        var routes = new List<NrAddon>();
+        if (o.Opti && !o.ReShadeOnly) routes.Add(NrAddon.OptiScaler);
+        if (o.RenoDx) routes.Add(NrAddon.RenoDx);
+        if (o.Lecram) routes.Add(NrAddon.Lecram);
+        if (o.Dfc) routes.Add(NrAddon.Dfc);
+        if (o.Uplift) routes.Add(NrAddon.Uplift);
+        if (NrAddons.PresentIn(targetDir, null).Contains(NrAddon.Bridge)) routes.Add(NrAddon.Bridge);
+        return routes;
+    }
+
+    /// <summary>
+    /// Why this selection is a poor mix, one line each; empty when it is fine. Never blocks by itself: the user confirms the
+    /// lines (<see cref="InstallOptions.ConfirmedConflict"/>), the install goes ahead and the warning stays on the game.
+    /// Covers the one-neural-consumer rule (docs/advisor.md, decision table row 18), DLSS5-Feeder's partner and
+    /// OptiScaler's built-in MFG unlock next to the MFG Unlock add-on.
+    /// </summary>
+    public static IReadOnlyList<string> Conflicts(string targetDir, InstallOptions o)
+    {
+        var routes = RoutesOf(o, targetDir);
+        var found = new List<string>(NrAddons.Conflicts(routes));
+        if (o.Feeder && NrAddons.FeederConflict(routes) is { } feeder) found.Add(feeder);
+        if (MfgUnlockConflict(targetDir, WithMfgDefaults(targetDir, o)) is { } mfg) found.Add(mfg);
+        if (InjectsFiles(o) && IsStorePath(targetDir)) found.Add(MethodAdvisor.StoreCaution);
+        return found;
+    }
+
+    private static bool InjectsFiles(InstallOptions o) => o.Opti || o.ReShade || o.Mfg || o.DlssNr || o.RenoDx || o.Lecram || o.Dfc || o.Uplift || o.Feeder;
+
+    private static bool IsStorePath(string dir) => dir.Contains(@"\WindowsApps\", StringComparison.OrdinalIgnoreCase);
+
+    /// <summary>The identity of a set of conflicts: a stored confirmation counts while the key stays the same.</summary>
+    public static string ConflictKey(IReadOnlyList<string> conflicts) => string.Join("\n", conflicts);
+
+    private static string? EnsureConflictsConfirmed(string targetDir, InstallOptions o)
+    {
+        if (o.Feeder && !o.ReShadeOnly) throw new InvalidOperationException("DLSS5-Feeder is a ReShade add-on: it needs ReShade + add-ons mode.");
+        var conflicts = Conflicts(targetDir, o);
+        if (conflicts.Count == 0) return null;
+        var key = ConflictKey(conflicts);
+        if (o.ConfirmedConflict != key) throw new InvalidOperationException("This selection needs your confirmation first: " + string.Join(" ", conflicts));
+        return key;
+    }
+
+    /// <summary>The file names of the add-ons this run installs: they must not displace each other.</summary>
+    private static IReadOnlySet<string> KeptAddonFiles(InstallOptions o)
+    {
+        var keep = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        if (o.RenoDx) keep.Add(ComponentStore.RenoDxFile);
+        if (o.Lecram) keep.UnionWith(ComponentStore.LecramFiles);
+        if (o.Dfc) keep.UnionWith(ComponentStore.DfcPackageFiles);
+        if (o.Uplift) keep.UnionWith(ComponentStore.UpliftFiles);
+        return keep;
     }
 
     private static void InstallOpti(Ctx ctx, string pkg, InstallOptions o, OptiSource source)
@@ -448,7 +541,7 @@ public sealed class Installer(ComponentStore store)
         var rel = ctx.Rel(path);
         var exists = File.Exists(path);
         var original = exists ? File.ReadAllText(path) : null;
-        var profile = o.ReShadeOverrides
+        var profile = ConfigProfile.Layer(o.ReShadeVulkan ? [.. o.ReShadeTemplate, .. ReShadeIniTemplate.VulkanExtras] : o.ReShadeTemplate, o.ReShadeOverrides)
             .Where(x => o.RenoDx || !RenoDxIni.IsRenoDx(x))
             .Where(x => !LecramIni.IsLecram(x) || o.Lecram && LecramIni.IsAvailable(x.Key.Trim(), lecramGen, lecram?.DetectedLabel))
             .Where(x => o.Uplift || !UpliftConfig.IsUplift(x))
@@ -830,7 +923,7 @@ public sealed class Installer(ComponentStore store)
     /// <summary>Another NR injector next to OptiScaler's DLSSNR would run the model twice: move the ones we don't own away.</summary>
     private static void DisplaceForeignNrAddons(Ctx ctx, params string[] names)
     {
-        foreach (var name in names)
+        foreach (var name in names.Where(n => ctx.Keep?.Contains(n) != true))
         {
             var f = Path.Combine(ctx.Target, name);
             if (File.Exists(f) && !ctx.M.Owns(ctx.Rel(f))) Displace(ctx, f);
@@ -849,26 +942,37 @@ public sealed class Installer(ComponentStore store)
     }
 
     /// <summary>
-    /// OptiScaler-NR v0.9+ can unlock MFG itself ([DLSSG] AdaMfgUnlock / AmpereMfgUnlock) and says never to combine that
-    /// with an external unlocker, which the MFG Unlock add-on is. Checked before anything is fetched or written. The add-on
-    /// already in the game counts too while this run leaves it there (<see cref="InstallOptions.KeepMfg"/>).
+    /// OptiScaler's own MFG unlock ([DLSSG] AdaMfgUnlock / AmpereMfgUnlock, both shipped as false in the F5 build) must not run
+    /// together with the MFG Unlock add-on. With the add-on in play a run that sets up OptiScaler writes both keys as false unless
+    /// the user sets them: an override or a value they changed in the ini wins and shows up as a conflict.
     /// </summary>
-    private static void EnsureNoDoubleMfgUnlock(string targetDir, InstallOptions o)
+    internal static readonly string[] MfgConflictKeys = ["AdaMfgUnlock", "AmpereMfgUnlock"];
+
+    private static bool MfgAddonInPlay(string targetDir, InstallOptions o) =>
+        !o.ReShadeOnly && (o.Mfg || (o.KeepMfg && o.Opti && InstallManifest.Read(targetDir)?.Mfg == true));
+
+    private static InstallOptions WithMfgDefaults(string targetDir, InstallOptions o)
     {
-        var addonStays = o.KeepMfg && o.Opti && InstallManifest.Read(targetDir)?.Mfg == true;
-        if (!(o.Mfg || addonStays) || o.ReShadeOnly) return;
+        if (!o.Opti || !MfgAddonInPlay(targetDir, o)) return o;
+        var ours = MfgConflictKeys
+            .Where(k => !o.Overrides.Any(x => x.Section.Equals("DLSSG", StringComparison.OrdinalIgnoreCase) && x.Key.Equals(k, StringComparison.OrdinalIgnoreCase)))
+            .Select(k => new IniOverride("DLSSG", k, "false"));
+        return o with { Overrides = [.. ours, .. o.Overrides] };
+    }
+
+    private static string? MfgUnlockConflict(string targetDir, InstallOptions o)
+    {
+        if (!MfgAddonInPlay(targetDir, o)) return null;
         var iniPath = Path.Combine(targetDir, "OptiScaler.ini");
         // An MFG-only update still runs next to the OptiScaler already in the game.
-        if (!o.Opti) { if (!File.Exists(iniPath)) return; o = o with { Overrides = [], CarryOverIni = true }; }
+        if (!o.Opti) { if (!File.Exists(iniPath)) return null; o = o with { Overrides = [], CarryOverIni = true }; }
         var current = o.CarryOverIni && File.Exists(iniPath) ? File.ReadAllText(iniPath) : null;
         var lastApplied = InstallManifest.Read(targetDir)?.OptiIni;
         var effective = IniFile.Parse(ConfigProfile.Merge(current ?? "", current, o.Overrides, o.CarryOverIni, lastApplied, o.OverwriteIni).Text);
-        var on = new[] { "AdaMfgUnlock", "AmpereMfgUnlock" }
+        var on = MfgConflictKeys
             .Where(k => effective.Get("DLSSG", k) is { } v && (v.Equals("true", StringComparison.OrdinalIgnoreCase) || v == "1")).ToList();
-        if (on.Count > 0)
-            throw new InvalidOperationException(
-                $"OptiScaler's built-in MFG unlock ([DLSSG] {string.Join(", ", on)}) is on, and it must not run together with the MFG Unlock add-on. " +
-                "Turn one of them off.");
+        return on.Count == 0 ? null
+            : $"OptiScaler's built-in MFG unlock ([DLSSG] {string.Join(", ", on)}) is on next to the MFG Unlock add-on: both unlock MFG, and OptiScaler says never to combine them.";
     }
 
     /// <summary>Copies the package folder in place, skipping unchanged files and docs.</summary>
@@ -1194,7 +1298,7 @@ public sealed class Installer(ComponentStore store)
         var m = InstallManifest.Read(targetDir) ?? throw new InvalidOperationException("Install NR in this game first.");
         m.Contain(targetDir, game.Root);
         if (!m.DlssNr) throw new InvalidOperationException("Install NR in this game first.");
-        var ctx = new Ctx(FileUtil.Normalize(game.Root), targetDir, m);
+        var ctx = new Ctx(FileUtil.Normalize(game.Root), targetDir, m, null, game);
         var source = store.VerifiedDlssNrPath(id ?? store.SelectedDlssNr());
         var target = m.Uplift ? UpliftConfig.NrPath(targetDir) : Path.Combine(targetDir, ComponentStore.DlssNrFile);
         var previous = File.Exists(target) ? store.RetainDlssNr(target) : null;
@@ -1221,14 +1325,31 @@ public sealed class Installer(ComponentStore store)
         EnsureNotRunning(game.Root);
         var m = InstallManifest.Read(targetDir) ?? throw new InvalidOperationException("No DLSS5 Updater install found here.");
         m.Contain(targetDir, game.Root);
-        var ctx = new Ctx(FileUtil.Normalize(game.Root), targetDir, m);
+        var ctx = new Ctx(FileUtil.Normalize(game.Root), targetDir, m, null, game);
         try
         {
             // Every step is recorded as soon as it is done, so a retry after a failure part-way (a locked file)
             // carries on where it stopped and never deletes an original that was already put back.
+            foreach (var c in Enumerable.Reverse(m.Components).ToList()) UndoComponent(ctx, c);
+            // Files of the components kept the old way whose placed version is known (ReShade, the NR runtime).
+            var placed = LegacyComponents.Project(m).SelectMany(c => c.Files).Where(f => f.Sha256 is not null)
+                .GroupBy(f => f.Path, StringComparer.OrdinalIgnoreCase).ToDictionary(g => g.Key, g => g.First().Sha256!, StringComparer.OrdinalIgnoreCase);
             foreach (var rel in m.Files.ToList())
             {
                 var full = ctx.Full(rel);
+                if (placed.TryGetValue(rel, out var sha) && File.Exists(full) && !FileUtil.Sha256(full).Equals(sha, StringComparison.OrdinalIgnoreCase))
+                {
+                    // Changed by the user or the game since: it stays, and the original it replaced is not put back over it.
+                    Log.Warn($"  {rel}: changed since it was installed (by you or the game), left in place");
+                    if (m.BackupOf(rel) is { } stale)
+                    {
+                        FileUtil.DeleteFile(Path.Combine(ctx.BackupDir, stale.Backup));
+                        m.Backups.Remove(stale);
+                    }
+                    m.Files.Remove(rel);
+                    m.Save(targetDir);
+                    continue;
+                }
                 TryDelete(full);
                 // Only below the install folder: folders a file of ours needed (DFC's neural folder, reshade-shaders) go when empty.
                 if (FileUtil.IsUnder(full, targetDir)) DeleteEmptyDirs(ctx, Path.GetDirectoryName(full)!);
@@ -1262,7 +1383,7 @@ public sealed class Installer(ComponentStore store)
         EnsureNotRunning(game.Root);
         var m = InstallManifest.Read(targetDir) ?? throw new InvalidOperationException("No DLSS5 Updater install found here.");
         m.Contain(targetDir, game.Root);
-        var ctx = new Ctx(FileUtil.Normalize(game.Root), targetDir, m);
+        var ctx = new Ctx(FileUtil.Normalize(game.Root), targetDir, m, null, game);
         try
         {
             foreach (var b in m.Backups.Where(b => b.Kind is "dlss" or "streamline").ToList())
@@ -1271,8 +1392,10 @@ public sealed class Installer(ComponentStore store)
                 m.Backups.Remove(b);
             }
             // The runtimes placed for DFC are part of that install, not a DLSS update: they leave with DFC.
+            // So are files a component recorded the generic way placed: they leave with that component.
             foreach (var rel in m.Files.Where(f => ComponentStore.DlssFiles.Contains(Path.GetFileName(f), StringComparer.OrdinalIgnoreCase)
-                                                   && !m.DfcRuntimes.Contains(f, StringComparer.OrdinalIgnoreCase)).ToList())
+                                                   && !m.DfcRuntimes.Contains(f, StringComparer.OrdinalIgnoreCase)
+                                                   && !m.Components.Any(c => c.FileAt(f) is not null)).ToList())
             {
                 TryDelete(ctx.Full(rel));
                 m.Files.Remove(rel);

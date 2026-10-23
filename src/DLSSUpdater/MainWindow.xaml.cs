@@ -16,6 +16,7 @@ public partial class MainWindow : Window
     private double _settingsOffset;
     // Inside the deferred settings and about pages; set once each page is first shown.
     private ScrollViewer? _settingsScroll;
+    private FrameworkElement? _settingsRoot;
     private ScrollViewer? _aboutScroll;
     private ItemsControl? _guideList;
 
@@ -37,7 +38,18 @@ public partial class MainWindow : Window
         Closed += (_, _) => Core.HashCache.Save();
         PreviewKeyDown += OnPreviewKeyDown;
         KeyDown += OnKeyDown;
-        SettingsHost.Realized += root => _settingsScroll = Deferred.Find<ScrollViewer>(root, "SettingsScroll");
+        SettingsHost.Realized += root =>
+        {
+            _settingsRoot = root;
+            _settingsScroll = Deferred.Find<ScrollViewer>(root, "SettingsScroll");
+        };
+        _vm.FocusGitHubToken += () => Dispatcher.BeginInvoke(() =>
+        {
+            if (_settingsRoot is null) return;
+            var box = Deferred.Find<TextBox>(_settingsRoot, "GitHubTokenBox");
+            box.BringIntoView();
+            box.Focus();
+        }, System.Windows.Threading.DispatcherPriority.Loaded);
         AboutHost.Realized += root =>
         {
             _aboutScroll = Deferred.Find<ScrollViewer>(root, "AboutScroll");

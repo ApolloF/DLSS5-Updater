@@ -79,8 +79,8 @@ public class GameConfigTests
     public void Effective_BuiltInPresetCanBeTheBase()
     {
         var s = Settings();
-        s.For(Game).Preset = ConfigProfile.RecommendedName;
-        Assert.Equal(Flat(ConfigProfile.Recommended()), Flat(GameConfig.EffectiveOpti(s, Game)));
+        s.For(Game).Preset = ConfigProfile.DefaultName;
+        Assert.Empty(GameConfig.EffectiveOpti(s, Game));
     }
 
     [Fact]
@@ -211,7 +211,7 @@ public class GameConfigTests
     [Theory]
     [InlineData("Global")]
     [InlineData("global")]
-    [InlineData(ConfigProfile.RecommendedName)]
+    [InlineData(ConfigProfile.DefaultName)]
     public void SavePreset_GameOnly_CannotShareANameWithAGlobalOrBuiltInPreset(string name)
     {
         var s = Settings();
@@ -220,7 +220,7 @@ public class GameConfigTests
     }
 
     [Theory]
-    [InlineData(ConfigProfile.RecommendedName)]
+    [InlineData(ConfigProfile.DefaultName)]
     [InlineData("MINE")]
     public void SavePreset_Global_CannotShareANameWithABuiltInOrAnotherGamesPreset(string name)
     {

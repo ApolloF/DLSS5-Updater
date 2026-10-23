@@ -250,7 +250,7 @@ public sealed class RenoDxTests : IDisposable
         Assert.All(options, o => Assert.Equal(RenoDxIni.SectionOf(o.Key), o.Section));
         Assert.Contains(options, o => o.Section == RenoDxIni.PresetSection);
         Assert.Contains(options, o => o.Section == RenoDxIni.Section);
-        Assert.All(ConfigProfile.RecommendedReShade().Where(RenoDxIni.IsRenoDx), o => Assert.Equal(RenoDxIni.SectionOf(o.Key), o.Section));
+        Assert.All(TestProfiles.RecommendedReShade().Where(RenoDxIni.IsRenoDx), o => Assert.Equal(RenoDxIni.SectionOf(o.Key), o.Section));
 
         // Ranges and label counts from the add-on's Setting constructors (0928 / 1016).
         double[] Values(string key) => options.Single(o => o.Key == "DirectNeuralRendering" + key).Choices

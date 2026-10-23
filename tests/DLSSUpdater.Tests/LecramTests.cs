@@ -90,6 +90,7 @@ public sealed class LecramTests : IDisposable
     {
         Mode = InstallMode.ReShadeOnly, ReShade = true, Lecram = lecram, RenoDx = renoDx, DlssNr = lecram || renoDx, DlssNrId = _nr.Id,
         Proxy = "dxgi.dll", ReShadeOverrides = overrides ?? [], LecramId = lecramId, RenoDxId = renoDxId,
+        ConfirmedConflict = lecram && renoDx ? Installer.ConflictKey(NrAddons.Conflicts([NrAddon.RenoDx, NrAddon.Lecram])) : null,
     };
 
     private static IniOverride Key(string key, string value) => new(LecramIni.Section, key, value);
@@ -564,7 +565,7 @@ public sealed class LecramTests : IDisposable
     }
 
     [Fact]
-    public async Task Lecram_InOptiScalerMode_OrWithDfc_Throws()
+    public async Task Lecram_InOptiScalerMode_OrWithDfc_NeedsConfirmationFirst()
     {
         _store.ImportLecram(FakeV10());
         var before = Snapshot();
@@ -572,7 +573,7 @@ public sealed class LecramTests : IDisposable
 
         var opti = await Assert.ThrowsAsync<InvalidOperationException>(() =>
             installer.InstallAsync(_game, _root, Lec() with { Mode = InstallMode.OptiScaler, Opti = true }, null, default));
-        Assert.Contains("ReShade + add-ons mode", opti.Message);
+        Assert.Contains("OptiScaler takes over", opti.Message);
         var dfc = await Assert.ThrowsAsync<InvalidOperationException>(() =>
             installer.InstallAsync(_game, _root, Lec() with { Dfc = true }, null, default));
         Assert.Contains("Lecram", dfc.Message);

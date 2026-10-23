@@ -91,6 +91,7 @@ public sealed class AddonLibraryTests : IDisposable
     {
         Mode = InstallMode.ReShadeOnly, ReShade = true, RenoDx = renoDx, Lecram = lecram, DlssNr = renoDx || lecram, DlssNrId = _nr.Id,
         Proxy = "dxgi.dll", RenoDxId = renoDxId, LecramId = lecramId,
+        ConfirmedConflict = renoDx && lecram ? Installer.ConflictKey(NrAddons.Conflicts([NrAddon.RenoDx, NrAddon.Lecram])) : null,
     };
 
     private GameViewModel NewGame(string? name = null)
@@ -325,7 +326,7 @@ public sealed class AddonLibraryTests : IDisposable
     }
 
     [Fact]
-    public void LecramDefault_APinStaysPinned_ANewerImportTakesItOver_ARemovedPinGoesBackToNewest()
+    public void LecramDefault_APinStaysPinned_EvenForANewerImport_ARemovedPinGoesBackToNewest()
     {
         var pinned = LecramV11("v11.0.0-beta.22");
         _settings.LecramId = pinned.Id;
@@ -334,13 +335,13 @@ public sealed class AddonLibraryTests : IDisposable
         Assert.Equal(pinned.Id, _settings.LecramId);
 
         var newer = LecramV11("v11.0.0-beta.45");
-        Assert.True(_store.AdoptImportedAddon(_settings, AddonKind.Lecram, newer));
-        Assert.Equal(newer.Id, _settings.LecramId);
+        Assert.False(_store.AdoptImportedAddon(_settings, AddonKind.Lecram, newer));
+        Assert.Equal(pinned.Id, _settings.LecramId);
 
-        _store.RemoveAddon(AddonKind.Lecram, newer.Id);
+        _store.RemoveAddon(AddonKind.Lecram, pinned.Id);
         Assert.True(_store.EnsureAddonDefaults(_settings));
         Assert.Null(_settings.LecramId);
-        Assert.Equal(pinned.Id, _store.LecramBuildFor(null)!.Id);
+        Assert.Equal(newer.Id, _store.LecramBuildFor(null)!.Id);
     }
 
     [Fact]
@@ -544,7 +545,6 @@ public sealed class AddonLibraryTests : IDisposable
         var otherLecram = LecramV11();
         _settings.RenoDxId = sf.Id;
         _settings.LecramId = lecram.Id;
-        _settings.AllowSeveralNrAddons = true;
         var vm = NewGame();
         vm.Components.First(c => c.Key == "renodx").Enabled = true;
         vm.Components.First(c => c.Key == "lecram").Enabled = true;
@@ -696,31 +696,25 @@ public sealed class AddonLibraryTests : IDisposable
     private static void Turn(GameViewModel vm, string key, bool on) => vm.Components.First(c => c.Key == key).Enabled = on;
 
     [Fact]
-    public void GameToggles_FollowTheSettingsRule()
+    public void GameToggles_AllowAnyMix_AndWarnAboutTheClash()
     {
         var vm = NewGame();
         Turn(vm, "renodx", true);
         Turn(vm, "lecram", true);
-        Assert.False(On(vm, "renodx"));
-        Assert.True(On(vm, "lecram"));
-        Assert.Null(vm.NrAddonWarning);
-        Turn(vm, "dfc", true);
-        Assert.False(On(vm, "lecram"));
-        Turn(vm, "dfc", false);
-        Assert.DoesNotContain(vm.Components, c => c.Key is "renodx" or "lecram" or "uplift" or "dfc" && c.Enabled);
-
-        _settings.AllowSeveralNrAddons = true;
-        Turn(vm, "renodx", true);
-        Turn(vm, "lecram", true);
         Assert.True(On(vm, "renodx") && On(vm, "lecram"));
         Assert.Contains("NR runs twice", vm.NrAddonWarning);
+        Turn(vm, "dfc", true);
+        Assert.True(On(vm, "renodx") && On(vm, "lecram") && On(vm, "dfc"));
         Turn(vm, "uplift", true);
-        Assert.False(On(vm, "renodx") || On(vm, "lecram"));
+        Assert.True(On(vm, "uplift") && On(vm, "renodx"));
+        Turn(vm, "dfc", false);
+        Turn(vm, "uplift", false);
+        Turn(vm, "lecram", false);
         Assert.Null(vm.NrAddonWarning);
     }
 
     [Fact]
-    public void GameWithBothInstalled_ShowsBoth_EvenWithoutTheOverride()
+    public void GameWithBothInstalled_ShowsBoth()
     {
         var root = Path.Combine(_tmp, "both-game");
         Directory.CreateDirectory(root);
