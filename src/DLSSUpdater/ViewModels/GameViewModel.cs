@@ -143,6 +143,7 @@ public sealed partial class GameViewModel : ObservableObject
             RefreshAddonPairStatus();
             NotifyDfcHint();
             RefreshModPick();
+            if (!_loading) SyncPick();
         };
         Info = info;
         Load(info);
@@ -197,6 +198,7 @@ public sealed partial class GameViewModel : ObservableObject
         if (_loading) return;
         _s.Settings.For(Id).Mode = value == _s.Settings.DefaultMode ? null : value;
         _s.Settings.Save();
+        SyncPick();
         RefreshStatus();
     }
 

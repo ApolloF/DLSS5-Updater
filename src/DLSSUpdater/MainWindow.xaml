@@ -943,7 +943,7 @@
                                         <Grid Margin="0,0,0,8">
                                             <Button Style="{StaticResource MethodCard}" IsEnabled="{Binding IsClickable}"
                                                     Command="{Binding DataContext.PickMethodCommand, RelativeSource={RelativeSource AncestorType=ItemsControl}}"
-                                                    CommandParameter="{Binding}" AutomationProperties.Name="{Binding Title, StringFormat='Pick {0}'}"
+                                                    CommandParameter="{Binding}" AutomationProperties.Name="{Binding Title, StringFormat='Use {0}'}"
                                                     ToolTip="{Binding CardTip}">
                                                 <Grid>
                                                     <Grid.ColumnDefinitions>
@@ -971,6 +971,9 @@
                                                             <Border Style="{StaticResource Badge}" Margin="8,0,0,0">
                                                                 <TextBlock Text="{Binding StateText}" Style="{StaticResource BadgeText}" />
                                                             </Border>
+                                                            <Border Style="{StaticResource Badge}" BorderBrush="{StaticResource Accent}" Visibility="{Binding IsTop, Converter={StaticResource BoolToVis}}">
+                                                                <TextBlock Text="Recommended" Style="{StaticResource BadgeText}" Foreground="{StaticResource Accent}" />
+                                                            </Border>
                                                         </StackPanel>
                                                         <TextBlock Text="{Binding Summary}" Foreground="{StaticResource Text}" FontSize="12" TextWrapping="Wrap" Margin="0,3,0,0" />
                                                         <TextBlock Text="{Binding Warning}" Style="{StaticResource MutedText}" FontSize="11.5" TextWrapping="Wrap" Margin="0,3,0,0"
@@ -990,12 +993,6 @@
                                     </DataTemplate>
                                 </ItemsControl.ItemTemplate>
                             </ItemsControl>
-                            <StackPanel Orientation="Horizontal" Margin="0,6,0,0" Visibility="{Binding CanSelectTop, Converter={StaticResource BoolToVis}}">
-                                <Button Content="{Binding SelectTopLabel}" Style="{StaticResource BtnPrimary}" Command="{Binding SelectTopMethodCommand}"
-                                        ToolTip="Turns on the components of the picked method; nothing is installed until you press Install" />
-                                <TextBlock Text="{Binding SelectTopHint}" Style="{StaticResource MutedText}" FontSize="11.5" Foreground="{StaticResource Warn}"
-                                           VerticalAlignment="Center" Margin="12,0,0,0" />
-                            </StackPanel>
                             <TextBlock Text="{Binding AdviceFooter}" Style="{StaticResource MutedText}" FontSize="11" TextWrapping="Wrap" Margin="0,10,0,0" />
                         </StackPanel>
                     </Border>
@@ -1028,6 +1025,7 @@
                         <Button Style="{StaticResource InfoBtn}" CommandParameter="install-mode" VerticalAlignment="Center"
                                 ToolTip="{Binding Source=install-mode, Converter={StaticResource HelpTip}}" />
                     </StackPanel>
+                    <TextBlock Text="Set by the method you pick above. Change it here to override." Style="{StaticResource MutedText}" FontSize="11.5" Margin="152,4,0,0" />
 
                     <!-- Components -->
                     <TextBlock Text="COMPONENTS" Style="{StaticResource SectionTitle}" />

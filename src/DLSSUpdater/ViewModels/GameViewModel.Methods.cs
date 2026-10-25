@@ -14,7 +14,7 @@ public sealed partial class MethodRow(MethodOption option, bool isTop, string? p
     public string Title => Option.Title;
     public string Summary => Option.Summary;
     public string Reason => Option.Reason;
-    /// <summary>The row is the method the green button applies.</summary>
+    /// <summary>The row is the method the page is set to: the user clicked it, or its mode and components are all on.</summary>
     [ObservableProperty] private bool _isPicked;
     /// <summary>The long reason is open below the row.</summary>
     [ObservableProperty] private bool _isExpanded;
@@ -40,13 +40,14 @@ public sealed partial class MethodRow(MethodOption option, bool isTop, string? p
     public bool IsAdviceOnly => Option.Availability is Availability.Available or Availability.NeedsSetup && Option.Components.Count == 0;
     /// <summary>Dim and disabled cards are the ones that can neither be picked nor opened.</summary>
     public bool IsClickable => IsSelectable || IsAdviceOnly;
-    public string CardTip => IsAdviceOnly ? "Installed from its own section further down this page" : "Pick this method, then press the green button to turn its components on";
+    public string CardTip => IsAdviceOnly ? "Installed from its own section further down this page"
+        : "Turns on this method's components and sets the install mode it needs. Nothing is installed until you press Install.";
     /// <summary>Methods that can't be used are shown dimmed, with the reason they can't.</summary>
     public bool IsDim => Option.Availability is Availability.NotPossible or Availability.Coming;
     public bool IsUnavailable => Option.Availability == Availability.NotPossible;
 }
 
-/// <summary>The per-game method advisor: which ways of improving this game the app knows (<see cref="MethodAdvisor"/>), and a button that selects the components of one.</summary>
+/// <summary>The per-game method advisor: which ways of improving this game the app knows (<see cref="MethodAdvisor"/>); clicking one selects its components.</summary>
 public sealed partial class GameViewModel
 {
     public ObservableCollection<MethodRow> Methods { get; } = [];
@@ -54,13 +55,10 @@ public sealed partial class GameViewModel
     [ObservableProperty] private string? _adviceBlocked;
     [ObservableProperty] private string? _adviceCaution;
     [ObservableProperty] private string _adviceFooter = "";
-    [ObservableProperty] private string _selectTopLabel = "";
-    [ObservableProperty] private string _selectTopHint = "";
 
     public bool HasAdviceBlocked => AdviceBlocked is not null;
     public bool HasAdviceCaution => AdviceCaution is not null;
     public bool HasMethods => Methods.Count > 0;
-    public bool CanSelectTop => Methods.Any(m => m.IsPicked);
 
     partial void OnAdviceBlockedChanged(string? value) => OnPropertyChanged(nameof(HasAdviceBlocked));
     partial void OnAdviceCautionChanged(string? value) => OnPropertyChanged(nameof(HasAdviceCaution));
@@ -156,33 +154,18 @@ public sealed partial class GameViewModel
         var top = advice.Top;
         var keep = Methods.FirstOrDefault(m => m.IsPicked)?.Option.Method;
         var rows = advice.Methods.Select(m => new MethodRow(m, ReferenceEquals(m, top), advice.Caution)).ToList();
-        // The user's pick survives a refresh while the method is still offered; otherwise the recommendation is picked, or nothing.
-        var picked = rows.FirstOrDefault(r => r.Option.Method == keep && r.IsSelectable) ?? rows.FirstOrDefault(r => r.IsTop);
-        if (picked is not null) picked.IsPicked = true;
         Methods.Clear();
         foreach (var r in rows) Methods.Add(r);
+        SyncPick(keep);
         AdviceBlocked = advice.Blocked;
         AdviceCaution = advice.Caution;
-        UpdatePickedLabel();
         AdviceFooter = advice.Methods.Any(m => m.Method is Method.NeuralAddon or Method.OptiScalerNr or Method.Feeder)
             ? $"{_s.Gpu.Label}. Neural rendering is the leaked DLSS 5 build and needs community DLLs; the app downloads and installs nvngx_dlssnr.dll automatically."
             : _s.Gpu.IsKnown ? _s.Gpu.Label : "";
         OnPropertyChanged(nameof(HasMethods));
     }
 
-    /// <summary>The green button reads "Use: X" for the picked method, and says so when it needs setup or carries a warning.</summary>
-    private void UpdatePickedLabel()
-    {
-        var row = Methods.FirstOrDefault(m => m.IsPicked);
-        SelectTopLabel = row is null ? "" : $"Use: {row.Title}";
-        SelectTopHint = row is null ? ""
-            : row.Option.Warning is not null ? "Read the warning on this method first: installing asks you to confirm."
-            : row.Option.Availability == Availability.NeedsSetup ? "Needs setup first: see \"Needs\" on the method."
-            : "";
-        OnPropertyChanged(nameof(CanSelectTop));
-    }
-
-    /// <summary>Marks a method as the one the green button applies. Nothing is changed on the page until that button is pressed.</summary>
+    /// <summary>Applies a method: its components go on and the install mode follows (see <see cref="SelectMethod"/>). Cards without components only open their details.</summary>
     [RelayCommand]
     private void PickMethod(MethodRow? row)
     {
@@ -193,14 +176,33 @@ public sealed partial class GameViewModel
             return;
         }
         if (!row.IsSelectable) return;
+        SelectMethod(row);
         foreach (var m in Methods) m.IsPicked = ReferenceEquals(m, row);
-        UpdatePickedLabel();
     }
 
-    [RelayCommand]
-    private void SelectTopMethod()
+    /// <summary>
+    /// Marks the card the page is set to, so a picked card always means "applied": the last pick while the page still matches it,
+    /// else the most specific method whose install mode and components are all on, else none. Runs after a refresh and whenever
+    /// the user changes the mode or a component by hand.
+    /// </summary>
+    private void SyncPick(Method? keep)
     {
-        if (Methods.FirstOrDefault(m => m.IsPicked) is { } row) SelectMethod(row);
+        var picked = Methods.FirstOrDefault(r => r.Option.Method == keep && PageMatches(r))
+            ?? Methods.Where(PageMatches).MaxBy(r => r.Option.Components.Count);
+        foreach (var m in Methods) m.IsPicked = ReferenceEquals(m, picked);
+    }
+
+    private void SyncPick() => SyncPick(Methods.FirstOrDefault(m => m.IsPicked)?.Option.Method);
+
+    /// <summary>The page already has this method's mode (when it needs one) and every one of its components that the page shows on (the mode's loader always is).</summary>
+    private bool PageMatches(MethodRow row)
+    {
+        if (!row.IsSelectable || row.Option.Mode is { } mode && mode != Mode) return false;
+        var rows = row.Option.Components
+            .Select(id => RowKeys.TryGetValue(id, out var key) ? Components.FirstOrDefault(c => c.Key == key) : null)
+            .Where(c => c is { Visible: true })
+            .ToList();
+        return rows.Count > 0 && rows.All(c => c!.Enabled);
     }
 
     /// <summary>Turns on the rows of the method (and the install mode it needs). Nothing is installed until the user presses Install.</summary>
