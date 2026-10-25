@@ -193,6 +193,12 @@ public sealed partial class AppSettings
     public bool? OnboardingDone { get; set; }
     /// <summary>The component strip shows its release chips; off, it is one summary line.</summary>
     public bool StripExpanded { get; set; }
+    /// <summary>Where the main window was when it closed (its normal, not maximized, rect), so it reopens there.</summary>
+    public double? WindowLeft { get; set; }
+    public double? WindowTop { get; set; }
+    public double? WindowWidth { get; set; }
+    public double? WindowHeight { get; set; }
+    public bool WindowMaximized { get; set; }
 
     public string? AddonId(AddonKind kind) => kind switch
     {

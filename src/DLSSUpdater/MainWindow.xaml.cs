@@ -26,6 +26,11 @@ public partial class MainWindow : Window
         if (Demo.ScreenshotDir is not null) PrepareScreenshots();
         _vm = new MainViewModel();
         DataContext = _vm;
+        if (Demo.ScreenshotDir is null)
+        {
+            RestoreWindowBounds();
+            Closing += (_, _) => SaveWindowBounds();
+        }
 
         Loaded += async (_, _) =>
         {
@@ -65,6 +70,31 @@ public partial class MainWindow : Window
         };
         SourceInitialized += (_, _) => RoundCorners();
         ListAutoScroll.FollowNewest(LogList, _vm.LogLines);
+    }
+
+    /// <summary>Reopens the window where it was closed, maximized if it was; off-screen places fall back to the default (<see cref="WindowBounds"/>).</summary>
+    private void RestoreWindowBounds()
+    {
+        var s = _vm.S.Settings;
+        var screen = new Rect(SystemParameters.VirtualScreenLeft, SystemParameters.VirtualScreenTop,
+            SystemParameters.VirtualScreenWidth, SystemParameters.VirtualScreenHeight);
+        if (WindowBounds.Restore(s.WindowLeft, s.WindowTop, s.WindowWidth, s.WindowHeight, screen, new Size(MinWidth, MinHeight)) is { } r)
+        {
+            WindowStartupLocation = WindowStartupLocation.Manual;
+            (Left, Top, Width, Height) = (r.Left, r.Top, r.Width, r.Height);
+        }
+        if (s.WindowMaximized) SourceInitialized += (_, _) => WindowState = WindowState.Maximized;
+    }
+
+    /// <summary>Keeps the normal (not maximized) rect and whether the window was maximized.</summary>
+    private void SaveWindowBounds()
+    {
+        var r = RestoreBounds;
+        if (r.IsEmpty) return;
+        var s = _vm.S.Settings;
+        (s.WindowLeft, s.WindowTop, s.WindowWidth, s.WindowHeight) = (r.Left, r.Top, r.Width, r.Height);
+        s.WindowMaximized = WindowState == WindowState.Maximized;
+        s.Save();
     }
 
     /// <summary>While a keybind button is waiting, the next key press becomes the binding. Otherwise Ctrl+F goes to the game search.</summary>
