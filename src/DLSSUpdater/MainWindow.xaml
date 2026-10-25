@@ -625,9 +625,13 @@
                 <ColumnDefinition Width="320" />
                 <ColumnDefinition Width="*" />
             </Grid.ColumnDefinitions>
+            <Grid.RowDefinitions>
+                <RowDefinition Height="*" />
+                <RowDefinition Height="Auto" />
+            </Grid.RowDefinitions>
 
             <!-- Game list -->
-            <Border BorderBrush="{StaticResource Line}" BorderThickness="0,0,1,0">
+            <Border Grid.RowSpan="2" BorderBrush="{StaticResource Line}" BorderThickness="0,0,1,0">
                 <Grid>
                     <Grid.RowDefinitions>
                         <RowDefinition Height="Auto" />
@@ -747,7 +751,7 @@
             </Border>
 
             <!-- Detail -->
-            <TextBlock Grid.Column="1" Text="Select a game on the left" Foreground="{StaticResource Muted}" HorizontalAlignment="Center" VerticalAlignment="Center"
+            <TextBlock Grid.Column="1" Grid.RowSpan="2" Text="Select a game on the left" Foreground="{StaticResource Muted}" HorizontalAlignment="Center" VerticalAlignment="Center"
                        Visibility="{Binding SelectedGame, Converter={StaticResource NullToVis}, ConverterParameter=invert}" />
 
             <!-- Disabled while Settings or About covers it, so Tab doesn't walk through controls nobody can see -->
@@ -1588,9 +1592,27 @@
                             </StackPanel>
                         </Border>
                     </StackPanel>
+                    </StackPanel>
+                </StackPanel>
+            </ScrollViewer>
 
-                    <!-- Actions -->
-                    <Grid Margin="0,28,0,0">
+            <!-- Install actions: pinned under the detail view so the primary button never scrolls out of sight -->
+            <Grid Grid.Row="1" Grid.Column="1" DataContext="{Binding SelectedGame}" Visibility="{Binding Converter={StaticResource NullToVis}}">
+                <Border Background="{StaticResource Surface}" BorderBrush="{StaticResource Line}" BorderThickness="0,1,0,0" Padding="36,10"
+                        Visibility="{Binding DetailTab, Converter={StaticResource EqualsToVis}, ConverterParameter=Install}">
+                    <Border.Style>
+                        <Style TargetType="Border">
+                            <Style.Triggers>
+                                <DataTrigger Binding="{Binding DataContext.SettingsOpen, RelativeSource={RelativeSource AncestorType=Window}}" Value="True">
+                                    <Setter Property="IsEnabled" Value="False" />
+                                </DataTrigger>
+                                <DataTrigger Binding="{Binding DataContext.AboutOpen, RelativeSource={RelativeSource AncestorType=Window}}" Value="True">
+                                    <Setter Property="IsEnabled" Value="False" />
+                                </DataTrigger>
+                            </Style.Triggers>
+                        </Style>
+                    </Border.Style>
+                    <Grid MaxWidth="980">
                         <Grid.ColumnDefinitions>
                             <ColumnDefinition Width="Auto" />
                             <ColumnDefinition Width="*" />
@@ -1605,6 +1627,20 @@
                             <Button Content="DLSS only" Margin="8,0,0,0" Padding="16,9" ToolTip="Update only the game's DLSS files. No mods are added."
                                     Command="{Binding DataContext.DlssOnlyCommand, RelativeSource={RelativeSource AncestorType=Window}}" />
                         </StackPanel>
+                        <!-- While a job runs: progress and Cancel here too, for users scrolled away from the status bar's thin line -->
+                        <DockPanel Grid.Column="1" Margin="20,0" VerticalAlignment="Center"
+                                   Visibility="{Binding DataContext.IsBusy, RelativeSource={RelativeSource AncestorType=Window}, Converter={StaticResource BoolToVis}}">
+                            <Button DockPanel.Dock="Right" Content="Cancel" Style="{StaticResource BtnGhost}" Padding="10,5" Margin="12,0,0,0"
+                                    ToolTip="Stop the running job" AutomationProperties.Name="Cancel the running job"
+                                    Command="{Binding DataContext.CancelCommand, RelativeSource={RelativeSource AncestorType=Window}}" />
+                            <ProgressBar DockPanel.Dock="Left" Width="140" Height="4" VerticalAlignment="Center" Background="{StaticResource Line}" Maximum="1"
+                                         Value="{Binding DataContext.Progress, RelativeSource={RelativeSource AncestorType=Window}}"
+                                         IsIndeterminate="{Binding DataContext.ProgressIndeterminate, RelativeSource={RelativeSource AncestorType=Window}}"
+                                         Visibility="{Binding DataContext.ProgressVisible, RelativeSource={RelativeSource AncestorType=Window}, Converter={StaticResource BoolToVis}}"
+                                         AutomationProperties.Name="Progress" />
+                            <TextBlock Text="{Binding DataContext.Status, RelativeSource={RelativeSource AncestorType=Window}}" Style="{StaticResource MutedText}" FontSize="12"
+                                       Margin="12,0,0,0" VerticalAlignment="Center" TextTrimming="CharacterEllipsis" />
+                        </DockPanel>
                         <StackPanel Grid.Column="2" Orientation="Horizontal">
                             <Button Content="Restore DLSS" Style="{StaticResource BtnGhost}" Margin="0,0,8,0" ToolTip="Put back the game's original DLSS and Streamline files"
                                     Command="{Binding DataContext.RestoreDlssCommand, RelativeSource={RelativeSource AncestorType=Window}}" />
@@ -1612,12 +1648,11 @@
                                     Command="{Binding DataContext.UninstallCommand, RelativeSource={RelativeSource AncestorType=Window}}" />
                         </StackPanel>
                     </Grid>
-                    </StackPanel>
-                </StackPanel>
-            </ScrollViewer>
+                </Border>
+            </Grid>
 
             <!-- Settings overlay -->
-            <Border Grid.Column="1" Background="{StaticResource Bg}" Visibility="{Binding SettingsOpen, Converter={StaticResource BoolToVis}}">
+            <Border Grid.Column="1" Grid.RowSpan="2" Background="{StaticResource Bg}" Visibility="{Binding SettingsOpen, Converter={StaticResource BoolToVis}}">
                 <v:Deferred x:Name="SettingsHost" Show="{Binding SettingsOpen}">
                     <v:Deferred.Template>
                         <DataTemplate>
@@ -2522,7 +2557,7 @@
             </Border>
 
             <!-- About overlay -->
-            <Border Grid.Column="1" Background="{StaticResource Bg}" Visibility="{Binding AboutOpen, Converter={StaticResource BoolToVis}}">
+            <Border Grid.Column="1" Grid.RowSpan="2" Background="{StaticResource Bg}" Visibility="{Binding AboutOpen, Converter={StaticResource BoolToVis}}">
                 <v:Deferred x:Name="AboutHost" Show="{Binding AboutOpen}">
                     <v:Deferred.Template>
                         <DataTemplate>

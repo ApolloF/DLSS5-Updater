@@ -43,6 +43,7 @@ public partial class MainWindow
             ("01-games", () => ShowGame("Ember Crown", "Install")),
             ("02-games-updates", () => { ShowGame("Ember Crown", "Install"); _vm.Filter = "Updates"; }),
             ("03-game-options", () => ShowGame("Ember Crown", "Config")),
+            ("03b-game-busy", ShowBusy),
             ("04-game-addons", () => ShowGame("Neon Meridian", "Install")),
             ("05-game-addons-options", () => ShowGame("Neon Meridian", "Config")),
             ("06-game-anticheat", () => ShowGame("Iron Veil", "Install")),
@@ -79,6 +80,23 @@ public partial class MainWindow
         _vm.SettingsVm.Onboarding = null;
         _vm.Search = "";
         _vm.Filter = "All";
+        if (_vm.IsBusy)
+        {
+            _vm.IsBusy = false;
+            _vm.ProgressVisible = false;
+            _vm.Progress = 0;
+            _vm.Status = "Ready";
+        }
+    }
+
+    /// <summary>The Install tab while a job runs: the footer shows progress and Cancel. Only the view model's flags are set; no job runs.</summary>
+    private void ShowBusy()
+    {
+        ShowGame("Ember Crown", "Install");
+        _vm.IsBusy = true;
+        _vm.Status = "Installing Ember Crown";
+        _vm.Progress = 0.4;
+        _vm.ProgressVisible = true;
     }
 
     private void ShowGame(string name, string tab)
@@ -104,12 +122,19 @@ public partial class MainWindow
         _vm.SettingsVm.Tab = tab;
     }
 
-    /// <summary>Renders the window at a fixed size regardless of the screen's scaling, so files are the same everywhere.</summary>
+    /// <summary>Renders the window at a fixed size regardless of the screen's scaling, so files are the same everywhere.
+    /// The brush is cut to the window's own rect: anything a descendant draws past the edge would otherwise squash the picture.</summary>
     private void Save(string path, int scale)
     {
         var visual = new DrawingVisual();
+        var brush = new VisualBrush(RootGrid)
+        {
+            Stretch = Stretch.Fill,
+            ViewboxUnits = BrushMappingMode.Absolute,
+            Viewbox = new Rect(0, 0, RootGrid.ActualWidth, RootGrid.ActualHeight),
+        };
         using (var dc = visual.RenderOpen())
-            dc.DrawRectangle(new VisualBrush(RootGrid) { Stretch = Stretch.Fill }, null, new Rect(0, 0, ShotWidth, ShotHeight));
+            dc.DrawRectangle(brush, null, new Rect(0, 0, ShotWidth, ShotHeight));
         var bmp = new RenderTargetBitmap((int)(ShotWidth * scale), (int)(ShotHeight * scale), 96.0 * scale, 96.0 * scale, PixelFormats.Pbgra32);
         bmp.Render(visual);
         var encoder = new PngBitmapEncoder();
