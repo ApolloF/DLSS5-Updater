@@ -1139,6 +1139,7 @@ public sealed partial class MainViewModel : ObservableObject
     {
         var g = SelectedGame;
         if (g?.SelectedTarget is null) return Task.CompletedTask;
+        if (!Dialog.Confirm("Restore DLSS", "Puts the game's original DLSS files back. Mods stay installed.", "Restore")) return Task.CompletedTask;
         return Run($"Restoring DLSS for {g.Name}", async ct =>
         {
             await S.Installer.RestoreDlssAsync(g.Info, g.SelectedTarget.Dir, ct);

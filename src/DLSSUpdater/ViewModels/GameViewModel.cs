@@ -624,6 +624,8 @@ public sealed partial class GameViewModel : ObservableObject
     public bool DlssOutdated => HasDlss && LatestDlss is not null && !DlssCurrent;
     public string? DlssOutdatedTip => !DlssOutdated ? null : DlssPinned ? "Not the DLSS version chosen for this game" : "Newer DLSS available";
     public string DlssBadgeText => DlssBadge + (DlssOutdated ? " ↑" : "");
+    /// <summary>What the DLSS badge's colour means: yellow outline behind, green outline current.</summary>
+    public string DlssBadgeTip => DlssOutdatedTip ?? (DlssCurrent ? "DLSS up to date" : "DLSS version found in the game");
     public bool DlssCurrent => LatestDlss is { } l && Info.Dlss.All(d => d.Version is { } v && (DlssPinned ? Trim(v) == l : Trim(v) >= l));
 
     [ObservableProperty] private bool _needsUpdate;
@@ -1030,6 +1032,7 @@ public sealed partial class GameViewModel : ObservableObject
         OnPropertyChanged(nameof(DlssCurrent));
         OnPropertyChanged(nameof(DlssOutdated));
         OnPropertyChanged(nameof(DlssOutdatedTip));
+        OnPropertyChanged(nameof(DlssBadgeTip));
         OnPropertyChanged(nameof(DlssBadgeText));
         RefreshHdr();
     }

@@ -67,10 +67,20 @@ public partial class MainWindow : Window
         ListAutoScroll.FollowNewest(LogList, _vm.LogLines);
     }
 
-    /// <summary>While a keybind button is waiting, the next key press becomes the binding.</summary>
+    /// <summary>While a keybind button is waiting, the next key press becomes the binding. Otherwise Ctrl+F goes to the game search.</summary>
     private void OnPreviewKeyDown(object sender, System.Windows.Input.KeyEventArgs e)
     {
-        if (_vm.SettingsVm.Capturing is null) return;
+        if (_vm.SettingsVm.Capturing is null)
+        {
+            if (e.Key == System.Windows.Input.Key.F && System.Windows.Input.Keyboard.Modifiers == System.Windows.Input.ModifierKeys.Control
+                && _vm.SettingsVm.Onboarding is null)
+            {
+                SearchBox.Focus();
+                SearchBox.SelectAll();
+                e.Handled = true;
+            }
+            return;
+        }
         var key = e.Key == System.Windows.Input.Key.System ? e.SystemKey : e.Key;
         var vk = System.Windows.Input.KeyInterop.VirtualKeyFromKey(key);
         var mods = System.Windows.Input.Keyboard.Modifiers;
@@ -80,10 +90,20 @@ public partial class MainWindow : Window
             mods.HasFlag(System.Windows.Input.ModifierKeys.Alt));
     }
 
-    /// <summary>Esc closes Settings or About. It runs after the controls, so an open dropdown or a keybind capture gets Esc first.</summary>
+    /// <summary>
+    /// Esc in the game search clears it; elsewhere it closes Settings or About. It runs after the controls, so an open dropdown
+    /// or a keybind capture gets Esc first.
+    /// </summary>
     private void OnKeyDown(object sender, System.Windows.Input.KeyEventArgs e)
     {
-        if (e.Handled || e.Key != System.Windows.Input.Key.Escape || !(_vm.SettingsOpen || _vm.AboutOpen)) return;
+        if (e.Handled || e.Key != System.Windows.Input.Key.Escape) return;
+        if (SearchBox.IsKeyboardFocused && _vm.Search.Length > 0)
+        {
+            _vm.Search = "";
+            e.Handled = true;
+            return;
+        }
+        if (!(_vm.SettingsOpen || _vm.AboutOpen)) return;
         if (_vm.AboutOpen && _vm.CanGoBack) _vm.BackCommand.Execute(null);
         else _vm.ShowGameView();
         e.Handled = true;

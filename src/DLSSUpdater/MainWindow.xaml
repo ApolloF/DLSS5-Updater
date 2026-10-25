@@ -703,7 +703,8 @@
                     </Grid.RowDefinitions>
 
                     <Grid Margin="16,16,16,10">
-                        <TextBox Text="{Binding Search, UpdateSourceTrigger=PropertyChanged}" Tag="Search games" AutomationProperties.Name="Search games" Padding="28,7,8,7" />
+                        <TextBox x:Name="SearchBox" Text="{Binding Search, UpdateSourceTrigger=PropertyChanged}" Tag="Search games" AutomationProperties.Name="Search games" Padding="28,7,8,7"
+                                 ToolTip="Search games (Ctrl+F; Esc clears)" />
                         <TextBlock Text="&#xE721;" Style="{StaticResource Icon}" Foreground="{StaticResource Dim}" Margin="10,0,0,0"
                                    HorizontalAlignment="Left" IsHitTestVisible="False" />
                     </Grid>
@@ -752,15 +753,15 @@
                                             </Style>
                                         </WrapPanel.Resources>
                                         <Border Background="{StaticResource Accent}" BorderBrush="{StaticResource Accent}"
-                                                Visibility="{Binding ModBadge, Converter={StaticResource NullToVis}}" ToolTip="{Binding ModBadge}">
+                                                Visibility="{Binding ModBadge, Converter={StaticResource NullToVis}}" ToolTip="{Binding ModBadge, StringFormat='Mods installed: {0}'}">
                                             <TextBlock Text="{Binding ModBadge}" Style="{StaticResource BadgeText}" Foreground="#0B0B0B" TextTrimming="CharacterEllipsis" />
                                         </Border>
                                         <Border BorderBrush="{StaticResource Danger}"
-                                                Visibility="{Binding HasAntiCheat, Converter={StaticResource BoolToVis}}" ToolTip="{Binding AntiCheat}">
+                                                Visibility="{Binding HasAntiCheat, Converter={StaticResource BoolToVis}}" ToolTip="{Binding AntiCheat, StringFormat='{}{0} anti-cheat: mods can get you banned online'}">
                                             <TextBlock Text="AC" Style="{StaticResource BadgeText}" Foreground="{StaticResource Danger}"
                                                        AutomationProperties.Name="{Binding AntiCheat, StringFormat='{}{0} anti-cheat'}" />
                                         </Border>
-                                        <Border Visibility="{Binding HasDlss, Converter={StaticResource BoolToVis}}" ToolTip="{Binding DlssOutdatedTip}">
+                                        <Border Visibility="{Binding HasDlss, Converter={StaticResource BoolToVis}}" ToolTip="{Binding DlssBadgeTip}">
                                             <Border.Style>
                                                 <Style TargetType="Border" BasedOn="{StaticResource {x:Type Border}}">
                                                     <Setter Property="BorderBrush" Value="{StaticResource Warn}" />
@@ -771,7 +772,7 @@
                                                     </Style.Triggers>
                                                 </Style>
                                             </Border.Style>
-                                            <TextBlock Text="{Binding DlssBadgeText}" Style="{StaticResource BadgeText}" AutomationProperties.HelpText="{Binding DlssOutdatedTip}" />
+                                            <TextBlock Text="{Binding DlssBadgeText}" Style="{StaticResource BadgeText}" AutomationProperties.HelpText="{Binding DlssBadgeTip}" />
                                         </Border>
                                         <Border Visibility="{Binding HasFeatureBadge, Converter={StaticResource BoolToVis}}"
                                                 ToolTip="DLSS features found in the game files (Ray Reconstruction, Frame Generation, Reflex)">
