@@ -41,6 +41,7 @@ public partial class MainWindow
         var steps = new (string Name, Action Show)[]
         {
             ("01-games", () => ShowGame("Ember Crown", "Install")),
+            ("01b-games-strip", () => { ShowGame("Ember Crown", "Install"); _vm.StripExpanded = true; }),
             ("02-games-updates", () => { ShowGame("Ember Crown", "Install"); _vm.Filter = "Updates"; }),
             ("03-game-options", () => ShowGame("Ember Crown", "Config")),
             ("03b-game-busy", ShowBusy),
@@ -80,6 +81,7 @@ public partial class MainWindow
         _vm.SettingsVm.Onboarding = null;
         _vm.Search = "";
         _vm.Filter = "All";
+        _vm.StripExpanded = false;
         if (_vm.IsBusy)
         {
             _vm.IsBusy = false;

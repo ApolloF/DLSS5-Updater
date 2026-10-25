@@ -93,6 +93,30 @@
         </DataTemplate>
 
         <!-- Component chip that opens its what's new popover; Tag is the chip's ReleaseNewsViewModel -->
+        <Style x:Key="StripToggle" TargetType="ToggleButton">
+            <Setter Property="Foreground" Value="{StaticResource Text}" />
+            <Setter Property="Background" Value="Transparent" />
+            <Setter Property="Padding" Value="8,6" />
+            <Setter Property="Cursor" Value="Hand" />
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="ToggleButton">
+                        <Border x:Name="Bd" Background="{TemplateBinding Background}" CornerRadius="3" Padding="{TemplateBinding Padding}">
+                            <ContentPresenter VerticalAlignment="Center" />
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="Bd" Property="Background" Value="{StaticResource Surface2}" />
+                            </Trigger>
+                            <Trigger Property="IsKeyboardFocused" Value="True">
+                                <Setter TargetName="Bd" Property="Background" Value="{StaticResource Surface2}" />
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
         <Style x:Key="ReleaseChip" TargetType="ToggleButton">
             <Setter Property="Foreground" Value="{StaticResource Text}" />
             <Setter Property="Background" Value="Transparent" />
@@ -513,13 +537,40 @@
         </Border>
         <!-- ============ Component strip ============ -->
         <Border BorderBrush="{StaticResource Line}" BorderThickness="0,1,0,1" Background="{StaticResource Surface}">
-            <Grid Margin="18,12,18,12">
+            <Grid Margin="18,4,18,4">
                 <Grid.ColumnDefinitions>
                     <ColumnDefinition Width="*" />
                     <ColumnDefinition Width="Auto" />
                 </Grid.ColumnDefinitions>
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto" />
+                    <RowDefinition Height="Auto" />
+                </Grid.RowDefinitions>
+                <!-- Collapsed by default: one summary line; the chips are reference info the user opens when wanted -->
+                <ToggleButton Style="{StaticResource StripToggle}" HorizontalAlignment="Left" Margin="-8,0,0,0" IsChecked="{Binding StripExpanded}"
+                              AutomationProperties.Name="Show component releases" AutomationProperties.HelpText="{Binding StripSummary}"
+                              ToolTip="Show or hide the component versions and release notes">
+                    <StackPanel Orientation="Horizontal">
+                        <Ellipse Width="7" Height="7" Fill="{StaticResource Accent}" VerticalAlignment="Center" Margin="0,0,8,0"
+                                 Visibility="{Binding StripHasNews, Converter={StaticResource BoolToVis}}" />
+                        <TextBlock Text="{Binding StripSummary}" VerticalAlignment="Center" />
+                        <TextBlock FontSize="10" Foreground="{StaticResource Muted}" VerticalAlignment="Center" Margin="10,1,0,0">
+                            <TextBlock.Style>
+                                <Style TargetType="TextBlock" BasedOn="{StaticResource Icon}">
+                                    <Setter Property="Text" Value="&#xE70D;" />
+                                    <Style.Triggers>
+                                        <DataTrigger Binding="{Binding StripExpanded}" Value="True">
+                                            <Setter Property="Text" Value="&#xE70E;" />
+                                        </DataTrigger>
+                                    </Style.Triggers>
+                                </Style>
+                            </TextBlock.Style>
+                        </TextBlock>
+                    </StackPanel>
+                </ToggleButton>
                 <!-- Fixed-width cells so the chips line up in columns when the strip wraps -->
-                <WrapPanel Orientation="Horizontal" ItemWidth="224" Margin="-8,-4,0,-4">
+                <WrapPanel Grid.Row="1" Grid.ColumnSpan="2" Orientation="Horizontal" ItemWidth="224" Margin="-8,4,0,6"
+                           Visibility="{Binding StripExpanded, Converter={StaticResource BoolToVis}}">
                     <ToggleButton Style="{StaticResource ReleaseChip}" Tag="{Binding OptiNews}" AutomationProperties.HelpText="{Binding Compat.Summary}">
                         <StackPanel>
                             <TextBlock Text="{Binding OptiChipTitle}" Style="{StaticResource Caps}" />

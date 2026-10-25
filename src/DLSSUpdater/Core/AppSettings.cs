@@ -191,6 +191,8 @@ public sealed partial class AppSettings
         Math.Clamp(KeepBuilds.GetValueOrDefault(kind.ToString(), BuildCleanup.DefaultKeep), 1, BuildCleanup.MaxKeep);
     /// <summary>First-run setup: false on a fresh install until it is finished or skipped. Missing (settings from 1.x) counts as done.</summary>
     public bool? OnboardingDone { get; set; }
+    /// <summary>The component strip shows its release chips; off, it is one summary line.</summary>
+    public bool StripExpanded { get; set; }
 
     public string? AddonId(AddonKind kind) => kind switch
     {

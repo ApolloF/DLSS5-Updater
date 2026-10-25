@@ -75,6 +75,13 @@ public sealed partial class MainViewModel : ObservableObject
         MfgNews = new ReleaseNewsViewModel(Component.MfgUnlock, "MFG Unlock", settings);
         StreamlineNews = new ReleaseNewsViewModel(Component.Streamline, "Streamline", settings);
         ReShadeNews = new ReleaseNewsViewModel(Component.ReShade, "ReShade", settings);
+        foreach (var news in AllNews)
+            news.PropertyChanged += (_, e) =>
+            {
+                if (e.PropertyName != nameof(ReleaseNewsViewModel.IsNew)) return;
+                OnPropertyChanged(nameof(StripHasNews));
+                OnPropertyChanged(nameof(StripSummary));
+            };
 
         GamesView = CollectionViewSource.GetDefaultView(Games);
         GamesView.Filter = o => o is GameViewModel g && Matches(g);
@@ -106,6 +113,24 @@ public sealed partial class MainViewModel : ObservableObject
     public ReleaseNewsViewModel MfgNews { get; }
     public ReleaseNewsViewModel StreamlineNews { get; }
     public ReleaseNewsViewModel ReShadeNews { get; }
+    private ReleaseNewsViewModel[] AllNews => [OptiNews, DlssNews, UpliftNews, MfgNews, StreamlineNews, ReShadeNews];
+
+    /// <summary>The component strip shows its chips; collapsed (the default) it is one summary line. Kept across restarts.</summary>
+    public bool StripExpanded
+    {
+        get => S.Settings.StripExpanded;
+        set
+        {
+            if (S.Settings.StripExpanded == value) return;
+            S.Settings.StripExpanded = value;
+            S.Settings.Save();
+            OnPropertyChanged();
+        }
+    }
+
+    /// <summary>A chip has a release the user hasn't opened yet: the collapsed strip shows a dot.</summary>
+    public bool StripHasNews => AllNews.Any(n => n.IsNew);
+    public string StripSummary => ComponentStripSummary.Text(AllNews.Count(n => n.IsNew), UpdateCount);
 
     internal const int MaxLogLines = 400;
 
@@ -160,7 +185,7 @@ public sealed partial class MainViewModel : ObservableObject
         ? "Lecram v11 update channel; builds are added to the library. Games keep their installed build."
         : "Lecram's DLSS5 add-on, imported by you. Games keep their installed build.";
     [ObservableProperty]
-    [NotifyPropertyChangedFor(nameof(HasUpdates), nameof(UpdateAllName))]
+    [NotifyPropertyChangedFor(nameof(HasUpdates), nameof(UpdateAllName), nameof(StripSummary))]
     private int _updateCount;
 
     public bool HasUpdates => UpdateCount > 0;
