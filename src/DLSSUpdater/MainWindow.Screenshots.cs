@@ -12,6 +12,8 @@ public partial class MainWindow
     private const double ShotWidth = 1280;
     private const double ShotHeight = 800;
     private static readonly int[] ShotScales = [1, 2];
+    /// <summary>The size the current view is rendered at; one view uses the window's minimum size.</summary>
+    private Size _shotSize = new(ShotWidth, ShotHeight);
 
     /// <summary>Gives the window the fixed size the screenshots are taken at.</summary>
     private void PrepareScreenshots()
@@ -34,7 +36,7 @@ public partial class MainWindow
         Application.Current.Shutdown(exitCode);
     }
 
-    /// <summary>Writes NN-name.png at 1x and NN-name@2x.png at 2x (1280x800 and 2560x1600 pixels) for each view.</summary>
+    /// <summary>Writes NN-name.png at 1x and NN-name@2x.png at 2x (1280x800 and 2560x1600 pixels; 31-min-size at the window's minimum size) for each view.</summary>
     internal async Task ExportScreenshotsAsync(string folder)
     {
         Directory.CreateDirectory(folder);
@@ -62,6 +64,7 @@ public partial class MainWindow
             ("16-setup-mode-reshade", () => ShowSetup(OnboardingStep.Mode).Mode = OnboardingViewModel.Modes[1]),
             ("17-setup-updates", () => ShowSetup(OnboardingStep.Updates)),
             ("18-setup-done", () => ShowSetup(OnboardingStep.Done)),
+            ("31-min-size", ShowMinSize),
         };
         foreach (var (name, show) in steps)
         {
@@ -84,6 +87,13 @@ public partial class MainWindow
         _vm.Search = "";
         _vm.Filter = "All";
         _vm.StripExpanded = false;
+        DetailScroll.ScrollToVerticalOffset(0);
+        if (_shotSize.Width != ShotWidth || _shotSize.Height != ShotHeight)
+        {
+            _shotSize = new Size(ShotWidth, ShotHeight);
+            Width = ShotWidth;
+            Height = ShotHeight;
+        }
         if (_vm.IsBusy)
         {
             _vm.IsBusy = false;
@@ -109,6 +119,16 @@ public partial class MainWindow
         game.DetailTab = tab;
         _vm.SelectedGame = game;
         _vm.ShowGameView();
+    }
+
+    /// <summary>The Install tab at the window's minimum size, scrolled to the components table: its header and the install footer must still fit.</summary>
+    private void ShowMinSize()
+    {
+        _shotSize = new Size(MinWidth, MinHeight);
+        Width = MinWidth;
+        Height = MinHeight;
+        ShowGame("Ember Crown", "Install");
+        Dispatcher.BeginInvoke(() => DetailScroll.ScrollToVerticalOffset(820), System.Windows.Threading.DispatcherPriority.Loaded);
     }
 
     /// <summary>The first-run setup at one step, over the games view; never finished, so nothing is written.</summary>
@@ -138,8 +158,8 @@ public partial class MainWindow
             Viewbox = new Rect(0, 0, RootGrid.ActualWidth, RootGrid.ActualHeight),
         };
         using (var dc = visual.RenderOpen())
-            dc.DrawRectangle(brush, null, new Rect(0, 0, ShotWidth, ShotHeight));
-        var bmp = new RenderTargetBitmap((int)(ShotWidth * scale), (int)(ShotHeight * scale), 96.0 * scale, 96.0 * scale, PixelFormats.Pbgra32);
+            dc.DrawRectangle(brush, null, new Rect(_shotSize));
+        var bmp = new RenderTargetBitmap((int)(_shotSize.Width * scale), (int)(_shotSize.Height * scale), 96.0 * scale, 96.0 * scale, PixelFormats.Pbgra32);
         bmp.Render(visual);
         var encoder = new PngBitmapEncoder();
         encoder.Frames.Add(BitmapFrame.Create(bmp));

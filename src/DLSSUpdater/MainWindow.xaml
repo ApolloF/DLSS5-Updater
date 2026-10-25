@@ -5,7 +5,7 @@
         xmlns:core="clr-namespace:DLSSUpdater.Core"
         xmlns:v="clr-namespace:DLSSUpdater.Views"
         xmlns:sys="clr-namespace:System;assembly=mscorlib"
-        Title="DLSS5 Updater" Width="1240" Height="800" MinWidth="980" MinHeight="680"
+        Title="DLSS5 Updater" Width="1240" Height="800" MinWidth="1180" MinHeight="680"
         WindowStartupLocation="CenterScreen" Icon="Assets/icon.ico"
         Background="{StaticResource Bg}" Foreground="{StaticResource Text}"
         FontFamily="{StaticResource UiFont}" FontSize="13"
@@ -806,7 +806,7 @@
                        Visibility="{Binding SelectedGame, Converter={StaticResource NullToVis}, ConverterParameter=invert}" />
 
             <!-- Disabled while Settings or About covers it, so Tab doesn't walk through controls nobody can see -->
-            <ScrollViewer Grid.Column="1" VerticalScrollBarVisibility="Auto" DataContext="{Binding SelectedGame}"
+            <ScrollViewer x:Name="DetailScroll" Grid.Column="1" VerticalScrollBarVisibility="Auto" DataContext="{Binding SelectedGame}"
                           Visibility="{Binding Converter={StaticResource NullToVis}}">
                 <ScrollViewer.Style>
                     <Style TargetType="ScrollViewer">
@@ -1085,7 +1085,7 @@
                             <Grid Margin="16,10,16,8">
                                 <Grid.ColumnDefinitions>
                                     <ColumnDefinition Width="18" />
-                                    <ColumnDefinition Width="*" />
+                                    <ColumnDefinition Width="*" MinWidth="140" />
                                     <ColumnDefinition Width="150" />
                                     <ColumnDefinition Width="280" />
                                     <ColumnDefinition Width="58" />
@@ -1102,7 +1102,7 @@
                                         <Grid Margin="16,9" Visibility="{Binding Visible, Converter={StaticResource BoolToVis}}">
                                             <Grid.ColumnDefinitions>
                                                 <ColumnDefinition Width="18" />
-                                                <ColumnDefinition Width="*" />
+                                                <ColumnDefinition Width="*" MinWidth="140" />
                                                 <ColumnDefinition Width="150" />
                                                 <ColumnDefinition Width="280" />
                                                 <ColumnDefinition Width="58" />
