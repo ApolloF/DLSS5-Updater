@@ -17,15 +17,13 @@ public sealed class MethodPickTests : IDisposable
 
     public void Dispose() => Directory.Delete(_tmp, true);
 
-    private GameViewModel NewGame()
+    private GameViewModel NewGame(string? antiCheat = null)
     {
         var root = Path.Combine(_tmp, "game");
         Directory.CreateDirectory(root);
         var store = new ComponentStore(new GitHubClient(), () => true);
-        var vm = new GameViewModel(new GameInfo { Id = root, Root = root, Name = "Pick game", Installs = [root] },
+        return new GameViewModel(new GameInfo { Id = root, Root = root, Name = "Pick game", Installs = [root], AntiCheat = antiCheat },
             new Services { Settings = new AppSettings(), Store = store, Installer = new Installer(store) });
-        vm.Methods.Clear();
-        return vm;
     }
 
     private static MethodRow Row(Method method, InstallMode? mode, params string[] components) =>
@@ -37,6 +35,7 @@ public sealed class MethodPickTests : IDisposable
     public void PickingASelectableCard_SetsItsModeAndTurnsItsComponentsOn()
     {
         var vm = NewGame();
+        vm.Methods.Clear();
         Assert.Equal(InstallMode.OptiScaler, vm.Mode);
         var addon = Row(Method.NeuralAddon, InstallMode.ReShadeOnly, ComponentRegistry.ReShade, ComponentRegistry.RenoDx);
         var opti = Row(Method.OptiScaler, InstallMode.OptiScaler, ComponentRegistry.OptiScaler);
@@ -55,6 +54,7 @@ public sealed class MethodPickTests : IDisposable
     public void PickingACardWithoutComponents_OnlyOpensItsDetails()
     {
         var vm = NewGame();
+        vm.Methods.Clear();
         var hdr = Row(Method.RenoDxHdr, null);
         vm.Methods.Add(hdr);
 
@@ -71,6 +71,7 @@ public sealed class MethodPickTests : IDisposable
     public void ChangingTheModeByHand_UnpicksACardThatNeedsTheOtherMode()
     {
         var vm = NewGame();
+        vm.Methods.Clear();
         var addon = Row(Method.NeuralAddon, InstallMode.ReShadeOnly, ComponentRegistry.ReShade, ComponentRegistry.RenoDx);
         vm.Methods.Add(addon);
         vm.PickMethodCommand.Execute(addon);
@@ -85,6 +86,7 @@ public sealed class MethodPickTests : IDisposable
     public void TurningComponentsOnByHand_PicksTheMostSpecificMatchingCard()
     {
         var vm = NewGame();
+        vm.Methods.Clear();
         Component(vm, "mfg").Enabled = false;
         var opti = Row(Method.OptiScaler, InstallMode.OptiScaler, ComponentRegistry.OptiScaler);
         var mfg = Row(Method.MfgUnlock, InstallMode.OptiScaler, ComponentRegistry.OptiScaler, ComponentRegistry.MfgUnlock);
@@ -100,5 +102,14 @@ public sealed class MethodPickTests : IDisposable
 
         Assert.True(opti.IsPicked);
         Assert.False(mfg.IsPicked);
+    }
+
+    [Fact]
+    public void AntiCheatCaution_IsNotRepeatedUnderTheAntiCheatBanner()
+    {
+        var vm = NewGame("EasyAntiCheat");
+        Assert.True(vm.HasAntiCheat);
+        Assert.Equal(MethodAdvisor.AntiCheatCaution("EasyAntiCheat"), vm.AdviceCaution);
+        Assert.False(vm.HasAdviceCaution);
     }
 }

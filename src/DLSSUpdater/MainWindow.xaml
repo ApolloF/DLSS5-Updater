@@ -190,9 +190,20 @@
                         </Style>
                     </Button.Style>
                 </Button>
-                <Button Grid.Column="2" Content="Default" Style="{StaticResource BtnGhost}" Margin="8,0,0,0" ToolTip="Leave the game's default"
-                        AutomationProperties.Name="{Binding Label, StringFormat='Default key for {0}'}"
-                        Command="{Binding DataContext.ResetBindCommand, RelativeSource={RelativeSource AncestorType=ItemsControl}}" CommandParameter="{Binding}" />
+                <!-- Only when the key differs from the default; Hidden, not Collapsed, so "Off" stays in its column -->
+                <Button Grid.Column="2" Content="Reset" Margin="8,0,0,0" ToolTip="Back to the default key"
+                        AutomationProperties.Name="{Binding Label, StringFormat='Reset {0} to its default key'}"
+                        Command="{Binding DataContext.ResetBindCommand, RelativeSource={RelativeSource AncestorType=ItemsControl}}" CommandParameter="{Binding}">
+                    <Button.Style>
+                        <Style TargetType="Button" BasedOn="{StaticResource BtnGhost}">
+                            <Style.Triggers>
+                                <DataTrigger Binding="{Binding IsDefault}" Value="True">
+                                    <Setter Property="Visibility" Value="Hidden" />
+                                </DataTrigger>
+                            </Style.Triggers>
+                        </Style>
+                    </Button.Style>
+                </Button>
                 <Button Grid.Column="3" Content="Off" Style="{StaticResource BtnGhost}" ToolTip="No key" AutomationProperties.Name="{Binding Label, StringFormat='No key for {0}'}"
                         Command="{Binding DataContext.DisableBindCommand, RelativeSource={RelativeSource AncestorType=ItemsControl}}" CommandParameter="{Binding}" />
             </Grid>
@@ -1229,13 +1240,13 @@
                     <TextBlock Text="NR RUNTIME VERSION" Style="{StaticResource SectionTitle}" />
                     <Border Style="{StaticResource Card}" Padding="16">
                         <StackPanel>
-                            <TextBlock Text="Which NR runtime this game gets when you install or update it. Default uses the one chosen in Settings → Local components. Switch NR puts your choice into the installed game now; Switch back restores the previous file. With a 310.9 runtime, compare models with the Preset option instead of switching versions. Runtimes marked download are older catalog builds; picking one downloads it first."
+                            <TextBlock Text="Which NR runtime this game gets when you install or update it. Default uses the one chosen in Settings → Components. Use this runtime now puts your choice into the installed game now; Restore previous runtime puts the previous file back. With a 310.9 runtime, compare models with the Preset option instead of switching versions. Runtimes marked download are older catalog builds; picking one downloads it first."
                                        Style="{StaticResource MutedText}" TextWrapping="Wrap" Margin="0,0,0,8" />
                             <ComboBox ItemsSource="{Binding NrChoices}" SelectedItem="{Binding NrChoice}" MaxDropDownHeight="300"
                                       AutomationProperties.Name="NR runtime version for this game" />
                             <WrapPanel Margin="0,8,0,0" IsEnabled="{Binding CanSwitchNr}">
-                                <Button Content="Switch NR" Command="{Binding DataContext.SwitchNrCommand, RelativeSource={RelativeSource AncestorType=Window}}" />
-                                <Button Content="Switch back" Command="{Binding DataContext.UndoNrCommand, RelativeSource={RelativeSource AncestorType=Window}}"
+                                <Button Content="Use this runtime now" Command="{Binding DataContext.SwitchNrCommand, RelativeSource={RelativeSource AncestorType=Window}}" />
+                                <Button Content="Restore previous runtime" Command="{Binding DataContext.UndoNrCommand, RelativeSource={RelativeSource AncestorType=Window}}"
                                         IsEnabled="{Binding CanUndoNr}" Margin="8,0,0,0" />
                             </WrapPanel>
                         </StackPanel>
@@ -1846,7 +1857,7 @@
                                                         <ComboBox ItemsSource="{Binding NrChoices}" SelectedItem="{Binding SelectedNr}" MaxDropDownHeight="300"
                                                                   AutomationProperties.Name="Default NR runtime" />
                                                         <TextBlock Text="{Binding SelectedNrHint}" Style="{StaticResource MutedText}" FontSize="11.5" TextWrapping="Wrap" Margin="0,6,0,0" />
-                                                        <Button Content="Switch default back" Command="{Binding UndoNrDefaultCommand}" HorizontalAlignment="Left" Margin="0,8,0,0" />
+                                                        <Button Content="Restore previous default" Command="{Binding UndoNrDefaultCommand}" HorizontalAlignment="Left" Margin="0,8,0,0" />
                                                     </StackPanel>
                                                     <Border Style="{StaticResource Divider}" />
                                                     <ContentControl Content="{Binding RenoDx}" ContentTemplate="{StaticResource AddonLibraryRow}" Margin="0,10" />

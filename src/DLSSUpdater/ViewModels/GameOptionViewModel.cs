@@ -6,7 +6,7 @@ namespace DLSSUpdater.ViewModels;
 
 /// <summary>
 /// The per-game editor of one ini key. It shares the definition (label, choices, help) of the Settings option and
-/// reads and writes the game's layer: "Inherit (…)" removes the key from the layer, a value overrides the base, and a
+/// reads and writes the game's layer: "Inherit · …" removes the key from the layer, a value overrides the base, and a
 /// choice without a value ("Off", "Game setting") unsets a key the base sets.
 /// </summary>
 public sealed partial class GameOptionViewModel : ObservableObject
@@ -123,7 +123,7 @@ public sealed partial class GameOptionViewModel : ObservableObject
 
     private void Rebuild()
     {
-        _inherit = new OptionChoice($"Inherit ({BaseLabel})", null, "Follows the base: the preset or current settings above.");
+        _inherit = new OptionChoice($"Inherit · {BaseLabel}", null, "Follows the base: the preset or current settings above.");
         var choices = new List<OptionChoice> { _inherit };
         choices.AddRange(Choices);
         if (LayerEntry is { Unset: false } e && Choices.All(c => !IniOptionViewModel.Same(c.Value, e.Value)))

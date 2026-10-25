@@ -168,7 +168,7 @@ public sealed partial class LumaViewModel(GameViewModel game, Services services)
         BuildChoices.Clear();
         if (_picked is { IsOffered: true, Kind: not LumaKind.Custom } picked)
         {
-            BuildChoices.Add(new DlssChoice(null, $"Default ({picked.Version})"));
+            BuildChoices.Add(new DlssChoice(null, $"Default · {picked.Version}"));
             foreach (var b in LumaPin.Candidates(picked, library)) BuildChoices.Add(new DlssChoice(b.Id, b.Version));
             if (pin is not null && BuildChoices.All(c => c.Tag != pin)) BuildChoices.Add(new DlssChoice(pin, "Pinned build not in the library"));
             BuildChoice = BuildChoices.FirstOrDefault(c => c.Tag == pin) ?? BuildChoices[0];

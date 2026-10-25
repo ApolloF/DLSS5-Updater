@@ -57,10 +57,19 @@ public sealed partial class GameViewModel
     [ObservableProperty] private string _adviceFooter = "";
 
     public bool HasAdviceBlocked => AdviceBlocked is not null;
-    public bool HasAdviceCaution => AdviceCaution is not null;
+    /// <summary>
+    /// The caution shows only when no banner already says it: not under a block, and not when it is just the anti-cheat
+    /// warning the page's anti-cheat banner shows above the tabs (a Store-install caution still shows).
+    /// </summary>
+    public bool HasAdviceCaution => AdviceCaution is not null && AdviceBlocked is null
+        && !(Info.AntiCheat is { } ac && AdviceCaution == MethodAdvisor.AntiCheatCaution(ac));
     public bool HasMethods => Methods.Count > 0;
 
-    partial void OnAdviceBlockedChanged(string? value) => OnPropertyChanged(nameof(HasAdviceBlocked));
+    partial void OnAdviceBlockedChanged(string? value)
+    {
+        OnPropertyChanged(nameof(HasAdviceBlocked));
+        OnPropertyChanged(nameof(HasAdviceCaution));
+    }
     partial void OnAdviceCautionChanged(string? value) => OnPropertyChanged(nameof(HasAdviceCaution));
 
     /// <summary>Component id -> the key of its row on the game page.</summary>
@@ -160,7 +169,7 @@ public sealed partial class GameViewModel
         AdviceBlocked = advice.Blocked;
         AdviceCaution = advice.Caution;
         AdviceFooter = advice.Methods.Any(m => m.Method is Method.NeuralAddon or Method.OptiScalerNr or Method.Feeder)
-            ? $"{_s.Gpu.Label}. Neural rendering is the leaked DLSS 5 build and needs community DLLs; the app downloads and installs nvngx_dlssnr.dll automatically."
+            ? $"{_s.Gpu.Label}. Neural rendering runs a DLSS 5 build NVIDIA hasn't released (nvngx_dlssnr.dll); the app downloads and installs it automatically."
             : _s.Gpu.IsKnown ? _s.Gpu.Label : "";
         OnPropertyChanged(nameof(HasMethods));
     }

@@ -1200,7 +1200,7 @@ public sealed class DfcTests : IDisposable
         vm.DetailTab = "Config";
         DLSSUpdater.ViewModels.GameOptionViewModel Hud() => vm.DfcRows.Single(r => r.Label == "HUD protection");
 
-        Assert.Equal(["Default (5.0.0)", v5.Label, v2.Label], vm.DfcChoices.Select(c => c.Label));
+        Assert.Equal(["Default · 5.0.0", v5.Label, v2.Label], vm.DfcChoices.Select(c => c.Label));
         Assert.Null(vm.DfcChoice!.Tag);
         Assert.False(vm.HasDfcNoDlssWarning);
         Assert.True(Hud().IsAvailable);

@@ -190,6 +190,11 @@ public sealed partial class MainViewModel : ObservableObject
 
     public bool HasUpdates => UpdateCount > 0;
 
+    public static string GamesText(int n) => n == 1 ? "1 game" : $"{n} games";
+    public static string UpdatesAvailableText(int n) => n == 1 ? "1 game has updates available" : $"{n} games have updates available";
+    public static string UpdateAllResultText(int updated, int failed) =>
+        failed == 0 ? $"Updated {GamesText(updated)}" : $"{GamesText(failed)} couldn't be updated. Details are in the log.";
+
     /// <summary>What a screen reader says for Update all, which otherwise shows the count in a coloured badge only.</summary>
     public string UpdateAllName => UpdateCount switch
     {
@@ -347,7 +352,7 @@ public sealed partial class MainViewModel : ObservableObject
             // Only now are all install records known, which the cleanup must keep builds for.
             await AutoCleanUpAsync();
         }, lease);
-        if (UpdateCount > 0) Log.Info($"{UpdateCount} game(s) have updates available");
+        if (UpdateCount > 0) Log.Info(UpdatesAvailableText(UpdateCount));
         if (!Demo.Active) await Task.Run(HashCache.Save);
         await SelfUpdate.StartupAsync();
     }
@@ -698,7 +703,7 @@ public sealed partial class MainViewModel : ObservableObject
             catch (NeedsAdminException ex) { failed++; Log.Error($"{g.Name}: {ex.Message}"); }
             catch (Exception ex) when (ex is not OperationCanceledException) { failed++; Log.Error(g.Name, ex); }
         }
-        Log.Info(failed == 0 ? $"Updated {targets.Count} game(s)" : $"{failed} game(s) couldn't be updated. Details are in the log.");
+        Log.Info(UpdateAllResultText(targets.Count, failed));
         await AutoCleanUpAsync();
     });
 
