@@ -88,7 +88,7 @@ Both versions keep settings and downloads in `%LocalAppData%\DLSS5Updater`, so y
 
 ## First run
 
-On a fresh install a short setup opens over the window: a welcome, the default install mode (OptiScaler F5 or OptiScaler-NR, or ReShade + add-ons with one NR add-on), and update and download choices. **Skip** or Esc on any step keeps the defaults; Enter goes to the next step. Nothing is written until you finish. People upgrading from 1.x don't see it, but **Settings → General → Run setup again** opens it any time.
+On a fresh install a short setup opens over the window: a welcome, the default install mode (OptiScaler F5 or OptiScaler-NR, or ReShade + add-ons with one NR add-on), and update and download choices. **Skip** or Esc on any step keeps the defaults; Enter goes to the next step. Nothing is written until you finish. People upgrading from 1.x don't see it, but **Settings → App → Run setup again** opens it any time.
 
 1. Start the app. It scans your game libraries and lists the games it finds. To add a game it missed, use **Add game** (one game folder) or **Add library** (a folder whose subfolders are games) at the bottom of the list.
 2. The files neural rendering needs (`nvngx_dlssnr.dll` and the NR add-ons) are downloaded and installed automatically when an install needs them. To use your own copy instead, import it under **Settings → Local components**. The app keeps them in `%LocalAppData%\DLSS5Updater\components`, several versions side by side, and you can pick a default.

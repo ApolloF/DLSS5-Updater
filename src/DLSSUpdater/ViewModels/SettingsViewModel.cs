@@ -88,7 +88,7 @@ public sealed partial class SettingsViewModel : ObservableObject
     }
     public ObservableCollection<DlssChoice> DlssChoices { get; } = [];
 
-    [ObservableProperty] private string _tab = "General";
+    [ObservableProperty] private string _tab = "Components";
 
     partial void OnTabChanged(string value)
     {
@@ -688,7 +688,7 @@ public sealed partial class SettingsViewModel : ObservableObject
     [RelayCommand]
     private void ResetAll()
     {
-        if (!Views.Dialog.Confirm("Reset to defaults",
+        if (!Views.Dialog.Confirm("Reset mod settings",
                 "Reset all OptiScaler.ini and ReShade.ini settings, keybinds and options to the upstream defaults (what OptiScaler-NR, ReShade and MFG Unlock ship with)? " +
                 "Saved presets are kept.", "Reset", danger: true))
             return;

@@ -221,14 +221,14 @@ public sealed partial class MainViewModel : ObservableObject
     public string RateLimitText => RateLimit?.Describe() ?? "";
     public bool CanAddGitHubToken => RateLimit is { TokenUsed: false };
 
-    /// <summary>The Settings page is open on the General tab; the window puts the cursor in the GitHub token box.</summary>
+    /// <summary>The Settings page is open on the App tab; the window puts the cursor in the GitHub token box.</summary>
     public event Action? FocusGitHubToken;
 
     [RelayCommand]
     private void AddGitHubToken()
     {
         AboutOpen = false;
-        SettingsVm.Tab = "General";
+        SettingsVm.Tab = "App";
         SettingsOpen = true;
         FocusGitHubToken?.Invoke();
     }
