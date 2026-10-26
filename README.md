@@ -10,7 +10,7 @@ Formerly called DLSS Updater. Updating keeps your settings: the app moves `%Loca
 
 ## Screenshots
 
-![DLSS5 Updater with the game list on the left and one game selected. The top bar shows the latest version of each component next to Check for updates and Update all. The selected game shows what works in it, with a short reason for each option and a Select button.](docs/images/games.png)
+![DLSS5 Updater with the game list on the left and one game selected. A one-line summary of component updates sits next to Check for updates and Update all. The selected game shows what works in it as cards with a short explanation each, one card picked, and the Update and DLSS only buttons pinned below.](docs/images/games.png)
 
 The game list and one game's components. Badges show what each game has installed, and an arrow marks an outdated DLSS version.
 
@@ -91,7 +91,7 @@ Both versions keep settings and downloads in `%LocalAppData%\DLSS5Updater`, so y
 On a fresh install a short setup opens over the window: a welcome, the default install mode (OptiScaler F5 or OptiScaler-NR, or ReShade + add-ons with one NR add-on), and update and download choices. **Skip** or Esc on any step keeps the defaults; Enter goes to the next step. Nothing is written until you finish. People upgrading from 1.x don't see it, but **Settings → App → Run setup again** opens it any time.
 
 1. Start the app. It scans your game libraries and lists the games it finds. To add a game it missed, use **Add game** (one game folder) or **Add library** (a folder whose subfolders are games) at the bottom of the list.
-2. The files neural rendering needs (`nvngx_dlssnr.dll` and the NR add-ons) are downloaded and installed automatically when an install needs them. To use your own copy instead, import it under **Settings → Local components**. The app keeps them in `%LocalAppData%\DLSS5Updater\components`, several versions side by side, and you can pick a default.
+2. The files neural rendering needs (`nvngx_dlssnr.dll` and the NR add-ons) are downloaded and installed automatically when an install needs them. To use your own copy instead, import it under **Settings → Components**. The app keeps them in `%LocalAppData%\DLSS5Updater\components`, several versions side by side, and you can pick a default.
 3. ReShade is downloaded the first time an install needs it. Pick another build, channel or your own import under **Settings → ReShade add-ons**; each game can pick its own.
 
 ## Everyday use
@@ -117,7 +117,7 @@ Existing config files are handled in the way you choose under **Existing game co
 - The app only changes files inside the game's own folder, with two exceptions: an Unreal game's `Engine.ini` (for HDR mods and the frame cap, put back on remove) and the ReShade Vulkan layer in `C:\ProgramData\ReShade`, which you install from Settings. It checks its own records before restoring so a damaged record cannot make it touch files elsewhere.
 - Games that ship anti-cheat software are marked with an **AC** badge. Before installing a mod into one, the app shows a warning and asks you to confirm.
 
-![A game marked with EasyAntiCheat. A red banner warns that adding mods can get you banned in online modes and that DLSS only is safe.](docs/images/anti-cheat.png)
+![A game marked with EasyAntiCheat. A red banner warns that adding mods can get you banned in online modes and that DLSS only is safe. Update the DLSS files is picked.](docs/images/anti-cheat.png)
 
 **Do not use these mods in online games with anti-cheat.** Replacing or injecting DLL files can get your account banned, and many online modes refuse to start. The app recognises common anti-cheat systems (Easy Anti-Cheat, BattlEye, EA Javelin, GameGuard, XIGNCODE3, PunkBuster, Vanguard and others), but no check is complete. If you are unsure, do not install. **DLSS only** swaps the DLSS files without injecting anything and does not ask for this confirmation, but changing game files is never risk-free. For online games, use the DLSS override in the NVIDIA app instead.
 
@@ -136,7 +136,7 @@ Press **Uninstall** for that game to restore the original files. Then try the **
 The OptiScaler-NR fork publishes pre-releases only. Keep **Include pre-releases** turned on in Settings.
 
 **The app cannot reach GitHub.**
-It uses what it already downloaded and shows an **OFFLINE** label. Try again later with **Check for updates**. If GitHub limits how often the app may ask, a banner says until when. Adding a free GitHub token in **Settings → General** lifts that limit.
+It uses what it already downloaded and shows an **OFFLINE** label. Try again later with **Check for updates**. If GitHub limits how often the app may ask, a banner says until when. Adding a free GitHub token in **Settings → App** lifts that limit.
 
 **Where are the logs?**
 Open the log panel in the app. Data, cache and the log file are in `%LocalAppData%\DLSS5Updater`.
