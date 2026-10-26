@@ -534,9 +534,25 @@ public static partial class SettingsOptions
 
     public static IniOptionViewModel[] HdrOutput(ObservableCollection<IniOverride> o) =>
     [
+        // OptiScaler-NR and F5 before 0.1.33; F5 0.1.33 replaced these two with HDR output for SDR games (OptiSources.F5).
         IniOptionViewModel.Toggle("Force HDR colour space", "Make the swapchain HDR even if the game doesn't ask.", "HDR", "ForceHDR", "true", o).About("hdr-force"),
-        IniOptionViewModel.Toggle("Use HDR10", "10-bit HDR10 instead of 16-bit scRGB when forcing HDR.", "HDR", "UseHDR10", "true", o).About("hdr-10"),
         IniOptionViewModel.Toggle("Skip colour space", "Don't set the HDR colour space (for games that set it themselves).", "HDR", "SkipColorSpace", "true", o).About("hdr-skip"),
+        IniOptionViewModel.Toggle("HDR output", "Show an SDR game in HDR: DirectX 11/12, not with DLSS-G. Needs Windows HDR on.", "HDR", "Enabled", "true", o).About("hdr-output"),
+        IniOptionViewModel.Toggle("Use HDR10", "10-bit HDR10 instead of 16-bit scRGB for the HDR swapchain.", "HDR", "UseHDR10", "true", o).About("hdr-10"),
+        new IniOptionViewModel("Peak brightness", "Highest brightness HDR output writes.", "HDR", "PeakNits", o,
+            C("Default · display's maximum", null, "0: the maximum the display reports, 1000 nits when it reports none."),
+            C("400 nits", "400", "Caps highlights at 400 nits."), C("600 nits", "600", "Caps highlights at 600 nits."),
+            C("800 nits", "800", "Caps highlights at 800 nits."), C("1000 nits", "1000", "Caps highlights at 1000 nits."),
+            C("1500 nits", "1500", "Caps highlights at 1500 nits.")).About("hdr-peaknits"),
+        new IniOptionViewModel("SDR white", "How bright the game's white is in HDR output.", "HDR", "GameNits", o,
+            C("Default · 203 nits", null, "203 nits, the BT.2408 reference white."),
+            C("100 nits", "100", "Dim; close to an SDR display in a dark room."), C("150 nits", "150", "A little dimmer than the reference."),
+            C("203 nits", "203", "The BT.2408 reference white."), C("250 nits", "250", "A little brighter than the reference."),
+            C("300 nits", "300", "Bright."), C("400 nits", "400", "Very bright; for a bright room.")).About("hdr-gamenits"),
+        new IniOptionViewModel("SDR curve", "How the game's SDR values are turned into light.", "HDR", "Decode", o,
+            C("Default · gamma 2.2", null, "Gamma 2.2."),
+            C("Gamma 2.2", "0", "Deeper blacks; what most SDR games were made for."),
+            C("sRGB", "1", "The sRGB curve.")).About("hdr-decode"),
     ];
 
     /// <summary>What to do when a game already has its own config values.</summary>

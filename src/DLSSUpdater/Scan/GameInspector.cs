@@ -73,7 +73,7 @@ public static partial class GameInspector
             ShouldIncludePredicate = (ref FileSystemEntry e) => Classify(ref e).Kind != HitKind.None,
             ShouldRecursePredicate = (ref FileSystemEntry e) =>
             {
-                if (SkipDirs.Contains(e.FileName.ToString())) return false;
+                if (SkipDirs.Contains(e.FileName.ToString()) || IsOptiBundledStreamline(ref e)) return false;
                 var rel = e.Directory.Length > rootLen ? e.Directory[rootLen..] : ReadOnlySpan<char>.Empty;
                 return rel.Count('\\') < MaxDepth;
             },
@@ -122,6 +122,15 @@ public static partial class GameInspector
         game.Tech = GameDetector.Detect(root, game.Exes, exes, signals, versionOf);
         game.Scanned = DateTime.UtcNow;
     }
+
+    /// <summary>
+    /// OptiScaler F5 (0.1.33+) ships its own DLSS-G and Streamline set in OptiScaler\streamline for its DLSS-G output. They are
+    /// OptiScaler's files, not the game's: swapping or counting them would treat them as the game's DLSS / Streamline.
+    /// A game's own folder named streamline elsewhere is still scanned.
+    /// </summary>
+    private static bool IsOptiBundledStreamline(ref FileSystemEntry e) =>
+        e.FileName.Equals("streamline", StringComparison.OrdinalIgnoreCase)
+        && Path.GetFileName(e.Directory).Equals("OptiScaler", StringComparison.OrdinalIgnoreCase);
 
     private static Hit Transform(ref FileSystemEntry e)
     {

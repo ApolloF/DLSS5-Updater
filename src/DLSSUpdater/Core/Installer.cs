@@ -167,8 +167,9 @@ public sealed partial class Installer(ComponentStore store)
         }
         if (o.ReShadeOnly && !o.ReShade) throw new InvalidOperationException("ReShade + add-ons mode installs ReShade as the proxy; ReShade can't be left out.");
         if (!AppSettings.IsKnownProxy(o.Proxy)) throw new InvalidOperationException($"\"{o.Proxy}\" is not a proxy name DLSS5 Updater installs under.");
-        o = WithMfgDefaults(targetDir, o);
-        var conflictKey = EnsureConflictsConfirmed(targetDir, o);
+        var optiTag = o.OptiTag ?? store.Opti?.Tag;
+        o = WithMfgDefaults(targetDir, o, optiTag);
+        var conflictKey = EnsureConflictsConfirmed(targetDir, o, store.Opti?.Tag);
         // Fetch everything first so a network failure never leaves a half-installed game.
         var pkg = o.Opti && !o.ReShadeOnly ? await store.EnsureOptiAsync(o.OptiTag, progress, ct) : null;
         var dlssNr = o.DlssNr;
@@ -275,7 +276,7 @@ public sealed partial class Installer(ComponentStore store)
 
                 if (pkg is not null)
                 {
-                    InstallOpti(ctx, pkg, o, OptiSources.OfTag(o.OptiTag ?? store.Opti?.Tag));
+                    InstallOpti(ctx, pkg, o, optiTag);
                     if (dlssNr || m.DlssNr) DisplaceForeignNrAddons(ctx, [ComponentStore.RenoDxFile, .. ComponentStore.LecramFiles, .. ComponentStore.DfcPackageFiles, .. ComponentStore.DfcForeignFiles, .. ComponentStore.UpliftFiles, .. ComponentStore.LegacyUpliftFiles]);
                     m.Opti = true;
                     m.OptiTag = o.OptiTag ?? store.Opti?.Tag;
@@ -417,12 +418,14 @@ public sealed partial class Installer(ComponentStore store)
     /// Covers the one-neural-consumer rule (docs/advisor.md, decision table row 18), DLSS5-Feeder's partner and
     /// OptiScaler's built-in MFG unlock next to the MFG Unlock add-on.
     /// </summary>
-    public static IReadOnlyList<string> Conflicts(string targetDir, InstallOptions o)
+    /// <param name="latestOptiTag">The newest OptiScaler release, which a run without a pinned build installs.</param>
+    public static IReadOnlyList<string> Conflicts(string targetDir, InstallOptions o, string? latestOptiTag = null)
     {
         var routes = RoutesOf(o, targetDir);
         var found = new List<string>(NrAddons.Conflicts(routes));
         if (o.Feeder && NrAddons.FeederConflict(routes) is { } feeder) found.Add(feeder);
-        if (MfgUnlockConflict(targetDir, WithMfgDefaults(targetDir, o)) is { } mfg) found.Add(mfg);
+        var optiTag = o.OptiTag ?? latestOptiTag;
+        if (MfgUnlockConflict(targetDir, WithMfgDefaults(targetDir, o, optiTag), optiTag) is { } mfg) found.Add(mfg);
         if (InjectsFiles(o) && IsStorePath(targetDir)) found.Add(MethodAdvisor.StoreCaution);
         return found;
     }
@@ -434,10 +437,10 @@ public sealed partial class Installer(ComponentStore store)
     /// <summary>The identity of a set of conflicts: a stored confirmation counts while the key stays the same.</summary>
     public static string ConflictKey(IReadOnlyList<string> conflicts) => string.Join("\n", conflicts);
 
-    private static string? EnsureConflictsConfirmed(string targetDir, InstallOptions o)
+    private static string? EnsureConflictsConfirmed(string targetDir, InstallOptions o, string? latestOptiTag)
     {
         if (o.Feeder && !o.ReShadeOnly) throw new InvalidOperationException("DLSS5-Feeder is a ReShade add-on: it needs ReShade + add-ons mode.");
-        var conflicts = Conflicts(targetDir, o);
+        var conflicts = Conflicts(targetDir, o, latestOptiTag);
         if (conflicts.Count == 0) return null;
         var key = ConflictKey(conflicts);
         if (o.ConfirmedConflict != key) throw new InvalidOperationException("This selection needs your confirmation first: " + string.Join(" ", conflicts));
@@ -455,9 +458,10 @@ public sealed partial class Installer(ComponentStore store)
         return keep;
     }
 
-    private static void InstallOpti(Ctx ctx, string pkg, InstallOptions o, OptiSource source)
+    private static void InstallOpti(Ctx ctx, string pkg, InstallOptions o, string? tag)
     {
         var m = ctx.M;
+        var source = OptiSources.OfTag(tag);
 
         // Other proxies that are OptiScaler, plus files the fork no longer uses.
         foreach (var name in AppSettings.ProxyNames.Where(n => !n.Equals(o.Proxy, StringComparison.OrdinalIgnoreCase)))
@@ -505,7 +509,34 @@ public sealed partial class Installer(ComponentStore store)
         var releaseIni = File.ReadAllText(Path.Combine(pkg, "OptiScaler.ini"));
         string? currentIni = File.Exists(iniPath) ? File.ReadAllText(iniPath) : null;
         if (currentIni is not null && !m.Owns(ctx.Rel(iniPath))) Backup(ctx, iniPath, "file", copy: true);
+        // Keys this build doesn't have are not written, and the ones an older build got from us go (F5 0.1.33 reads an old ForceHDR=true as HDR output on).
+        bool Lacks(string id)
+        {
+            var slash = id.IndexOf('/');
+            return slash > 0 && source.Lacks(id[..slash], id[(slash + 1)..], tag);
+        }
+        if (currentIni is not null && m.Owns(ctx.Rel(iniPath)) && m.OptiIni.Keys.Any(Lacks))
+        {
+            var cur = IniFile.Parse(currentIni);
+            var dropped = new List<string>();
+            foreach (var id in m.OptiIni.Keys.Where(Lacks).ToList())
+            {
+                var slash = id.IndexOf('/');
+                if (string.Equals(cur.Get(id[..slash], id[(slash + 1)..]), m.OptiIni[id], StringComparison.OrdinalIgnoreCase))
+                {
+                    cur.Remove(id[..slash], id[(slash + 1)..]);
+                    dropped.Add($"[{id[..slash]}] {id[(slash + 1)..]}={m.OptiIni[id]}");
+                }
+                m.OptiIni.Remove(id);
+            }
+            currentIni = cur.ToString();
+            // Not mapped to the new HDR output keys on purpose: ForceHDR only set the colour space, HDR output does much more.
+            if (dropped.Count > 0)
+                Log.Info($"  OptiScaler {tag} doesn't read {string.Join(", ", dropped)} any more, removed from OptiScaler.ini"
+                         + (dropped.Any(d => d.StartsWith("[HDR] ForceHDR", StringComparison.OrdinalIgnoreCase)) ? ". HDR output is off until you turn it on in the game's options" : ""));
+        }
         var profile = ConfigProfile.WithRequired(o.Overrides, o);
+        profile.RemoveAll(x => Lacks(x.Id));
         // Without a ReShade64.dll beside it, LoadReshade from the profile goes back to the release's value (off).
         if (!o.ReShade && !File.Exists(Path.Combine(ctx.Target, ComponentStore.ReShadeFile)))
             profile.RemoveAll(x => x.Id.Equals("Plugins/LoadReshade", StringComparison.OrdinalIgnoreCase));
@@ -942,37 +973,53 @@ public sealed partial class Installer(ComponentStore store)
     }
 
     /// <summary>
-    /// OptiScaler's own MFG unlock ([DLSSG] AdaMfgUnlock / AmpereMfgUnlock, both shipped as false in the F5 build) must not run
-    /// together with the MFG Unlock add-on. With the add-on in play a run that sets up OptiScaler writes both keys as false unless
-    /// the user sets them: an override or a value they changed in the ini wins and shows up as a conflict.
+    /// OptiScaler's own MFG unlock must not run together with the MFG Unlock add-on. Builds up to F5 0.1.32 (and OptiScaler-NR)
+    /// have [DLSSG] AdaMfgUnlock / AmpereMfgUnlock, F5 0.1.33 has none, F5 0.1.34 has [MFGUnlock] XeFG / RTX40 / RTX2030; all
+    /// ship off. With the add-on in play a run that sets up OptiScaler writes the build's keys as off unless the user sets them:
+    /// an override or a value they changed in the ini wins and shows up as a conflict.
     /// </summary>
-    internal static readonly string[] MfgConflictKeys = ["AdaMfgUnlock", "AmpereMfgUnlock"];
+    internal static readonly (string Section, string Key)[] MfgConflictKeys =
+        [("DLSSG", "AdaMfgUnlock"), ("DLSSG", "AmpereMfgUnlock"), .. OptiSources.MfgUnlockKeys.Select(k => ("MFGUnlock", k))];
+
+    /// <summary>The unlock keys the build behind <paramref name="optiTag"/> has; all of them when the build is unknown.</summary>
+    private static IEnumerable<(string Section, string Key)> MfgKeysOf(string? optiTag) =>
+        optiTag is null ? MfgConflictKeys : MfgConflictKeys.Where(k => !OptiSources.OfTag(optiTag).Lacks(k.Section, k.Key, optiTag));
+
+    /// <summary>
+    /// [DLSSG] keys are true/false (1 counts as on). [MFGUnlock] keys follow F5's MfgUnlock::ParseMode: true/on and detect run the
+    /// unlock; auto, empty, false/off and anything else leave it off.
+    /// </summary>
+    private static bool IsUnlockOn(string section, string? value) =>
+        value is not null && (section.Equals("MFGUnlock", StringComparison.OrdinalIgnoreCase)
+            ? value.Equals("true", StringComparison.OrdinalIgnoreCase) || value.Equals("on", StringComparison.OrdinalIgnoreCase) || value.Equals("detect", StringComparison.OrdinalIgnoreCase)
+            : value.Equals("true", StringComparison.OrdinalIgnoreCase) || value == "1");
 
     private static bool MfgAddonInPlay(string targetDir, InstallOptions o) =>
         !o.ReShadeOnly && (o.Mfg || (o.KeepMfg && o.Opti && InstallManifest.Read(targetDir)?.Mfg == true));
 
-    private static InstallOptions WithMfgDefaults(string targetDir, InstallOptions o)
+    private static InstallOptions WithMfgDefaults(string targetDir, InstallOptions o, string? optiTag)
     {
         if (!o.Opti || !MfgAddonInPlay(targetDir, o)) return o;
-        var ours = MfgConflictKeys
-            .Where(k => !o.Overrides.Any(x => x.Section.Equals("DLSSG", StringComparison.OrdinalIgnoreCase) && x.Key.Equals(k, StringComparison.OrdinalIgnoreCase)))
-            .Select(k => new IniOverride("DLSSG", k, "false"));
+        var ours = MfgKeysOf(optiTag)
+            .Where(k => !o.Overrides.Any(x => x.Section.Equals(k.Section, StringComparison.OrdinalIgnoreCase) && x.Key.Equals(k.Key, StringComparison.OrdinalIgnoreCase)))
+            .Select(k => new IniOverride(k.Section, k.Key, "false"));
         return o with { Overrides = [.. ours, .. o.Overrides] };
     }
 
-    private static string? MfgUnlockConflict(string targetDir, InstallOptions o)
+    private static string? MfgUnlockConflict(string targetDir, InstallOptions o, string? optiTag)
     {
         if (!MfgAddonInPlay(targetDir, o)) return null;
         var iniPath = Path.Combine(targetDir, "OptiScaler.ini");
+        var record = InstallManifest.Read(targetDir);
         // An MFG-only update still runs next to the OptiScaler already in the game.
-        if (!o.Opti) { if (!File.Exists(iniPath)) return null; o = o with { Overrides = [], CarryOverIni = true }; }
+        if (!o.Opti) { if (!File.Exists(iniPath)) return null; o = o with { Overrides = [], CarryOverIni = true }; optiTag = record?.OptiTag; }
         var current = o.CarryOverIni && File.Exists(iniPath) ? File.ReadAllText(iniPath) : null;
-        var lastApplied = InstallManifest.Read(targetDir)?.OptiIni;
-        var effective = IniFile.Parse(ConfigProfile.Merge(current ?? "", current, o.Overrides, o.CarryOverIni, lastApplied, o.OverwriteIni).Text);
-        var on = MfgConflictKeys
-            .Where(k => effective.Get("DLSSG", k) is { } v && (v.Equals("true", StringComparison.OrdinalIgnoreCase) || v == "1")).ToList();
+        var effective = IniFile.Parse(ConfigProfile.Merge(current ?? "", current, o.Overrides, o.CarryOverIni, record?.OptiIni, o.OverwriteIni).Text);
+        // One section tag per group keeps the 3.0.0 text ("[DLSSG] AdaMfgUnlock, AmpereMfgUnlock"): it is the conflict key stored confirmations match.
+        var on = MfgKeysOf(optiTag).Where(k => IsUnlockOn(k.Section, effective.Get(k.Section, k.Key)))
+            .GroupBy(k => k.Section).Select(g => $"[{g.Key}] {string.Join(", ", g.Select(k => k.Key))}").ToList();
         return on.Count == 0 ? null
-            : $"OptiScaler's built-in MFG unlock ([DLSSG] {string.Join(", ", on)}) is on next to the MFG Unlock add-on: both unlock MFG, and OptiScaler says never to combine them.";
+            : $"OptiScaler's built-in MFG unlock ({string.Join(", ", on)}) is on next to the MFG Unlock add-on: both unlock MFG, and OptiScaler says never to combine them.";
     }
 
     /// <summary>Copies the package folder in place, skipping unchanged files and docs.</summary>

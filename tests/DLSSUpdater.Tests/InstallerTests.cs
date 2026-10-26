@@ -1227,6 +1227,17 @@ public class InstallerTests : IDisposable
     }
 
     [Fact]
+    public async Task MfgAddonWithOpti_AConfirmationStoredBy300_StillMatches()
+    {
+        File.WriteAllText(Path.Combine(_target, "OptiScaler.ini"), "[DLSSG]\nAdaMfgUnlock=true\nAmpereMfgUnlock=1\n");
+        const string stored = "OptiScaler's built-in MFG unlock ([DLSSG] AdaMfgUnlock, AmpereMfgUnlock) is on next to the MFG Unlock add-on: both unlock MFG, and OptiScaler says never to combine them.";
+
+        Assert.Equal(stored, Installer.ConflictKey(Installer.Conflicts(_target, Full)));
+        await new Installer(_store).InstallAsync(Game(), _target, Full with { ConfirmedConflict = stored }, null, default);
+        Assert.Equal(stored, InstallManifest.Read(_target)!.ConfirmedConflict);
+    }
+
+    [Fact]
     public async Task MfgAddonWithOpti_ConfirmedOverride_KeepsBoth_AndTheWarningStays()
     {
         var keepBoth = Full with { Overrides = [.. TestProfiles.Recommended(), new("DLSSG", "AdaMfgUnlock", "true")] };
@@ -1251,6 +1262,153 @@ public class InstallerTests : IDisposable
         // Dropping the clash clears the stored confirmation.
         await installer.InstallAsync(Game(), _target, Full with { Mfg = false, Overrides = [.. TestProfiles.Recommended(), new("DLSSG", "AdaMfgUnlock", "true")] }, null, default);
         Assert.Null(InstallManifest.Read(_target)!.ConfirmedConflict);
+    }
+
+    private const string F5OldIni = ReleaseIni + "[HDR]\nForceHDR=auto\nUseHDR10=auto\nSkipColorSpace=auto\n[DLSSG]\nAdaMfgUnlock=false\nAmpereMfgUnlock=false\n";
+    private const string F5NewIni = ReleaseIni + "[MFGUnlock]\nXeFG=auto\nRTX40=auto\nRTX2030=auto\n[HDR]\nEnabled=auto\nUseHDR10=auto\nPeakNits=auto\n";
+
+    /// <summary>An F5 package; from 0.1.33 it carries NVIDIA's DLSS-G and Streamline set in OptiScaler\streamline.</summary>
+    private void SeedF5(string tag, string ini, bool bundledStreamline)
+    {
+        SeedOpti(tag, "OPTI-F5");
+        var pkg = Path.Combine(ComponentStore.TagDir(Component.OptiScaler, tag), "pkg");
+        Write(Path.Combine(pkg, "OptiScaler.ini"), ini);
+        Write(Path.Combine(pkg, "nvngx.dll_dlssnr.dll"), "FORWARDER");
+        if (!bundledStreamline) return;
+        Write(Path.Combine(pkg, @"OptiScaler\streamline\nvngx_dlssg.dll"), "F5-DLSSG");
+        Write(Path.Combine(pkg, @"OptiScaler\streamline\sl.interposer.dll"), "F5-SL-INTERPOSER");
+        Write(Path.Combine(pkg, @"OptiScaler\streamline\sl.dlss_g.dll"), "F5-SL-DLSSG");
+    }
+
+    [Fact]
+    public async Task F5BundledStreamline_IsInstalledAndRecorded_ButNeverSwappedOrCountedAsTheGames()
+    {
+        var slCache = Path.Combine(ComponentStore.TagDir(Component.Streamline, "v2.14.16"), "x64");
+        foreach (var f in new[] { "sl.interposer.dll", "sl.common.dll", "sl.dlss_g.dll" }) Write(Path.Combine(slCache, f), "SL-SDK-" + f);
+        var sl = new ReleaseInfo { Tag = "v2.14.16" };
+        ComponentStore.MarkComplete(Component.Streamline, sl);
+        _store.Streamline = sl;
+        var before = Snapshot();
+        SeedF5("v0.1.34-f5", F5NewIni, bundledStreamline: true);
+        var installer = new Installer(_store);
+        var o = Full with { Streamline = true };
+
+        await installer.InstallAsync(Game(), _target, o, null, default);
+        await installer.InstallAsync(Game(), _target, o, null, default);
+
+        Assert.Equal("F5-DLSSG", T(@"OptiScaler\streamline\nvngx_dlssg.dll"));
+        Assert.Equal("F5-SL-INTERPOSER", T(@"OptiScaler\streamline\sl.interposer.dll"));
+        Assert.Equal("F5-SL-DLSSG", T(@"OptiScaler\streamline\sl.dlss_g.dll"));
+        // The game's own frame generation and Streamline dlls are still updated.
+        Assert.Equal("NEW-nvngx_dlssg.dll", T("nvngx_dlssg.dll"));
+        Assert.Equal("SL-SDK-sl.dlss_g.dll", T("sl.dlss_g.dll"));
+        var m = InstallManifest.Load(_target)!;
+        Assert.Contains(Rel(Path.Combine(_target, "OptiScaler")), m.Dirs);
+        var game = Game();
+        Assert.DoesNotContain(game.Dlss.Concat(game.Streamline), d => d.Path.Contains(@"\OptiScaler\streamline\", StringComparison.OrdinalIgnoreCase));
+
+        await installer.UninstallAsync(Game(), _target, default);
+        Assert.Equal(before, Snapshot());
+    }
+
+    [Fact]
+    public async Task F5BundledStreamline_InAnOptiScalerFolderThatPredatesUs_IsRecordedFileByFile()
+    {
+        Write(Path.Combine(_target, @"OptiScaler\user-notes.txt"), "MINE");
+        SeedF5("v0.1.34-f5", F5NewIni, bundledStreamline: true);
+
+        await new Installer(_store).InstallAsync(Game(), _target, new InstallOptions { Opti = true, Proxy = "dxgi.dll", Overrides = TestProfiles.Recommended() }, null, default);
+
+        var m = InstallManifest.Load(_target)!;
+        foreach (var f in new[] { "nvngx_dlssg.dll", "sl.interposer.dll", "sl.dlss_g.dll" })
+            Assert.True(m.Owns(Rel(Path.Combine(_target, "OptiScaler", "streamline", f))), f);
+        Assert.False(m.Owns(Rel(Path.Combine(_target, @"OptiScaler\user-notes.txt"))));
+    }
+
+    [Fact]
+    public async Task F5Keys_FollowTheInstalledVersion_AndUpdatingDropsTheOnesTheNewBuildRemoved()
+    {
+        var installer = new Installer(_store);
+        var o = Full with { Overrides = [.. TestProfiles.Recommended(), new("HDR", "ForceHDR", "true"), new("HDR", "UseHDR10", "true"), new("HDR", "Enabled", "true")] };
+
+        SeedF5("v0.1.32-f5", F5OldIni, bundledStreamline: false);
+        await installer.InstallAsync(Game(), _target, o, null, default);
+        var ini = IniFile.Load(Path.Combine(_target, "OptiScaler.ini"));
+        Assert.Equal("true", ini.Get("HDR", "ForceHDR"));
+        Assert.Equal("true", ini.Get("HDR", "UseHDR10"));
+        Assert.Null(ini.Get("HDR", "Enabled"));
+        Assert.Equal("false", ini.Get("DLSSG", "AdaMfgUnlock"));
+        Assert.Equal("false", ini.Get("DLSSG", "AmpereMfgUnlock"));
+        Assert.Null(ini.Get("MFGUnlock", "RTX40"));
+
+        // 0.1.34 reads a ForceHDR=true left behind as HDR output on, so the one we wrote goes with the other removed keys, and the log says so.
+        SeedF5("v0.1.34-f5", F5NewIni, bundledStreamline: true);
+        var lines = new List<string>();
+        void Capture(string line) { lock (lines) lines.Add(line); }
+        Log.Line += Capture;
+        try { await installer.InstallAsync(Game(), _target, o, null, default); }
+        finally { Log.Line -= Capture; }
+        Assert.Contains(lines, l => l.Contains("[HDR] ForceHDR=true") && l.Contains("HDR output is off"));
+        ini = IniFile.Load(Path.Combine(_target, "OptiScaler.ini"));
+        Assert.Null(ini.Get("HDR", "ForceHDR"));
+        Assert.Null(ini.Get("HDR", "SkipColorSpace"));
+        Assert.Equal("true", ini.Get("HDR", "Enabled"));
+        Assert.Equal("true", ini.Get("HDR", "UseHDR10"));
+        Assert.Null(ini.Get("DLSSG", "AdaMfgUnlock"));
+        Assert.Null(ini.Get("DLSSG", "AmpereMfgUnlock"));
+        foreach (var k in new[] { "XeFG", "RTX40", "RTX2030" }) Assert.Equal("false", ini.Get("MFGUnlock", k));
+        Assert.DoesNotContain(InstallManifest.Load(_target)!.OptiIni.Keys, k => k.StartsWith("DLSSG/", StringComparison.OrdinalIgnoreCase) || k.Equals("HDR/ForceHDR", StringComparison.OrdinalIgnoreCase));
+    }
+
+    [Fact]
+    public async Task F5Keys_AValueTheUserSetInAKeyTheNewBuildRemoved_Stays()
+    {
+        var installer = new Installer(_store);
+        SeedF5("v0.1.32-f5", F5OldIni, bundledStreamline: false);
+        await installer.InstallAsync(Game(), _target, Full, null, default);
+        var path = Path.Combine(_target, "OptiScaler.ini");
+        var ini = IniFile.Load(path);
+        ini.Set("DLSSG", "AmpereMfgUnlock", "maybe");
+        ini.Save(path);
+
+        SeedF5("v0.1.34-f5", F5NewIni, bundledStreamline: false);
+        await installer.InstallAsync(Game(), _target, Full, null, default);
+        ini = IniFile.Load(path);
+        Assert.Equal("maybe", ini.Get("DLSSG", "AmpereMfgUnlock"));
+        Assert.Null(ini.Get("DLSSG", "AdaMfgUnlock"));
+    }
+
+    [Theory]
+    [InlineData("detect", true)]
+    [InlineData("true", true)]
+    [InlineData("on", true)]
+    [InlineData("ON", true)]
+    [InlineData("auto", false)]
+    [InlineData("false", false)]
+    [InlineData("off", false)]
+    [InlineData("1", false)]
+    public async Task F5MfgUnlock_DetectOrOnNextToTheAddon_IsAConflict(string value, bool conflict)
+    {
+        SeedF5("v0.1.34-f5", F5NewIni, bundledStreamline: false);
+        var o = Full with { Overrides = [.. TestProfiles.Recommended(), new("MFGUnlock", "RTX40", value)] };
+
+        var conflicts = Installer.Conflicts(_target, o, _store.Opti?.Tag);
+        if (!conflict) { Assert.Empty(conflicts); return; }
+        Assert.Contains("[MFGUnlock] RTX40", Assert.Single(conflicts));
+        await Assert.ThrowsAsync<InvalidOperationException>(() => new Installer(_store).InstallAsync(Game(), _target, o, null, default));
+    }
+
+    [Fact]
+    public async Task F5MfgUnlock_KeysTheBuildLacks_AreNeitherWrittenNorAConflict()
+    {
+        SeedF5("v0.1.33-f5", ReleaseIni, bundledStreamline: true);
+        var o = Full with { Overrides = [.. TestProfiles.Recommended(), new("MFGUnlock", "RTX40", "true"), new("DLSSG", "AdaMfgUnlock", "true")] };
+
+        Assert.Empty(Installer.Conflicts(_target, o, _store.Opti?.Tag));
+        await new Installer(_store).InstallAsync(Game(), _target, o, null, default);
+        var ini = IniFile.Load(Path.Combine(_target, "OptiScaler.ini"));
+        Assert.Null(ini.Get("MFGUnlock", "RTX40"));
+        Assert.Null(ini.Get("DLSSG", "AdaMfgUnlock"));
     }
 
     [Fact]

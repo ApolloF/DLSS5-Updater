@@ -41,7 +41,7 @@ public static class OptiCompat
         var ini = IniFile.Load(cached);
 
         var keys = managed
-            .Where(k => !string.IsNullOrWhiteSpace(k.Section) && !string.IsNullOrWhiteSpace(k.Key) && !source.IsUnsupported(k.Section, k.Key))
+            .Where(k => !string.IsNullOrWhiteSpace(k.Section) && !string.IsNullOrWhiteSpace(k.Key) && !source.Lacks(k.Section, k.Key, tag))
             .Distinct()
             .ToList();
         var missing = keys
