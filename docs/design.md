@@ -55,7 +55,7 @@ Each component has exactly these parts. A part that doesn't apply is explicitly 
 - Owner-only conveniences that a public build must not have (today: fetching Lecram's paid builds from his channel)
   sit behind a compile-time switch (`-p:<Name>=true`, default off, `BuildFlags.<Name>`), are compiled in both variants
   and tested in both. Public releases build with the switch off; `tools/build-private.ps1` builds the private
-  variant; the release bot drops it on copyparty after each release.
+  variant (portable exe and installer); the release bot drops both on copyparty after each release.
 - `nvngx_dlssnr.dll` is never committed to this repo or bundled in the exe/installer; the app downloads it from the catalog mirror.
 
 ## 4. Choosing builds
