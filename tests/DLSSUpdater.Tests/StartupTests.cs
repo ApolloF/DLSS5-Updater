@@ -144,6 +144,17 @@ public sealed class StartupTests : IDisposable
     private static string TempDir() => Path.Combine(Path.GetTempPath(), "dlssu-mig-" + Guid.NewGuid().ToString("N")[..8]);
 
     [Fact]
+    public void DataRoot_OnlyTakesAFolderUnderTemp()
+    {
+        var copy = Path.Combine(Path.GetTempPath(), "dlssu-copy");
+        Assert.Equal(copy, AppPaths.TempRootArg(["--data-root", copy]));
+        Assert.Null(AppPaths.TempRootArg(["--data-root", Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "DLSS5Updater")]));
+        Assert.Null(AppPaths.TempRootArg(["--data-root", Path.Combine(Path.GetTempPath(), "..", "DLSS5Updater")]));
+        Assert.Null(AppPaths.TempRootArg(["--data-root"]));
+        Assert.Null(AppPaths.TempRootArg(["--demo"]));
+    }
+
+    [Fact]
     public void Migrate_MovesLegacyFolder_WhenOnlyItExists()
     {
         var legacy = TempDir();

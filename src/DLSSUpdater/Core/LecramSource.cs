@@ -18,11 +18,12 @@ public sealed partial class ComponentStore
     private readonly SemaphoreSlim _lecramCheck = new(1, 1);
 
     /// <param name="force">Check even when automatic checks are off (the Check now button).</param>
-    public Task CheckLecramAsync(AppSettings settings, CancellationToken ct, bool force = false) =>
-        CheckLecramAsync(settings, new MediaFireClient(), ct, force, BuildFlags.LecramChannel);
+    public Task CheckLecramAsync(AppSettings settings, CancellationToken ct, bool force = false, IProgress<TransferProgress>? progress = null) =>
+        CheckLecramAsync(settings, new MediaFireClient(), ct, force, BuildFlags.LecramChannel, progress);
 
     /// <param name="channelEnabled">False in the public build: the paid channel is never contacted, not even when forced.</param>
-    internal async Task CheckLecramAsync(AppSettings settings, MediaFireClient client, CancellationToken ct, bool force = false, bool channelEnabled = true)
+    internal async Task CheckLecramAsync(AppSettings settings, MediaFireClient client, CancellationToken ct, bool force = false, bool channelEnabled = true,
+        IProgress<TransferProgress>? progress = null)
     {
         if (!channelEnabled || !(settings.AutoDownloadLecram || force) || !await _lecramCheck.WaitAsync(0, ct)) return;
         var temp = Path.Combine(AppPaths.Cache, "lecram-download-" + Guid.NewGuid().ToString("N"));
@@ -39,7 +40,7 @@ public sealed partial class ComponentStore
             {
                 Directory.CreateDirectory(temp);
                 var package = Path.Combine(temp, "package");
-                await client.DownloadAsync(latest, package, ct);
+                await client.DownloadAsync(latest, package, ct, progress);
                 var addon = Path.Combine(temp, Lecram11File);
                 if (latest.Rank == 2) File.Move(package, addon);
                 else MediaFireClient.ExtractAddon(package, addon);
@@ -61,6 +62,7 @@ public sealed partial class ComponentStore
                                       or UnauthorizedAccessException or System.Text.Json.JsonException or KeyNotFoundException or InvalidOperationException or FormatException)
         {
             settings.LecramLastResult = "Check failed; keeping the Lecram library. " + (UserErrors.IsCurated(ex) ? ex.Message : "The details are in the log.");
+            if (!UserErrors.IsCurated(ex)) Log.Warn($"Lecram check failed ({ex.Message})");
             Log.Info("Lecram: " + settings.LecramLastResult);
         }
         finally

@@ -249,7 +249,9 @@ Since the builds went behind the author's Buy Me a Coffee, the public DLSS5 Upda
   the file. The newest upload wins, not the highest version. The installer prefers EXE over ZIP over raw add-on on a tie; the app only
   needs the add-on, so it prefers raw over ZIP over EXE.
 - **Download.** `links.normal_download` is a landing page; the first `href="https://download...` in it (HTML entities decoded) is the
-  file. The downloaded file's SHA-256 must equal the listing's, else it is refused. Nothing is ever executed.
+  file. The downloaded file's SHA-256 must equal the listing's, else it is refused. Nothing is ever executed. MediaFire can be slow
+  (v12.0.0's 10 MB setup took 137 s at ~74 KB/s on 2026-10-26), so the check runs as its own run ("Checking Lecram") after the startup
+  or update check, with download progress and Cancel; a download that gets no data for 30 s is given up and the next check starts over.
 - **Setup exe.** A Rust PE with a normal DEFLATE ZIP appended after the PE sections (central directory offsets count from the ZIP's
   start; the app also accepts offsets counted from the file start). Entries include `dlss5-nr.addon64` and `package.json`
   (schema 1, `version` `v11.0.0-beta.22`, `kind` `v11`). The app finds the end-of-central-directory record, reads the ZIP in

@@ -357,6 +357,7 @@ public sealed partial class MainViewModel : ObservableObject
         if (UpdateCount > 0) Log.Info(UpdatesAvailableText(UpdateCount));
         if (!Demo.Active) await Task.Run(HashCache.Save);
         await SelfUpdate.StartupAsync();
+        await CheckLecramRun();
     }
 
     public async Task RefreshLocalComponentsAsync()
@@ -393,11 +394,19 @@ public sealed partial class MainViewModel : ObservableObject
     public string LecramVersion => S.Settings.LecramLastVersion ?? S.Store.LecramBuildFor(null)?.DetectedLabel ?? "not in library";
 
     /// <summary>Lecram check on its own (Add-on library "Check now", even with automatic checks off), as a run like any other.</summary>
-    internal Task CheckLecramNowAsync() => Run("Checking Lecram", async ct =>
-    {
-        await CheckLecramAsync(ct, force: true);
-        await AutoCleanUpAsync();
-    });
+    internal Task CheckLecramNowAsync() => CheckLecramRun(force: true);
+
+    /// <summary>
+    /// The Lecram channel as a run of its own after the startup or update check, never inside it: MediaFire can take minutes
+    /// for a setup exe, which then shows as a cancellable download instead of holding back the scan, the latest versions and the cleanup.
+    /// </summary>
+    private Task CheckLecramRun(bool force = false) => Demo.Active || !BuildFlags.LecramChannel
+        ? Task.CompletedTask
+        : Run("Checking Lecram", async ct =>
+        {
+            await CheckLecramAsync(ct, force);
+            await AutoCleanUpAsync();
+        });
 
     /// <summary>
     /// A build picker's "(download)" entry: fetches that older catalog build as a run of its own (status line, progress, one
@@ -480,7 +489,8 @@ public sealed partial class MainViewModel : ObservableObject
     private async Task CheckLecramAsync(CancellationToken ct, bool force = false)
     {
         if (Demo.Active) return;
-        await Task.Run(() => S.Store.CheckLecramAsync(S.Settings, ct, force));
+        var progress = TransferProgress();
+        await Task.Run(() => S.Store.CheckLecramAsync(S.Settings, ct, force, progress));
         S.Settings.Save();
         await RefreshLocalComponentsAsync();
         SettingsVm.Reload();
@@ -494,7 +504,11 @@ public sealed partial class MainViewModel : ObservableObject
     private bool CanAddGames() => !IsBusy && !Demo.Active;
 
     [RelayCommand(CanExecute = nameof(CanRun))]
-    private Task CheckUpdates() => Run("Checking for updates", CheckUpdatesCore);
+    private async Task CheckUpdates()
+    {
+        await Run("Checking for updates", CheckUpdatesCore);
+        await CheckLecramRun();
+    }
 
     private async Task CheckUpdatesCore(CancellationToken ct)
     {
@@ -502,7 +516,6 @@ public sealed partial class MainViewModel : ObservableObject
         {
             Gh.Token = S.Settings.GitHubToken;
             await S.Store.RefreshAsync(ct);
-            await CheckLecramAsync(ct);
             await CheckCatalogAsync(ct);
             await S.Extras!.LoadCatalogAsync(ct);
         }

@@ -15,6 +15,8 @@ public sealed class SingleInstance : IDisposable
     public const string DefaultName = @"Local\DLSSUpdater.SingleInstance";
     /// <summary>The demo (--demo) uses its own temp data folder, so it only excludes other demos.</summary>
     public const string DemoName = @"Local\DLSSUpdater.Demo";
+    /// <summary>A start on a copied data folder (--data-root) only excludes other such starts.</summary>
+    public const string TempRootName = @"Local\DLSSUpdater.TempRoot";
     private const string LegacyProcessName = "DLSSUpdater";
 
     private readonly Mutex _mutex;
