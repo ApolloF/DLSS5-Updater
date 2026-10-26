@@ -37,6 +37,9 @@ Each method is a clickable card: a one-line plain summary (`MethodAdvisor.Summar
 page and the install mode follows. It never installs; the user presses Install. The picked card is the one the page is set to:
 after a refresh, or when the user changes the mode or a component by hand, the app marks the most specific method whose mode and
 components are all on (or none).
+MFG Unlock (H) is an add-on, not a method (`MethodAdvisor.IsAddOn`): it shows as a checkbox card under the methods ("Add to the
+method you picked") and goes on or off by itself, so picking a method never takes it out and it works with no method picked too.
+It is never the recommended one.
 Smooth Motion has no components: it is a driver setting on the game's NVIDIA tab, so its card isn't pickable.
 
 The recommended method (`MethodAdvice.Top`, badged "Recommended") is the first selectable one without a warning. `Rank` puts

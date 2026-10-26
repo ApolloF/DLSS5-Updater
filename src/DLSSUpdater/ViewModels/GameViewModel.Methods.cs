@@ -14,7 +14,8 @@ public sealed partial class MethodRow(MethodOption option, bool isTop, string? p
     public string Title => Option.Title;
     public string Summary => Option.Summary;
     public string Reason => Option.Reason;
-    /// <summary>The row is the method the page is set to: the user clicked it, or its mode and components are all on.</summary>
+    public bool IsAddOn => Option.IsAddOn;
+    /// <summary>The row is the method the page is set to: the user clicked it, or its mode and components are all on. An add-on row is picked while its components are on.</summary>
     [ObservableProperty] private bool _isPicked;
     /// <summary>The long reason is open below the row.</summary>
     [ObservableProperty] private bool _isExpanded;
@@ -41,6 +42,7 @@ public sealed partial class MethodRow(MethodOption option, bool isTop, string? p
     /// <summary>Dim and disabled cards are the ones that can neither be picked nor opened.</summary>
     public bool IsClickable => IsSelectable || IsAdviceOnly;
     public string CardTip => IsAdviceOnly ? "Installed from its own section further down this page"
+        : IsAddOn ? "Turns this add-on on or off next to the method you picked. Nothing is installed until you press Install."
         : "Turns on this method's components and sets the install mode it needs. Nothing is installed until you press Install.";
     /// <summary>Methods that can't be used are shown dimmed, with the reason they can't.</summary>
     public bool IsDim => Option.Availability is Availability.NotPossible or Availability.Coming;
@@ -51,6 +53,8 @@ public sealed partial class MethodRow(MethodOption option, bool isTop, string? p
 public sealed partial class GameViewModel
 {
     public ObservableCollection<MethodRow> Methods { get; } = [];
+    /// <summary>Add-ons shown under the methods (MFG Unlock): each goes on or off by itself, whichever method is picked.</summary>
+    public ObservableCollection<MethodRow> AddOns { get; } = [];
 
     [ObservableProperty] private string? _adviceBlocked;
     [ObservableProperty] private string? _adviceCaution;
@@ -64,6 +68,7 @@ public sealed partial class GameViewModel
     public bool HasAdviceCaution => AdviceCaution is not null && AdviceBlocked is null
         && !(Info.AntiCheat is { } ac && AdviceCaution == MethodAdvisor.AntiCheatCaution(ac));
     public bool HasMethods => Methods.Count > 0;
+    public bool HasAddOns => AddOns.Count > 0;
 
     partial void OnAdviceBlockedChanged(string? value)
     {
@@ -162,9 +167,12 @@ public sealed partial class GameViewModel
         }
         var top = advice.Top;
         var keep = Methods.FirstOrDefault(m => m.IsPicked)?.Option.Method;
-        var rows = advice.Methods.Select(m => new MethodRow(m, ReferenceEquals(m, top), advice.Caution)).ToList();
+        var rows = advice.Choices.Select(m => new MethodRow(m, ReferenceEquals(m, top), advice.Caution)).ToList();
+        var addOns = advice.AddOns.Select(m => new MethodRow(m, false, advice.Caution)).ToList();
         Methods.Clear();
         foreach (var r in rows) Methods.Add(r);
+        AddOns.Clear();
+        foreach (var r in addOns) AddOns.Add(r);
         SyncPick(keep);
         AdviceBlocked = advice.Blocked;
         AdviceCaution = advice.Caution;
@@ -172,16 +180,23 @@ public sealed partial class GameViewModel
             ? $"{_s.Gpu.Label}. Neural rendering runs a DLSS 5 build NVIDIA hasn't released (nvngx_dlssnr.dll); the app downloads and installs it automatically."
             : _s.Gpu.IsKnown ? _s.Gpu.Label : "";
         OnPropertyChanged(nameof(HasMethods));
+        OnPropertyChanged(nameof(HasAddOns));
     }
 
     /// <summary>
     /// Applies a method: its components go on, the install mode follows and the previous card's extras go off (see
-    /// <see cref="SelectMethod"/>). Cards without components only open their details.
+    /// <see cref="SelectMethod"/>). Cards without components only open their details; an add-on card switches its components
+    /// on or off and leaves the method alone.
     /// </summary>
     [RelayCommand]
     private void PickMethod(MethodRow? row)
     {
         if (row is null) return;
+        if (row.IsAddOn)
+        {
+            ToggleAddOn(row);
+            return;
+        }
         if (row.IsAdviceOnly)
         {
             row.IsExpanded = !row.IsExpanded;
@@ -202,6 +217,7 @@ public sealed partial class GameViewModel
         var picked = Methods.FirstOrDefault(r => r.Option.Method == keep && PageMatches(r))
             ?? Methods.Where(PageMatches).MaxBy(r => r.Option.Components.Count);
         foreach (var m in Methods) m.IsPicked = ReferenceEquals(m, picked);
+        foreach (var a in AddOns) a.IsPicked = AddOnOn(a);
     }
 
     private void SyncPick() => SyncPick(Methods.FirstOrDefault(m => m.IsPicked)?.Option.Method);
@@ -231,6 +247,25 @@ public sealed partial class GameViewModel
             foreach (var id in previous.Option.Components.Except(row.Option.Components, StringComparer.OrdinalIgnoreCase))
                 if (EditableRow(id) is { } component) component.Enabled = false;
         // The NR add-ons exclude each other: the one the method picked stays, the others go (see NrAddons).
+        RefreshStatus();
+        OnPropertyChanged(nameof(AnyEnabled));
+    }
+
+    /// <summary>An add-on is on while all of its components the page can change are on; it needs no install mode of its own.</summary>
+    private bool AddOnOn(MethodRow row)
+    {
+        var rows = row.Option.Components.Select(EditableRow).Where(c => c is not null).ToList();
+        return row.IsSelectable && rows.Count > 0 && rows.All(c => c!.Enabled);
+    }
+
+    /// <summary>Switches an add-on's components on or off. The picked method, its mode and its components stay as they are.</summary>
+    private void ToggleAddOn(MethodRow row)
+    {
+        if (!row.IsSelectable) return;
+        var on = !AddOnOn(row);
+        foreach (var id in row.Option.Components)
+            if (EditableRow(id) is { } component) component.Enabled = on;
+        SyncPick();
         RefreshStatus();
         OnPropertyChanged(nameof(AnyEnabled));
     }

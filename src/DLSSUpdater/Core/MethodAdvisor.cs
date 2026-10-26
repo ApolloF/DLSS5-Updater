@@ -61,6 +61,8 @@ public sealed record MethodOption(Method Method, string Title, Availability Avai
     public NrAddon? Route { get; init; }
     /// <summary>One plain line on what the method does for the player; the longer <see cref="Reason"/> is the detail.</summary>
     public string Summary => MethodAdvisor.SummaryOf(Method);
+    /// <summary>An add-on that goes on top of whichever method is picked (<see cref="MethodAdvisor.IsAddOn"/>), not a method of its own.</summary>
+    public bool IsAddOn => MethodAdvisor.IsAddOn(Method);
     /// <summary>True when the game page can select this method's components.</summary>
     public bool Selectable => (Availability is Availability.Available or Availability.NeedsSetup) && Components.Count > 0;
 }
@@ -77,8 +79,13 @@ public sealed record MethodAdvice(IReadOnlyList<MethodOption> Methods, IReadOnly
     /// The method to recommend: the first the game page can select without a warning. <see cref="MethodAdvisor.Advise"/> ranks
     /// Available before NeedsSetup, so a method that needs setup is only recommended when nothing available fits. A method that
     /// clashes with a neural route already in the game carries a warning, so it is never recommended; null when nothing qualifies.
+    /// Add-ons (MFG Unlock) are never the recommendation: they go on top of the method.
     /// </summary>
-    public MethodOption? Top => Methods.FirstOrDefault(m => m.Selectable && m.Warning is null);
+    public MethodOption? Top => Methods.FirstOrDefault(m => !m.IsAddOn && m.Selectable && m.Warning is null);
+    /// <summary>The methods the game page offers as exclusive choices: everything but the add-ons.</summary>
+    public IEnumerable<MethodOption> Choices => Methods.Where(m => !m.IsAddOn);
+    /// <summary>The add-ons the game page offers on top of whichever method is picked.</summary>
+    public IEnumerable<MethodOption> AddOns => Methods.Where(m => m.IsAddOn);
     public IEnumerable<MethodOption> Possible => Methods.Where(m => m.Availability is Availability.Available or Availability.NeedsSetup);
     public IEnumerable<MethodOption> Unavailable => Methods.Where(m => m.Availability is Availability.NotPossible or Availability.Coming);
 }
@@ -115,6 +122,12 @@ public sealed record AdvisorInput(GameInfo Game, GpuInfo Gpu)
 /// </summary>
 public static class MethodAdvisor
 {
+    /// <summary>
+    /// MFG Unlock adds frame generation next to the upscaler or NR route, and the installer combines it with every mode
+    /// (OptiScaler + MFG, ReShade + Lecram + MFG, ...), so picking a method never takes it out.
+    /// </summary>
+    public static bool IsAddOn(Method m) => m == Method.MfgUnlock;
+
     public const string FeederCaveat = "DLAA only: no performance gain, a few ms per frame at 4K. Single-player games only.";
 
     public static string TitleOf(Method m) => m switch
