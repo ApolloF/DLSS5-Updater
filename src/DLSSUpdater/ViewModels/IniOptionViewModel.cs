@@ -62,10 +62,10 @@ public sealed partial class IniOptionViewModel : ObservableObject
         return this;
     }
 
-    /// <summary>Switches hint and choices to the build's variant and hides the row when the build lacks the key.</summary>
-    public void ApplySource(OptiSource source)
+    /// <summary>Switches hint and choices to the build's variant and hides the row when the build behind <paramref name="tag"/> lacks the key.</summary>
+    public void ApplySource(OptiSource source, string? tag = null)
     {
-        IsAvailable = !source.IsUnsupported(Section, Key);
+        IsAvailable = !source.Lacks(Section, Key, tag);
         var v = _variants.GetValueOrDefault(source);
         Show(v.Hint, v.Choices);
     }

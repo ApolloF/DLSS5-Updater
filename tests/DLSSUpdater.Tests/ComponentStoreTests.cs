@@ -131,6 +131,95 @@ public class ComponentStoreTests
         Assert.Equal(new Version(0, 1, 32), store.Opti.Version);
     }
 
+    [Theory]
+    [InlineData("OptiScaler-DLSSNR-F5-0.1.32.zip", true)]
+    [InlineData("OptiScaler-DLSSNR-F5-0.1.33-with-dlss-fg.zip", true)]
+    [InlineData("OptiScaler-DLSSNR-F5-v0.1.34-with-dlss-fg.zip", true)]
+    [InlineData("Optional-Vendor-Neutral-DLSS5-Forwarder.zip", false)]
+    [InlineData("OptiScaler-DLSSNR-Troubleshooting.md", false)]
+    [InlineData("OptiScaler-DLSSNR-F5-v0.1.34-with-dlss-fg.zip.sha256", false)]
+    public void F5Asset_MatchesOldAndRenamedZips_NotTheForwarderOrDocs(string name, bool match) =>
+        Assert.Equal(match, OptiSources.F5.Asset.IsMatch(name));
+
+    [Fact]
+    public async Task F5Source_PicksTheRenamedZip_WithTheForwarderAndGuideBesideIt()
+    {
+        const string release =
+            """[{"tag_name":"v0.1.34","prerelease":false,"assets":[""" +
+            """{"name":"Optional-Vendor-Neutral-DLSS5-Forwarder.zip","browser_download_url":"https://example.invalid/fwd.zip"},""" +
+            """{"name":"OptiScaler-DLSSNR-Troubleshooting.md","browser_download_url":"https://example.invalid/guide.md"},""" +
+            """{"name":"OptiScaler-DLSSNR-F5-v0.1.34-with-dlss-fg.zip","browser_download_url":"https://example.invalid/f5.zip"}]},""" +
+            """{"tag_name":"v0.1.33","prerelease":false,"assets":[{"name":"OptiScaler-DLSSNR-F5-0.1.33-with-dlss-fg.zip","browser_download_url":"https://example.invalid/f533.zip"}]}]""";
+        var gh = new FakeGitHub(r =>
+        {
+            var url = r.RequestUri!.ToString();
+            if (url.Contains(OptiSources.F5.Repo + "/releases")) return Json(release);
+            if (url.StartsWith("https://api.github.com/")) return Json("[]");
+            return new HttpResponseMessage(HttpStatusCode.NotFound);
+        });
+        var store = new ComponentStore(new GitHubClient(gh), () => true) { OptiSourceRepo = () => OptiSources.F5.Repo };
+        await store.RefreshAsync(default);
+        Assert.Equal("v0.1.34-f5", store.Opti?.Tag);
+        Assert.Equal("OptiScaler-DLSSNR-F5-v0.1.34-with-dlss-fg.zip", Assert.Single(store.Opti!.Files).Name);
+    }
+
+    [Theory]
+    [InlineData("v0.1.32-f5", true, false, true, false)]
+    [InlineData("v0.1.33-f5", false, true, false, false)]
+    [InlineData("v0.1.34-f5", false, true, false, true)]
+    [InlineData(null, false, true, false, true)]
+    public void F5Keys_FollowTheBuildVersion(string? tag, bool forceHdr, bool hdrOutput, bool adaUnlock, bool mfgUnlock)
+    {
+        var f5 = OptiSources.F5;
+        Assert.Equal(!forceHdr, f5.Lacks("HDR", "ForceHDR", tag));
+        Assert.Equal(!forceHdr, f5.Lacks("HDR", "SkipColorSpace", tag));
+        Assert.Equal(!hdrOutput, f5.Lacks("HDR", "Enabled", tag));
+        Assert.Equal(!hdrOutput, f5.Lacks("hdr", "peaknits", tag));
+        Assert.Equal(!adaUnlock, f5.Lacks("DLSSG", "AdaMfgUnlock", tag));
+        Assert.Equal(!mfgUnlock, f5.Lacks("MFGUnlock", "RTX40", tag));
+        Assert.False(f5.Lacks("HDR", "UseHDR10", tag));
+        Assert.True(f5.Lacks("DlssNr", "DenoiseFirst", tag));
+    }
+
+    [Fact]
+    public void OptiScalerNr_KeepsTheOldHdrAndUnlockKeys_InEveryVersion()
+    {
+        var nr = OptiSources.Default;
+        foreach (var tag in new[] { "v0.9.51", "v9.9.9", null })
+        {
+            Assert.False(nr.Lacks("HDR", "ForceHDR", tag));
+            Assert.False(nr.Lacks("DLSSG", "AmpereMfgUnlock", tag));
+            Assert.True(nr.Lacks("HDR", "Enabled", tag));
+            Assert.True(nr.Lacks("MFGUnlock", "XeFG", tag));
+        }
+    }
+
+    [Fact]
+    public void HdrOptions_ShowTheKeysOfTheDefaultBuildsVersion()
+    {
+        var options = DLSSUpdater.ViewModels.SettingsOptions.HdrOutput([]);
+        bool Shown(string key) => options.Single(o => o.Key == key).IsAvailable;
+
+        foreach (var o in options) o.ApplySource(OptiSources.F5, "v0.1.32-f5");
+        Assert.True(Shown("ForceHDR"));
+        Assert.True(Shown("SkipColorSpace"));
+        Assert.False(Shown("Enabled"));
+        Assert.False(Shown("GameNits"));
+        Assert.True(Shown("UseHDR10"));
+
+        foreach (var o in options) o.ApplySource(OptiSources.F5, "v0.1.34-f5");
+        Assert.False(Shown("ForceHDR"));
+        Assert.False(Shown("SkipColorSpace"));
+        Assert.True(Shown("Enabled"));
+        Assert.True(Shown("PeakNits"));
+        Assert.True(Shown("Decode"));
+        Assert.True(Shown("UseHDR10"));
+
+        foreach (var o in options) o.ApplySource(OptiSources.Default, "v0.9.51");
+        Assert.True(Shown("ForceHDR"));
+        Assert.False(Shown("Enabled"));
+    }
+
     [Fact]
     public void CompatFlagsManagedKeysWhoseDocumentationChanged()
     {

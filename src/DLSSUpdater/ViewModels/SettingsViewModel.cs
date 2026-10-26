@@ -297,6 +297,7 @@ public sealed partial class SettingsViewModel : ObservableObject
                 OnPropertyChanged(nameof(OptiBuild));
                 _main.OptiSourceChanged();
             }
+            else ApplyOptiSource();
             Save();
             _ = _main.RefreshLocalComponentsAsync();
         }
@@ -322,6 +323,7 @@ public sealed partial class SettingsViewModel : ObservableObject
         Fill(OptiVersionChoices, store.Library(LibraryKind.OptiScaler), GameViewModel.NewestOptiLabel(store), Settings.OptiTag);
         Fill(UpliftVersionChoices, store.Library(LibraryKind.Uplift), GameViewModel.NewestUpliftLabel(store), Settings.UpliftTag);
         _reloadingReleases = false;
+        ApplyOptiSource();
         OnPropertyChanged(nameof(SelectedOptiVersion));
         OnPropertyChanged(nameof(SelectedUpliftVersion));
 
@@ -334,13 +336,15 @@ public sealed partial class SettingsViewModel : ObservableObject
         }
     }
 
-    /// <summary>Hides the options the chosen OptiScaler build doesn't have and switches the rest to its values.</summary>
+    /// <summary>Hides the options the default OptiScaler build doesn't have and switches the rest to its values.</summary>
     public void ApplyOptiSource()
     {
         var source = OptiBuild;
+        // Newest follows the latest release of the source; unknown before the first check, which means the tested build.
+        var tag = Settings.OptiTag ?? (_main.S.Store.Opti is { } latest && OptiSources.OfTag(latest.Tag) == source ? latest.Tag : null);
         var shared = GameOptionViewModel.Definitions.Nr.Concat(GameOptionViewModel.Definitions.Tonemap).Concat(GameOptionViewModel.Definitions.HdrOutput);
         foreach (var o in NrOptions.Concat(TonemapOptions).Concat(HdrOptions).Concat(shared))
-            o.ApplySource(source);
+            o.ApplySource(source, tag);
     }
 
     public bool InstallReShade

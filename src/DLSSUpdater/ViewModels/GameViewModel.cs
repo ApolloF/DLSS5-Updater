@@ -296,7 +296,7 @@ public sealed partial class GameViewModel : ObservableObject
     public string? NrAddonWarning => BothAddonsEnabled ? NrAddons.Conflict(NrAddon.RenoDx, [NrAddon.Lecram]) : null;
 
     /// <summary>What clashes in the current selection (<see cref="Installer.Conflicts"/>); stays visible after the user confirmed it.</summary>
-    public string? ConflictWarning => SelectedTarget is null ? null : Installer.Conflicts(SelectedTarget.Dir, BuildOptions(false, false)) is { Count: > 0 } c ? string.Join(Environment.NewLine, c) : null;
+    public string? ConflictWarning => SelectedTarget is null ? null : Installer.Conflicts(SelectedTarget.Dir, BuildOptions(false, false), _s.Store.Opti?.Tag) is { Count: > 0 } c ? string.Join(Environment.NewLine, c) : null;
     public bool HasConflictWarning => ConflictWarning is not null;
 
     private void RefreshConflicts()
