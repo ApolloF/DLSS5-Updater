@@ -1,5 +1,5 @@
 ; Inno Setup script for the installable DLSS5 Updater. Build after `dotnet publish`:
-;   iscc /DAppVersion=3.1.0 installer\DLSSUpdater.iss
+;   iscc /DAppVersion=3.1.1 installer\DLSSUpdater.iss
 ; The portable build is the same single-file publish\DLSS5Updater.exe, released as is.
 ; The owner's private build (tools\build-private.ps1) adds /DPrivate: it packages publish-private\DLSS5Updater.exe into
 ; publish-private\DLSS5Updater-Setup-<version>-private.exe. Same AppId, so it installs over the public app and back.
