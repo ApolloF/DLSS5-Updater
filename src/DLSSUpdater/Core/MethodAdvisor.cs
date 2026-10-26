@@ -142,7 +142,7 @@ public static class MethodAdvisor
         Method.OptiScalerNr => "Installs OptiScaler and nvngx_dlssnr.dll; OptiScaler replaces the game's upscaler and adds neural rendering.",
         Method.OptiScaler => "Installs OptiScaler, which replaces the game's upscaler and adds frame generation.",
         Method.Feeder => "Runs neural rendering through ReShade in a game without DLSS, at native resolution (no FPS gain).",
-        Method.MfgUnlock => "Adds a mod that turns on DLSS multi frame generation on RTX 40 in a game with DLSS frame generation.",
+        Method.MfgUnlock => "Adds a mod that turns on multi frame generation in a game with DLSS frame generation: DLSS-G on RTX 40, Intel XeMFG on RTX 20/30.",
         Method.SmoothMotion => "Turns on NVIDIA's driver frame generation from the game's NVIDIA profile tab; adds no files.",
         Method.Dx11Bridge => "Neural rendering for a DX11 game that has DLSS. Not in the app yet.",
         Method.UpscalerMod => "A community mod that gives this game an upscaler. Not in the app yet.",
@@ -531,13 +531,26 @@ public static class MethodAdvisor
         return Opt(Method.OptiScaler, Availability.Available, reason, [ComponentRegistry.OptiScaler], null, InstallMode.OptiScaler) with { Route = NrAddon.OptiScaler };
     }
 
-    // The add-on the app installs (mavismmg's MFGAdaUnlock) targets RTX 40 only; an unreadable GPU never hides it.
-    private static MethodOption MfgUnlock(Ctx c) =>
-        c.Gpu.Tier == RtxTier.Rtx50
-            ? Opt(Method.MfgUnlock, Availability.NotPossible, "Not needed: RTX 50 has multi frame generation built in.")
-            : c.Gpu.IsKnown && c.Gpu.Tier != RtxTier.Rtx40
-                ? Opt(Method.MfgUnlock, Availability.NotPossible, "Only for RTX 40 cards: it unlocks the multi frame generation they leave out.")
-                : Opt(Method.MfgUnlock, Availability.Available, "Unlocks DLSS multi frame generation on RTX 40 in a game that ships DLSS-G.", [ComponentRegistry.MfgUnlock]);
+    // The add-on the app installs (mavismmg's MFGAdaUnlock) has two backends since 1.5.0 (README "Choosing a backend"): DLSS-G, the
+    // default, for RTX 40 only, and Intel XeMFG for RTX 20/30/40/50 (D3D12, Intel files from its panel, no exclusive fullscreen).
+    // An unreadable GPU never hides it.
+    private static MethodOption MfgUnlock(Ctx c)
+    {
+        if (c.Gpu.Tier == RtxTier.Rtx50)
+            return Opt(Method.MfgUnlock, Availability.NotPossible, "Not needed: RTX 50 has multi frame generation built in.");
+        if (!c.Gpu.IsKnown || c.Gpu.Tier == RtxTier.Rtx40)
+            return Opt(Method.MfgUnlock, Availability.Available, "Unlocks DLSS multi frame generation on RTX 40 in a game that ships DLSS-G (its default DLSS-G backend).", [ComponentRegistry.MfgUnlock]);
+        if (!c.Gpu.IsNvidia || !c.Gpu.IsRtx)
+            return Opt(Method.MfgUnlock, Availability.NotPossible, "Needs a GeForce RTX card: DLSS-G on RTX 40, Intel XeMFG on RTX 20 and 30.");
+        if (c.ApiKnown && c.Api != GraphicsApis.Dx12)
+            return Opt(Method.MfgUnlock, Availability.NotPossible, "On RTX 20 and 30 it only works through its Intel XeMFG backend, which needs D3D12.");
+        return Opt(Method.MfgUnlock, Availability.NeedsSetup,
+            "Multi frame generation on RTX 20 and 30 through its Intel XeMFG backend (XeSS frame generation fed by the game's DLSS-G inputs, 2x to 6x). The DLSS-G backend stays RTX 40 only.",
+            [ComponentRegistry.MfgUnlock],
+            ["Set General → Frame generation method to Intel XeMFG in the MFG Unlock panel (ReShade overlay), then restart the game",
+             "Install Intel's libxess_fg.dll and libxell.dll from the panel: Diagnostics → Intel runtime files → Install / update files",
+             "Borderless or windowed display mode: XeMFG keeps frame generation off in exclusive fullscreen"]);
+    }
 
     private static MethodOption SmoothMotion(Ctx c, string reason)
     {

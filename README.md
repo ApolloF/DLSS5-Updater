@@ -48,7 +48,7 @@ Settings for all games. Every option has a short explanation, and the help butto
 | [OptiScaler](https://github.com/optiscaler/OptiScaler) | Lets a game use DLSS, FSR or XeSS as its upscaler. | Parent project of the forks above. |
 | [NVIDIA DLSS](https://github.com/NVIDIA/DLSS) | The DLSS runtime files for upscaling, ray reconstruction and frame generation. | Downloaded from NVIDIA's GitHub. |
 | [NVIDIA Streamline](https://github.com/NVIDIA-RTX/Streamline) | The layer between a game and DLSS frame generation. Optional. | Downloaded from NVIDIA's GitHub. |
-| [MFG Unlock](https://github.com/mavismmg/MFGAdaUnlock-RenoDx) | A ReShade add-on that unlocks multi frame generation on RTX 40 cards. | Downloaded from GitHub. |
+| [MFG Unlock](https://github.com/mavismmg/MFGAdaUnlock-RenoDx) | A ReShade add-on that unlocks multi frame generation: DLSS-G on RTX 40 cards, Intel XeMFG on RTX 20/30. | Downloaded from GitHub. |
 | [ReShade](https://reshade.me) | Post-processing and add-on loader. | Downloaded from reshade.me (add-on build, build without add-ons, older versions) or from crosire's CI (nightly), or imported. Every build is kept in a library; the file name follows the game's graphics API and Vulkan games use the Vulkan layer. |
 | [GITC Uplift](https://github.com/ghostinthecamera/GITC-Uplift) | A ReShade add-on that runs DLSS neural rendering. Replaces the other neural rendering routes. | Downloaded from GitHub. |
 | NVIDIA DLSS neural rendering runtime | `nvngx_dlssnr.dll`, the file the neural rendering routes run on. | Downloaded and installed automatically. You can also import your own. |

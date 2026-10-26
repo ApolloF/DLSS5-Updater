@@ -35,8 +35,9 @@ public static class HelpTopics
             "Use it instead of ShortFuse, Lecram, Deep Fried Chicken or OptiScaler-NR; these NR routes cannot coexist. " +
             "This app installs the 64-bit add-on, its helper and Uplift effects. ReShade with full add-on support is required; Vulkan and OpenGL need ReShade 6.8+. " +
             "It uses the NR runtime from your library (downloaded automatically; you can import another). It goes in GITC-Uplift beside the add-on because Uplift blocks a runtime mapped from the game folder (NVIDIA DLSS can load that copy first on RTX 50). " +
-            "The app writes Enabled=1. In the game press Home, then open the GITC Uplift tab. Tested with 1.4.2; newer tags warn in the log. " +
-            "Preset B needs NR 310.9.16. NGX hooks Off is safe mode, Present only. Use D3D9Ex changes exclusive fullscreen to borderless. Mask blend values are undocumented."),
+            "The app writes Enabled=1. In the game press Home, then open the GITC Uplift tab. Tested with 1.6.2; newer tags warn in the log. " +
+            "Preset B needs NR 310.9.16. Present with frame generation runs NR on every generated frame too, so at 3x/4x frame generation each Present pass runs 3-4 times per game frame; After DLSS avoids that. " +
+            "Cross-queue passes (64-bit DX12 only, experimental, off by default) let a DLSS-stage pass and a later Present pass use different GPU queues, at a possible FPS and latency cost. NGX hooks Off is safe mode, Present only. Use D3D9Ex changes exclusive fullscreen to borderless. Mask blend values are undocumented."),
         // ---------- General ----------
         new("install-mode", "General", "Install mode", "Whether OptiScaler or ReShade is the proxy the game loads; set per game.",
             "OptiScaler (default; the build chosen under OptiScaler build) is the main use: OptiScaler is the proxy, loads ReShade and its add-ons, and runs the NR runtime. " +
@@ -291,12 +292,14 @@ public static class HelpTopics
         new("nr-scale", "DLSSNR", "Model resolution", "The fraction of the image the model works at; cost falls with the square.",
             "Fraction of the image the model works at, relative to its stage (before SR: render resolution; after: output). " +
             "Cost falls with the square: 50% is about a quarter. Above 100% supersamples and averages down."),
-        new("nr-preset", "DLSSNR", "Preset", "Picks the network in nvngx_dlssnr.dll: Preset A is the main model, B a smaller, softer one.",
-            "Picks the network inside nvngx_dlssnr.dll. 310.9 DLLs carry two: Preset A, the main model, and Preset B, a small one at about half the cost " +
-            "that looks softer. 310.8 DLLs only have A and ignore B. Compare models here instead of switching NR versions. " +
+        new("nr-preset", "DLSSNR", "Preset", "Picks the network in nvngx_dlssnr.dll: Quality is the full model, Performance a small FP8 one.",
+            "Picks the network inside nvngx_dlssnr.dll. 310.9 DLLs carry two: 1 Quality (\"Honest Tench\", the full model, called Preset A elsewhere in the app) " +
+            "and 2 Performance (\"Crazy Cuckoo Small FP8\", called Preset B, up to 40% faster with less detail). Auto (0, the default) lets the DLL choose: " +
+            "310.9 DLLs pick Performance. 310.8 DLLs only have Quality and ignore 2. Compare models here instead of switching NR versions. " +
             "Changing it rebuilds the model feature, which causes a short hitch in-game. Later passes use the same preset."),
-        new("nr-style", "DLSSNR", "Style", "Built-in model profiles inside the NVIDIA DLL.",
-            "Built-in model profiles inside the same NVIDIA DLL. Changing it rebuilds the model feature, which causes a short hitch in-game."),
+        new("nr-style", "DLSSNR", "Style", "Built-in model profiles inside the NVIDIA DLL: standard, natural or cinematic.",
+            "Built-in model profiles inside the same NVIDIA DLL: 0 standard (the default), 1 natural, 2 cinematic. " +
+            "Changing it rebuilds the model feature, which causes a short hitch in-game."),
         new("nr-strengths", "DLSSNR", "Model strengths", "How strongly the model changes the image: overall intensity, structure, tone and skin detail.",
             "Intensity scales everything. Local structure adds fine detail and texture. Local tone changes local contrast and lighting. " +
             "Skin structure sets detail on faces separately (follow = same as local structure). Values are undocumented; 1.0 is the model's default."),
@@ -473,10 +476,12 @@ public static class HelpTopics
             "Anything the catalog doesn't have can be imported: an add-on file (.addon, .addon32, .addon64) or a .zip that holds some, a folder or .zip with a Shaders folder (and Textures) or just .fx files. " +
             "The files are copied as they are into the library and listed beside the catalog's entries (marked imported). They install the same way, and nothing cleans them up; only Remove here deletes an import. Games that already have a copy keep it until you update them. " +
             "Imports can't be checked against a catalog hash, so only import files you trust."),
-        new("comp-mfg", "Components", "MFG Unlock", "ReShade add-on that unlocks 3x and 4x multi frame generation on RTX 40 cards.",
-            "ReShade add-on (renodx-mfgunlock.addon64, downloaded from mavismmg/MFGAdaUnlock-RenoDx) that unlocks 3x and 4x multi frame generation on RTX 40 cards. " +
-            "Needs ReShade and a game with DLSS frame generation through Streamline; other games are not affected. " +
-            "Turn it off on RTX 50 (it has MFG natively), on cards without frame generation, or when the game misbehaves with frame generation forced."),
+        new("comp-mfg", "Components", "MFG Unlock", "ReShade add-on that unlocks multi frame generation: DLSS-G on RTX 40, Intel XeMFG on RTX 20/30.",
+            "ReShade add-on (renodx-mfgunlock.addon64, downloaded from mavismmg/MFGAdaUnlock-RenoDx) with two backends, picked in its panel under General, Frame generation method (restart the game after changing it). " +
+            "DLSS-G (the default) unlocks 3x and 4x DLSS multi frame generation on RTX 40 cards; it needs a game with DLSS frame generation through Streamline and a modern nvngx_dlssg.dll. " +
+            "Intel XeMFG (1.5.0 and newer) runs Intel XeSS frame generation at 2x to 6x on RTX 20, 30, 40 and 50, fed by the game's DLSS-G inputs (or its own XeSS-FG or FSR 3.1 frame generation). It is D3D12 only, " +
+            "needs Intel's libxess_fg.dll and libxell.dll beside the game exe (install them from the panel: Diagnostics, Intel runtime files) and does not work in exclusive fullscreen: use borderless or windowed. " +
+            "Other games are not affected. Turn it off on RTX 50 (it has MFG natively), on cards without frame generation, or when the game misbehaves with frame generation forced."),
         new("comp-dlssnr", "Components", "NR runtime", "NVIDIA's DLSS 5 neural rendering model (nvngx_dlssnr.dll), needed by every NR route.",
             "NVIDIA's DLSS 5 neural rendering model, nvngx_dlssnr.dll. The app downloads it automatically into Settings, Local components; you can also import your own. " +
             "NVIDIA's original needs an RTX 50 card; for RTX 20/30/40 use a compat build (import it if it isn't in the library). OptiScaler's NR and every NR add-on need it. " +
@@ -670,7 +675,7 @@ public static class HelpTopics
         ["nr-passes"] = "1. 2 only for a deliberately stronger look with headroom to spare; 3 is mostly for experiments.",
         ["nr-scale"] = "100% at 1440p output. 75% at 4K or on RTX 40 / lower cards to keep the cost down; 50% if FPS drops too much.",
         ["rdx-preset"] = "Preset A for the full look; Preset B when the model costs too much on RTX 20/30/40.",
-        ["nr-preset"] = "Preset A for the full look; Preset B when the model costs too much on RTX 20/30/40.",
+        ["nr-preset"] = "Quality for the full look; Performance when the model costs too much on RTX 20/30/40.",
         ["nr-style"] ="Standard. Natural if the result looks over-processed, Cinematic for a graded look.",
         ["nr-strengths"] = "A good start is local structure 0.7, local tone 0.25, skin 0.5: detail without changing the game's lighting too much. " +
                            "Lower local tone first if the image looks re-lit; lower skin structure if faces look aged.",

@@ -1,8 +1,10 @@
 # GITC Uplift
 
 ReShade add-on by ghostinthecamera that runs DLSS-NR (`nvngx_dlssnr.dll`, user-supplied) on the game image.
-Open source (MIT): https://github.com/ghostinthecamera/GITC-Uplift. Facts below come from the source at commit 31374b9
-(v1.4.2, 2026-10-18); file:line references are into that tree. Re-check them for every new release.
+Open source (MIT): https://github.com/ghostinthecamera/GITC-Uplift. Facts below come from the source at commit e1681d1
+(v1.6.2, 2026-10-22); file:line references are into that tree. Re-check them for every new release.
+v1.4.2 → v1.6.2 changed no existing key, default or range; it added `AllowCrossQueuePasses` (1.5.0) and the hidden
+`Language` (1.5.0), and the package layout and `SHA256SUMS.txt` stayed the same.
 
 ## Release package
 
@@ -12,7 +14,7 @@ Open source (MIT): https://github.com/ghostinthecamera/GITC-Uplift. Facts below 
   `[ADDON] AddonPath` says otherwise); the `.fx` files go into ReShade's shader folder. The README says to delete old
   `uplift.addon64` / `uplift.addon32` / `uplift-helper64.exe` when updating; the code has no rename migration.
 - Needs the ReShade build with full add-on support. Vulkan and OpenGL need ReShade 6.8+.
-- Version: `CMakeLists.txt:2` (`project(uplift VERSION 1.4.2)`), logged at load. Add-on name "GITC Uplift".
+- Version: `CMakeLists.txt:2` (`project(uplift VERSION 1.6.2)`), logged at load. Add-on name "GITC Uplift".
 - State folder `%LOCALAPPDATA%\Uplift` (or env `UPLIFT_STATE_DIR`).
 
 ## Runtime (nvngx_dlssnr.dll) lookup
@@ -69,7 +71,8 @@ Main keys (default; range; values). H = hidden in the overlay.
 | UICorrection | 0 | 0 Auto, 1 Off, 2 On |
 | MotionVectors | 0 | 0 Auto, 1 DLSS, 2 Launchpad, 3 None, 4 Lumenite |
 | Upsampling | 1 | 0 Classic, 1 Edge-aware |
-| PresentWithFrameGen | 0 | bool |
+| PresentWithFrameGen | 0 | bool; NR at Present also runs on generated frames (3-4x per game frame at 3x/4x FG); overlay asks before enabling |
+| AllowCrossQueuePasses | 0 | bool (1.5.0+); experimental, 64-bit D3D12 only: a DLSS-stage pass and a later Present pass on different GPU queues; with FG also needs PresentWithFrameGen; overlay asks before enabling |
 | Encoding | 0 | 0 Auto, 1 Linear BT.709, 2 sRGB, 3 BT.2100 PQ, 4 scRGB, 5 scRGB-nl |
 | DiffuseWhiteNits | 0 | 0 = auto, else 48-500 |
 | TransferStrength / ColorStrength | 1.0 | 0-1 |
@@ -111,7 +114,7 @@ Per pass 2..10: `Pass<N>FollowPass1` 1, `Intensity`, `Style`, `LocalTone`, `Loca
 `TransferStrength`, `ColorStrength`, `Stage` (0 Same as previous, 1 Before upscaling, 2 After DLSS, 3 Present), `Preset`
 (0 inherit, 1 Legacy, 2 Small FP8). Pass rows are not saved while `FollowPass1=1`.
 
-Hidden / no effect: `DLSSQualityMode`, `DLSSPreset*`, `DLSSAutoExposure`, `PedestalRemoval`, `DepthDirection`,
+Hidden / no effect: `Language` (1.5.0+, 0 English, 1 Simplified Chinese; set from the overlay's top-right selector), `DLSSQualityMode`, `DLSSPreset*`, `DLSSAutoExposure`, `PedestalRemoval`, `DepthDirection`,
 `GlobalTone`, `Performance`, `AdjustVulkanDevices`, `AdjustVulkanDevicesForNgx`, `VulkanNativeNr`,
 `DiagnosticRemoveDevice`, `DlssPlacementBlocked` (bookkeeping latch), `ConfigVersion`. The app does not write these.
 
@@ -119,9 +122,9 @@ Hidden / no effect: `DLSSQualityMode`, `DLSSPreset*`, `DLSSAutoExposure`, `Pedes
 
 DLSS5 Updater installs the x64 add-on, helper and both effects, writes `[Uplift] Enabled=1`, and places the user-supplied
 runtime in `GITC-Uplift\nvngx_dlssnr.dll`. It never downloads the runtime. ReShade + add-ons mode is required; other NR
-routes are displaced and restored on uninstall. Releases newer than tested v1.4.2 warn in the log.
+routes are displaced and restored on uninstall. Releases newer than tested v1.6.2 warn in the log.
 
-The app exposes the main stage, resolution, strength, face protection, exposure, compatibility and diagnostics options.
+The app exposes the main stage, resolution, strength, face protection, exposure, compatibility (including cross-queue passes) and diagnostics options.
 The look/shape keys, advanced face-mask keys, per-pass keys, HDR detail keys and hidden keys remain in the in-game
 GITC Uplift tab. `SnippetPath` is not exposed: the app uses Uplift's default runtime lookup folder. Numeric dropdowns
 provide common values; other values within the documented ranges can be entered in Advanced.

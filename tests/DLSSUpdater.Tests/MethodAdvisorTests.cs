@@ -12,6 +12,7 @@ public sealed class MethodAdvisorTests
     private static readonly GpuInfo Rtx50 = new(GpuVendor.Nvidia, RtxTier.Rtx50, "GeForce RTX 5080");
     private static readonly GpuInfo Rtx40 = new(GpuVendor.Nvidia, RtxTier.Rtx40, "GeForce RTX 4070");
     private static readonly GpuInfo Rtx30 = new(GpuVendor.Nvidia, RtxTier.Rtx30, "GeForce RTX 3060");
+    private static readonly GpuInfo Rtx20 = new(GpuVendor.Nvidia, RtxTier.Rtx20, "GeForce RTX 2070");
 
     private static GameInfo Game(GraphicsApis apis = GraphicsApis.Dx12, int bits = 64, GameEngine engine = GameEngine.Unknown,
         UpscalerSignals up = UpscalerSignals.None, bool dlss = false, bool fg = false, string? antiCheat = null, string name = "Test Game")
@@ -96,13 +97,38 @@ public sealed class MethodAdvisorTests
     }
 
     [Fact]
-    public void Row4_OnRtx30_MfgUnlockIsOnlyForRtx40_ButAnUnknownGpuKeepsIt()
+    public void Row4_OnRtx30_MfgUnlockNeedsTheXeMfgBackend_AndAnUnknownGpuKeepsIt()
     {
         var mfg = Option(Advise(Game(dlss: true, fg: true), Rtx30), Method.MfgUnlock);
-        Assert.Equal(Availability.NotPossible, mfg.Availability);
-        Assert.Contains("RTX 40", mfg.Reason);
+        Assert.Equal(Availability.NeedsSetup, mfg.Availability);
+        Assert.Contains("XeMFG", mfg.Reason);
+        Assert.Equal([ComponentRegistry.MfgUnlock], mfg.Components);
+        Assert.Contains(mfg.Needs, n => n.Contains("Intel XeMFG"));
+        Assert.Contains(mfg.Needs, n => n.Contains("libxess_fg.dll") && n.Contains("libxell.dll"));
+        Assert.Contains(mfg.Needs, n => n.Contains("exclusive fullscreen"));
 
+        Assert.Equal(Availability.NeedsSetup, Option(Advise(Game(dlss: true, fg: true), Rtx20), Method.MfgUnlock).Availability);
         Assert.Equal(Availability.Available, Option(Advise(Game(dlss: true, fg: true), GpuInfo.Unknown), Method.MfgUnlock).Availability);
+    }
+
+    [Fact]
+    public void Row4_OnRtx40_MfgUnlockUsesTheDlssGBackendWithoutSetup()
+    {
+        var mfg = Option(Advise(Game(dlss: true, fg: true), Rtx40), Method.MfgUnlock);
+        Assert.Equal(Availability.Available, mfg.Availability);
+        Assert.Empty(mfg.Needs);
+    }
+
+    [Fact]
+    public void Row4_XeMfgNeedsD3D12_AndAnRtxCard()
+    {
+        var vulkan = Option(Advise(Game(GraphicsApis.Vulkan, dlss: true, fg: true), Rtx30), Method.MfgUnlock);
+        Assert.Equal(Availability.NotPossible, vulkan.Availability);
+        Assert.Contains("D3D12", vulkan.Reason);
+
+        var gtx = Option(Advise(Game(dlss: true, fg: true), new GpuInfo(GpuVendor.Nvidia, RtxTier.None, "GeForce GTX 1080")), Method.MfgUnlock);
+        Assert.Equal(Availability.NotPossible, gtx.Availability);
+        Assert.Contains("RTX", gtx.Reason);
     }
 
     // ---------- row 5-6: no DLSS on DX11/12 ----------

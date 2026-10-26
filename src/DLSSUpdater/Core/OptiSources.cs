@@ -22,7 +22,7 @@ public static class OptiSources
 {
     public static readonly OptiSource Default = new(
         ComponentStore.OptiRepo, "OptiScaler-NR", "OptiScaler-NR (ShyVortex)",
-        new Regex(@"^OptiScaler-NR-v[\d.]+\.zip$", RegexOptions.IgnoreCase), "", "v0.9.51", [], []);
+        new Regex(@"^OptiScaler-NR-v[\d.]+\.zip$", RegexOptions.IgnoreCase), "", "v0.9.72", [], []);
 
     public static readonly OptiSource F5 = new(
         "janblade/OptiScaler-F5-DLSSNR-Multipass", "OptiScaler F5", "OptiScaler F5 (janblade)",
