@@ -21,7 +21,12 @@ internal sealed record LecramChannel(string Key, MediaFireFile? Latest, bool Off
 /// <summary>The public update channel used by DLSS5-NR-Setup; requests within a check are sequential.</summary>
 internal sealed partial class MediaFireClient
 {
-    internal const string DefaultFolder = "wrwi1qkpgy0qu";
+    /// <summary>
+    /// The author's update folders, newest generation first. Each major gets its own folder and no older folder points to it
+    /// (v12's installer: "v12's own folder, so v11 setups never see v12"), so a new major is added here with a release.
+    /// </summary>
+    internal static readonly string[] Folders = ["r1xp6x0i043wx" /* v12 */, "wrwi1qkpgy0qu" /* v11 */];
+    internal static readonly string DefaultFolder = Folders[0];
     private const int MaxDownload = 256 * 1024 * 1024;
     private static readonly HttpClient SharedHttp = CreateHttp(new SocketsHttpHandler
     {
@@ -80,6 +85,23 @@ internal sealed partial class MediaFireClient
     internal static MediaFireFile? SelectLatest(IEnumerable<MediaFireFile> files) => files
         .Where(f => f.Version is not null || f.Name.Equals(ComponentStore.Lecram11File, StringComparison.OrdinalIgnoreCase))
         .OrderByDescending(f => f.Created).ThenByDescending(f => f.Rank).FirstOrDefault();
+
+    /// <summary>
+    /// Checks the folders newest generation first and takes the first one with a build, so a late fix in an older generation's
+    /// folder never wins over a newer major. A key the settings remembered from a move (not one of <see cref="Folders"/>) goes first.
+    /// </summary>
+    internal async Task<LecramChannel> CheckFoldersAsync(string remembered, CancellationToken ct)
+    {
+        var keys = Folders.Contains(remembered, StringComparer.OrdinalIgnoreCase) ? Folders : [remembered, .. Folders];
+        LecramChannel? first = null;
+        foreach (var key in keys)
+        {
+            var channel = await CheckAsync(key, ct);
+            if (channel.Offline || channel.Latest is not null) return channel;
+            first ??= channel;
+        }
+        return first!;
+    }
 
     internal async Task<LecramChannel> CheckAsync(string key, CancellationToken ct)
     {
