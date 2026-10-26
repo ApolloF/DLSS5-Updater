@@ -35,6 +35,12 @@ internal sealed partial class MediaFireClient
     });
     private readonly HttpClient _http;
 
+    /// <summary>
+    /// How long a download may go without a byte before it is given up. HttpClient's timeout ends at the response headers, and
+    /// MediaFire can trickle a file at a few KB/s or stall outright, which held the startup check for minutes.
+    /// </summary>
+    internal TimeSpan StallTimeout { get; init; } = TimeSpan.FromSeconds(30);
+
     internal MediaFireClient() => _http = SharedHttp;
     internal MediaFireClient(HttpMessageHandler handler) => _http = CreateHttp(handler);
 
@@ -178,7 +184,7 @@ internal sealed partial class MediaFireClient
         return match.Success && Https(url) ? url : throw new InvalidDataException("MediaFire download link was not found.");
     }
 
-    internal async Task DownloadAsync(MediaFireFile file, string dest, CancellationToken ct)
+    internal async Task DownloadAsync(MediaFireFile file, string dest, CancellationToken ct, IProgress<TransferProgress>? progress = null)
     {
         var html = await _http.GetStringAsync(file.Landing, ct);
         using var response = await _http.GetAsync(DownloadLink(html), HttpCompletionOption.ResponseHeadersRead, ct);
@@ -187,15 +193,30 @@ internal sealed partial class MediaFireClient
         Directory.CreateDirectory(Path.GetDirectoryName(dest)!);
         try
         {
+            var total = response.Content.Headers.ContentLength;
+            using var stall = CancellationTokenSource.CreateLinkedTokenSource(ct);
             await using (var input = await response.Content.ReadAsStreamAsync(ct))
             await using (var output = File.Create(dest))
             {
                 var buffer = new byte[81920];
-                int read;
-                while ((read = await input.ReadAsync(buffer, ct)) > 0)
+                var lastReport = 0L;
+                while (true)
                 {
+                    stall.CancelAfter(StallTimeout);
+                    int read;
+                    try { read = await input.ReadAsync(buffer, stall.Token); }
+                    catch (OperationCanceledException) when (!ct.IsCancellationRequested)
+                    { throw new HttpRequestException($"MediaFire sent nothing for {StallTimeout.TotalSeconds:0} seconds; the download was stopped."); }
+                    if (read == 0) break;
                     if (output.Length + read > MaxDownload) throw new InvalidDataException("Lecram package is too large.");
                     await output.WriteAsync(buffer.AsMemory(0, read), ct);
+                    if (progress is not null && Environment.TickCount64 - lastReport > 100)
+                    {
+                        lastReport = Environment.TickCount64;
+                        progress.Report(new TransferProgress(
+                            $"Downloading {file.Name}  {output.Length / 1048576.0:0.0} / {(total ?? 0) / 1048576.0:0.0} MB",
+                            total > 0 ? (double)output.Length / total.Value : null));
+                    }
                 }
             }
             if (!FileUtil.Sha256(dest).Equals(file.Hash, StringComparison.OrdinalIgnoreCase))

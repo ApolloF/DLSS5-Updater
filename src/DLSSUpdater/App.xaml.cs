@@ -36,7 +36,8 @@ public partial class App : Application
         // Made-up games for screenshots and trying the interface; see Core/Demo.cs. The demo has its own temp data folder,
         // so it may run next to a normal instance, but only one demo at a time (each start wipes that folder).
         var demo = e.Args.Contains("--demo");
-        _instance = SingleInstance.TryAcquire(demo ? SingleInstance.DemoName : SingleInstance.DefaultName,
+        var copy = demo ? null : AppPaths.TempRootArg(e.Args);
+        _instance = SingleInstance.TryAcquire(demo ? SingleInstance.DemoName : copy is not null ? SingleInstance.TempRootName : SingleInstance.DefaultName,
             e.Args.Contains(RestartedArg) ? TimeSpan.FromSeconds(15) : TimeSpan.Zero);
         if (_instance is null)
         {
@@ -55,7 +56,8 @@ public partial class App : Application
             return;
         }
         // Before anything logs: Log creates the data folder, which would block the move.
-        if (!demo)
+        if (copy is not null) AppPaths.Root = copy;
+        else if (!demo)
         {
             var legacy = AppPaths.LegacyRoot;
             var target = AppPaths.Root;
@@ -75,7 +77,7 @@ public partial class App : Application
             Log.Error("Background task failed", args.Exception);
             args.SetObserved();
         };
-        if (!demo && StartPendingUpdate()) return;
+        if (!demo && copy is null && StartPendingUpdate()) return;
         // Inside the handler's reach: a locked demo folder shows a message instead of crashing the process.
         if (demo) Demo.Enable(screenshotDir: Demo.ScreenshotArg(e.Args));
         base.OnStartup(e);
