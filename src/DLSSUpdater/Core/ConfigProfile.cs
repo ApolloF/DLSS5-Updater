@@ -31,39 +31,35 @@ public static class ConfigProfile
     /// <summary>ReShade.ini defaults: none (ReShade and the MFG add-on ship without an ini and use their own defaults).</summary>
     public static List<IniOverride> ReShadeDefaults() => [];
 
-    public const string RecommendedName = "Recommended (ApolloF)";
+    public const string DefaultName = "Default";
 
-    /// <summary>The tuned OptiScaler.ini values this tool was built around (former defaults), offered as a built-in preset.</summary>
-    public static List<IniOverride> Recommended() =>
+    /// <summary>The name of the removed "Recommended" preset; games that used it fall back to the current settings.</summary>
+    internal const string RetiredRecommendedName = "Recommended (ApolloF)";
+
+    /// <summary>The only built-in preset: the upstream defaults, no overrides.</summary>
+    public static ConfigPreset DefaultPreset() =>
+        new() { Name = DefaultName, Opti = Defaults(), ReShade = ReShadeDefaults(), BuiltIn = true };
+
+    /// <summary>Keys the retired Recommended preset wrote; they stay managed so old installs that have them are still cleaned up.</summary>
+    internal static readonly (string Section, string Key)[] LegacyRecommendedKeys =
     [
-        new("Upscalers", "Dx12Upscaler", "dlss"),
-        new("DLSS", "RenderPresetOverride", "true"),
-        new("DLSS", "RenderPresetForAll", "12"),
-        new("Menu", "ShortcutKey", "0x2e"),
-        new("Plugins", "LoadReshade", "true"),
-        new("Log", "LogToFile", "true"),
-        new("Log", "LogLevel", "2"),
-        new("DlssNr", "Enabled", "true"),
-        new("DlssNr", "RunBeforeSR", "true"),
-        new("DlssNr", "ColourStrength", "0.200000"),
-        new("DlssNr", "LocalStructure", "0.700000"),
-        new("DlssNr", "LocalTone", "0.250000"),
-        new("DlssNr", "SkinStructure", "0.500000"),
-        new("DlssNr", "ToggleKey", "0xdc"),
-        new("DlssNr", "WhitePointSource", "3"),
-        new("DlssNr", "ReversibleMode", "3"),
+        ("Upscalers", "Dx12Upscaler"),
+        ("DLSS", "RenderPresetOverride"),
+        ("DLSS", "RenderPresetForAll"),
+        ("Menu", "ShortcutKey"),
+        ("Plugins", "LoadReshade"),
+        ("Log", "LogToFile"),
+        ("Log", "LogLevel"),
+        ("DlssNr", "Enabled"),
+        ("DlssNr", "RunBeforeSR"),
+        ("DlssNr", "ColourStrength"),
+        ("DlssNr", "LocalStructure"),
+        ("DlssNr", "LocalTone"),
+        ("DlssNr", "SkinStructure"),
+        ("DlssNr", "ToggleKey"),
+        ("DlssNr", "WhitePointSource"),
+        ("DlssNr", "ReversibleMode"),
     ];
-
-    /// <summary>ReShade.ini values of the built-in preset; ReShade fills in everything else on first launch.</summary>
-    public static List<IniOverride> RecommendedReShade() =>
-    [
-        new("OVERLAY", "TutorialProgress", "4"),
-        new(RenoDxIni.Section, "DirectNeuralRenderingHookStage", "1"),
-        new(RenoDxIni.PresetSection, "DirectNeuralRenderingPassCount", "1"),
-    ];
-
-    public static ConfigPreset RecommendedPreset() =>
-        new() { Name = RecommendedName, Opti = Recommended(), ReShade = RecommendedReShade(), BuiltIn = true };
 
     /// <summary>
     /// Keys without which an installed component does nothing (upstream ships both as false): ReShade loaded by

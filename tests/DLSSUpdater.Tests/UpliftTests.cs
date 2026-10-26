@@ -222,7 +222,7 @@ public sealed class UpliftTests : IDisposable
     }
 
     [Fact]
-    public void ViewModel_UpliftAndOtherRoutesExcludeEachOther_AndModeHidesUplift()
+    public void ViewModel_UpliftAndOtherRoutesCanBeBothOn_WithAWarning_AndModeHidesUplift()
     {
         var settings = new AppSettings { DefaultMode = InstallMode.ReShadeOnly, InstallUplift = true };
         var vm = new GameViewModel(_game, new Services { Settings = settings, Store = _store, Installer = new Installer(_store) });
@@ -232,9 +232,10 @@ public sealed class UpliftTests : IDisposable
         foreach (var key in new[] { "renodx", "lecram", "dfc" })
         {
             Row(key).Enabled = true;
-            Assert.False(Row("uplift").Enabled);
-            Row("uplift").Enabled = true;
-            Assert.False(Row(key).Enabled);
+            Assert.True(Row("uplift").Enabled);
+            Assert.NotNull(vm.ConflictWarning);
+            Row(key).Enabled = false;
+            Assert.Null(vm.ConflictWarning);
             Assert.True(Row("reshade").Enabled);
             Assert.True(Row("dlssnr").Enabled);
         }
@@ -245,10 +246,10 @@ public sealed class UpliftTests : IDisposable
     }
 
     [Fact]
-    public async Task Install_RejectsConflictingRoutesAnd32BitGames_BeforeChangingGameFiles()
+    public async Task Install_NeedsConfirmationForConflictingRoutes_AndRejects32BitGames_BeforeChangingGameFiles()
     {
         var installer = new Installer(_store);
-        foreach (var options in new[] { Options with { Lecram = true }, Options with { RenoDx = true }, Options with { Dfc = true }, Options with { Mode = InstallMode.OptiScaler }, Options with { Opti = true }, Options with { DlssNr = false } })
+        foreach (var options in new[] { Options with { Lecram = true }, Options with { RenoDx = true }, Options with { Dfc = true }, Options with { DlssNr = false } })
             await Assert.ThrowsAsync<InvalidOperationException>(() => installer.InstallAsync(_game, _root, options, null, default));
         WriteExe(_game.Exes[0], Machine.I386);
         var ex = await Assert.ThrowsAsync<InvalidOperationException>(() => installer.InstallAsync(_game, _root, Options, null, default));
@@ -284,7 +285,7 @@ public sealed class UpliftTests : IDisposable
     [Fact]
     public async Task Install_WarnsForANewerTag_AndWritesAllExposedOptions()
     {
-        var release = new ReleaseInfo { Tag = "v1.4.3" };
+        var release = new ReleaseInfo { Tag = "v1.6.3" };
         var pkg = Path.Combine(ComponentStore.TagDir(Component.Uplift, release.Tag), "pkg");
         foreach (var rel in ComponentStore.UpliftFiles) FileUtil.AtomicWriteText(Path.Combine(pkg, rel), rel);
         ComponentStore.MarkComplete(Component.Uplift, release);
@@ -300,7 +301,7 @@ public sealed class UpliftTests : IDisposable
             }, null, default);
         }
         finally { Log.Line -= Capture; }
-        Assert.Contains(lines, l => l.Contains("WARNING") && l.Contains("newer than the tested 1.4.2"));
+        Assert.Contains(lines, l => l.Contains("WARNING") && l.Contains("newer than the tested 1.6.2"));
         Assert.All(UpliftConfig.Defaults, kv => Assert.Equal(kv.Value, Ini().Get("Uplift", kv.Key)));
         Assert.Equal("1", Ini().Get("Uplift", "Enabled"));
     }
@@ -326,15 +327,15 @@ public sealed class UpliftTests : IDisposable
     }
 
     [Theory]
-    [InlineData("v1.4.2", false)]
-    [InlineData("1.4.1", false)]
-    [InlineData("v1.4.3", true)]
+    [InlineData("v1.6.2", false)]
+    [InlineData("1.4.2", false)]
+    [InlineData("v1.6.3", true)]
     public void TestedVersion_WarnsOnlyForNewerTags(string tag, bool warns) => Assert.Equal(warns, UpliftConfig.Warning(tag) is not null);
 
     [Fact]
     public void Options_ExposeExactlyTheDocumentedKeysAndDefaults()
     {
-        const string expected = "EnableKey=0;Intensity=1.0;Style=0;Preset=1;PassCount=1;ResolutionMode=0;ResolutionScale=100;Source=0;PreUpscale=0;KeepFaces=0;FaceProtection=0;LightingScale=2.5;AutoMask=1;LocalStructure=1.0;LocalTone=1.0;SkinStructure=1.0;UICorrection=0;MotionVectors=0;Upsampling=1;PresentWithFrameGen=0;Encoding=0;DiffuseWhiteNits=0;InputExposure=0;AutoExposureMode=0;AutoExposureBlend=0.8;ExposureAdapt=1;VramCheck=0;GraceSeconds=5;NgxHooks=0;ForeignNr=0;VulkanNr=0;UseD3D9Ex=0;ShowNvIndicator=0;LogLevel=2;MaskBlendMode=1";
+        const string expected = "EnableKey=0;Intensity=1.0;Style=0;Preset=1;PassCount=1;ResolutionMode=0;ResolutionScale=100;Source=0;PreUpscale=0;KeepFaces=0;FaceProtection=0;LightingScale=2.5;AutoMask=1;LocalStructure=1.0;LocalTone=1.0;SkinStructure=1.0;UICorrection=0;MotionVectors=0;Upsampling=1;PresentWithFrameGen=0;AllowCrossQueuePasses=0;Encoding=0;DiffuseWhiteNits=0;InputExposure=0;AutoExposureMode=0;AutoExposureBlend=0.8;ExposureAdapt=1;VramCheck=0;GraceSeconds=5;NgxHooks=0;ForeignNr=0;VulkanNr=0;UseD3D9Ex=0;ShowNvIndicator=0;LogLevel=2;MaskBlendMode=1";
         var defaults = expected.Split(';').Select(pair => pair.Split('=')).ToDictionary(pair => pair[0], pair => pair[1]);
         var options = SettingsOptions.Uplift([]);
         Assert.Equal(defaults.Count, options.Length);

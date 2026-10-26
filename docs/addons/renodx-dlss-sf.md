@@ -13,7 +13,11 @@
 - No public source. `clshortfuse/renodx` holds only the shared `src/utils/dlss/*` helpers and the unrelated
   `dlssfix` add-on (`renodx-dlssfix.addon64`); nightlies don't contain `renodx-dlss.addon64`.
 - Official channel: RenoDX Discord, DLSS 5 thread. Third-party mirror: `github.com/RankFTW/rhi-repo` releases,
-  tags `renodx-dlss-SF-<YY.MMDD.HHMM>` (no hashes). Hence import-only in the app.
+  tags `renodx-dlss-SF-<YY.MMDD.HHMM>` (older ones `renodx-dlss-SF-0.55`), one zip per release holding `renodx-dlss.addon64`;
+  the releases publish no hashes and the repository has no licence.
+- The catalog (`renodxDlss` section, [catalog.md](../catalog.md)) lists the newest ten of those releases with the SHA-256 the
+  catalog generator computed, each with a mirror copy. The app downloads and installs the newest build automatically (mirror
+  first, the author's URL as the fallback), refuses a hash mismatch, and imports the add-on from it (`docs/design.md` section 3).
 - Framework is MIT (RenoDX).
 
 ## ReShade.ini layout
@@ -85,14 +89,17 @@ Setting struct (1016, for the next diff): global flag at `+0x338`, type byte at 
 
 - SF has no awareness of other NR add-ons (no `renodx-dlss5` strings). It pins itself until process exit and hooks
   NGX `Parameter::Set` and Streamline with MinHook.
-- Running it next to Lecram depends on Lecram's `ForeignNr=observe`. The user ran SF 0928 + Lecram 0928 together;
+- Running it next to Lecram v10/v11 depends on Lecram's `ForeignNr=observe`; Lecram v12's default `ForeignNr=auto` runs beside it. The user ran SF 0928 + Lecram 0928 together;
   a Werewulf crash with SF 1016 was not attributed to the add-ons. Record test results per exact pair rather than inferring
   compatibility from the SF version.
 
 ## App support
 
-DLSS5 Updater imports the add-on (never downloads it: it is not published on any official GitHub) and installs it per game in
-ReShade-only mode with ReShade 6+, a game with native DLSS and an imported `nvngx_dlssnr.dll`. It adds the add-on to
+DLSS5 Updater downloads and installs the newest catalog build automatically (hash-checked, see above; Settings can turn the
+download off) and also imports the add-on. A build it fetched is a library build like an import (`AddonBuild.Downloaded`, with `CatalogSha` the zip's hash so
+the next check knows it is there), becomes the default when it is newer than the current default, and may go in the automatic
+cleanup, which never deletes imports. It installs it per game in
+ReShade-only mode with ReShade 6+, a game with native DLSS and the NR runtime `nvngx_dlssnr.dll`. It adds the add-on to
 `[ADDON] LoadFromDllMain`, replaces OptiScaler-NR and excludes Deep Fried Chicken; Lecram's add-on may stay next to it.
 
 - **Library.** Every imported build is kept: `components\renodx-dlss\<sha256>\renodx-dlss.addon64` plus a `version.json` (id =
@@ -107,7 +114,8 @@ ReShade-only mode with ReShade 6+, a game with native DLSS and an imported `nvng
 - **Options.** Each option's first choice, "Add-on default", writes nothing, so the add-on's own default (table above) applies.
   A switch (Off/On) in the app writes nothing for Off, which only fits keys whose default is off. `AutoMask` defaults to 1, so
   Character mask is a list instead: Add-on default (on), On writes `1`, Off writes `0`.
-- **With Lecram.** The tested pair is `renodx-dlss` 0.2026.928.x with Lecram 0928 (see [lecram-dlss5.md](lecram-dlss5.md)). The
+- **With Lecram.** The app writes `ForeignNr=observe` for Lecram v10/v11 builds only; v12 runs beside SF by default. The tested
+  pair is `renodx-dlss` 0.2026.928.x with Lecram 0928 (see [lecram-dlss5.md](lecram-dlss5.md)). The
   Install tab shows the exact selected pair's recorded status (Works, Crashed or Untested), and offers buttons to mark it working
   or crashed. Untested is neutral information; only Crashed warns, with its recorded date. Neither blocks installation.
   Results persist by both build ids by build ids.

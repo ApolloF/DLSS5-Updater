@@ -91,6 +91,7 @@ public sealed class AddonLibraryTests : IDisposable
     {
         Mode = InstallMode.ReShadeOnly, ReShade = true, RenoDx = renoDx, Lecram = lecram, DlssNr = renoDx || lecram, DlssNrId = _nr.Id,
         Proxy = "dxgi.dll", RenoDxId = renoDxId, LecramId = lecramId,
+        ConfirmedConflict = renoDx && lecram ? Installer.ConflictKey(NrAddons.Conflicts([NrAddon.RenoDx, NrAddon.Lecram])) : null,
     };
 
     private GameViewModel NewGame(string? name = null)
@@ -145,6 +146,55 @@ public sealed class AddonLibraryTests : IDisposable
         var build = LecramV11("v11.0.0-beta.22NR on\0v11.0.0-H\0v11.0.0-beta.22\0v11.0.0-beta.22");
         Assert.Equal(LecramGeneration.V11, build.Generation);
         Assert.Equal("v11.0.0-beta.22", build.DetectedLabel);
+    }
+
+    [Fact]
+    public void Label_ReadsTheV11_9AndV12Layouts()
+    {
+        // v11.9.0 and v12.0.0 carry their version once glued to "NR" and once bare (docs/addons/lecram-dlss5.md); no beta suffix.
+        Assert.Equal("v12.0.0", Label("v12.0.0NR onNR offbytessha256\0v12.0.0\0"));
+        Assert.Equal("v11.9.0", Label("v11.9.0NR onNR offbytessha256\0v11.9.0\0"));
+        var build = LecramV11("v12.0.0NR on\0v12.0.0", frameworkNoise: false);
+        Assert.Equal(LecramGeneration.V11, build.Generation);
+        Assert.Equal("v12.0.0", build.DetectedLabel);
+    }
+
+    [Fact]
+    public void Label_IsNeverTheDlssSdkVersion()
+    {
+        // Older v10 builds hold no label of their own, only the DLSS SDK's v310.8.0.
+        Assert.Null(Label("DLSS SDK v310.8.0\0"));
+        Assert.Equal("v8.5.0-rc10", Label("v310.8.0\0v8.5.0-rc10\0v6.1.2\0"));
+        Assert.True(ComponentStore.IsSdkLabel("v310.8.0"));
+        Assert.True(ComponentStore.IsSdkLabel(" V310.10.0 "));
+        Assert.False(ComponentStore.IsSdkLabel("v12.0.0"));
+        Assert.False(ComponentStore.IsSdkLabel("310.8.0"));
+        Assert.False(ComponentStore.IsSdkLabel("v99.0.0"));
+        Assert.True(ComponentStore.IsLecramVersionLabel("v7.0.0-rc8"));
+        Assert.False(ComponentStore.IsLecramVersionLabel("v310.8.0"));
+        Assert.False(ComponentStore.IsLecramVersionLabel("0.2026.923.307"));
+        Assert.False(ComponentStore.IsLecramVersionLabel(""));
+        Assert.False(ComponentStore.IsLecramVersionLabel(null));
+    }
+
+    [Fact]
+    public void ALecramBuildLabelledByTheSdkString_IsRelabelledOnLoad_AndRanksBelowLabelledBuilds()
+    {
+        var old = LecramV10(new Version(0, 2026, 828, 517));
+        var rc10 = LecramV11("v8.5.0-rc10", frameworkNoise: false);
+        // What an earlier version of the app stored for a v10 binary whose only version string is the SDK's. The fixture (a copy of
+        // the test assembly) carries other vX.Y.Z strings, so the stored file is replaced by bytes with only the SDK's.
+        var file = ComponentStore.AddonPathOf(AddonKind.Lecram, old);
+        File.WriteAllBytes(file, [(byte)'M', (byte)'Z', .. Encoding.ASCII.GetBytes("\0DLSS SDK v310.8.0\0")]);
+        var record = Path.Combine(Path.GetDirectoryName(file)!, "version.json");
+        File.WriteAllText(record, JsonSerializer.Serialize(old with { DetectedLabel = "v310.8.0" }, JsonCtx.Default.AddonBuild));
+
+        var reloaded = new ComponentStore(new GitHubClient(), () => true);
+        var builds = reloaded.LecramBuilds;
+
+        Assert.Equal([rc10.Id, old.Id], builds.Select(b => b.Id));
+        Assert.Equal("0.2026.828.517", builds[1].DetectedLabel);
+        Assert.Equal("0.2026.828.517", JsonSerializer.Deserialize(File.ReadAllText(record), JsonCtx.Default.AddonBuild)!.DetectedLabel);
     }
 
     [Fact]
@@ -325,7 +375,7 @@ public sealed class AddonLibraryTests : IDisposable
     }
 
     [Fact]
-    public void LecramDefault_APinStaysPinned_ANewerImportTakesItOver_ARemovedPinGoesBackToNewest()
+    public void LecramDefault_APinStaysPinned_EvenForANewerImport_ARemovedPinGoesBackToNewest()
     {
         var pinned = LecramV11("v11.0.0-beta.22");
         _settings.LecramId = pinned.Id;
@@ -334,13 +384,13 @@ public sealed class AddonLibraryTests : IDisposable
         Assert.Equal(pinned.Id, _settings.LecramId);
 
         var newer = LecramV11("v11.0.0-beta.45");
-        Assert.True(_store.AdoptImportedAddon(_settings, AddonKind.Lecram, newer));
-        Assert.Equal(newer.Id, _settings.LecramId);
+        Assert.False(_store.AdoptImportedAddon(_settings, AddonKind.Lecram, newer));
+        Assert.Equal(pinned.Id, _settings.LecramId);
 
-        _store.RemoveAddon(AddonKind.Lecram, newer.Id);
+        _store.RemoveAddon(AddonKind.Lecram, pinned.Id);
         Assert.True(_store.EnsureAddonDefaults(_settings));
         Assert.Null(_settings.LecramId);
-        Assert.Equal(pinned.Id, _store.LecramBuildFor(null)!.Id);
+        Assert.Equal(newer.Id, _store.LecramBuildFor(null)!.Id);
     }
 
     [Fact]
@@ -524,8 +574,8 @@ public sealed class AddonLibraryTests : IDisposable
         var sf = Sf(new Version(0, 2026, 928, 306));
         _settings.RenoDxId = sf.Id;
         var vm = NewGame();
-        Assert.Equal($"Default ({sf.Name})", vm.RenoDxChoices[0].Label);
-        Assert.Equal("Default (none imported)", vm.LecramChoices[0].Label);
+        Assert.Equal($"Default · {sf.Name}", vm.RenoDxChoices[0].Label);
+        Assert.Equal("Default · none imported", vm.LecramChoices[0].Label);
         Assert.Equal(new string?[] { null, sf.Id }, vm.RenoDxChoices.Select(c => c.Tag));
 
         _settings.For(vm.Id).RenoDxId = new string('e', 64);
@@ -544,7 +594,6 @@ public sealed class AddonLibraryTests : IDisposable
         var otherLecram = LecramV11();
         _settings.RenoDxId = sf.Id;
         _settings.LecramId = lecram.Id;
-        _settings.AllowSeveralNrAddons = true;
         var vm = NewGame();
         vm.Components.First(c => c.Key == "renodx").Enabled = true;
         vm.Components.First(c => c.Key == "lecram").Enabled = true;
@@ -696,31 +745,25 @@ public sealed class AddonLibraryTests : IDisposable
     private static void Turn(GameViewModel vm, string key, bool on) => vm.Components.First(c => c.Key == key).Enabled = on;
 
     [Fact]
-    public void GameToggles_FollowTheSettingsRule()
+    public void GameToggles_AllowAnyMix_AndWarnAboutTheClash()
     {
         var vm = NewGame();
         Turn(vm, "renodx", true);
         Turn(vm, "lecram", true);
-        Assert.False(On(vm, "renodx"));
-        Assert.True(On(vm, "lecram"));
-        Assert.Null(vm.NrAddonWarning);
-        Turn(vm, "dfc", true);
-        Assert.False(On(vm, "lecram"));
-        Turn(vm, "dfc", false);
-        Assert.DoesNotContain(vm.Components, c => c.Key is "renodx" or "lecram" or "uplift" or "dfc" && c.Enabled);
-
-        _settings.AllowSeveralNrAddons = true;
-        Turn(vm, "renodx", true);
-        Turn(vm, "lecram", true);
         Assert.True(On(vm, "renodx") && On(vm, "lecram"));
         Assert.Contains("NR runs twice", vm.NrAddonWarning);
+        Turn(vm, "dfc", true);
+        Assert.True(On(vm, "renodx") && On(vm, "lecram") && On(vm, "dfc"));
         Turn(vm, "uplift", true);
-        Assert.False(On(vm, "renodx") || On(vm, "lecram"));
+        Assert.True(On(vm, "uplift") && On(vm, "renodx"));
+        Turn(vm, "dfc", false);
+        Turn(vm, "uplift", false);
+        Turn(vm, "lecram", false);
         Assert.Null(vm.NrAddonWarning);
     }
 
     [Fact]
-    public void GameWithBothInstalled_ShowsBoth_EvenWithoutTheOverride()
+    public void GameWithBothInstalled_ShowsBoth()
     {
         var root = Path.Combine(_tmp, "both-game");
         Directory.CreateDirectory(root);

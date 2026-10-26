@@ -17,8 +17,10 @@
             <TextBox x:Name="InputBox" Margin="0,-8,0,20" Visibility="Collapsed" />
             <CheckBox x:Name="OptionBox" Margin="0,-8,0,20" Visibility="Collapsed" />
             <StackPanel Orientation="Horizontal" HorizontalAlignment="Right">
-                <Button x:Name="CancelButton" Content="Cancel" Style="{StaticResource BtnGhost}" Margin="0,0,8,0" IsCancel="True" Click="OnCancel" />
-                <Button x:Name="OkButton" Content="OK" Style="{StaticResource BtnPrimary}" IsDefault="True" Click="OnOk" />
+                <Button x:Name="CancelButton" Content="Cancel" Style="{StaticResource BtnGhost}" Margin="0,0,8,0" IsCancel="True" Click="OnCancel"
+                        AutomationProperties.Name="{Binding Content, RelativeSource={RelativeSource Self}}" />
+                <Button x:Name="OkButton" Content="OK" Style="{StaticResource BtnPrimary}" IsDefault="True" Click="OnOk"
+                        AutomationProperties.Name="{Binding Content, RelativeSource={RelativeSource Self}}" />
             </StackPanel>
         </StackPanel>
     </Border>

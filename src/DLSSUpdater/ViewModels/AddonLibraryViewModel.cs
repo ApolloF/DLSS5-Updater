@@ -39,6 +39,10 @@ public sealed partial class AddonLibraryViewModel : ObservableObject
     /// <summary>Only Lecram has a channel, and only the private build is allowed to use it.</summary>
     internal static bool CanCheck(AddonKind kind, bool channelEnabled) => kind == AddonKind.Lecram && channelEnabled;
 
+    /// <summary>Lecram's row has the automatic check switch in the private build (MediaFire); public builds import it, so there is nothing to switch.</summary>
+    public bool HasAutoDownload => CanCheckUpdates;
+    public string AutoDownloadLabel => "Check for new builds automatically";
+
     /// <summary>Deep Fried Chicken ships as a folder: its row also imports the extracted release folder.</summary>
     public bool CanImportFolder => IsDfc;
 
@@ -91,17 +95,44 @@ public sealed partial class AddonLibraryViewModel : ObservableObject
         set
         {
             if (_reloading || value is null || (value.Tag is null && !HasNewestChoice) || value.Tag == Settings.AddonId(_kind)) return;
+            if (CatalogOffer.IsOffer(value.Tag)) { _ = DownloadAsync(value.Tag!); return; }
             Settings.SetAddonId(_kind, value.Tag);
             Settings.Save();
             _ = _changed();
         }
     }
 
-    internal static string NewestLabel(string newestBuild) => $"Newest ({newestBuild})";
+    /// <summary>The tooltip of the default picker; names the "· download" entries only where this add-on has them.</summary>
+    public string PickerTip => CatalogKind is null || (_kind == AddonKind.Lecram && BuildFlags.LecramCatalogOff)
+        ? "Default build: games without their own pick install it"
+        : "Default build: games without their own pick install it. Builds marked download are fetched when picked.";
+
+    /// <summary>The older catalog builds of this add-on; Deep Fried Chicken has none, and Lecram none while its catalog downloads are off (BuildFlags.LecramCatalogOff).</summary>
+    private CatalogBuildKind? CatalogKind => _kind switch { AddonKind.RenoDx => CatalogBuildKind.RenoDx, AddonKind.Lecram => CatalogBuildKind.Lecram, _ => null };
+
+    /// <summary>A "· download" entry picked as the default: the build comes first, then it becomes the default. If it doesn't come the list goes back to the current default.</summary>
+    private async Task DownloadAsync(string offerTag)
+    {
+        var picked = await _main.PickCatalogBuildAsync(CatalogKind!.Value, offerTag, id => { Settings.SetAddonId(_kind, id); Settings.Save(); });
+        if (picked) await _changed();
+        else Reload();
+    }
+
+    /// <summary>"Newest · 5.0.0 (2026-10-20)"; the build's own label may already end in a parenthesis, so no second pair.</summary>
+    internal static string NewestLabel(string newestBuild) => $"Newest · {newestBuild}";
+
+    /// <summary>
+    /// Deep Fried Chicken's licence forbids downloads, and the public build imports Lecram's add-on, so new builds only come in by import.
+    /// No author URL is known to the app, so there is no link.
+    /// </summary>
+    public bool IsImportOnly => IsDfc || (_kind == AddonKind.Lecram && !CanCheckUpdates);
+    public string ImportOnlyNote => IsDfc
+        ? "Import only: its licence doesn't allow downloads. Get new builds from the author's page."
+        : "Import only: get new builds from the author's page.";
 
     internal static string NoLecramBuilds(bool channelEnabled) => channelEnabled
         ? $"No builds yet. Use Check now to fetch the latest v11 build, or import your own copy ({ComponentStore.Lecram10File} for v10 and older, {ComponentStore.Lecram11File} for v11 and newer)."
-        : $"No builds yet. Import the add-on ({ComponentStore.Lecram10File} for v10 and older, {ComponentStore.Lecram11File} for v11 and newer). Builds are available to supporters on the author's Buy Me a Coffee.";
+        : $"No builds yet. Import the add-on ({ComponentStore.Lecram10File} for v10 and older, {ComponentStore.Lecram11File} for v11 and newer).";
 
     private const string NoDfcBuilds =
         "Not imported. Its licence is personal use only, so import your own copy: extract the release and choose its folder (Folder…), " +
@@ -124,6 +155,12 @@ public sealed partial class AddonLibraryViewModel : ObservableObject
     /// <summary>The user's name for the selected build, edited in a text box and applied with Save name.</summary>
     [ObservableProperty] private string _labelText = "";
 
+    /// <summary>The name box and Save name only show after Rename…</summary>
+    [ObservableProperty] private bool _isRenaming;
+
+    [RelayCommand]
+    private void ToggleRename() => IsRenaming = !IsRenaming;
+
     public string Info
     {
         get
@@ -131,7 +168,7 @@ public sealed partial class AddonLibraryViewModel : ObservableObject
             if (SelectedBuild is not { } build)
                 return _kind switch
                 {
-                    AddonKind.RenoDx => $"Not imported. ShortFuse's {ComponentStore.RenoDxFile} isn't published on GitHub; get it from ShortFuse's RenoDX Discord and import it here.",
+                    AddonKind.RenoDx => $"Not in the library yet. ShortFuse's {ComponentStore.RenoDxFile} is downloaded and installed automatically at the next update check, or import it here.",
                     AddonKind.Lecram => NoLecramBuilds(BuildFlags.LecramChannel),
                     _ => NoDfcBuilds,
                 };
@@ -152,8 +189,10 @@ public sealed partial class AddonLibraryViewModel : ObservableObject
         var builds = Store.AddonBuilds(_kind);
         _buildCount = builds.Count;
         if (HasNewestChoice && builds.Count > 0) Choices.Add(new DlssChoice(null, NewestLabel(builds[0].Label)));
-        foreach (var b in builds) Choices.Add(new DlssChoice(b.Id, b.Label));
+        var offers = CatalogKind is { } kind ? _main.S.CatalogOffers(kind).Select(o => o.ToEntry()) : [];
+        foreach (var c in BuildPickerList.Merge(builds.Select(b => b.ToPickerEntry()), offers)) Choices.Add(new DlssChoice(c.Tag, c.Label));
         LabelText = SelectedBuild?.UserLabel ?? "";
+        IsRenaming = false;
         _reloading = false;
         OnPropertyChanged(nameof(Selected));
         OnPropertyChanged(nameof(HasBuilds));

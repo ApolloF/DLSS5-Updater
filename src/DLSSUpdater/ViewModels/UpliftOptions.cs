@@ -13,7 +13,7 @@ public static partial class SettingsOptions
             var value = UpliftConfig.Defaults[key];
             var def = choices.First(c => IniOptionViewModel.Same(c.Value, value));
             return new IniOptionViewModel(label, hint, UpliftConfig.Section, key, rs,
-                [new($"Default ({def.Label})", value, def.Description), .. choices, new("Leave game setting", null)]).About("uplift");
+                [new($"Default · {def.Label}", value, def.Description), .. choices, new("Leave game setting", null)]).About("uplift");
         }
         IniOptionViewModel Enum(string label, string hint, string key, params string[] labels) =>
             Choices(label, hint, key, labels.Select((name, i) => new OptionChoice(name, i.ToString(CultureInfo.InvariantCulture))).ToArray());
@@ -42,7 +42,8 @@ public static partial class SettingsOptions
             Enum("UI correction", "Auto, disable or enable UI correction.", "UICorrection", "Auto", "Off", "On"),
             Enum("Motion vectors", "Motion-vector source for NR.", "MotionVectors", "Auto", "DLSS", "Launchpad", "None", "Lumenite"),
             Enum("Upsampling", "Classic or edge-aware upsampling.", "Upsampling", "Classic", "Edge-aware"),
-            Bool("Present with frame generation", "Allow the Present stage with frame generation.", "PresentWithFrameGen"),
+            Bool("Present with frame generation", "Runs NR on generated frames too: 3-4x the Present cost at 3x/4x frame generation, can wipe out its gain. After DLSS avoids this.", "PresentWithFrameGen"),
+            Bool("Cross-queue passes", "Experimental, 64-bit DX12 only: a DLSS-stage pass and a later Present pass may run on different GPU queues. Can cost FPS and latency; with frame generation it also needs Present with frame generation.", "AllowCrossQueuePasses"),
             Enum("Input encoding", "Auto detects the input encoding; other choices select it explicitly.", "Encoding", "Auto", "Linear BT.709", "sRGB", "BT.2100 PQ", "scRGB", "scRGB-nl"),
             Number("Diffuse white", "0 = automatic; otherwise 48-500 nits.", "DiffuseWhiteNits", 0, 48, 80, 100, 150, 200, 250, 300, 400, 500),
             Enum("Input exposure", "Exposure source; Auto combines the game and Uplift meter.", "InputExposure", "Auto", "Game", "Metered", "Manual"),

@@ -61,6 +61,38 @@ public class ScanTests : IDisposable
     }
 
     [Fact]
+    public void Inspect_SkipsOurOwnBackupFolders()
+    {
+        Touch(@"Game.exe", 100);
+        var real = Touch(@"Bin\nvngx_dlss.dll");
+        Touch(@"_DLSS5_Backup\originals\0b1c\nvngx_dlss.dll");
+        Touch(@".dlssupdater\backup\nvngx_dlss.dll");
+
+        var g = new GameInfo { Root = _root, Name = "Game" };
+        GameInspector.Inspect(g);
+
+        Assert.Equal(real, Assert.Single(g.Dlss).Path);
+    }
+
+    [Fact]
+    public void Inspect_IgnoresOptiScalersBundledStreamline_ButNotAGamesOwnStreamlineFolder()
+    {
+        Touch(@"Game.exe", 100);
+        // F5 0.1.33+ ships NVIDIA's DLSS-G and Streamline for its own DLSS-G output in OptiScaler\streamline.
+        Touch(@"Bin\OptiScaler\streamline\nvngx_dlssg.dll");
+        Touch(@"Bin\OptiScaler\streamline\sl.interposer.dll");
+        Touch(@"Bin\OptiScaler\streamline\sl.dlss_g.dll");
+        var fg = Touch(@"Bin\nvngx_dlssg.dll");
+        var sl = Touch(@"Engine\streamline\sl.interposer.dll");
+
+        var g = new GameInfo { Root = _root, Name = "Game" };
+        GameInspector.Inspect(g);
+
+        Assert.Equal(fg, Assert.Single(g.Dlss).Path);
+        Assert.Equal(sl, Assert.Single(g.Streamline).Path);
+    }
+
+    [Fact]
     public void Inspect_UnityPlayerBeatsBiggerModTool()
     {
         var game = Touch(@"Beat Saber.exe", 10);
@@ -179,6 +211,22 @@ public class ScanTests : IDisposable
             acl.RemoveAccessRule(deny);
             apps.SetAccessControl(acl);
         }
+    }
+
+    [Fact]
+    public void Steam_AppId_FromTheManifest_ReachesTheInspectedGame()
+    {
+        var lib = SteamLibrary("ids", "Known Game");
+        Directory.CreateDirectory(Path.Combine(lib, "steamapps", "common", "Copied Game"));
+        File.WriteAllBytes(Path.Combine(lib, "steamapps", "common", "Copied Game", "game.exe"), [(byte)'M', (byte)'Z']);
+
+        var games = Launchers.SteamLibraries([lib]).OrderBy(g => g.Name).ToList();
+
+        Assert.Equal(["Copied Game", "Known Game"], games.Select(g => g.Name).ToArray());
+        Assert.Null(games[0].SteamAppId);
+        Assert.Equal(1, games[1].SteamAppId);
+        Assert.Equal(1, GameScanner.Inspect(games[1]).SteamAppId);
+        Assert.Null(GameScanner.Inspect(new GameEntry("Other", _root, "Manual")).SteamAppId);
     }
 
     [Fact]

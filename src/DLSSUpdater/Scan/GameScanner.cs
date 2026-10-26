@@ -5,7 +5,7 @@ namespace DLSSUpdater.Scan;
 
 public static class GameScanner
 {
-    private static readonly string[] SourcePriority = ["Steam", "Epic", "GOG", "EA", "Ubisoft", "Xbox", "Manual", "Library"];
+    internal static readonly string[] SourcePriority = ["Steam", "Epic", "GOG", "EA", "Ubisoft", "Battle.net", "Rockstar", "Xbox", "Manual", "Library"];
 
     /// <summary>
     /// All known game folders, deduplicated by path; launcher names win over manual entries. Hidden games are left out,
@@ -49,14 +49,16 @@ public static class GameScanner
 
     internal static List<string> InstallDirs(IEnumerable<GameEntry> entries) => entries.SelectMany(e => Inspect(e).Installs).ToList();
 
-    public static GameInfo Inspect(GameEntry entry)
+    public static GameInfo Inspect(GameEntry entry, TechOverride? manual = null)
     {
         var game = new GameInfo
         {
+            Manual = manual,
             Id = GameInfo.MakeId(entry.Root),
             Name = entry.Name,
             Source = entry.Source,
             Root = FileUtil.Normalize(entry.Root),
+            SteamAppId = entry.SteamAppId,
         };
         try { GameInspector.Inspect(game); }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
@@ -76,12 +78,13 @@ public static class GameScanner
             new ParallelOptions { MaxDegreeOfParallelism = 4, CancellationToken = ct },
             (i, _) =>
             {
-                results[i] = Inspect(entries[i]);
+                results[i] = Inspect(entries[i], settings.Games.GetValueOrDefault(GameInfo.MakeId(entries[i].Root))?.Tech);
                 progress?.Report(Interlocked.Increment(ref done) * 100 / Math.Max(entries.Count, 1));
                 return ValueTask.CompletedTask;
             });
         var list = results.OrderBy(g => g.Name, StringComparer.OrdinalIgnoreCase).ToList();
         SaveCache(list);
+        DetectCache.Save();
         return list;
     }
 

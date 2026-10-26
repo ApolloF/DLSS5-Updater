@@ -101,7 +101,7 @@ public sealed partial class OnboardingViewModel : ObservableObject
 
     public static IReadOnlyList<OnboardingChoice<NrAddon?>> Addons { get; } =
     [
-        new(NrAddon.RenoDx, "ShortFuse RenoDX", "ShortFuse's RenoDX DLSS add-on. You import renodx-dlss.addon64 yourself; needs a game with native DLSS."),
+        new(NrAddon.RenoDx, "ShortFuse RenoDX", "ShortFuse's RenoDX DLSS add-on. Downloaded and installed automatically; needs a game with native DLSS."),
         new(NrAddon.Lecram, "Lecram DLSS5", LecramHint(BuildFlags.LecramChannel)),
         new(NrAddon.Uplift, "GITC Uplift", "Open-source add-on, downloaded from GitHub. Single-player games only: injection can trigger anti-cheat."),
         new(null, "None", "ReShade, MFG Unlock and the DLSS updates only. Each game can still pick an add-on later."),
@@ -109,7 +109,7 @@ public sealed partial class OnboardingViewModel : ObservableObject
 
     internal static string LecramHint(bool channelEnabled) => channelEnabled
         ? "Lecram's DLSS5 add-on. New v11 builds are fetched automatically."
-        : "Lecram's DLSS5 add-on. You import it yourself; the builds are available to supporters on his Buy Me a Coffee.";
+        : "Lecram's DLSS5 add-on. Import only: you add the file yourself.";
 
     /// <summary>The automatic Lecram check only exists in the private build; the stored choice is left alone elsewhere.</summary>
     public bool ShowLecramChannel => BuildFlags.LecramChannel;
@@ -164,13 +164,12 @@ public sealed partial class OnboardingViewModel : ObservableObject
         return new OnboardingResult(true, build);
     }
 
-    /// <summary>An unchanged pick leaves the add-ons alone (a kept ShortFuse + Lecram pair stays); a new one goes through the exclusivity rule.</summary>
+    /// <summary>An unchanged pick leaves the add-ons alone (a kept ShortFuse + Lecram pair stays); a new one replaces them (the page offers a single pick).</summary>
     private void ApplyAddon(AppSettings s)
     {
         if (Addon.Value == _initialAddon) return;
+        foreach (var a in NrAddons.Defaults(s).ToList()) NrAddons.SetDefault(s, a, false);
         if (Addon.Value is { } addon) NrAddons.SetDefault(s, addon, true);
-        else
-            foreach (var a in NrAddons.Defaults(s).ToList()) NrAddons.SetDefault(s, a, false);
     }
 
     private bool _closed;

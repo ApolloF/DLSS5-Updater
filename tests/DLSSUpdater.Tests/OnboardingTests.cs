@@ -72,14 +72,25 @@ public sealed class OnboardingTests : IDisposable
     public void LecramTexts_SayWhereTheBuildsComeFrom()
     {
         Assert.Contains("fetched automatically", OnboardingViewModel.LecramHint(true));
-        Assert.Contains("Buy Me a Coffee", OnboardingViewModel.LecramHint(false));
-        Assert.DoesNotContain("fetch", OnboardingViewModel.LecramHint(false));
+        Assert.Contains("Import only", OnboardingViewModel.LecramHint(false));
+        Assert.DoesNotContain("automatically", OnboardingViewModel.LecramHint(false));
         Assert.Contains("MediaFire", HelpTopics.LecramUpdates(true));
         Assert.DoesNotContain("MediaFire", HelpTopics.LecramUpdates(false));
         Assert.DoesNotContain("MediaFire", HelpTopics.LecramSourceIntro(false));
-        Assert.Contains("Buy Me a Coffee", HelpTopics.LecramSourceIntro(false));
+        Assert.Contains("import only", HelpTopics.LecramSourceIntro(false));
+        Assert.Contains("import only", HelpTopics.LecramUpdates(false));
+        Assert.DoesNotContain("automatically", HelpTopics.LecramSourceIntro(false));
+        Assert.DoesNotContain("automatically", HelpTopics.LecramUpdates(false));
+        Assert.DoesNotContain("automatically", AddonLibraryViewModel.NoLecramBuilds(false));
         Assert.DoesNotContain("Check now", AddonLibraryViewModel.NoLecramBuilds(false));
         Assert.Contains("Check now", AddonLibraryViewModel.NoLecramBuilds(true));
+    }
+
+    [Fact]
+    public void LecramCatalogDownloads_AreOffInEveryBuildForNow()
+    {
+        Assert.False(BuildFlags.LecramCatalog);
+        Assert.True(BuildFlags.LecramCatalogOff);
     }
 
     [Theory]
@@ -199,7 +210,7 @@ public sealed class OnboardingTests : IDisposable
     [Fact]
     public void UnchangedAddon_KeepsAnAllowedPair()
     {
-        var s = new AppSettings { AllowSeveralNrAddons = true, InstallRenoDx = true, InstallLecram = true, DefaultMode = InstallMode.ReShadeOnly };
+        var s = new AppSettings { InstallRenoDx = true, InstallLecram = true, DefaultMode = InstallMode.ReShadeOnly };
         var setup = new OnboardingViewModel(s);
         Assert.Equal(NrAddon.Lecram, setup.Addon.Value);
         setup.Finish();

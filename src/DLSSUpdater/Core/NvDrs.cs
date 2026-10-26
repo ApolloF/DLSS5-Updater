@@ -15,7 +15,7 @@ public sealed class NvApiException(int status, string call)
 /// Function ids and struct layouts are from NVIDIA's nvapi headers (nvapi_interface.h / nvapi.h).
 /// Structs are marshalled as raw buffers at their documented offsets.
 /// </summary>
-public sealed class NvDrs : IDisposable
+public sealed class NvDrs : IDrsSession
 {
     public const int Ok = 0;
     public const int InvalidUserPrivilege = -137;

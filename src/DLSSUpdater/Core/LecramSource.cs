@@ -8,7 +8,7 @@ namespace DLSSUpdater.Core;
 public enum LecramGeneration { V10, V11 }
 
 /// <summary>
-/// Lecram's DLSS5 Neural Rendering add-on supports local imports and, in the private build only (BuildFlags.LecramChannel), the author's v11 update channel.
+/// Lecram's DLSS5 Neural Rendering add-on is imported and, in the private build only (BuildFlags.LecramChannel), also taken from the author's v11 update channel.
 /// v10 and older (renodx-dlss5.addon64) name themselves in the version resource; v11+
 /// (dlss5-nr.addon64) has no version resource and is recognised by strings in the binary. Every imported build stays in the
 /// library; a game gets the one chosen for it, under its generation's file name.
@@ -91,7 +91,8 @@ public sealed partial class ComponentStore
     public AddonBuild ImportLecram(string source) => ImportLecram(source, downloaded: false);
 
     /// <param name="downloaded">Fetched from Lecram's channel by the app, so the automatic cleanup may remove it later.</param>
-    internal AddonBuild ImportLecram(string source, bool downloaded)
+    /// <param name="knownLabel">The version the catalog names the build by (its release tag); it wins over the binary's strings.</param>
+    internal AddonBuild ImportLecram(string source, bool downloaded, string? knownLabel = null)
     {
         if (!File.Exists(source)) throw new FileNotFoundException("The add-on file doesn't exist.", source);
         var original = FileUtil.OriginalFilename(source);
@@ -117,9 +118,11 @@ public sealed partial class ComponentStore
 
         var file = generation == Generation.V10 ? Lecram10File : Lecram11File;
         var fileVersion = FileUtil.ReadVersion(source) is { } v ? FileUtil.Format(v) : "";
-        // The build names itself in a string of its binary; without one the file version (v10) or the generation (v11) stands in.
-        var label = FindBuildLabel(File.ReadAllBytes(source)) ?? (fileVersion.Length > 0 ? fileVersion : "v11");
+        // The catalog's version, else the string the build names itself by in its binary; without one the file version (v10) or the generation (v11) stands in.
+        var known = IsLecramVersionLabel(knownLabel) ? knownLabel!.Trim() : null;
+        var label = known ?? FindBuildLabel(File.ReadAllBytes(source)) ?? FallbackLecramLabel(fileVersion);
         var build = RetainAddon(AddonKind.Lecram, source, file, fileVersion, generation, label, downloaded);
+        if (known is not null && build.DetectedLabel != known) build = RelabelAddon(AddonKind.Lecram, build, known);
         Log.Info($"{(downloaded ? "Downloaded" : "Imported")} {file} {build.Label} from {source}");
         return build;
     }

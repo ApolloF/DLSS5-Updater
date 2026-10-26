@@ -1,11 +1,12 @@
 using System.Text.Json;
+using System.Text.RegularExpressions;
 using Microsoft.Win32;
 using DLSSUpdater.Core;
 
 namespace DLSSUpdater.Scan;
 
 /// <summary>Finds installed games from the launchers' own records. Every source is best-effort.</summary>
-public static class Launchers
+public static partial class Launchers
 {
     public static IEnumerable<GameEntry> All() =>
         Safe("Steam", Steam)
@@ -13,6 +14,8 @@ public static class Launchers
             .Concat(Safe("GOG", Gog))
             .Concat(Safe("EA", Ea))
             .Concat(Safe("Ubisoft", Ubisoft))
+            .Concat(Safe("Battle.net", BattleNet))
+            .Concat(Safe("Rockstar", Rockstar))
             .Concat(Safe("Xbox", Xbox));
 
     private static IEnumerable<GameEntry> Safe(string name, Func<IEnumerable<GameEntry>> source)
@@ -97,7 +100,7 @@ public static class Launchers
                 if (SteamSkipNames.Any(s => name.Contains(s, StringComparison.OrdinalIgnoreCase))) continue;
                 var path = Path.Combine(apps, "common", dir);
                 listed.Add(dir);
-                if (Directory.Exists(path)) games.Add(new GameEntry(name.Length > 0 ? name : dir, path, "Steam"));
+                if (Directory.Exists(path)) games.Add(new GameEntry(name.Length > 0 ? name : dir, path, "Steam", int.TryParse(id, out var appId) && appId > 0 ? appId : null));
             }
             catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) { }
         }
@@ -210,6 +213,94 @@ public static class Launchers
             if (!string.IsNullOrEmpty(path) && Directory.Exists(path))
                 yield return new GameEntry(Path.GetFileName(path.TrimEnd('\\')), path, "Ubisoft");
         }
+    }
+
+    // ---------- Battle.net and Rockstar (neither keeps a library file, so both read the Uninstall registry) ----------
+
+    /// <summary>One entry of the Windows Uninstall registry, as far as the launcher scans need it.</summary>
+    internal sealed record UninstallEntry(string Name, string? Publisher, string? InstallLocation);
+
+    private static readonly string[] UninstallKeys =
+        [@"SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall", @"SOFTWARE\WOW6432Node\Microsoft\Windows\CurrentVersion\Uninstall"];
+
+    internal static IEnumerable<UninstallEntry> UninstallEntries()
+    {
+        foreach (var hive in new[] { Registry.LocalMachine, Registry.CurrentUser })
+            foreach (var path in UninstallKeys)
+            {
+                using var key = hive.OpenSubKey(path);
+                if (key is null) continue;
+                foreach (var sub in key.GetSubKeyNames())
+                {
+                    using var app = key.OpenSubKey(sub);
+                    var name = app?.GetValue("DisplayName") as string;
+                    if (string.IsNullOrWhiteSpace(name)) continue;
+                    yield return new UninstallEntry(name, app?.GetValue("Publisher") as string, app?.GetValue("InstallLocation") as string);
+                }
+            }
+    }
+
+    private static readonly string[] BattleNetPublishers = ["Blizzard Entertainment", "Activision", "Activision Blizzard"];
+
+    public static IEnumerable<GameEntry> BattleNet() => BattleNetEntries(UninstallEntries());
+
+    /// <summary>Blizzard and Activision games from the Uninstall entries. The Battle.net app and its agent are not games.</summary>
+    internal static List<GameEntry> BattleNetEntries(IEnumerable<UninstallEntry> entries) =>
+        InstalledGames(entries, "Battle.net", e =>
+            BattleNetPublishers.Contains(e.Publisher?.Trim(), StringComparer.OrdinalIgnoreCase) &&
+            !e.Name.Contains("Battle.net", StringComparison.OrdinalIgnoreCase) &&
+            !e.Name.Contains("Agent", StringComparison.OrdinalIgnoreCase));
+
+    public static IEnumerable<GameEntry> Rockstar()
+    {
+        var entries = UninstallEntries().ToList();
+        var launcher = Registry.GetValue(@"HKEY_LOCAL_MACHINE\SOFTWARE\WOW6432Node\Rockstar Games\Launcher", "InstallFolder", null) as string
+                       ?? entries.FirstOrDefault(e => e.Name.Equals("Rockstar Games Launcher", StringComparison.OrdinalIgnoreCase))?.InstallLocation;
+        return RockstarEntries(entries, launcher is null ? null : Path.Combine(launcher, "titles.dat"));
+    }
+
+    /// <summary>
+    /// Rockstar games from the Uninstall entries plus the launcher's titles.dat. [U] titles.dat is not documented: the research
+    /// notes only say it holds an "InstallFolder" value per title, so any quoted value after that key counts.
+    /// </summary>
+    internal static List<GameEntry> RockstarEntries(IEnumerable<UninstallEntry> entries, string? titlesDat)
+    {
+        var games = InstalledGames(entries, "Rockstar", e =>
+            string.Equals(e.Publisher?.Trim(), "Rockstar Games", StringComparison.OrdinalIgnoreCase) &&
+            !e.Name.Contains("Launcher", StringComparison.OrdinalIgnoreCase) &&
+            !e.Name.Contains("Social Club", StringComparison.OrdinalIgnoreCase));
+        try
+        {
+            if (titlesDat is not null && File.Exists(titlesDat))
+                foreach (Match m in TitleInstallFolder().Matches(File.ReadAllText(titlesDat)))
+                {
+                    var dir = m.Groups[1].Value.Replace(@"\\", @"\").Replace('/', '\\');
+                    if (Directory.Exists(dir)) AddOnce(games, new GameEntry(Path.GetFileName(dir.TrimEnd('\\')), dir, "Rockstar"));
+                }
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) { }
+        return games;
+    }
+
+    [GeneratedRegex("""
+        "InstallFolder"\s*[:=]?\s*"((?:[^"\\]|\\.)*)"
+        """, RegexOptions.IgnoreCase)]
+    private static partial Regex TitleInstallFolder();
+
+    private static List<GameEntry> InstalledGames(IEnumerable<UninstallEntry> entries, string source, Func<UninstallEntry, bool> isOurs)
+    {
+        var games = new List<GameEntry>();
+        foreach (var e in entries.Where(isOurs))
+        {
+            var dir = e.InstallLocation?.Trim().Trim('"');
+            if (!string.IsNullOrEmpty(dir) && Directory.Exists(dir)) AddOnce(games, new GameEntry(e.Name, dir, source));
+        }
+        return games;
+    }
+
+    private static void AddOnce(List<GameEntry> games, GameEntry entry)
+    {
+        if (!games.Any(g => GameInfo.MakeId(g.Root) == GameInfo.MakeId(entry.Root))) games.Add(entry);
     }
 
     // ---------- Xbox / Microsoft Store (moddable XboxGames folders only) ----------

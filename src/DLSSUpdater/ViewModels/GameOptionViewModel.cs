@@ -6,7 +6,7 @@ namespace DLSSUpdater.ViewModels;
 
 /// <summary>
 /// The per-game editor of one ini key. It shares the definition (label, choices, help) of the Settings option and
-/// reads and writes the game's layer: "Inherit (…)" removes the key from the layer, a value overrides the base, and a
+/// reads and writes the game's layer: "Inherit · …" removes the key from the layer, a value overrides the base, and a
 /// choice without a value ("Off", "Game setting") unsets a key the base sets.
 /// </summary>
 public sealed partial class GameOptionViewModel : ObservableObject
@@ -34,15 +34,18 @@ public sealed partial class GameOptionViewModel : ObservableObject
     private readonly string _gameId;
     private readonly Func<AddonBuild?>? _lecram;
     private readonly Func<string, bool>? _available;
+    private readonly Func<(OptiSource Source, string? Tag)>? _opti;
     private OptionChoice _inherit = null!;
 
     /// <param name="lecram">For Lecram's options: the build this game uses, whose generation and label decide availability, hint and choices.</param>
     /// <param name="available">Whether the build this game uses has the key (Deep Fried Chicken: its default cfg), instead of the Settings' default build.</param>
+    /// <param name="opti">For OptiScaler's options: the build this game installs, which decides availability, hint and choices.</param>
     public GameOptionViewModel(IniOptionViewModel definition, bool reShade, AppSettings settings, string gameId, Func<AddonBuild?>? lecram = null,
-        Func<string, bool>? available = null)
+        Func<string, bool>? available = null, Func<(OptiSource Source, string? Tag)>? opti = null)
     {
         _lecram = lecram;
         _available = available;
+        _opti = opti;
         _def = definition;
         _reShade = reShade;
         _s = settings;
@@ -50,6 +53,12 @@ public sealed partial class GameOptionViewModel : ObservableObject
         _def.PropertyChanged += (_, e) =>
         {
             if (_lecram is not null) return;
+            // The Settings' default build moved: a game that follows the default re-reads its own view.
+            if (_opti is not null)
+            {
+                if (e.PropertyName is nameof(IniOptionViewModel.IsAvailable) or nameof(IniOptionViewModel.Hint) or nameof(IniOptionViewModel.Choices)) Refresh();
+                return;
+            }
             if (e.PropertyName == nameof(IniOptionViewModel.IsAvailable)) { if (_available is null) OnPropertyChanged(nameof(IsAvailable)); }
             else if (e.PropertyName == nameof(IniOptionViewModel.Hint)) OnPropertyChanged(nameof(Hint));
             else if (e.PropertyName == nameof(IniOptionViewModel.Choices)) Refresh();
@@ -57,17 +66,24 @@ public sealed partial class GameOptionViewModel : ObservableObject
         Rebuild();
     }
 
-    public bool IsAvailable => _available is not null ? _available(_def.Key) : _lecram is null ? _def.IsAvailable : LecramView.IsAvailable;
+    public bool IsAvailable => _available is not null ? _available(_def.Key) : OwnView?.IsAvailable ?? _def.IsAvailable;
 
     public string Label => _def.Label;
-    public string Hint => _lecram is null ? _def.Hint : LecramView.Hint;
-    private OptionChoice[] Choices => _lecram is null ? _def.Choices : LecramView.Choices;
-    private (bool IsAvailable, string Hint, OptionChoice[] Choices) LecramView
+    public string Hint => OwnView?.Hint ?? _def.Hint;
+    private OptionChoice[] Choices => OwnView?.Choices ?? _def.Choices;
+    /// <summary>The view of the game's own Lecram or OptiScaler build; null follows the Settings' default build.</summary>
+    private (bool IsAvailable, string Hint, OptionChoice[] Choices)? OwnView
     {
         get
         {
-            var build = _lecram!();
-            return _def.ViewFor(build?.Generation, build?.DetectedLabel);
+            if (_lecram is not null)
+            {
+                var build = _lecram();
+                return _def.ViewFor(build?.Generation, build?.DetectedLabel);
+            }
+            if (_opti is null) return null;
+            var (source, tag) = _opti();
+            return _def.ViewFor(source, tag);
         }
     }
     public string? Topic => _def.Topic;
@@ -123,7 +139,7 @@ public sealed partial class GameOptionViewModel : ObservableObject
 
     private void Rebuild()
     {
-        _inherit = new OptionChoice($"Inherit ({BaseLabel})", null, "Follows the base: the preset or current settings above.");
+        _inherit = new OptionChoice($"Inherit · {BaseLabel}", null, "Follows the base: the preset or current settings above.");
         var choices = new List<OptionChoice> { _inherit };
         choices.AddRange(Choices);
         if (LayerEntry is { Unset: false } e && Choices.All(c => !IniOptionViewModel.Same(c.Value, e.Value)))

@@ -40,6 +40,8 @@ public sealed class GameInfo
     public string Name { get; set; } = "";
     public string Source { get; set; } = "";
     public string Root { get; set; } = "";
+    /// <summary>Steam AppID from the game's appmanifest; null for other launchers and manual folders.</summary>
+    public int? SteamAppId { get; set; }
 
     /// <summary>Executables, best candidate first.</summary>
     public List<string> Exes { get; set; } = [];
@@ -47,6 +49,34 @@ public sealed class GameInfo
     /// <summary>Streamline runtime files (sl.*.dll) the game ships.</summary>
     public List<DlssDll> Streamline { get; set; } = [];
     public string? AntiCheat { get; set; }
+    /// <summary>Graphics API, bitness, engine and non-NVIDIA upscaler signals from the game's files.</summary>
+    public GameTech Tech { get; set; } = new();
+
+    /// <summary>The user's hand-set detection values (mirrored from the game's settings, never saved in games.json).</summary>
+    [JsonIgnore]
+    public TechOverride? Manual { get; set; }
+
+    private (GameTech Detected, TechOverride? Manual, GameTech Result)? _effective;
+
+    /// <summary>
+    /// What every consumer reads: <see cref="Tech"/> unless the user set a value. <see cref="Tech"/> itself stays what the scan found,
+    /// so the game page can show "Auto (X)" and go back to it.
+    /// </summary>
+    [JsonIgnore]
+    public GameTech Effective
+    {
+        get
+        {
+            if (_effective is { } e && ReferenceEquals(e.Detected, Tech) && ReferenceEquals(e.Manual, Manual)) return e.Result;
+            var result = TechOverride.Apply(Tech, Manual);
+            _effective = (Tech, Manual, result);
+            return result;
+        }
+    }
+
+    /// <summary>The exe treated as the game's main one: the user's pick while it is still on disk, else the best-ranked.</summary>
+    [JsonIgnore]
+    public string? MainExe => Manual?.MainExe is { } m && File.Exists(m) ? m : Exes.FirstOrDefault();
     /// <summary>Directories under the root holding a .dlssupdater manifest.</summary>
     public List<string> Installs { get; set; } = [];
     public DateTime Scanned { get; set; }
@@ -78,4 +108,4 @@ public sealed class GameInfo
 }
 
 /// <summary>A game folder reported by a launcher or the user, before inspection.</summary>
-public sealed record GameEntry(string Name, string Root, string Source);
+public sealed record GameEntry(string Name, string Root, string Source, int? SteamAppId = null);

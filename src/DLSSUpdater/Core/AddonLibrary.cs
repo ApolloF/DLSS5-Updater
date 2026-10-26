@@ -4,14 +4,15 @@ using System.Text.Json.Serialization;
 
 namespace DLSSUpdater.Core;
 
-/// <summary>The import-only add-ons that keep a library of builds, like the NR library does for nvngx_dlssnr.dll.</summary>
+/// <summary>The add-ons (downloaded from the catalog or imported) that keep a library of builds, like the NR library does for nvngx_dlssnr.dll.</summary>
 public enum AddonKind { RenoDx, Lecram, Dfc }
 
 /// <summary>
 /// One imported build of ShortFuse's or Lecram's add-on or of Deep Fried Chicken, stored under
 /// components\&lt;add-on dir&gt;\&lt;sha256&gt;\&lt;FileName&gt; with this record next to it as version.json. <see cref="FileName"/> is the
 /// name the add-on is installed under. A Deep Fried Chicken build's folder holds its whole 64-bit set beside the add-on.
-/// <see cref="Downloaded"/>: the app fetched it from Lecram's channel; false for every import and for builds from before the flag.
+/// <see cref="Downloaded"/>: the app fetched it from Lecram's channel or the catalog; false for every import and for builds from before the flag.
+/// <see cref="CatalogSha"/>: the SHA-256 of the catalog download (a zip) this build came out of, so the next check knows it is already here.
 /// </summary>
 public sealed record AddonBuild(
     string Id,
@@ -21,7 +22,8 @@ public sealed record AddonBuild(
     string DetectedLabel,
     string? UserLabel,
     DateTime Imported,
-    bool Downloaded = false)
+    bool Downloaded = false,
+    string? CatalogSha = null)
 {
     /// <summary>The name this build goes by: the user's own label, else what was detected in the file.</summary>
     [JsonIgnore]
@@ -38,6 +40,8 @@ public sealed record AddonBuild(
             return $"{DetectedLabel}{version} ({Imported.ToLocalTime():yyyy-MM-dd})";
         }
     }
+
+    public PickerEntry ToPickerEntry() => new(Id, DetectedLabel, Label, Id, ParsedVersion);
 
     /// <summary>"{detected label}-{sha[..12]}", what an install records and the Installed column shows.</summary>
     [JsonIgnore]
@@ -166,12 +170,36 @@ public sealed partial class ComponentStore
                 var b = JsonSerializer.Deserialize(File.ReadAllText(file), JsonCtx.Default.AddonBuild);
                 if (b is not null && ValidId(b.Id) && Path.GetFileName(Path.GetDirectoryName(file)) == b.Id
                     && ValidAddonFile(kind, b.FileName) && File.Exists(Path.Combine(root, b.Id, b.FileName))
-                    && (kind != AddonKind.Dfc || File.Exists(Path.Combine(root, b.Id, DfcBridgeFile)))) builds.Add(b);
+                    && (kind != AddonKind.Dfc || File.Exists(Path.Combine(root, b.Id, DfcBridgeFile))))
+                    builds.Add(kind == AddonKind.Lecram && IsSdkLabel(b.DetectedLabel) ? RelabelFromFile(root, b) : b);
             }
             catch (Exception ex) when (ex is IOException or JsonException)
             { Log.Error($"Could not read add-on library entry {file}", ex); }
         }
         return BuildOrder.NewestFirst(builds, b => b.DetectedLabel, b => b.Imported, b => b.Id, b => b.ParsedVersion);
+    }
+
+    /// <summary>
+    /// A Lecram build an older version of this app labelled by the DLSS SDK's version string gets its label from its own file
+    /// again (now without the SDK string), else from its file version.
+    /// </summary>
+    private static AddonBuild RelabelFromFile(string root, AddonBuild build)
+    {
+        var label = FindBuildLabel(File.ReadAllBytes(Path.Combine(root, build.Id, build.FileName))) ?? FallbackLecramLabel(build.FileVersion);
+        var relabelled = build with { DetectedLabel = label };
+        FileUtil.AtomicWriteText(Path.Combine(root, build.Id, BuildRecordFile), JsonSerializer.Serialize(relabelled, JsonCtx.Default.AddonBuild));
+        Log.Info($"Lecram build {build.Id[..12]} was labelled {build.DetectedLabel}, the DLSS SDK's version; it is {label} now");
+        return relabelled;
+    }
+
+    /// <summary>Gives a library build a new detected label; the user's own label stays.</summary>
+    private AddonBuild RelabelAddon(AddonKind kind, AddonBuild build, string label)
+    {
+        var relabelled = build with { DetectedLabel = label };
+        FileUtil.AtomicWriteText(Path.Combine(AddonRoot(kind), build.Id, BuildRecordFile), JsonSerializer.Serialize(relabelled, JsonCtx.Default.AddonBuild));
+        ForgetAddons(kind);
+        Log.Info($"Relabelled {kind} build {build.Id[..12]} from {build.DetectedLabel} to {label}");
+        return relabelled;
     }
 
     private static bool ValidAddonFile(AddonKind kind, string name) => kind switch
@@ -325,11 +353,12 @@ public sealed partial class ComponentStore
     /// <summary>
     /// An imported build becomes the default only when it is newer than the current default, so importing an older build
     /// to keep it around doesn't silently downgrade every game. Lecram and Deep Fried Chicken on "Newest" (no pinned id) follow
-    /// the library by themselves. Returns true when the default changed.
+    /// the library by themselves, and a build pinned there was picked over "Newest", so it stays. Returns true when the default
+    /// changed.
     /// </summary>
     public bool AdoptImportedAddon(AppSettings s, AddonKind kind, AddonBuild imported)
     {
-        if (FollowsNewest(kind) && s.AddonId(kind) is null) return false;
+        if (FollowsNewest(kind)) return false;
         var current = AddonBuilds(kind).FirstOrDefault(b => b.Id == s.AddonId(kind));
         if (current is not null && imported.Order.CompareTo(current.Order) <= 0) return false;
         s.SetAddonId(kind, imported.Id);
@@ -354,7 +383,8 @@ public sealed partial class ComponentStore
     /// <summary>
     /// The build label of a Lecram add-on: the highest <c>v1.2.3</c> / <c>v1.2.3-pre</c> string in the binary. The RenoDX
     /// framework in it carries v6.1.0 / v6.1.2 strings, which lose by being lower; on a tie the one with a pre-release suffix wins,
-    /// then the most frequent, then the shorter. Null when the binary has none.
+    /// then the most frequent, then the shorter. The DLSS SDK's version (v310.8.0, the only one in some older v10 builds) is never
+    /// a build label (<see cref="IsSdkLabel"/>). Null when the binary has none.
     /// </summary>
     internal static string? FindBuildLabel(ReadOnlySpan<byte> data)
     {
@@ -365,7 +395,7 @@ public sealed partial class ComponentStore
             if (at < 0) break;
             var i = offset + at;
             offset = i + 1;
-            if (SemverAt(data, i) is not { } s) continue;
+            if (SemverAt(data, i) is not { } s || s.Major >= SdkMajor) continue;
             var rank = s.Major * 1_000_000_000_000L + s.Minor * 1_000_000L + s.Patch;
             var pre = s.Text.Contains('-');
             found[s.Text] = (rank, pre, found.TryGetValue(s.Text, out var old) ? old.Count + 1 : 1);
@@ -374,6 +404,30 @@ public sealed partial class ComponentStore
             : found.OrderByDescending(f => f.Value.Rank).ThenByDescending(f => f.Value.Pre)
                 .ThenByDescending(f => f.Value.Count).ThenBy(f => f.Key.Length).First().Key;
     }
+
+    /// <summary>DLSS SDK versions start at 310; Lecram's builds are far below.</summary>
+    private const int SdkMajor = 100;
+
+    /// <summary>True for a label like "v310.8.0": the DLSS SDK's version, not a Lecram build's.</summary>
+    internal static bool IsSdkLabel(string? label)
+    {
+        var text = (label ?? "").Trim();
+        if (text.Length < 2 || text[0] is not ('v' or 'V')) return false;
+        var digits = 0;
+        while (1 + digits < text.Length && char.IsAsciiDigit(text[1 + digits])) digits++;
+        return digits > 0 && 1 + digits < text.Length && text[1 + digits] == '.'
+               && long.TryParse(text.AsSpan(1, Math.Min(digits, 12)), out var major) && major >= SdkMajor;
+    }
+
+    /// <summary>A version a catalog entry or release tag can name a Lecram build by: "v" and a version that isn't the SDK's.</summary>
+    internal static bool IsLecramVersionLabel(string? label)
+    {
+        var text = (label ?? "").Trim();
+        return text.Length > 1 && text[0] is 'v' or 'V' && char.IsAsciiDigit(text[1]) && !IsSdkLabel(text) && !text.Any(char.IsWhiteSpace);
+    }
+
+    /// <summary>What names a Lecram build whose binary has no label: its file version (v10), else its generation.</summary>
+    internal static string FallbackLecramLabel(string fileVersion) => fileVersion.Length > 0 ? fileVersion : "v11";
 
     private static (string Text, long Major, long Minor, long Patch)? SemverAt(ReadOnlySpan<byte> data, int i)
     {

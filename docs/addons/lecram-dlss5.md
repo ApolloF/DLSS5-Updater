@@ -13,6 +13,8 @@
 | v11 Patch 8 / beta.29 | `dlss5-nr.addon64` (sha256 `f7ac2d030790…`) | **none** | `v11.0.0-beta.29` | 2026-10-19 (static + probe) | Catalog, classification and all 38 migration/value probes identical to beta.22. Adds `NRPass2Preset`..`NRPass4Preset` (mixed models), a default-on D3D12 crash watcher behind `NRGpuCrashWitness`, and writes `[OVERLAY] TutorialProgress=4`. Same file standalone and inside `DLSS5-NR-Setup-v11.0.0-beta.29.exe`. beta.24 (Patch 6) and beta.26 (Patch 7) were not checked. |
 | v11 Patch 10 / beta.45 | `dlss5-nr.addon64` (sha256 `c50905c160de…`) | **none** | `v11.0.0-beta.45` | 2026-10-20 (static + probe) | Same key set, API reads and writes as beta.29. Catalog identical apart from one behaviour note (`NRLocalTone` no longer "resets history"). The panel renames Render preset to "Model version" (1 Old, 2 New). Same file standalone (channel `archive` folder) and inside `DLSS5-NR-Setup-v11.0.0-beta.45.exe`. |
 | v11 Patch 11 / beta.48 (**supported**) | `dlss5-nr.addon64` (sha256 `30f3154e7bee…`) | **none** | `v11.0.0-beta.48` | 2026-10-20 (static + probe) | Catalog as beta.45; classification (`classify111.py`) identical to beta.29. Adds the API key `NRPresentFgPath` (test option, Present with frame generation). Same file standalone (channel `addon` folder) and inside `DLSS5-NR-Setup-v11.0.0-beta.48.exe`. beta.40 (Patch 9) is not on the public channel and was not checked. |
+| v11.9 | `dlss5-nr.addon64` (sha256 `173954453862…`) | **11.9.0.3000** (product `v11.9 (11.9.0)`, OriginalFilename `dlss5-nr.addon64`, internal name `nr-addon`) | `v11.9.0` | 2026-10-26 (static only, probe not run) | The MediaFire channel's current build. With v12.0.0 the first builds with a PE version resource; the generation comes from its OriginalFilename. The app writes the same keys as for beta.48, `NRPresentFgPath` included. |
+| v12.0.0 | `dlss5-nr.addon64` (sha256 `124cd5a76b71…`) | **12.0.0.3000** (product `v12 (12.0.0)`, OriginalFilename `dlss5-nr.addon64`, internal name `nr-addon`) | `v12.0.0` | 2026-10-26 (static only, probe not run) | Same file name and section as v11, so the app treats it as the v11 generation. `NRPresentFgPath` retired (still read, logged `retired=1`). `ForeignNr` gains `auto`, the new default. New `NROpticalFlow` (settings schema 12, on by default; not offered). Also ships inside `DLSS5-NR-Setup-v12.0.0.exe` (not opened). |
 
 The author's own names (from the beta.18 installer's `sources.json`): `v11.0.0-beta.5`..`beta.11` = "v11 Patch 3",
 `beta.12`..`beta.18` = "v11 Patch 4" (C). The beta.29 installer's `sources.json` adds beta.22 = "v11 Patch 5", beta.24 = "Patch 6",
@@ -28,10 +30,19 @@ the tie at 11.0.0 goes to the most frequent, `v11.0.0-beta.NN` (C, test `Label_R
 same layout; the app's import reads `v11.0.0-beta.29` from the real file and extracts the same add-on from its setup exe (C). beta.45 and
 beta.48 drop the `dlss5-nr11.0.0-beta.NN` description string: `v11.0.0-beta.NN` three times (glued to "NR on", in the menu-key tooltip,
 bare) and `v11.0.0-H` once, so the label is still `v11.0.0-beta.NN` (C, test `Label_ReadsTheV11Beta18AndBeta22Layouts`). v11 has no
-framework `v6.1.x` strings.
+framework `v6.1.x` strings. v11.9.0 and v12.0.0 carry `vX.Y.0` twice (bare and glued to "NR") and nothing higher, so the label is
+`v11.9.0` / `v12.0.0` (C, test `Label_ReadsTheV11_9AndV12Layouts`); their version resource agrees.
+
+The DLSS SDK's version string (`v310.8.0`) is never a build label: some older v10 builds (for example the one released as
+`renodx-dlss5-7.0.0-rc8`, and one with file version 0.2026.828.517) carry no label of their own, only that string, which earlier
+versions of the app took for their version and ranked above every real build. Any `v` string with a three-digit major is skipped
+(`IsSdkLabel`); such a build falls back to its file version, which ranks below every labelled build. A library entry stored with
+the SDK string is relabelled from its file when the library loads. A build from the catalog is named by the catalog's version
+(the catalog takes it from the release tag, `renodx-dlss5-7.0.0-rc8` → `v7.0.0-rc8`), and library builds the catalog lists are
+relabelled to it on each check; a catalog version that is itself the SDK string changes nothing.
 
 Licence: no restriction found; THIRD-PARTY-NOTICES lists MIT RenoDX, ReShade, ImGui, Detours, nlohmann/json, gtl,
-NVIDIA DLSS/Streamline headers. Distributed by the author to supporters (sign-in with payment email): import-only.
+NVIDIA DLSS/Streamline headers. Downloaded and installed automatically from the catalog mirror (`neural.lecram`, public build too); imports stay possible.
 
 ## Files and placement
 
@@ -138,6 +149,15 @@ Runtime (probe, `tools/addon-probe`):
     with frame generation (`ROUTE-02` is the diagnostic "Real-frame schedule has a missing delivered job", C). beta.29 and beta.45
     do not read it (C).
   - The retired settings keys `NRPresentPreFg` / `NRPresentPreFgContract` stay retired (C); the new path is the API key only.
+- **v11.9.0 and v12.0.0** (static strings only; the probe was not run on either). Both have a version resource (11.9.0.3000 and
+  12.0.0.3000, description "v12 (12.0.0): ReShade's menu key ... opens the DLSS 5 NR menu", C). In v12.0.0 (C):
+  - `NRPresentFgPath` is retired: the start line reads `NR-PRESENT v1 fg_path=classic NRPresentFgPath=<n> retired=1`, so the
+    value no longer switches the path. The app hides the option for v12.0.0 and newer and removes a value it wrote for v11.
+  - `ForeignNr` takes `auto` (the new default), `yield` or `observe`; auto keeps running beside ShortFuse's `renodx-dlss.addon64`
+    (`NR-COMPAT v1 other_nr=renodx-dlss.addon64 ...`, `beside`). The app writes no `observe` for v12.
+  - `NROpticalFlow` is new (settings schema 12: "NROpticalFlow on by default; an older file that stores it off adopts on once";
+    `NR-OFA v1 available=... enabled=...` log lines). Not offered: what it does in a game needs a probe, and the app writes
+    `ConfigVersion=11` when it seeds a hook point.
 
 ### Main keys
 
@@ -145,7 +165,7 @@ Runtime (probe, `tools/addon-probe`):
 |---|---|---|---|---|---|
 | `EnableHooks` | int | 2 | absent = auto (may escalate) | 0 all hooks off, 1 NGX + Streamline, 2 NGX only | C |
 | `DX11Source` | text | auto | auto | auto, native, foreign, off. Present in D3D11 needs native | C |
-| `ForeignNr` | text | yield | yield | yield = stand down when another NR producer (NGX feature 18) evaluates in the process; observe = keep running | C/D |
+| `ForeignNr` | text | yield | yield; v12.0.0: auto | yield = stand down when another NR producer (NGX feature 18) evaluates in the process; observe = keep running; auto (v12) = keep running beside ShortFuse's add-on by itself | C/D |
 | `NRHookPoint` | int | 2 (Present), 0..2 | beta.6: 3 (Auto); beta.18+: 0 (After Upscaling) | 0 Upscaled ("After Upscaling"), 1 Render ("Before Upscaling"), 2 Present, 3 Auto (v11: Present with Upscaled fallback). Invalid → the build's default | C/D |
 | `NRIntensity` | float | 1.0, 0..1 | 1.0, 0..1 (higher clamps) | 0928: 0..2 | D/C |
 | `NRStyle` | int | 0, 0..2 | 0, 0..2 | 0928 overlay Default/Natural/Cinematic; v11 overlay Model A/B/C | D/C |
@@ -166,7 +186,8 @@ Runtime (probe, `tools/addon-probe`):
 | `NRCodecMode` | int | 2, 0..5 | retired | 2 Auto, 0 Classic, 1 Anchored, 3 Display, 4 PsychoVisual, 5 Source preserving | C |
 | `NRPresentGuides` | int | 0 | 0, 0..2 (3 and text read as 0) | v10: 0 Optional, 1 Required, 2 Never. beta.6: 0 DLSS frames (1 read as 0), 2 Always on. beta.18+: 0 Always on (stock), 1 DLSS frames, 2 Always on. Only 1 and 2 mean the same in every v11 build | C |
 | `NRMaskBlendMode` | int | — | beta.22+, absent = not sent | Passed to NGX `DLSSNR.MaskBlendMode`; meanings undocumented | C/D |
-| `NRPresentFgPath` | int | — | beta.48+, absent = 0 | 0 the usual Present path with frame generation (`classic`), 1 NR once per real frame at frame generation's call (`contract`, test option). Other values read as 0 | C |
+| `NRPresentFgPath` | int | — | beta.48 to v11.9, absent = 0; v12.0.0: retired (read, logged `retired=1`) | 0 the usual Present path with frame generation (`classic`), 1 NR once per real frame at frame generation's call (`contract`, test option). Other values read as 0 | C |
+| `NROpticalFlow` | int | — | v12.0.0+, on by default (schema 12) | Optical flow (`NR-OFA`); not probed, not offered by the app | C |
 | `NRGpuCrashWitness` | int | — | beta.22+ | beta.22: absent/0 off, non-zero DRED breadcrumbs. beta.29: absent = crash watcher on (DRED after a crash), 0 all off, non-zero watcher + DRED from launch | C |
 | `NRToggleKey` / `NRScreenshotKey` / `NRShotKey` | VK | 117 F6 / 116 F5 / 118 F7 | unbound when absent | | D/C |
 
@@ -243,14 +264,14 @@ Since the builds went behind the author's Buy Me a Coffee, the public DLSS5 Upda
 
 The default Lecram build (`AppSettings.LecramId`) is unset by default, shown as "Newest (<label>)" in Settings: it follows the newest build in
 the library, so an import or download of a newer build needs no settings write and an older import changes nothing. Picking a concrete build
-pins it; a newer import then takes over the pin, as for ShortFuse's add-on. A pinned build that is removed goes back to Newest. Settings from
+pins it, and it stays pinned when newer builds arrive (unlike ShortFuse's add-on, which has no "Newest"). A pinned build that is removed goes back to Newest. Settings from
 before this reset the pin once (`LecramNewestMigrated`), since pins written by the old automatic logic can't be told from the user's picks.
 Per-game build picks are untouched.
 
 ## App support
 
-DLSS5 Updater imports the add-on (the private build can also fetch v11 builds from the author's channel, see "Update source") and installs it per game in ReShade-only mode, with the same
-prerequisites as ShortFuse's add-on: ReShade 6+, a game with native DLSS and an imported `nvngx_dlssnr.dll`. It excludes
+DLSS5 Updater downloads and installs the add-on automatically from the catalog mirror (`neural.lecram`; the file itself decides v10 or v11) or imports it (the private build can also fetch v11 builds from the author's channel, see "Update source") and installs it per game in ReShade-only mode, with the same
+prerequisites as ShortFuse's add-on: ReShade 6+, a game with native DLSS and the NR runtime `nvngx_dlssnr.dll`. It excludes
 OptiScaler-NR and Deep Fried Chicken. It is not added to `[ADDON] LoadFromDllMain`, since nothing here shows it needs early load.
 
 - **Library.** Every imported build is kept: `components\lecram-dlss5\<sha256>\<file name>` plus a `version.json` (id = SHA-256,
@@ -274,15 +295,18 @@ OptiScaler-NR and Deep Fried Chicken. It is not added to `[ADDON] LoadFromDllMai
   (`NRPresentGuides` 1/2, not 0), so there is no per-build choice variant; `NRFeedMode` (1/2) is offered for both generations and
   beta.6 ignores it. Keys only later v11 builds read are tied to the first checked build that has them (`LecramIni`): GPU crash
   reports (Off 0, On 1) from beta.22, the pass presets (offered 0..2, Old and New of 310.9.16) from beta.29, Present with frame
-  generation (0, or 1 as a test) from beta.48. For an older build (by its detected label) the option is hidden and the key is not
-  written; a key the app wrote for a newer build is removed when the game moves to an older one, unless you changed it since. A build
+  generation (0, or 1 as a test) from beta.48. Keys a later build retired are tied to that build the same way (Present with frame
+  generation is retired from v12.0.0). For an older build (by its detected label), or one that retired the key, the option is hidden
+  and the key is not written; a key the app wrote is removed when the game moves to a build that doesn't read it, unless you changed
+  it since. A build
   without a readable label gets every v11 key. Because v11 resets `NRHookPoint` once in a v10-era ini, a hook point set here has to be applied again
   after the game's first start with v11 if that game ran v10 before. The
   Settings page follows the default build's generation; a game's options follow the generation of the build that game uses.
   Keys the app wrote are removed again when the add-on is dropped, unless you changed them since.
-- **ShortFuse next to Lecram.** With both installed the app writes `ForeignNr=observe` (otherwise Lecram yields), also over the
-  `ForeignNr=yield` the add-on writes itself on first run, unless the profile sets `ForeignNr` explicitly. Lecram alone never gets
-  the key, and an `observe` the app wrote is removed when ShortFuse's add-on goes.
+- **ShortFuse next to Lecram.** With both installed and a v10 or v11 build, the app writes `ForeignNr=observe` (otherwise Lecram
+  yields), also over the `ForeignNr=yield` the add-on writes itself on first run, unless the profile sets `ForeignNr` explicitly.
+  v12.0.0 and newer default to `auto`, which already runs beside it, so they get no key. Lecram alone never gets it, and an
+  `observe` the app wrote is removed when ShortFuse's add-on goes or the game moves to v12. The user's own value always wins.
 - **Pair status.** ShortFuse's `renodx-dlss` 0.2026.0928.x with Lecram 0928 (v8.5.0-rc10) was tested working. A crash in
   Werewulf with a newer SF build was not attributed to the add-ons. Results are recorded by both build ids in settings.json,
   by build ids: Works shows no message, Untested shows neutral information with known working pairs, and

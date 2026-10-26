@@ -318,7 +318,7 @@ public sealed class LecramUpdateTests : IDisposable
     }
 
     [Fact]
-    public async Task Update_OnlyBecomesTheDefaultWhenNewer()
+    public async Task Update_NeverMovesAPinnedDefault()
     {
         var settings = new AppSettings();
         var newer = _store.ImportLecram(WriteAddon("v11.0.0-beta.30"));
@@ -332,7 +332,7 @@ public sealed class LecramUpdateTests : IDisposable
         await _store.CheckLecramAsync(settings, new MediaFireClient(Server(Channel(SetupRemote("v11.0.0-beta.31", "2026-10-19T10:00:00Z")))), CancellationToken.None);
 
         Assert.Equal(3, _store.LecramBuilds.Count);
-        Assert.Equal("v11.0.0-beta.31", _store.LecramBuildFor(settings.LecramId)!.DetectedLabel);
+        Assert.Equal(newer.Id, settings.LecramId);
     }
 
     [Fact]
