@@ -28,10 +28,10 @@ public sealed partial class ComponentStore
         var temp = Path.Combine(AppPaths.Cache, "lecram-download-" + Guid.NewGuid().ToString("N"));
         try
         {
-            var channel = await client.CheckAsync(settings.LecramFolderKey, ct);
+            var channel = await client.CheckFoldersAsync(settings.LecramFolderKey, ct);
             if (!channel.Offline) settings.LecramFolderKey = channel.Key;
             if (channel.Offline) settings.LecramLastResult = "Offline; keeping the Lecram library (cached listing).";
-            else if (channel.Latest is not { } latest) settings.LecramLastResult = "No v11 builds found; keeping the Lecram library.";
+            else if (channel.Latest is not { } latest) settings.LecramLastResult = "No v11 or newer builds found; keeping the Lecram library.";
             else if (latest.Hash.Equals(settings.LecramLastAssetHash, StringComparison.OrdinalIgnoreCase)
                      && settings.LecramLastBuildId is { } id && LecramBuilds.Any(b => b.Id == id))
                 settings.LecramLastResult = $"Up to date: {settings.LecramLastVersion}.";

@@ -234,10 +234,16 @@ Since the builds went behind the author's Buy Me a Coffee, the public DLSS5 Upda
 `DLSS5-NR-Setup-v11.0.0-beta.22.exe` (never run, no network used for the analysis); the live listing was then checked once.
 
 - **Listing** (public, no login): `GET https://www.mediafire.com/api/1.5/folder/get_content.php?folder_key=<key>&content_type=files&chunk=<n>&response_format=json`.
-  Default key `wrwi1qkpgy0qu`. `response.folder_content.files[]` carries `filename`, `hash` (SHA-256), `size`, `created_utc`,
+  Keys (`MediaFireClient.Folders`, newest generation first): `r1xp6x0i043wx` (folder `v12`) and `wrwi1qkpgy0qu` (folder `v11`). `response.folder_content.files[]` carries `filename`, `hash` (SHA-256), `size`, `created_utc`,
   `links.normal_download`, `quickkey`; `more_chunks` is `yes`/`no` (the installer stops after 10 chunks, so does the app).
+- **One folder per major.** From v12 the author gives each major its own folder, and no older folder points to it: v12's
+  `sources.json` (inside `DLSS5-NR-Setup-v12.0.0.exe`, static read) has `updates.mediafire_folder` `r1xp6x0i043wx` with the note
+  "v12's own folder, so v11 setups (wrwi1qkpgy0qu) never see v12", and its release notes say v11.9's Check for updates does not see
+  v12 (C). The app checks the folders newest generation first and takes the first one with a build, so a late v11 fix never wins
+  over v12. A new major's folder has to be added to `Folders` with a release; the folder of the installer each new major ships
+  (`updates.mediafire_folder` in its `sources.json`) is the key.
 - **Channel move.** A `channel.json` in the root (fields `notice`, `moved_to`) moves the channel to a new folder key. The app
-  follows it once per check, remembers the new key in its settings and refuses a loop or a second move.
+  follows it once per check, remembers the new key in its settings (checked before the built-in folders) and refuses a loop or a second move.
 - **Candidates.** `DLSS5-NR-Setup-v*.exe`, `DLSS5-NR-*.zip`, `dlss5-nr.addon64`, `dlss5-nr-v*.addon64`. The version comes from
   the file name (`vN.N.N` with an optional `-alpha.N`/`-beta.N`/`-rc.N`); a major below 11, or a missing hash or `created_utc`, skips
   the file. The newest upload wins, not the highest version. The installer prefers EXE over ZIP over raw add-on on a tie; the app only
@@ -253,8 +259,13 @@ Since the builds went behind the author's Buy Me a Coffee, the public DLSS5 Upda
   `licenses.txt`. Two subfolders appeared: `addon` (the raw beta.48 `dlss5-nr.addon64`) and `archive` (older setups beta.18..beta.45,
   their changelogs and raw add-ons as `dlss5-nr(N).addon64`). The app reads only the root (as the installer does), so it takes the
   beta.48 setup exe and extracts the add-on; its hash equals the raw file's (C). Patch 9 (beta.40) is in neither folder.
+- **Live state (2026-10-26):** the `v11` root ends at `DLSS5-NR-Setup-v11.9.0.exe` (no `channel.json`). The `v12` folder
+  (`r1xp6x0i043wx`, created 2026-10-24) lists `DLSS5-NR-Setup-v12.0.0.exe` (10,107,204 bytes, sha256 `b63590ec239c…`),
+  `changelog-v12.0.0.txt`, `licenses.txt` and an `addon` subfolder. The setup holds one root `dlss5-nr.addon64` (sha256 `124cd5a76b71…`,
+  the checked v12.0.0 build) with the three strings the app recognises v11+ by (C). Release 3.1.0 only read the `v11` folder, so it
+  stayed at v11.9.0.
 - **In the app (private build only).** The listing is cached under `%LocalAppData%\DLSS5Updater\cache` (ETag/Last-Modified sent when present). One
-  listing per check, requests in sequence. The add-on goes through the normal import (labels, generation, dedupe by SHA-256) and
+  listing per folder until one has a build, requests in sequence. The add-on goes through the normal import (labels, generation, dedupe by SHA-256) and
   never writes the default (see "Default build"). Games are never switched. Offline, a broken listing or an
   exe without ZIP is logged once and the library stays as it is. In the private build Settings → Local components has "Check for new builds
   automatically" (default on) and "Check now"; the public build hides both and makes no request, even when forced. The stored setting is never reset. A new build may have options beyond the last checked one; fetching it does not

@@ -10,7 +10,7 @@ namespace DLSSUpdater.Tests;
 /// <summary>Lecram's public MediaFire channel against a fake server: no request leaves the machine.</summary>
 public sealed class LecramUpdateTests : IDisposable
 {
-    private const string Folder = "wrwi1qkpgy0qu";
+    private static readonly string Folder = MediaFireClient.DefaultFolder;
     private const string Download = "https://download1.mediafire.test/";
 
     private sealed class FakeMediaFire(Func<HttpRequestMessage, HttpResponseMessage> respond) : HttpMessageHandler
@@ -94,7 +94,7 @@ public sealed class LecramUpdateTests : IDisposable
         if (url.Host == "www.mediafire.com" && url.AbsolutePath.StartsWith("/api/"))
         {
             var query = System.Web.HttpUtility.ParseQueryString(url.Query);
-            var files = folders[query["folder_key"]!];
+            var files = folders.GetValueOrDefault(query["folder_key"]!, []);
             var chunk = int.Parse(query["chunk"]!);
             var page = files.Skip((chunk - 1) * perChunk).Take(perChunk).ToArray();
             var items = string.Join(",", page.Select(f =>
@@ -251,6 +251,79 @@ public sealed class LecramUpdateTests : IDisposable
         await Assert.ThrowsAsync<InvalidDataException>(() => new MediaFireClient(Server(chain)).CheckAsync(Folder, CancellationToken.None));
     }
 
+    // The live listings of 2026-10-26 (fields the app does not read left out): v12 sits in its own folder, the v11 folder
+    // still ends at v11.9.0 and has no channel.json pointing on.
+    private const string LiveV12 =
+        """{"response":{"folder_content":{"chunk_size":"100","content_type":"files","chunk_number":"1","files":[{"hash":"b04e2e12cbca7e5c2b6d6e5710040602c10e81aa72c553bea5dc5e1315678654","filename":"changelog-v12.0.0.txt","size":"7501","created_utc":"2026-10-24T04:25:38Z","links":{"normal_download":"https://www.mediafire.com/file/zx1z6600p0diglt/changelog-v12.0.0.txt/file"}},{"hash":"b63590ec239cc321796f6cd41fa9f32dd2bac350e1c33964656db9b6e9f61275","filename":"DLSS5-NR-Setup-v12.0.0.exe","size":"10107204","created_utc":"2026-10-24T04:25:22Z","links":{"normal_download":"https://www.mediafire.com/file/hxan1y9py2zj56o/DLSS5-NR-Setup-v12.0.0.exe/file"}},{"hash":"ec1b223c9d22f0757bfb406f415a6414825016a08fc7ec0e18fd7dcc84fef460","filename":"licenses.txt","size":"174074","created_utc":"2026-10-24T04:25:53Z","links":{"normal_download":"https://www.mediafire.com/file/qvts592dhd07xmt/licenses.txt/file"}}],"more_chunks":"no"},"result":"Success"}}""";
+    private const string LiveV11 =
+        """{"response":{"folder_content":{"chunk_size":"100","content_type":"files","chunk_number":"1","files":[{"hash":"fb995c9f98a3adbb6fda0074a4b129c1ee700aaa57d354ed2cf17bff989278d8","filename":"changelog-v11.9.0.txt","size":"3993","created_utc":"2026-10-21T23:11:23Z","links":{"normal_download":"https://www.mediafire.com/file/4zk2fndd7i5hswl/changelog-v11.9.0.txt/file"}},{"hash":"a6b7f99b7370b9781c706bdbebfe85fbf442af19bb308f1629ccd2978708c11a","filename":"DLSS5-NR-Setup-v11.9.0.exe","size":"9526805","created_utc":"2026-10-21T23:11:05Z","links":{"normal_download":"https://www.mediafire.com/file/ckbaexfm65x2tkt/DLSS5-NR-Setup-v11.9.0.exe/file"}},{"hash":"ec1b223c9d22f0757bfb406f415a6414825016a08fc7ec0e18fd7dcc84fef460","filename":"licenses.txt","size":"174074","created_utc":"2026-10-18T18:55:00Z","links":{"normal_download":"https://www.mediafire.com/file/jfeyxw0k3e966so/licenses.txt/file"}}],"more_chunks":"no"},"result":"Success"}}""";
+
+    [Fact]
+    public async Task CheckFolders_FindsV12InTheLiveListings_EvenFromTheRememberedV11Folder()
+    {
+        var server = new FakeMediaFire(r =>
+        {
+            var key = System.Web.HttpUtility.ParseQueryString(r.RequestUri!.Query)["folder_key"];
+            return new HttpResponseMessage(HttpStatusCode.OK) { Content = new StringContent(key == "r1xp6x0i043wx" ? LiveV12 : LiveV11) };
+        });
+
+        var result = await new MediaFireClient(server).CheckFoldersAsync("wrwi1qkpgy0qu", CancellationToken.None);
+
+        Assert.Equal("r1xp6x0i043wx", result.Key);
+        Assert.Equal("DLSS5-NR-Setup-v12.0.0.exe", result.Latest!.Name);
+        Assert.Equal("v12.0.0", result.Latest.Version);
+        Assert.Equal("b63590ec239cc321796f6cd41fa9f32dd2bac350e1c33964656db9b6e9f61275", result.Latest.Hash);
+        Assert.Single(server.Requests);
+        Assert.Equal("DLSS5-NR-Setup-v11.9.0.exe", MediaFireClient.SelectLatest(MediaFireClient.ParseListing(LiveV11).Files)!.Name);
+    }
+
+    [Fact]
+    public async Task CheckFolders_TakesTheNewestGenerationsFolder_OverALaterUploadInAnOlderOne()
+    {
+        var folders = new Dictionary<string, Remote[]>
+        {
+            ["r1xp6x0i043wx"] = [new Remote("DLSS5-NR-Setup-v12.0.0.exe", AddonBytes("v12.0.0"), "2026-10-24T04:25:22Z")],
+            ["wrwi1qkpgy0qu"] = [new Remote("DLSS5-NR-Setup-v11.9.1.exe", AddonBytes("v11.9.1"), "2026-10-25T10:00:00Z")],
+        };
+
+        var result = await new MediaFireClient(Server(folders)).CheckFoldersAsync("wrwi1qkpgy0qu", CancellationToken.None);
+
+        Assert.Equal("DLSS5-NR-Setup-v12.0.0.exe", result.Latest!.Name);
+    }
+
+    [Fact]
+    public async Task CheckFolders_FallsBackToAnOlderFolder_WhileTheNewestHasNoBuild()
+    {
+        var folders = new Dictionary<string, Remote[]>
+        {
+            ["r1xp6x0i043wx"] = [new Remote("licenses.txt", "x"u8.ToArray(), "2026-10-24T04:25:53Z")],
+            ["wrwi1qkpgy0qu"] = [new Remote("DLSS5-NR-Setup-v11.9.0.exe", AddonBytes("v11.9.0"), "2026-10-21T23:11:05Z")],
+        };
+        var server = Server(folders);
+
+        var result = await new MediaFireClient(server).CheckFoldersAsync("r1xp6x0i043wx", CancellationToken.None);
+
+        Assert.Equal(("wrwi1qkpgy0qu", "DLSS5-NR-Setup-v11.9.0.exe"), (result.Key, result.Latest!.Name));
+        Assert.Equal(2, server.Requests.Count);
+
+        var none = await new MediaFireClient(Server(new())).CheckFoldersAsync("r1xp6x0i043wx", CancellationToken.None);
+        Assert.Equal(("r1xp6x0i043wx", null), (none.Key, none.Latest));
+    }
+
+    [Fact]
+    public async Task CheckFolders_ChecksAKeyRememberedFromAMoveFirst()
+    {
+        var folders = new Dictionary<string, Remote[]>
+        {
+            ["moved1"] = [new Remote("DLSS5-NR-Setup-v12.1.0.exe", AddonBytes("v12.1.0"), "2026-11-01T10:00:00Z")],
+            ["r1xp6x0i043wx"] = [new Remote("DLSS5-NR-Setup-v12.0.0.exe", AddonBytes("v12.0.0"), "2026-10-24T04:25:22Z")],
+        };
+
+        var result = await new MediaFireClient(Server(folders)).CheckFoldersAsync("moved1", CancellationToken.None);
+
+        Assert.Equal(("moved1", "DLSS5-NR-Setup-v12.1.0.exe"), (result.Key, result.Latest!.Name));
+    }
+
     [Fact]
     public async Task Download_ChecksTheListedSha256()
     {
@@ -315,6 +388,27 @@ public sealed class LecramUpdateTests : IDisposable
         Assert.False(imported.Downloaded);
         Assert.False(Assert.Single(_store.LecramBuilds).Downloaded);
         Assert.Empty(_store.TakeAdded());
+    }
+
+    [Fact]
+    public async Task Update_AddsV12FromItsOwnFolder_AfterV11_9WasUpToDate()
+    {
+        var v119 = SetupRemote("v11.9.0", "2026-10-21T23:11:05Z");
+        var settings = new AppSettings { LecramFolderKey = "wrwi1qkpgy0qu" };
+        await _store.CheckLecramAsync(settings, new MediaFireClient(Server(new() { ["wrwi1qkpgy0qu"] = [v119] })), CancellationToken.None);
+        Assert.Equal("v11.9.0", settings.LecramLastVersion);
+
+        var folders = new Dictionary<string, Remote[]>
+        {
+            ["r1xp6x0i043wx"] = [SetupRemote("v12.0.0", "2026-10-24T04:25:22Z")],
+            ["wrwi1qkpgy0qu"] = [v119],
+        };
+        await _store.CheckLecramAsync(settings, new MediaFireClient(Server(folders)), CancellationToken.None);
+
+        Assert.Equal(2, _store.LecramBuilds.Count);
+        Assert.Equal("v12.0.0", _store.LecramBuildFor(null)!.DetectedLabel);
+        Assert.Equal(("r1xp6x0i043wx", "v12.0.0"), (settings.LecramFolderKey, settings.LecramLastVersion));
+        Assert.Contains("v12.0.0", settings.LecramLastResult);
     }
 
     [Fact]
