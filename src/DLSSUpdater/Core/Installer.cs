@@ -560,9 +560,9 @@ public sealed partial class Installer(ComponentStore store)
             profile.RemoveAll(x => UpliftConfig.IsUplift(x) && x.Key.Equals("Enabled", StringComparison.OrdinalIgnoreCase));
             profile.Add(new(UpliftConfig.Section, "Enabled", "1"));
         }
-        // Next to ShortFuse's add-on Lecram stands down unless told to observe; the user's own ForeignNr wins.
+        // Next to ShortFuse's add-on a v11 build stands down unless told to observe (v12's auto runs beside it); the user's own ForeignNr wins.
         var explicitForeignNr = profile.Any(LecramIni.IsForeignNr);
-        var observe = o.RenoDx && o.Lecram && !explicitForeignNr;
+        var observe = o.RenoDx && o.Lecram && !explicitForeignNr && !LecramIni.AutoRunsBesideForeignNr(lecramGen, lecram?.DetectedLabel);
         if (observe) profile.Add(new(LecramIni.Section, LecramIni.ForeignNrKey, "observe"));
         if (o.RenoDx)
         {
@@ -597,8 +597,8 @@ public sealed partial class Installer(ComponentStore store)
         // The add-on writes ForeignNr=yield itself on first run; that is its default, not a choice, so it makes way for observe.
         if (observe && string.Equals(cleaned.Get(LecramIni.Section, LecramIni.ForeignNrKey), "yield", StringComparison.OrdinalIgnoreCase))
             hadStale |= cleaned.Remove(LecramIni.Section, LecramIni.ForeignNrKey);
-        // observe was only needed next to ShortFuse's add-on.
-        if (o.Lecram && !o.RenoDx && !explicitForeignNr)
+        // observe was only needed next to ShortFuse's add-on, and only for a v11 build.
+        if (o.Lecram && !observe && !explicitForeignNr)
             hadStale |= DropWrittenKeys(cleaned, ctx.M.ReShadeIni, LecramIni.Section, k => k.Equals(LecramIni.ForeignNrKey, StringComparison.OrdinalIgnoreCase));
         hadStale |= DropWrittenKeys(cleaned, ctx.M.ReShadeIni, RenoDxIni.Section, RenoDxIni.IsPresetKey);
         if (o.CarryOverIni && o.Lecram && lecramGen == LecramGeneration.V11 &&

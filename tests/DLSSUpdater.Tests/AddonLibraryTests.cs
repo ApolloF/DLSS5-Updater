@@ -149,6 +149,55 @@ public sealed class AddonLibraryTests : IDisposable
     }
 
     [Fact]
+    public void Label_ReadsTheV11_9AndV12Layouts()
+    {
+        // v11.9.0 and v12.0.0 carry their version once glued to "NR" and once bare (docs/addons/lecram-dlss5.md); no beta suffix.
+        Assert.Equal("v12.0.0", Label("v12.0.0NR onNR offbytessha256\0v12.0.0\0"));
+        Assert.Equal("v11.9.0", Label("v11.9.0NR onNR offbytessha256\0v11.9.0\0"));
+        var build = LecramV11("v12.0.0NR on\0v12.0.0", frameworkNoise: false);
+        Assert.Equal(LecramGeneration.V11, build.Generation);
+        Assert.Equal("v12.0.0", build.DetectedLabel);
+    }
+
+    [Fact]
+    public void Label_IsNeverTheDlssSdkVersion()
+    {
+        // Older v10 builds hold no label of their own, only the DLSS SDK's v310.8.0.
+        Assert.Null(Label("DLSS SDK v310.8.0\0"));
+        Assert.Equal("v8.5.0-rc10", Label("v310.8.0\0v8.5.0-rc10\0v6.1.2\0"));
+        Assert.True(ComponentStore.IsSdkLabel("v310.8.0"));
+        Assert.True(ComponentStore.IsSdkLabel(" V310.10.0 "));
+        Assert.False(ComponentStore.IsSdkLabel("v12.0.0"));
+        Assert.False(ComponentStore.IsSdkLabel("310.8.0"));
+        Assert.False(ComponentStore.IsSdkLabel("v99.0.0"));
+        Assert.True(ComponentStore.IsLecramVersionLabel("v7.0.0-rc8"));
+        Assert.False(ComponentStore.IsLecramVersionLabel("v310.8.0"));
+        Assert.False(ComponentStore.IsLecramVersionLabel("0.2026.923.307"));
+        Assert.False(ComponentStore.IsLecramVersionLabel(""));
+        Assert.False(ComponentStore.IsLecramVersionLabel(null));
+    }
+
+    [Fact]
+    public void ALecramBuildLabelledByTheSdkString_IsRelabelledOnLoad_AndRanksBelowLabelledBuilds()
+    {
+        var old = LecramV10(new Version(0, 2026, 828, 517));
+        var rc10 = LecramV11("v8.5.0-rc10", frameworkNoise: false);
+        // What an earlier version of the app stored for a v10 binary whose only version string is the SDK's. The fixture (a copy of
+        // the test assembly) carries other vX.Y.Z strings, so the stored file is replaced by bytes with only the SDK's.
+        var file = ComponentStore.AddonPathOf(AddonKind.Lecram, old);
+        File.WriteAllBytes(file, [(byte)'M', (byte)'Z', .. Encoding.ASCII.GetBytes("\0DLSS SDK v310.8.0\0")]);
+        var record = Path.Combine(Path.GetDirectoryName(file)!, "version.json");
+        File.WriteAllText(record, JsonSerializer.Serialize(old with { DetectedLabel = "v310.8.0" }, JsonCtx.Default.AddonBuild));
+
+        var reloaded = new ComponentStore(new GitHubClient(), () => true);
+        var builds = reloaded.LecramBuilds;
+
+        Assert.Equal([rc10.Id, old.Id], builds.Select(b => b.Id));
+        Assert.Equal("0.2026.828.517", builds[1].DetectedLabel);
+        Assert.Equal("0.2026.828.517", JsonSerializer.Deserialize(File.ReadAllText(record), JsonCtx.Default.AddonBuild)!.DetectedLabel);
+    }
+
+    [Fact]
     public void Label_NeedsAFullThreePartVersion_TrimsPunctuation_AndIsNullWithoutOne()
     {
         Assert.Null(Label(""));

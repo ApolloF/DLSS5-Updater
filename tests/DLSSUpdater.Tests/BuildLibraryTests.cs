@@ -76,6 +76,15 @@ public sealed class BuildLibraryTests : IDisposable
     }
 
     [Fact]
+    public void Lecram_v12_sorts_above_v11_9_and_the_betas_and_release_tags_compare_by_value()
+    {
+        string[] labels = ["v11.0.0-beta.48", "v12.0.0", "v7.0.0-rc8", "v11.9.0", "v8.5.0-rc10", "v11.0.0-beta.45", "0.2026.828.517"];
+        var sorted = BuildOrder.NewestFirst(labels, l => l, _ => null, l => l);
+        // A v10 build without a label of its own goes by its file version (0.2026...), below every labelled build.
+        Assert.Equal(["v12.0.0", "v11.9.0", "v11.0.0-beta.48", "v11.0.0-beta.45", "v8.5.0-rc10", "v7.0.0-rc8", "0.2026.828.517"], sorted);
+    }
+
+    [Fact]
     public void Prerelease_numbers_compare_by_value_inside_dash_and_dot_parts()
     {
         string[] labels = ["v8.5.0-rc9-model-sdr1", "v0.7.0-pre9", "v11.0.0-beta.5", "v8.5.0-rc10-model-sdr1", "v11.0.0-beta.48", "v0.7.0-pre10", "v11.0.0-beta.45"];

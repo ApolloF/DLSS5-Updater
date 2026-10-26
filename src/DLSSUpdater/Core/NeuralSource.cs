@@ -45,6 +45,7 @@ public sealed partial class ComponentStore
     public async Task<AddonBuild?> CheckLecramCatalogAsync(AppSettings settings, CatalogNeuralLine? line, ICatalogFetch fetch,
         IProgress<TransferProgress>? progress, CancellationToken ct)
     {
+        RelabelLecramFromCatalog(line);
         if (!settings.AutoDownloadLecram || line?.Current is not { } newest || newest.ToBinary() is not { IsInstallable: true }) return null;
         var sha = newest.Sha256.ToLowerInvariant();
         if (sha == settings.CatalogLecramFetched || AddonBuilds(AddonKind.Lecram).Any(b => b.Id.Equals(sha, StringComparison.OrdinalIgnoreCase))) return null;
@@ -57,7 +58,23 @@ public sealed partial class ComponentStore
         return build;
     }
 
-    /// <summary>One catalog build of Lecram's add-on into the library; its own file decides v10 or v11, not the catalog. Null (logged) when refused.</summary>
+    /// <summary>
+    /// Library builds the catalog lists take its version as their label: the release tag, e.g. v7.0.0-rc8 for a v10 binary whose only
+    /// version string is the DLSS SDK's. A catalog version that names no build (<see cref="IsLecramVersionLabel"/>) changes nothing.
+    /// </summary>
+    internal void RelabelLecramFromCatalog(CatalogNeuralLine? line)
+    {
+        if (line is null) return;
+        foreach (var entry in line.All)
+        {
+            if (!IsLecramVersionLabel(entry.Version)) continue;
+            var label = entry.Version.Trim();
+            if (AddonBuilds(AddonKind.Lecram).FirstOrDefault(b => b.Id.Equals(entry.Sha256, StringComparison.OrdinalIgnoreCase)) is { } build && build.DetectedLabel != label)
+                RelabelAddon(AddonKind.Lecram, build, label);
+        }
+    }
+
+    /// <summary>One catalog build of Lecram's add-on into the library, named by the catalog's version; its own file decides v10 or v11, not the catalog. Null (logged) when refused.</summary>
     private Task<AddonBuild?> FetchLecramAsync(CatalogNeuralLine line, CatalogNeuralBuild build, ICatalogFetch fetch,
         IProgress<TransferProgress>? progress, CancellationToken ct)
     {
@@ -69,7 +86,7 @@ public sealed partial class ComponentStore
             var result = await fetch.DownloadAsync(build.ToBinary(), path, progress, ct);
             if (!result.Ok) { Log.Info($"{what} not downloaded: {result.Refusal}"); return null; }
             RequirePe(path, Path.GetFileName(path));
-            var imported = ImportLecram(path, downloaded: true);
+            var imported = ImportLecram(path, downloaded: true, build.Version);
             if (build.Generation is { } g && !g.Equals(imported.Generation.ToString(), StringComparison.OrdinalIgnoreCase))
                 Log.Warn($"{what}: the catalog says {g}, the file is {imported.Generation}; going by the file");
             Log.Info($"{what} downloaded from the catalog");

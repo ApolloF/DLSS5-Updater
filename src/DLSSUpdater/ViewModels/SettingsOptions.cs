@@ -205,7 +205,8 @@ public static partial class SettingsOptions
     // generation carry a variant (IniOptionViewModel.In). Within v11 only values that mean the same in beta.6 and beta.18+ are offered
     // (NRPresentGuides 0 flipped meaning, so it is not), so no per-build choice variant is needed; keys an older v11 build lacks
     // (NRGpuCrashWitness before beta.22, NRPass2..4Preset before beta.29, NRPresentFgPath before beta.48) are hidden and not written
-    // for it. NRMaskBlendMode (raw NGX value, undocumented) is not offered.
+    // for it, and so are keys a later build retired (NRPresentFgPath from v12.0.0). NRMaskBlendMode (raw NGX value, undocumented) and
+    // v12's NROpticalFlow (unprobed; the app writes ConfigVersion=11) are not offered.
     // Not exposed: the other Present/HDR, normalisation, Look, model-lab, layer, per-pass look and screenshot keys, which are tuned
     // in the add-on's own overlay.
     public static IniOptionViewModel[] Lecram(ObservableCollection<IniOverride> rs) =>
@@ -303,7 +304,7 @@ public static partial class SettingsOptions
                 C("Add-on default", null, "Leave the add-on's own choice (beta.18+: Always on; beta.6: DLSS frames)."),
                 C("DLSS frames only", "1", "Only the game's DLSS frames."),
                 C("Always on", "2", "Also menus, loading and pause screens, with neutral guides where the game gives none.")),
-        new IniOptionViewModel("Present with frame generation", "Test option (v11 beta.48 and newer): how NR runs at Present under frame generation.", LecramIni.Section, "NRPresentFgPath", rs,
+        new IniOptionViewModel("Present with frame generation", "Test option (v11 beta.48 to v11.9; retired in v12): how NR runs at Present under frame generation.", LecramIni.Section, "NRPresentFgPath", rs,
             C("Add-on default", null, "Leave the add-on's own choice (0, the usual path)."),
             C("Usual path", "0", "The add-on's default."),
             C("Real frames only (test)", "1", "NR runs once per real frame at frame generation's call and never again on the final frame. Try it if NR blinks at Present with frame generation (ROUTE-02).")).About("lc-fg-path"),
@@ -313,7 +314,7 @@ public static partial class SettingsOptions
             C("Game exposure", "2", "Forces the game's own exposure (v10.7: v2 game exposure). v11 beta.18+ uses it on Direct3D 12 at After upscaling only."))
             .About("lc-feed"),
         new IniOptionViewModel("With another NR add-on", "What Lecram does when another neural-rendering add-on is active.", LecramIni.Section, LecramIni.ForeignNrKey, rs,
-            C("Add-on default", null, "Leave the add-on's own choice (yield). Set to observe automatically while ShortFuse's add-on is installed too."),
+            C("Add-on default", null, "Leave the add-on's own choice (v11: yield, set to observe automatically while ShortFuse's add-on is installed too; v12: auto, which already runs beside it)."),
             C("Yield", "yield", "Stand down when another NR producer evaluates in the game."),
             C("Observe", "observe", "Keep running next to the other add-on.")).About("lc-foreign"),
         new IniOptionViewModel("Hooks", "Which DLSS hooks the add-on installs. Advanced.", LecramIni.Section, "EnableHooks", rs,
