@@ -174,7 +174,10 @@ public sealed partial class GameViewModel
         OnPropertyChanged(nameof(HasMethods));
     }
 
-    /// <summary>Applies a method: its components go on and the install mode follows (see <see cref="SelectMethod"/>). Cards without components only open their details.</summary>
+    /// <summary>
+    /// Applies a method: its components go on, the install mode follows and the previous card's extras go off (see
+    /// <see cref="SelectMethod"/>). Cards without components only open their details.
+    /// </summary>
     [RelayCommand]
     private void PickMethod(MethodRow? row)
     {
@@ -185,8 +188,8 @@ public sealed partial class GameViewModel
             return;
         }
         if (!row.IsSelectable) return;
-        SelectMethod(row);
-        foreach (var m in Methods) m.IsPicked = ReferenceEquals(m, row);
+        SelectMethod(row, Methods.FirstOrDefault(m => m.IsPicked));
+        SyncPick(row.Option.Method);
     }
 
     /// <summary>
@@ -214,16 +217,24 @@ public sealed partial class GameViewModel
         return rows.Count > 0 && rows.All(c => c!.Enabled);
     }
 
-    /// <summary>Turns on the rows of the method (and the install mode it needs). Nothing is installed until the user presses Install.</summary>
-    private void SelectMethod(MethodRow row)
+    /// <summary>
+    /// Turns on the rows of the method (and the install mode it needs), and turns off the rows only the <paramref name="previous"/>
+    /// card used, so switching from OptiScaler + MFG to OptiScaler leaves MFG off. Nothing is installed until the user presses Install.
+    /// </summary>
+    private void SelectMethod(MethodRow row, MethodRow? previous)
     {
         if (!row.IsSelectable) return;
         if (row.Option.Mode is { } mode && mode != Mode) Mode = mode;
         foreach (var id in row.Option.Components)
-            if (RowKeys.TryGetValue(id, out var key) && Components.FirstOrDefault(c => c.Key == key) is { Visible: true, Editable: true } component)
-                component.Enabled = true;
+            if (EditableRow(id) is { } component) component.Enabled = true;
+        if (previous is not null && !ReferenceEquals(previous, row))
+            foreach (var id in previous.Option.Components.Except(row.Option.Components, StringComparer.OrdinalIgnoreCase))
+                if (EditableRow(id) is { } component) component.Enabled = false;
         // The NR add-ons exclude each other: the one the method picked stays, the others go (see NrAddons).
         RefreshStatus();
         OnPropertyChanged(nameof(AnyEnabled));
     }
+
+    private ComponentRow? EditableRow(string id) =>
+        RowKeys.TryGetValue(id, out var key) && Components.FirstOrDefault(c => c.Key == key) is { Visible: true, Editable: true } component ? component : null;
 }

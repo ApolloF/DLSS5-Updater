@@ -193,7 +193,7 @@ public sealed partial class AppSettings
     public bool? OnboardingDone { get; set; }
     /// <summary>The component strip shows its release chips; off, it is one summary line.</summary>
     public bool StripExpanded { get; set; }
-    /// <summary>Where the main window was when it closed (its normal, not maximized, rect), so it reopens there.</summary>
+    /// <summary>Where the main window was when it closed: its normal (not maximized) rect from the Win32 window placement, in physical pixels.</summary>
     public double? WindowLeft { get; set; }
     public double? WindowTop { get; set; }
     public double? WindowWidth { get; set; }

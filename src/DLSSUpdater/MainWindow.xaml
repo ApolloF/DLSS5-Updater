@@ -190,8 +190,8 @@
                         </Style>
                     </Button.Style>
                 </Button>
-                <!-- Only when the key differs from the default; Hidden, not Collapsed, so "Off" stays in its column -->
-                <Button Grid.Column="2" Content="Reset" Margin="8,0,0,0" ToolTip="Back to the default key"
+                <!-- Only when the key differs from the default; Hidden, not Collapsed, so "Off" stays in its column. It hides itself, so the click hands focus to the key button -->
+                <Button Grid.Column="2" Content="Reset" Margin="8,0,0,0" ToolTip="Back to the default key" Click="OnResetBind"
                         AutomationProperties.Name="{Binding Label, StringFormat='Reset {0} to its default key'}"
                         Command="{Binding DataContext.ResetBindCommand, RelativeSource={RelativeSource AncestorType=ItemsControl}}" CommandParameter="{Binding}">
                     <Button.Style>

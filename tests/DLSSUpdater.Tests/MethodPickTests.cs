@@ -105,6 +105,45 @@ public sealed class MethodPickTests : IDisposable
     }
 
     [Fact]
+    public void PickingASmallerCard_TurnsOffThePreviousCardsExtras()
+    {
+        var vm = NewGame();
+        vm.Methods.Clear();
+        var opti = Row(Method.OptiScaler, InstallMode.OptiScaler, ComponentRegistry.OptiScaler);
+        var mfg = Row(Method.MfgUnlock, InstallMode.OptiScaler, ComponentRegistry.OptiScaler, ComponentRegistry.MfgUnlock);
+        vm.Methods.Add(opti);
+        vm.Methods.Add(mfg);
+        vm.PickMethodCommand.Execute(mfg);
+        Assert.True(mfg.IsPicked);
+
+        vm.PickMethodCommand.Execute(opti);
+
+        Assert.False(Component(vm, "mfg").Enabled);
+        Assert.True(Component(vm, "opti").Enabled);
+        Assert.True(opti.IsPicked);
+        Assert.False(mfg.IsPicked);
+    }
+
+    [Fact]
+    public void PickingACardWhoseComponentsCantAllGoOn_MarksTheCardThePageMatches()
+    {
+        var vm = NewGame();
+        vm.Methods.Clear();
+        Component(vm, "mfg").Enabled = false;
+        var opti = Row(Method.OptiScaler, InstallMode.OptiScaler, ComponentRegistry.OptiScaler);
+        var dlssNr = Row(Method.OptiScalerNr, InstallMode.OptiScaler, ComponentRegistry.OptiScaler, ComponentRegistry.DlssNr);
+        vm.Methods.Add(opti);
+        vm.Methods.Add(dlssNr);
+        Component(vm, "dlssnr").Enabled = false;
+        Component(vm, "dlssnr").Editable = false;
+
+        vm.PickMethodCommand.Execute(dlssNr);
+
+        Assert.False(dlssNr.IsPicked);
+        Assert.True(opti.IsPicked);
+    }
+
+    [Fact]
     public void AntiCheatCaution_IsNotRepeatedUnderTheAntiCheatBanner()
     {
         var vm = NewGame("EasyAntiCheat");

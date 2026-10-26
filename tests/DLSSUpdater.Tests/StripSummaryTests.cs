@@ -22,7 +22,19 @@ public sealed class StripSummaryTests : IDisposable
     [InlineData(0, 1, "Components: 1 game needs updates")]
     [InlineData(1, 4, "Components: 1 new release · 4 games need updates")]
     public void Text_CountsNewReleasesAndGamesWithUpdates(int newReleases, int games, string expected) =>
-        Assert.Equal(expected, ComponentStripSummary.Text(newReleases, games));
+        Assert.Equal(expected, ComponentStripSummary.Text(newReleases, games, checkedOnce: true, online: true));
+
+    [Theory]
+    [InlineData(0, 0, "Components: checking…")]
+    [InlineData(2, 3, "Components: checking…")]
+    public void Text_BeforeTheFirstCheck_SaysChecking_NotAllCurrent(int newReleases, int games, string expected) =>
+        Assert.Equal(expected, ComponentStripSummary.Text(newReleases, games, checkedOnce: false, online: true));
+
+    [Theory]
+    [InlineData(0, 0, "Components: offline")]
+    [InlineData(1, 2, "Components: 1 new release · 2 games need updates · offline")]
+    public void Text_Offline_SaysOffline_NotAllCurrent(int newReleases, int games, string expected) =>
+        Assert.Equal(expected, ComponentStripSummary.Text(newReleases, games, checkedOnce: true, online: false));
 
     [Fact]
     public void StripExpanded_IsOffByDefault_AndSurvivesARestart()

@@ -130,7 +130,7 @@ public sealed partial class MainViewModel : ObservableObject
 
     /// <summary>A chip has a release the user hasn't opened yet: the collapsed strip shows a dot.</summary>
     public bool StripHasNews => AllNews.Any(n => n.IsNew);
-    public string StripSummary => ComponentStripSummary.Text(AllNews.Count(n => n.IsNew), UpdateCount);
+    public string StripSummary => ComponentStripSummary.Text(AllNews.Count(n => n.IsNew), UpdateCount, ComponentsChecked, Online);
 
     internal const int MaxLogLines = 400;
 
@@ -218,7 +218,9 @@ public sealed partial class MainViewModel : ObservableObject
     [ObservableProperty] private string _reShadeText = "not imported";
     [ObservableProperty] private bool _dlssNrOk;
     [ObservableProperty] private bool _reShadeOk;
-    [ObservableProperty] private bool _online = true;
+    [ObservableProperty, NotifyPropertyChangedFor(nameof(StripSummary))] private bool _online = true;
+    /// <summary>The first release check of this session has finished, so the strip can say whether everything is current.</summary>
+    [ObservableProperty, NotifyPropertyChangedFor(nameof(StripSummary))] private bool _componentsChecked;
     [ObservableProperty, NotifyPropertyChangedFor(nameof(ShowRateLimit))] private bool _rateLimitDismissed;
     [ObservableProperty, NotifyPropertyChangedFor(nameof(ShowRateLimit), nameof(RateLimitText), nameof(CanAddGitHubToken))] private GitHubRateLimit? _rateLimit;
 
@@ -506,6 +508,7 @@ public sealed partial class MainViewModel : ObservableObject
         }
         var s = S.Store;
         Online = new[] { s.Opti, s.Dlss, s.Mfg, s.Uplift }.Any(r => r is { FromCache: false, Stale: false });
+        ComponentsChecked = true;
         OptiVersion = s.Opti is null ? "—" : s.Opti.Tag + (s.Opti.Prerelease ? " pre" : "");
         DlssVersion = s.Dlss?.Tag.TrimStart('v') ?? "—";
         UpliftVersion = s.Uplift?.Tag ?? "\u2014";

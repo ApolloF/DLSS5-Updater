@@ -59,14 +59,15 @@ public class UiTextTests
         Assert.Equal(expected, MainViewModel.UpdateAllResultText(updated, failed));
 
     [Fact]
-    public void No_view_model_builds_a_picker_label_with_brackets_or_game_s()
+    public void No_view_model_has_a_picker_label_with_brackets_or_game_s()
     {
         var dir = Path.Combine(RepoRoot(), "src", "DLSSUpdater", "ViewModels");
         foreach (var file in Directory.EnumerateFiles(dir, "*.cs"))
         {
             var text = File.ReadAllText(file);
-            Assert.DoesNotContain("$\"Default (", text);
-            Assert.DoesNotContain("$\"Inherit (", text);
+            // Literal labels too, not just interpolated ones: pickers say "Default · 4".
+            Assert.DoesNotContain("\"Default (", text);
+            Assert.DoesNotContain("\"Inherit (", text);
             Assert.DoesNotContain("game(s)", text);
         }
     }

@@ -28,7 +28,11 @@ public partial class MainWindow : Window
         DataContext = _vm;
         if (Demo.ScreenshotDir is null)
         {
-            RestoreWindowBounds();
+            var s = _vm.S.Settings;
+            var saved = WindowBounds.Restore(s.WindowLeft, s.WindowTop, s.WindowWidth, s.WindowHeight, MonitorWorkAreas());
+            // A saved place is applied once the window has a handle; without one the window stays centred.
+            if (saved is not null) WindowStartupLocation = WindowStartupLocation.Manual;
+            SourceInitialized += (_, _) => RestoreWindowBounds(saved);
             Closing += (_, _) => SaveWindowBounds();
         }
 
@@ -72,29 +76,107 @@ public partial class MainWindow : Window
         ListAutoScroll.FollowNewest(LogList, _vm.LogLines);
     }
 
-    /// <summary>Reopens the window where it was closed, maximized if it was; off-screen places fall back to the default (<see cref="WindowBounds"/>).</summary>
-    private void RestoreWindowBounds()
+    /// <summary>
+    /// Reopens the window where it was closed, maximized if it was, through the Win32 window placement (physical pixels, so
+    /// monitors with different scaling keep the size). A place that is no longer on a monitor falls back to the default (<see cref="WindowBounds"/>).
+    /// </summary>
+    private void RestoreWindowBounds(Rect? saved)
     {
-        var s = _vm.S.Settings;
-        var screen = new Rect(SystemParameters.VirtualScreenLeft, SystemParameters.VirtualScreenTop,
-            SystemParameters.VirtualScreenWidth, SystemParameters.VirtualScreenHeight);
-        if (WindowBounds.Restore(s.WindowLeft, s.WindowTop, s.WindowWidth, s.WindowHeight, screen, new Size(MinWidth, MinHeight)) is { } r)
+        if (saved is { } r)
         {
-            WindowStartupLocation = WindowStartupLocation.Manual;
-            (Left, Top, Width, Height) = (r.Left, r.Top, r.Width, r.Height);
+            var hwnd = new WindowInteropHelper(this).Handle;
+            var wp = new WindowPlacement
+            {
+                Length = Marshal.SizeOf<WindowPlacement>(),
+                ShowCmd = SwHide, // not shown yet; Show() does that
+                NormalPosition = new NativeRect((int)r.Left, (int)r.Top, (int)r.Right, (int)r.Bottom),
+            };
+            // Landing on a monitor with other scaling resizes the window for its DPI; the second call puts the saved size back.
+            for (var i = 0; i < 2 && SetWindowPlacement(hwnd, ref wp); i++)
+            {
+                var now = new WindowPlacement { Length = Marshal.SizeOf<WindowPlacement>() };
+                if (GetWindowPlacement(hwnd, ref now) && now.NormalPosition == wp.NormalPosition) break;
+            }
         }
-        if (s.WindowMaximized) SourceInitialized += (_, _) => WindowState = WindowState.Maximized;
+        if (_vm.S.Settings.WindowMaximized) WindowState = WindowState.Maximized;
     }
 
-    /// <summary>Keeps the normal (not maximized) rect and whether the window was maximized.</summary>
+    /// <summary>Keeps the normal (not maximized) rect and whether the window was maximized, also when it is closed minimized.</summary>
     private void SaveWindowBounds()
     {
-        var r = RestoreBounds;
-        if (r.IsEmpty) return;
+        var wp = new WindowPlacement { Length = Marshal.SizeOf<WindowPlacement>() };
+        if (!GetWindowPlacement(new WindowInteropHelper(this).Handle, ref wp)) return;
+        var r = wp.NormalPosition;
+        if (r.Right <= r.Left || r.Bottom <= r.Top) return;
         var s = _vm.S.Settings;
-        (s.WindowLeft, s.WindowTop, s.WindowWidth, s.WindowHeight) = (r.Left, r.Top, r.Width, r.Height);
-        s.WindowMaximized = WindowState == WindowState.Maximized;
+        (s.WindowLeft, s.WindowTop, s.WindowWidth, s.WindowHeight) = (r.Left, r.Top, r.Right - r.Left, r.Bottom - r.Top);
+        s.WindowMaximized = WindowBounds.WasMaximized(wp.ShowCmd, wp.Flags);
         s.Save();
+    }
+
+    /// <summary>
+    /// Each monitor's work area in the window placement's workspace coordinates, which start at the work area's corner
+    /// rather than the monitor's (they differ by a taskbar on the top or left).
+    /// </summary>
+    private static List<Rect> MonitorWorkAreas()
+    {
+        var areas = new List<Rect>();
+        EnumDisplayMonitors(IntPtr.Zero, IntPtr.Zero, (monitor, _, _, _) =>
+        {
+            var info = new MonitorInfo { Size = Marshal.SizeOf<MonitorInfo>() };
+            if (GetMonitorInfo(monitor, ref info))
+                areas.Add(new Rect(info.Monitor.Left, info.Monitor.Top, info.Work.Right - info.Work.Left, info.Work.Bottom - info.Work.Top));
+            return true;
+        }, IntPtr.Zero);
+        return areas;
+    }
+
+    private const int SwHide = 0;
+
+    [StructLayout(LayoutKind.Sequential)]
+    private record struct NativeRect(int Left, int Top, int Right, int Bottom);
+
+    [StructLayout(LayoutKind.Sequential)]
+    private struct NativePoint { public int X, Y; }
+
+    [StructLayout(LayoutKind.Sequential)]
+    private struct WindowPlacement
+    {
+        public int Length, Flags, ShowCmd;
+        public NativePoint MinPosition, MaxPosition;
+        public NativeRect NormalPosition;
+    }
+
+    [StructLayout(LayoutKind.Sequential)]
+    private struct MonitorInfo
+    {
+        public int Size;
+        public NativeRect Monitor, Work;
+        public int Flags;
+    }
+
+    private delegate bool MonitorEnumProc(IntPtr monitor, IntPtr hdc, IntPtr rect, IntPtr data);
+
+    [DllImport("user32.dll")]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    private static extern bool GetWindowPlacement(IntPtr hwnd, ref WindowPlacement placement);
+
+    [DllImport("user32.dll")]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    private static extern bool SetWindowPlacement(IntPtr hwnd, ref WindowPlacement placement);
+
+    [DllImport("user32.dll")]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    private static extern bool EnumDisplayMonitors(IntPtr hdc, IntPtr clip, MonitorEnumProc callback, IntPtr data);
+
+    [DllImport("user32.dll", CharSet = CharSet.Unicode)]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    private static extern bool GetMonitorInfo(IntPtr monitor, ref MonitorInfo info);
+
+    /// <summary>Reset hides itself once the key is the default again, so the click hands keyboard focus to the row's key button.</summary>
+    private void OnResetBind(object sender, RoutedEventArgs e)
+    {
+        if (sender is Button { Parent: Grid row }) row.Children.OfType<Button>().First().Focus();
     }
 
     /// <summary>While a keybind button is waiting, the next key press becomes the binding. Otherwise Ctrl+F goes to the game search.</summary>
