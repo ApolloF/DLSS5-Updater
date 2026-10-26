@@ -46,7 +46,7 @@ public static class OptiSources
 
     public static readonly OptiSource Default = new(
         ComponentStore.OptiRepo, "OptiScaler-NR", "OptiScaler-NR (ShyVortex)",
-        new Regex(@"^OptiScaler-NR-v[\d.]+\.zip$", RegexOptions.IgnoreCase), "", "v0.9.51", [],
+        new Regex(@"^OptiScaler-NR-v[\d.]+\.zip$", RegexOptions.IgnoreCase), "", "v0.9.72", [],
         [.. HdrOutputKeys.Select(k => ("HDR", k)), .. MfgUnlockKeys.Select(k => ("MFGUnlock", k))]);
 
     /// <summary>Asset names: "-0.1.32.zip" up to 0.1.32, "-0.1.33-with-dlss-fg.zip", then "-v0.1.34-with-dlss-fg.zip".</summary>
