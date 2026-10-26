@@ -8,7 +8,10 @@ public static class LecramIni
 {
     public const string Section = "RenoDX.DLSS5";
 
-    /// <summary>Set to "observe" so Lecram keeps running next to ShortFuse's add-on; its default "yield" stands down.</summary>
+    /// <summary>
+    /// Set to "observe" so a v11 build keeps running next to ShortFuse's add-on; its default "yield" stands down. v12's default
+    /// "auto" already runs beside it (<see cref="AutoRunsBesideForeignNr"/>).
+    /// </summary>
     public const string ForeignNrKey = "ForeignNr";
 
     /// <summary>v10 and older only: the character mask is always on in v11.</summary>
@@ -29,24 +32,42 @@ public static class LecramIni
         ["NRPresentFgPath"] = "v11.0.0-beta.48",
     };
 
+    /// <summary>v11-generation keys a later build no longer acts on, by the first checked build that retired them (it still reads them and logs <c>retired=1</c>).</summary>
+    private static readonly Dictionary<string, string> RetiredIn = new(StringComparer.OrdinalIgnoreCase)
+    {
+        ["NRPresentFgPath"] = "v12.0.0",
+    };
+
+    /// <summary>The first build whose default ForeignNr=auto keeps running next to another NR producer such as ShortFuse's add-on.</summary>
+    private const string FirstAutoForeignNrBuild = "v12.0.0";
+
     public static bool IsLecram(IniOverride o) => o.Section.Trim().Equals(Section, StringComparison.OrdinalIgnoreCase);
 
     public static bool IsForeignNr(IniOverride o) => IsLecram(o) && o.Key.Trim().Equals(ForeignNrKey, StringComparison.OrdinalIgnoreCase);
 
     /// <summary>
-    /// False for a key the build doesn't read: the other generation's keys, and v11 keys newer than <paramref name="build"/>
-    /// (its detected label). Everything is available while nothing is imported; a build without a known label gets every v11 key.
+    /// False for a key the build doesn't read: the other generation's keys, v11 keys newer than <paramref name="build"/>
+    /// (its detected label) and keys it retired. Everything is available while nothing is imported; a build without a known label
+    /// gets every v11 key.
     /// </summary>
     public static bool IsAvailable(string key, LecramGeneration? generation, string? build = null) => generation switch
     {
         LecramGeneration.V10 => !V11Only.Contains(key),
-        LecramGeneration.V11 => !V10Only.Contains(key) && !OlderThanFirstBuild(key.Trim(), build),
+        LecramGeneration.V11 => !V10Only.Contains(key) && !OlderThanFirstBuild(key.Trim(), build) && !Retired(key.Trim(), build),
         _ => true,
     };
 
+    /// <summary>True when <paramref name="build"/>'s default ForeignNr already runs beside ShortFuse's add-on, so the app needn't write observe.</summary>
+    public static bool AutoRunsBesideForeignNr(LecramGeneration? generation, string? build) =>
+        generation == LecramGeneration.V11 && AtLeast(build, FirstAutoForeignNrBuild);
+
     private static bool OlderThanFirstBuild(string key, string? build) =>
-        !string.IsNullOrWhiteSpace(build) && FirstV11Build.TryGetValue(key, out var first) &&
-        BuildOrder.Key(build).CompareTo(BuildOrder.Key(first)) < 0;
+        !string.IsNullOrWhiteSpace(build) && FirstV11Build.TryGetValue(key, out var first) && !AtLeast(build, first);
+
+    private static bool Retired(string key, string? build) => RetiredIn.TryGetValue(key, out var retired) && AtLeast(build, retired);
+
+    private static bool AtLeast(string? build, string first) =>
+        !string.IsNullOrWhiteSpace(build) && BuildOrder.Key(build).CompareTo(BuildOrder.Key(first)) >= 0;
 
     /// <summary>The 31 model-tuning axes that v11's one-time migration resets to default.</summary>
     public static readonly string[] ModelAxisKeys =

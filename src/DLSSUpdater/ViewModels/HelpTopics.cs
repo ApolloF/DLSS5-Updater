@@ -54,7 +54,10 @@ public static class HelpTopics
         new("opti-build", "General", "OptiScaler build", "Which OptiScaler fork gets installed: F5 (default) or OptiScaler-NR.",
             "Which fork of OptiScaler is installed. OptiScaler F5 (janblade) is the default for new installs; OptiScaler-NR (ShyVortex) is the fork this app was first built around. " +
             "F5 is experimental and releases often; it needs its own open-source NGX forwarder (nvngx.dll_dlssnr.dll), which is installed next to OptiScaler and removed again when you switch back. " +
-            "A few DLSSNR options it does not have are hidden. Games keep the build they have until you update them."),
+            "A few DLSSNR options it does not have are hidden, and so are options only some F5 versions have. Games keep the build they have until you update them. " +
+            "From 0.1.33 the F5 zip ships NVIDIA's DLSS frame generation and Streamline files in OptiScaler\\streamline; they are installed with it, only used when DLSS-G is OptiScaler's frame generation output, and never counted as the game's own DLSS or Streamline files. " +
+            "RTX 30: F5's troubleshooting guide reports games hanging the GPU (\"device hung\") seconds after start when the game's own DLSS frame generation is on and an nvngx_dlssg.dll is in the OptiScaler folder. " +
+            "Its fix: remove that file from the OptiScaler folder or turn DLSS Frame Generation off in the game, and use OptiScaler's frame generation with FSR FG or XeFG output instead."),
         new("prereleases", "General", "Include prereleases", "Include prerelease builds in update checks; the OptiScaler-NR fork only publishes prereleases.",
             "The OptiScaler-NR fork only publishes prereleases, so turning this off usually means no OptiScaler updates. Applies to every source."),
         new("streamline", "General", "Replace Streamline files", "Replaces the game's sl.*.dll files with one signed Streamline release; needed for Dynamic MFG.",
@@ -119,9 +122,9 @@ public static class HelpTopics
         new("lecram", "General", "Lecram DLSS5 add-on", "Lecram's ReShade add-on that runs DLSS neural rendering; builds are kept side by side.",
             LecramSourceIntro(BuildFlags.LecramChannel) +
             "There are two generations: v10 and older (renodx-dlss5.addon64, recognised by its version resource) and v11 and newer (dlss5-nr.addon64, recognised by strings in the file because it has no version resource). " +
-            "Every import is kept as its own build, named by the highest vX.Y.Z string in the file or by you; a game only ever gets one file, because v11 goes inert when a renodx-dlss5.addon64 file sits next to it (from v11 beta.22 not when ReShade has that add-on disabled). Settings picks the default build and each game can pick its own, whose generation decides the options shown. " +
+            "Every import is kept as its own build, named by the catalog's version, else the highest vX.Y.Z string in the file (never the DLSS SDK's v310.x; a build with neither goes by its file version), or by you; a game only ever gets one file, because v11 goes inert when a renodx-dlss5.addon64 file sits next to it (from v11 beta.22 not when ReShade has that add-on disabled). Settings picks the default build and each game can pick its own, whose generation decides the options shown. " +
             "It needs ReShade + add-ons mode, ReShade 6+ with add-on support, a game with native DLSS and the NR runtime nvngx_dlssnr.dll, and it replaces OptiScaler-NR and Deep Fried Chicken. " +
-            "It can run next to ShortFuse's RenoDX add-on once you confirm the warning (NR then runs twice): the app then sets ForeignNr=observe. The 0928 pair (ShortFuse 0.2026.0928 and Lecram v8.5.0-rc10) was tested working. Each exact pair of builds has a status (Works, Crashed or not tested together yet); only Crashed shows a warning. Mark the current build pair on the Install tab. " +
+            "It can run next to ShortFuse's RenoDX add-on once you confirm the warning (NR then runs twice): for v11 builds the app then sets ForeignNr=observe; v12's default auto already runs beside it. The 0928 pair (ShortFuse 0.2026.0928 and Lecram v8.5.0-rc10) was tested working. Each exact pair of builds has a status (Works, Crashed or not tested together yet); only Crashed shows a warning. Mark the current build pair on the Install tab. " +
             "A copy of either Lecram file already in the game is moved to the backup folder and restored by Uninstall. Options that exist in only one generation are hidden for the other, following the build the game uses. " +
             "From v11 Patch 4 (beta.18) the author also ships its own installer (DLSS5 NR Setup). It finds the add-on in every game on every drive and its Update all replaces it there, games this app manages included, so manage a game with one of the two. " +
             "It keeps a shared nvngx_dlssnr.dll in %LOCALAPPDATA%\\DLSS5-NR\\runtime, which v11 also finds by itself."),
@@ -211,17 +214,19 @@ public static class HelpTopics
             "NRPresentGuides: which frames get the model at Present (and Auto). v11: 1 only the game's DLSS frames, 2 Always on (also menus, loading and pause screens, with flat depth and no motion where the game gives none). " +
             "0 is the stock value and flipped meaning: Always on in beta.18+, DLSS frames in beta.6, so the app does not offer it for v11. " +
             "v10.7: 0 Optional (default: the game's guides on DLSS frames, neutral guides on the frames drawn without DLSS), 1 Required (undocumented beyond its name), 2 Never (neutral guides on every frame)."),
-        new("lc-fg-path", "Lecram DLSS5", "Present with frame generation", "Test option for NR blinking at Present with frame generation (v11 beta.48 and newer).",
+        new("lc-fg-path", "Lecram DLSS5", "Present with frame generation", "Test option for NR blinking at Present with frame generation (v11 beta.48 to v11.9; retired in v12).",
             "NRPresentFgPath, v11 beta.48 (Patch 11) and newer, a test option the author added for players who see NR blink (diagnostic ROUTE-02, a real frame without NR) at Present with frame generation. " +
             "1 runs NR once per real frame at frame generation's own call and never again on the final frame; 0 (default) keeps the usual path. Only 1 switches: the add-on reads other values as the usual path. " +
-            "It only matters when NR runs at Present (or Auto) and frame generation is on. The add-on reads the key when it loads, so restart the game after changing it. Older builds ignore it, so the app hides it and does not write it there."),
+            "It only matters when NR runs at Present (or Auto) and frame generation is on. The add-on reads the key when it loads, so restart the game after changing it. Older builds ignore it, so the app hides it and does not write it there. " +
+            "v12.0.0 retired it: it still reads the key but logs it as retired=1 and no longer acts on it, so the app hides it for v12 too and removes the value it wrote before."),
         new("lc-feed", "Lecram DLSS5", "HDR brightness source", "Where HDR brightness comes from: Auto, NR's own meter or the game's exposure.",
             "NRFeedMode: 0 Auto (default), 1 NR's own frame meter, 2 the game's exposure. v10.7 labels them Auto, v1 frame meter and v2 game exposure. " +
             "v11 beta.18+ reads it again: at After upscaling in a Direct3D 12 HDR game it takes the brightness from the game's exposure texture when the game hands one to DLSS (Vulkan keeps the meter); the author offers 1 and 2 to compare. " +
             "v11 beta.6 ignores the key (logged as retired)."),
         new("lc-foreign", "Lecram DLSS5", "With another NR add-on", "What the add-on does when another NR add-on is running in the same game.",
-            "ForeignNr: yield (default) makes the add-on stand down when another NR producer (NGX feature 18) evaluates in the game; observe keeps it running. " +
-            "Running together with ShortFuse's add-on needs observe, so the app writes it automatically when both are installed, unless you set this option yourself."),
+            "ForeignNr: yield (v11 default) makes the add-on stand down when another NR producer (NGX feature 18) evaluates in the game; observe keeps it running. " +
+            "With v11 builds, running together with ShortFuse's add-on needs observe, so the app writes it automatically when both are installed, unless you set this option yourself. " +
+            "v12 adds auto, its new default, which already runs beside ShortFuse's add-on, so the app writes nothing for v12 builds (and removes the observe it wrote for an earlier v11 build). The app offers yield and observe for every build."),
         new("lc-hooks", "Lecram DLSS5", "Hooks", "Which hooks the add-on installs: none, NGX and Streamline, or NGX only.",
             "EnableHooks: 0 all hooks off, 1 NGX and Streamline, 2 NGX only. v10 defaults to 2; v11 has no value by default and picks automatically, escalating when needed. " +
             "With a Streamline game and DLSS on, 1 is the setting to try; if the game crashes at boot, use 2."),
@@ -332,11 +337,25 @@ public static class HelpTopics
 
         // ---------- HDR output ----------
         new("hdr-force", "HDR output", "Force HDR colour space", "Makes the game's swapchain HDR even if the game only outputs SDR.",
-            "OptiScaler makes the game's swapchain HDR even if the game only outputs SDR. Useful with RenoDX-style HDR mods; otherwise leave off."),
-        new("hdr-10", "HDR output", "Use HDR10", "When forcing HDR, uses 10-bit HDR10 instead of 16-bit scRGB.",
-            "When forcing HDR, use the 10-bit HDR10 format instead of 16-bit float scRGB. Less bandwidth; scRGB keeps more precision."),
+            "OptiScaler makes the game's swapchain HDR even if the game only outputs SDR. Useful with RenoDX-style HDR mods; otherwise leave off. " +
+            "OptiScaler-NR and OptiScaler F5 before 0.1.33 only; F5 0.1.33 replaced it with HDR output and reads an old ForceHDR=true as HDR output on."),
+        new("hdr-10", "HDR output", "Use HDR10", "Uses 10-bit HDR10 instead of 16-bit scRGB for the HDR swapchain.",
+            "Use the 10-bit HDR10 (PQ) format instead of 16-bit float scRGB for the HDR swapchain: with Force HDR colour space, or with HDR output in OptiScaler F5 0.1.33 and newer. " +
+            "Less bandwidth; scRGB keeps more precision."),
         new("hdr-skip", "HDR output", "Skip colour space", "Doesn't set the HDR colour space, for games or mods that set it themselves.",
-            "Don't set the HDR colour space; for games or mods that set it themselves and get wrong colours when OptiScaler does too."),
+            "Don't set the HDR colour space; for games or mods that set it themselves and get wrong colours when OptiScaler does too. " +
+            "OptiScaler-NR and OptiScaler F5 before 0.1.33 only."),
+        new("hdr-output", "HDR output", "HDR output", "OptiScaler F5 0.1.33+: shows an SDR game correctly inside an HDR signal. Off by default.",
+            "OptiScaler F5 0.1.33 and newer. The swapchain is made HDR (scRGB, or HDR10 with Use HDR10) and one pass converts the game's SDR picture when it is shown; the game never sees the HDR format. " +
+            "It gives the right brightness and gamma, not brighter highlights the game never had. DirectX 11 and 12 only (no Vulkan); works with XeFG and FSR frame generation, not with DLSS-G. " +
+            "It stands aside when the game already outputs HDR, Windows HDR is off for the display, or the game uses exclusive full screen with an older swapchain type; OptiScaler's log and menu say why. " +
+            "Turning it on or off applies at the next game start (or a resolution or window change in most games)."),
+        new("hdr-peaknits", "HDR output", "Peak brightness", "OptiScaler F5 0.1.33+: the highest brightness HDR output writes, in nits.",
+            "The highest brightness HDR output writes, in nits. Default 0: the maximum the display reports, or 1000 when it reports none. OptiScaler F5 0.1.33 and newer."),
+        new("hdr-gamenits", "HDR output", "SDR white", "OptiScaler F5 0.1.33+: how bright the game's white is in HDR output, in nits.",
+            "Brightness of the game's SDR white in HDR output, in nits (80 to 1000). Default 203, the BT.2408 reference white. OptiScaler F5 0.1.33 and newer."),
+        new("hdr-decode", "HDR output", "SDR curve", "OptiScaler F5 0.1.33+: gamma 2.2 or the sRGB curve for turning SDR values into light.",
+            "How HDR output turns the game's SDR values into light: gamma 2.2 (default; deeper blacks, what most SDR games were made for) or the sRGB curve. OptiScaler F5 0.1.33 and newer."),
 
         // ---------- NVIDIA driver ----------
         new("nv-features", "NVIDIA", "Detected game features", "Which DLSS runtimes the game ships; settings it can't use are moved out of the way.",
@@ -690,6 +709,10 @@ public static class HelpTopics
         ["tm-hdrtransfer"] = "Off unless you use Run before upscaling + Apply to finished picture in an HDR game and brightness looks wrong.",
         ["hdr-force"] = "Off. Only with an HDR mod that expects OptiScaler to make the swapchain HDR.",
         ["hdr-10"] = "Off (scRGB, more precision). On if your capture tool or display chain works better with HDR10.",
+        ["hdr-output"] = "Off. On for an SDR game on an HDR display that looks washed out, with XeFG, FSR FG or no frame generation.",
+        ["hdr-peaknits"] = "Leave it at 0, the display's maximum. Set it only when the display reports a wrong maximum.",
+        ["hdr-gamenits"] = "203. Raise it if the game looks too dark next to the desktop, lower it if white looks glaring.",
+        ["hdr-decode"] = "Gamma 2.2. sRGB if dark scenes look crushed.",
         ["nv-sr-preset"] = "Use global for most games. Recommended lets DLSS pick per quality mode. Force K for Quality / DLAA, M for Performance, L for Ultra Performance; Off stops the driver override for that game.",
         ["nv-sr-mode"] = "Use the game's setting. DLAA if you have headroom; Performance with an L/M preset at 4K looks close to Quality with older presets.",
         ["nv-rr-preset"] = "Use global or F. Try D only if F shows smearing in a specific game.",

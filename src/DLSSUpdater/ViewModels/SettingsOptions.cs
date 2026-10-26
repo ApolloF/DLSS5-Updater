@@ -205,7 +205,8 @@ public static partial class SettingsOptions
     // generation carry a variant (IniOptionViewModel.In). Within v11 only values that mean the same in beta.6 and beta.18+ are offered
     // (NRPresentGuides 0 flipped meaning, so it is not), so no per-build choice variant is needed; keys an older v11 build lacks
     // (NRGpuCrashWitness before beta.22, NRPass2..4Preset before beta.29, NRPresentFgPath before beta.48) are hidden and not written
-    // for it. NRMaskBlendMode (raw NGX value, undocumented) is not offered.
+    // for it, and so are keys a later build retired (NRPresentFgPath from v12.0.0). NRMaskBlendMode (raw NGX value, undocumented) and
+    // v12's NROpticalFlow (unprobed; the app writes ConfigVersion=11) are not offered.
     // Not exposed: the other Present/HDR, normalisation, Look, model-lab, layer, per-pass look and screenshot keys, which are tuned
     // in the add-on's own overlay.
     public static IniOptionViewModel[] Lecram(ObservableCollection<IniOverride> rs) =>
@@ -303,7 +304,7 @@ public static partial class SettingsOptions
                 C("Add-on default", null, "Leave the add-on's own choice (beta.18+: Always on; beta.6: DLSS frames)."),
                 C("DLSS frames only", "1", "Only the game's DLSS frames."),
                 C("Always on", "2", "Also menus, loading and pause screens, with neutral guides where the game gives none.")),
-        new IniOptionViewModel("Present with frame generation", "Test option (v11 beta.48 and newer): how NR runs at Present under frame generation.", LecramIni.Section, "NRPresentFgPath", rs,
+        new IniOptionViewModel("Present with frame generation", "Test option (v11 beta.48 to v11.9; retired in v12): how NR runs at Present under frame generation.", LecramIni.Section, "NRPresentFgPath", rs,
             C("Add-on default", null, "Leave the add-on's own choice (0, the usual path)."),
             C("Usual path", "0", "The add-on's default."),
             C("Real frames only (test)", "1", "NR runs once per real frame at frame generation's call and never again on the final frame. Try it if NR blinks at Present with frame generation (ROUTE-02).")).About("lc-fg-path"),
@@ -313,7 +314,7 @@ public static partial class SettingsOptions
             C("Game exposure", "2", "Forces the game's own exposure (v10.7: v2 game exposure). v11 beta.18+ uses it on Direct3D 12 at After upscaling only."))
             .About("lc-feed"),
         new IniOptionViewModel("With another NR add-on", "What Lecram does when another neural-rendering add-on is active.", LecramIni.Section, LecramIni.ForeignNrKey, rs,
-            C("Add-on default", null, "Leave the add-on's own choice (yield). Set to observe automatically while ShortFuse's add-on is installed too."),
+            C("Add-on default", null, "Leave the add-on's own choice (v11: yield, set to observe automatically while ShortFuse's add-on is installed too; v12: auto, which already runs beside it)."),
             C("Yield", "yield", "Stand down when another NR producer evaluates in the game."),
             C("Observe", "observe", "Keep running next to the other add-on.")).About("lc-foreign"),
         new IniOptionViewModel("Hooks", "Which DLSS hooks the add-on installs. Advanced.", LecramIni.Section, "EnableHooks", rs,
@@ -533,9 +534,25 @@ public static partial class SettingsOptions
 
     public static IniOptionViewModel[] HdrOutput(ObservableCollection<IniOverride> o) =>
     [
+        // OptiScaler-NR and F5 before 0.1.33; F5 0.1.33 replaced these two with HDR output for SDR games (OptiSources.F5).
         IniOptionViewModel.Toggle("Force HDR colour space", "Make the swapchain HDR even if the game doesn't ask.", "HDR", "ForceHDR", "true", o).About("hdr-force"),
-        IniOptionViewModel.Toggle("Use HDR10", "10-bit HDR10 instead of 16-bit scRGB when forcing HDR.", "HDR", "UseHDR10", "true", o).About("hdr-10"),
         IniOptionViewModel.Toggle("Skip colour space", "Don't set the HDR colour space (for games that set it themselves).", "HDR", "SkipColorSpace", "true", o).About("hdr-skip"),
+        IniOptionViewModel.Toggle("HDR output", "Show an SDR game in HDR: DirectX 11/12, not with DLSS-G. Needs Windows HDR on.", "HDR", "Enabled", "true", o).About("hdr-output"),
+        IniOptionViewModel.Toggle("Use HDR10", "10-bit HDR10 instead of 16-bit scRGB for the HDR swapchain.", "HDR", "UseHDR10", "true", o).About("hdr-10"),
+        new IniOptionViewModel("Peak brightness", "Highest brightness HDR output writes.", "HDR", "PeakNits", o,
+            C("Default · display's maximum", null, "0: the maximum the display reports, 1000 nits when it reports none."),
+            C("400 nits", "400", "Caps highlights at 400 nits."), C("600 nits", "600", "Caps highlights at 600 nits."),
+            C("800 nits", "800", "Caps highlights at 800 nits."), C("1000 nits", "1000", "Caps highlights at 1000 nits."),
+            C("1500 nits", "1500", "Caps highlights at 1500 nits.")).About("hdr-peaknits"),
+        new IniOptionViewModel("SDR white", "How bright the game's white is in HDR output.", "HDR", "GameNits", o,
+            C("Default · 203 nits", null, "203 nits, the BT.2408 reference white."),
+            C("100 nits", "100", "Dim; close to an SDR display in a dark room."), C("150 nits", "150", "A little dimmer than the reference."),
+            C("203 nits", "203", "The BT.2408 reference white."), C("250 nits", "250", "A little brighter than the reference."),
+            C("300 nits", "300", "Bright."), C("400 nits", "400", "Very bright; for a bright room.")).About("hdr-gamenits"),
+        new IniOptionViewModel("SDR curve", "How the game's SDR values are turned into light.", "HDR", "Decode", o,
+            C("Default · gamma 2.2", null, "Gamma 2.2."),
+            C("Gamma 2.2", "0", "Deeper blacks; what most SDR games were made for."),
+            C("sRGB", "1", "The sRGB curve.")).About("hdr-decode"),
     ];
 
     /// <summary>What to do when a game already has its own config values.</summary>

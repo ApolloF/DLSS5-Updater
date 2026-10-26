@@ -89,7 +89,7 @@ Setting struct (1016, for the next diff): global flag at `+0x338`, type byte at 
 
 - SF has no awareness of other NR add-ons (no `renodx-dlss5` strings). It pins itself until process exit and hooks
   NGX `Parameter::Set` and Streamline with MinHook.
-- Running it next to Lecram depends on Lecram's `ForeignNr=observe`. The user ran SF 0928 + Lecram 0928 together;
+- Running it next to Lecram v10/v11 depends on Lecram's `ForeignNr=observe`; Lecram v12's default `ForeignNr=auto` runs beside it. The user ran SF 0928 + Lecram 0928 together;
   a Werewulf crash with SF 1016 was not attributed to the add-ons. Record test results per exact pair rather than inferring
   compatibility from the SF version.
 
@@ -114,7 +114,8 @@ ReShade-only mode with ReShade 6+, a game with native DLSS and the NR runtime `n
 - **Options.** Each option's first choice, "Add-on default", writes nothing, so the add-on's own default (table above) applies.
   A switch (Off/On) in the app writes nothing for Off, which only fits keys whose default is off. `AutoMask` defaults to 1, so
   Character mask is a list instead: Add-on default (on), On writes `1`, Off writes `0`.
-- **With Lecram.** The tested pair is `renodx-dlss` 0.2026.928.x with Lecram 0928 (see [lecram-dlss5.md](lecram-dlss5.md)). The
+- **With Lecram.** The app writes `ForeignNr=observe` for Lecram v10/v11 builds only; v12 runs beside SF by default. The tested
+  pair is `renodx-dlss` 0.2026.928.x with Lecram 0928 (see [lecram-dlss5.md](lecram-dlss5.md)). The
   Install tab shows the exact selected pair's recorded status (Works, Crashed or Untested), and offers buttons to mark it working
   or crashed. Untested is neutral information; only Crashed warns, with its recorded date. Neither blocks installation.
   Results persist by both build ids by build ids.

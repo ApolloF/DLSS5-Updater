@@ -76,6 +76,15 @@ public sealed class BuildLibraryTests : IDisposable
     }
 
     [Fact]
+    public void Lecram_v12_sorts_above_v11_9_and_the_betas_and_release_tags_compare_by_value()
+    {
+        string[] labels = ["v11.0.0-beta.48", "v12.0.0", "v7.0.0-rc8", "v11.9.0", "v8.5.0-rc10", "v11.0.0-beta.45", "0.2026.828.517"];
+        var sorted = BuildOrder.NewestFirst(labels, l => l, _ => null, l => l);
+        // A v10 build without a label of its own goes by its file version (0.2026...), below every labelled build.
+        Assert.Equal(["v12.0.0", "v11.9.0", "v11.0.0-beta.48", "v11.0.0-beta.45", "v8.5.0-rc10", "v7.0.0-rc8", "0.2026.828.517"], sorted);
+    }
+
+    [Fact]
     public void Prerelease_numbers_compare_by_value_inside_dash_and_dot_parts()
     {
         string[] labels = ["v8.5.0-rc9-model-sdr1", "v0.7.0-pre9", "v11.0.0-beta.5", "v8.5.0-rc10-model-sdr1", "v11.0.0-beta.48", "v0.7.0-pre10", "v11.0.0-beta.45"];
@@ -225,6 +234,40 @@ public sealed class BuildLibraryTests : IDisposable
         Assert.Null(vm.BuildOptions(false, false).OptiTag);
         _settings.OptiTag = "v0.9.51";
         Assert.Equal("v0.9.51", vm.BuildOptions(false, false).OptiTag);
+    }
+
+    [Fact]
+    public void Per_game_opti_rows_follow_the_games_pick_not_the_default_build()
+    {
+        _settings.OptiSource = OptiSources.F5.Repo;
+        _store.Opti = Release(Component.OptiScaler, "v0.1.34-f5", "F5-34");
+        Release(Component.OptiScaler, "v0.1.32-f5", "F5-32");
+        var root = Path.Combine(_tmp, "Game");
+        Write(Path.Combine(root, "Game.exe"), "EXE");
+        var vm = new GameViewModel(GameScanner.Inspect(new GameEntry("Game", root, "Manual")), new Services { Settings = _settings, Store = _store, Installer = new Installer(_store) });
+        GameConfig.SetLayer(_settings.For(vm.Id), false, "HDR", "ForceHDR", "true", false);
+        vm.DetailTab = "Config";
+        GameOptionViewModel Row(string label) => vm.HdrRows.Single(r => r.Label == label);
+        const string force = "Force HDR colour space", output = "HDR output";
+
+        // Default Newest (0.1.34), game pinned to 0.1.32: the 0.1.32 keys show, and its ForceHDR override can be seen.
+        vm.OptiChoice = vm.OptiChoices.Single(c => c.Tag == "v0.1.32-f5");
+        Assert.True(Row(force).IsAvailable);
+        Assert.True(Row(force).IsOverridden);
+        Assert.False(Row(output).IsAvailable);
+
+        vm.OptiChoice = vm.OptiChoices[0];
+        Assert.False(Row(force).IsAvailable);
+        Assert.True(Row(output).IsAvailable);
+
+        // Default pinned to 0.1.32, game pinned to 0.1.34.
+        _settings.OptiTag = "v0.1.32-f5";
+        vm.RebuildAddonChoices();
+        Assert.True(Row(force).IsAvailable);
+        Assert.False(Row(output).IsAvailable);
+        vm.OptiChoice = vm.OptiChoices.Single(c => c.Tag == "v0.1.34-f5");
+        Assert.False(Row(force).IsAvailable);
+        Assert.True(Row(output).IsAvailable);
     }
 
     [Fact]
