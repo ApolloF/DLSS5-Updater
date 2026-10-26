@@ -137,19 +137,19 @@ public static class MethodAdvisor
     /// <summary>What a method does for the player, in one line (the row's headline; <see cref="MethodOption.Reason"/> has the detail).</summary>
     public static string SummaryOf(Method m) => m switch
     {
-        Method.DlssUpdate => "Newer DLSS files for a sharper, steadier image. The safest first step.",
-        Method.NeuralAddon => "Adds neural rendering on top of the game's own DLSS, through a ReShade add-on.",
-        Method.OptiScalerNr => "OptiScaler with neural rendering: swaps the game's upscaler and adds the neural look.",
-        Method.OptiScaler => "Swaps the game's upscaler for FSR or XeSS and adds frame generation.",
-        Method.Feeder => "Neural rendering for a game with no DLSS. Better image, no FPS gain.",
-        Method.MfgUnlock => "Multi frame generation on RTX 40 in a game that has DLSS frame generation.",
-        Method.SmoothMotion => "NVIDIA's driver frame generation, switched on in the game's NVIDIA tab. Adds no files.",
+        Method.DlssUpdate => "Replaces the game's DLSS files with the newest release.",
+        Method.NeuralAddon => "Installs ReShade, nvngx_dlssnr.dll and an NR add-on that works on top of the game's own DLSS.",
+        Method.OptiScalerNr => "Installs OptiScaler and nvngx_dlssnr.dll; OptiScaler replaces the game's upscaler and adds neural rendering.",
+        Method.OptiScaler => "Installs OptiScaler, which replaces the game's upscaler and adds frame generation.",
+        Method.Feeder => "Runs neural rendering through ReShade in a game without DLSS, at native resolution (no FPS gain).",
+        Method.MfgUnlock => "Adds a mod that turns on DLSS multi frame generation on RTX 40 in a game with DLSS frame generation.",
+        Method.SmoothMotion => "Turns on NVIDIA's driver frame generation from the game's NVIDIA profile tab; adds no files.",
         Method.Dx11Bridge => "Neural rendering for a DX11 game that has DLSS. Not in the app yet.",
         Method.UpscalerMod => "A community mod that gives this game an upscaler. Not in the app yet.",
-        Method.Luma => "A framework mod that reworks the game's rendering, with better HDR and optional DLSS.",
+        Method.Luma => "Installs this game's Luma mod, which changes its rendering and adds HDR and optional DLSS.",
         Method.AioAddon => "One add-on for neural rendering, upscaling and frame generation. Not in the app yet.",
         Method.Dxvk => "Runs an older Direct3D game on Vulkan, with optional HDR output.",
-        _ => "Real HDR output for this game.",
+        _ => "Installs this game's RenoDX mod, which adds HDR output.",
     };
 
     /// <summary>
@@ -385,7 +385,7 @@ public static class MethodAdvisor
         var dx11 = c.Api == GraphicsApis.Dx11;
         rows.Add(vulkan ? 3 : dx11 ? 2 : 1);
 
-        list.Add(DlssUpdate(c, "Newest DLSS files: the cheapest and safest first step." + plugin, viaPlugin));
+        list.Add(DlssUpdate(c, "Restore DLSS puts the game's original files back." + plugin, viaPlugin));
         if (vulkan)
         {
             list.Add(Opt(Method.NeuralAddon, Availability.NotPossible, "ReShade reaches Vulkan through a registered layer, not a proxy dll, so the NR add-ons can't load in the usual way."));
