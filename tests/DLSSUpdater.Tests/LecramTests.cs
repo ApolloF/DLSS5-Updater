@@ -257,8 +257,11 @@ public sealed class LecramTests : IDisposable
         if (File.Exists(v11))
         {
             var build = _store.ImportLecram(v11);
+            // dlss5-nr.addon64 is the v11-generation file of every build from v11 on (v11.x and v12 alike), whichever is lying in Downloads.
             Assert.Equal(LecramGeneration.V11, build.Generation);
-            Assert.StartsWith("v11.", build.DetectedLabel); // whichever v11 build is lying in Downloads
+            Assert.Matches(@"^v(1[1-9]|[2-9]\d)\.\d+\.\d+", build.DetectedLabel);
+            // v11.9.0 and v12.0.0 are the first with a version resource; its version is the label's.
+            if (build.ParsedVersion is { } version) Assert.StartsWith($"v{version.Major}.{version.Minor}.{version.Build}", build.DetectedLabel);
         }
         if (File.Exists(v10))
         {
@@ -349,6 +352,8 @@ public sealed class LecramTests : IDisposable
 
     [Theory]
     [InlineData("v11.0.0-beta.48", true)]
+    [InlineData("v11.9.0", true)]
+    [InlineData("v12.0.0", false)]
     [InlineData("v11.0.0-beta.45", false)]
     [InlineData("v11.0.0-beta.29", false)]
     public async Task PresentFgPath_IsWrittenOnlyForBuildsThatReadIt(string label, bool written)
@@ -376,6 +381,20 @@ public sealed class LecramTests : IDisposable
         await installer.InstallAsync(_game, _root, Lec(lecramId: beta48.Id, overrides: overrides), null, default);
         Assert.Equal("1", Value("NRPresentFgPath"));
         await installer.InstallAsync(_game, _root, Lec(lecramId: beta45.Id, overrides: overrides), null, default);
+        Assert.Null(Value("NRPresentFgPath"));
+    }
+
+    [Fact]
+    public async Task SwitchingToV12_DropsTheRetiredKeyTheAppWroteForV11()
+    {
+        var v119 = _store.ImportLecram(FakeV11("v11.9.0"));
+        var v12 = _store.ImportLecram(FakeV11("v12.0.0"));
+        var installer = new Installer(_store);
+        IniOverride[] overrides = [Key("NRPresentFgPath", "1")];
+
+        await installer.InstallAsync(_game, _root, Lec(lecramId: v119.Id, overrides: overrides), null, default);
+        Assert.Equal("1", Value("NRPresentFgPath"));
+        await installer.InstallAsync(_game, _root, Lec(lecramId: v12.Id, overrides: overrides), null, default);
         Assert.Null(Value("NRPresentFgPath"));
     }
 
@@ -456,6 +475,40 @@ public sealed class LecramTests : IDisposable
 
         await installer.InstallAsync(_game, _root, Lec(renoDx: true, overrides: [Key("ForeignNr", "yield")]), null, default);
         Assert.Equal("yield", Ini().Get(LecramIni.Section, "ForeignNr"));
+    }
+
+    [Theory]
+    [InlineData("v11.9.0", "observe")]
+    [InlineData("v11.0.0-beta.48", "observe")]
+    [InlineData("v12.0.0", null)]
+    [InlineData("v12.1.0-beta.1", null)]
+    public async Task NextToShortFuse_OnlyV11BuildsGetForeignNrObserve_V12sAutoRunsBesideIt(string label, string? expected)
+    {
+        ImportSf(new Version(0, 2026, 928, 2324));
+        var build = _store.ImportLecram(FakeV11(label));
+        var installer = new Installer(_store);
+
+        await installer.InstallAsync(_game, _root, Lec(renoDx: true, lecramId: build.Id), null, default);
+        Assert.Equal(expected, Value("ForeignNr"));
+
+        // The user's own value always wins, v12 included.
+        await installer.InstallAsync(_game, _root, Lec(renoDx: true, lecramId: build.Id, overrides: [Key("ForeignNr", "yield")]), null, default);
+        Assert.Equal("yield", Value("ForeignNr"));
+    }
+
+    [Fact]
+    public async Task SwitchingToV12_NextToShortFuse_DropsTheObserveTheAppWroteForV11()
+    {
+        ImportSf(new Version(0, 2026, 928, 2324));
+        var v119 = _store.ImportLecram(FakeV11("v11.9.0"));
+        var v12 = _store.ImportLecram(FakeV11("v12.0.0"));
+        var installer = new Installer(_store);
+
+        await installer.InstallAsync(_game, _root, Lec(renoDx: true, lecramId: v119.Id), null, default);
+        Assert.Equal("observe", Value("ForeignNr"));
+        await installer.InstallAsync(_game, _root, Lec(renoDx: true, lecramId: v12.Id), null, default);
+        Assert.Null(Value("ForeignNr"));
+        Assert.DoesNotContain(InstallManifest.Read(_root)!.ReShadeIni.Keys, k => k.EndsWith("/ForeignNr", StringComparison.OrdinalIgnoreCase));
     }
 
     [Fact]
@@ -758,6 +811,8 @@ public sealed class LecramTests : IDisposable
         Assert.Equal([1.0, 2], Numbers(Option(options, "NRFeedMode")));
         Assert.Equal([0.0], Numbers(Option(options, "NeuralUplift")));
         Assert.Equal(["yield", "observe"], Option(options, "ForeignNr").Choices.Where(c => c.Value is not null).Select(c => c.Value));
+        // v12's NROpticalFlow is unprobed and its schema 12 default would need ConfigVersion 12; not offered.
+        Assert.DoesNotContain(options, o => o.Key == "NROpticalFlow");
         Assert.Equal(["auto", "native", "foreign", "off"], Option(options, "DX11Source").Choices.Where(c => c.Value is not null).Select(c => c.Value));
     }
 
@@ -797,6 +852,11 @@ public sealed class LecramTests : IDisposable
     [InlineData("NRPresentFgPath", "v11.0.0-beta.49", true)]
     [InlineData("NRPresentFgPath", "v11.0.1", true)]
     [InlineData("NRPresentFgPath", "v11", true)]
+    [InlineData("NRPresentFgPath", "v11.9.0", true)]
+    [InlineData("NRPresentFgPath", "v12.0.0", false)]
+    [InlineData("NRPresentFgPath", "v12.0.0-beta.1", true)]
+    [InlineData("NRPresentFgPath", "v12.1.0", false)]
+    [InlineData("NRPass2Preset", "v12.0.0", true)]
     [InlineData("NRPresentFgPath", null, true)]
     [InlineData("NRPresentFgPath", "v11.0.0-beta.45", false)]
     [InlineData("NRPresentFgPath", "v11.0.0-beta.40", false)]
@@ -830,6 +890,10 @@ public sealed class LecramTests : IDisposable
         Assert.False(fgPath.IsAvailable);
         Assert.True(passPreset.IsAvailable);
         Assert.False(fgPath.ViewFor(LecramGeneration.V11, "v11.0.0-beta.29").IsAvailable);
+        Assert.True(fgPath.ViewFor(LecramGeneration.V11, "v11.9.0").IsAvailable);
+        // v12.0.0 retired it (still read, logged retired=1).
+        Assert.False(fgPath.ViewFor(LecramGeneration.V11, "v12.0.0").IsAvailable);
+        Assert.True(passPreset.ViewFor(LecramGeneration.V11, "v12.0.0").IsAvailable);
         Assert.False(passPreset.ViewFor(LecramGeneration.V11, "v11.0.0-beta.22").IsAvailable);
 
         fgPath.ApplyGeneration(LecramGeneration.V11);

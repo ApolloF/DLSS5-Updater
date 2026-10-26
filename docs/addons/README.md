@@ -24,8 +24,9 @@ comments, file names, version resources) and what the app installs.
 
 ## How to analyse a new build
 
-1. Version and identity: `(Get-Item x.addon64).VersionInfo` (OriginalFilename, FileVersion). Lecram v11 has no
-   version resource; identify it by its strings instead.
+1. Version and identity: `(Get-Item x.addon64).VersionInfo` (OriginalFilename, FileVersion). Lecram v11 up to beta.48 has no
+   version resource; identify it by its strings instead. v11.9.0 and v12.0.0 are the first with one (OriginalFilename
+   `dlss5-nr.addon64`, FileVersion 11.9.0.3000 / 12.0.0.3000).
 2. Strings with offsets: `strings -t x -n 4 x.addon64 > a.txt` and `strings -t x -e l x.addon64 > w.txt` (UTF-16).
    Grep for the ini section, `Key=` in help/log text, tooltips and label lists.
 3. RenoDX-framework add-ons (SF): each `Setting` is a constructor in a static initializer. Key, label, label list,
