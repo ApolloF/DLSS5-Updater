@@ -36,7 +36,8 @@ public sealed partial class ComponentStore
 {
     /// <summary>
     /// The catalog builds of <paramref name="kind"/> the library doesn't have, newest first, with the label the picker shows.
-    /// Entries without a hash, a plain file name or a download URL are skipped. Lecram has none while <paramref name="lecramOff"/> is set
+    /// Entries without a hash, a plain file name or a download URL are skipped. ShortFuse's add-on offers at most
+    /// <see cref="MaxRenoDxOffers"/>, and none with a version the library already has. Lecram has none while <paramref name="lecramOff"/> is set
     /// (<see cref="BuildFlags.LecramCatalogOff"/>: the private channel, or public builds that import Lecram); the auto-check skips the mirror then too.
     /// </summary>
     public IReadOnlyList<CatalogOffer> OfferedBuilds(CatalogBuildKind kind, CatalogSections? sections, bool lecramOff)
@@ -50,16 +51,23 @@ public sealed partial class ComponentStore
             default:
                 var offers = new List<CatalogOffer>();
                 if (sections?.RenodxDlss is not { } section) return offers;
-                foreach (var b in section.Builds)
+                foreach (var b in section.Builds.OrderByDescending(b => BuildOrder.Key(RenoDxCatalogVersion(b))))
                 {
                     if (!b.File.IsInstallable) continue;
                     var sha = b.File.Sha256!.ToLowerInvariant();
-                    if (HasRenoDxCatalogBuild(sha) || offers.Any(o => o.Sha256 == sha)) continue;
-                    offers.Add(new CatalogOffer(kind, sha, RenoDxLabel(section, b), string.IsNullOrWhiteSpace(b.Version) ? b.Tag : b.Version));
+                    if (HasRenoDxCatalogBuild(b) || offers.Any(o => o.Sha256 == sha)) continue;
+                    offers.Add(new CatalogOffer(kind, sha, RenoDxLabel(section, b), RenoDxCatalogVersion(b)));
+                    if (offers.Count == MaxRenoDxOffers) break;
                 }
                 return offers;
         }
     }
+
+    /// <summary>
+    /// ShortFuse's builds come every few days and the catalog keeps a long tail of them, so the pickers offer only the newest few
+    /// the library lacks. The library's own builds are always listed.
+    /// </summary>
+    public const int MaxRenoDxOffers = 5;
 
     private static List<CatalogOffer> NeuralOffers(CatalogBuildKind kind, CatalogNeuralLine? line, IEnumerable<string> owned)
     {
@@ -79,8 +87,8 @@ public sealed partial class ComponentStore
     /// <summary>The release's version, plus the short hash when another release of the list carries the same version.</summary>
     private static string RenoDxLabel(CatalogRenodxDlss section, CatalogDlssBuild build)
     {
-        var label = string.IsNullOrWhiteSpace(build.Version) ? build.Tag : build.Version;
-        var shared = section.Builds.Count(b => string.Equals(string.IsNullOrWhiteSpace(b.Version) ? b.Tag : b.Version, label, StringComparison.OrdinalIgnoreCase)) > 1;
+        var label = RenoDxCatalogVersion(build);
+        var shared = section.Builds.Count(b => string.Equals(RenoDxCatalogVersion(b), label, StringComparison.OrdinalIgnoreCase)) > 1;
         return shared && build.File.Sha256 is { Length: >= 8 } sha ? $"{label} · {sha[..8]}" : label;
     }
 

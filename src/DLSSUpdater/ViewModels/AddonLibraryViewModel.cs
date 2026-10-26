@@ -174,7 +174,12 @@ public sealed partial class AddonLibraryViewModel : ObservableObject
                 };
             if (IsDfc) return DfcInfo(build, Store.DfcCompat(DfcKeys, build.Id), _buildCount);
             var path = ComponentStore.AddonPathOf(_kind, build);
-            var generation = build.Generation switch { LecramGeneration.V11 => "v11 and newer  ·  ", LecramGeneration.V10 => "v10 and older  ·  ", _ => "" };
+            var generation = build.Generation switch
+            {
+                LecramGeneration.V11 => "v11 and newer  ·  ",
+                LecramGeneration.V10 => "v10 and older  ·  ",
+                _ => _kind == AddonKind.RenoDx && build.FileVersion.Length > 0 ? $"File version {build.FileVersion}  ·  " : "",
+            };
             var size = File.Exists(path) ? $"{new FileInfo(path).Length / 1048576.0:0.0} MB  ·  " : "";
             var count = _buildCount > 1 ? $"  ·  {_buildCount} builds in the library" : "";
             return $"{generation}{size}SHA-256 {build.Id[..12]}…{count}";

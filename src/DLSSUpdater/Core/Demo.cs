@@ -100,7 +100,7 @@ public static class Demo
         Fakes.Clear();
         PlaceNr(NrCompatId, NrCompatVersion);
         PlaceNr(NrOriginalId, NrOriginalVersion);
-        PlaceAddon("renodx-dlss", "renodx-dlss", ComponentStore.RenoDxFile, "0.2026.928.0", "0.2026.928", null);
+        PlaceAddon("renodx-dlss", "renodx-dlss", ComponentStore.RenoDxFile, "0.2026.928.306", "26.0928.0205", null);
         PlaceAddon("lecram-dlss5", "lecram-dlss5-v11", ComponentStore.Lecram11File, "", "v11.0.1", LecramGeneration.V11);
         PlaceAddon("lecram-dlss5", "lecram-dlss5-beta48", ComponentStore.Lecram11File, "", "v11.0.0-beta.48", LecramGeneration.V11);
         PlaceAddon("lecram-dlss5", "lecram-dlss5-beta45", ComponentStore.Lecram11File, "", "v11.0.0-beta.45", LecramGeneration.V11);
@@ -159,7 +159,7 @@ public static class Demo
 
     private static string RenoDxId => Sha("renodx-dlss");
     private static string LecramId => Sha("lecram-dlss5-v11");
-    private static string RenoDxTag => $"0.2026.928-{RenoDxId[..12]}";
+    private static string RenoDxTag => $"26.0928.0205-{RenoDxId[..12]}";
     private static string LecramTag => $"v11.0.1-{LecramId[..12]}";
 
     /// <summary>The releases the demo pretends are the newest, with release notes, and which of them count as new.</summary>

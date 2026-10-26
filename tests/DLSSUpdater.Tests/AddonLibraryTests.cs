@@ -207,13 +207,13 @@ public sealed class AddonLibraryTests : IDisposable
     }
 
     [Fact]
-    public void Label_OfAnImportedBuild_ComesFromItsBinary_AndSfUsesItsFileVersion()
+    public void Label_OfAnImportedBuild_ComesFromItsBinary_AndSfWithoutABuildTimeUsesItsFileVersion()
     {
         var lecram = LecramV11("v8.5.0-rc10-model-sdr1");
         Assert.Equal("v8.5.0-rc10-model-sdr1", lecram.DetectedLabel);
         var sf = Sf(new Version(0, 2026, 928, 306));
         Assert.Equal("0.2026.928.306", sf.FileVersion);
-        Assert.Equal("0.2026.928.306", sf.DetectedLabel);
+        Assert.Equal("26.0928.0306", sf.DetectedLabel);
         Assert.Equal("v11", LecramV11("no version here", frameworkNoise: false).DetectedLabel);
     }
 
@@ -234,7 +234,7 @@ public sealed class AddonLibraryTests : IDisposable
         var json = JsonSerializer.Deserialize<JsonElement>(File.ReadAllText(Path.Combine(dir, "version.json")));
         Assert.Equal(sha, json.GetProperty("Id").GetString());
         Assert.Equal("0.2026.928.306", json.GetProperty("FileVersion").GetString());
-        Assert.Equal("0.2026.928.306", json.GetProperty("DetectedLabel").GetString());
+        Assert.Equal("26.0928.0306", json.GetProperty("DetectedLabel").GetString());
         Assert.True(json.TryGetProperty("Imported", out _));
 
         _store.RenameAddon(AddonKind.RenoDx, sha, "my label");
@@ -271,7 +271,7 @@ public sealed class AddonLibraryTests : IDisposable
         var build = LecramV11("v8.5.0-rc10-model-sdr1");
         Assert.Matches(@"^v8\.5\.0-rc10-model-sdr1 \(\d{4}-\d{2}-\d{2}\)$", build.Label);
         var sf = Sf(new Version(0, 2026, 928, 306));
-        Assert.Matches(@"^0\.2026\.928\.306 \(\d{4}-\d{2}-\d{2}\)$", sf.Label);
+        Assert.Equal("26.0928.0306", sf.Label);
         var v10 = LecramV10();
         Assert.Contains($" · {v10.FileVersion} (", v10.Label);
 
