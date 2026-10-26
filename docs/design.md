@@ -143,3 +143,6 @@ Measured against this guideline on main (after #63, #66 and #67). Each is fixed 
   fields keep being written for one major version so 2.2.x can still read the record.
 - **Compat checks differ** per component (`OptiCompat`, `UpliftConfig`, `DfcConfig`, `LecramIni`, ...). Target: one
   `ComponentCompat` shape (tested version, schema, missing keys, summary) that each config class fills.
+- **OptiScaler F5 vendor-neutral forwarder**: since 0.1.33 F5 releases carry `Optional-Vendor-Neutral-DLSS5-Forwarder.zip`, an
+  `nvngx.dll_dlssnr.dll` that runs the NR model itself so AMD and Intel GPUs can use DLSS-NR (DirectML, DirectX 12, 310.9
+  `nvngx_dlssnr.dll` only). The app installs only the main zip and its NVIDIA forwarder; it doesn't offer this one as an option.

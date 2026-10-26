@@ -75,6 +75,24 @@ public class ScanTests : IDisposable
     }
 
     [Fact]
+    public void Inspect_IgnoresOptiScalersBundledStreamline_ButNotAGamesOwnStreamlineFolder()
+    {
+        Touch(@"Game.exe", 100);
+        // F5 0.1.33+ ships NVIDIA's DLSS-G and Streamline for its own DLSS-G output in OptiScaler\streamline.
+        Touch(@"Bin\OptiScaler\streamline\nvngx_dlssg.dll");
+        Touch(@"Bin\OptiScaler\streamline\sl.interposer.dll");
+        Touch(@"Bin\OptiScaler\streamline\sl.dlss_g.dll");
+        var fg = Touch(@"Bin\nvngx_dlssg.dll");
+        var sl = Touch(@"Engine\streamline\sl.interposer.dll");
+
+        var g = new GameInfo { Root = _root, Name = "Game" };
+        GameInspector.Inspect(g);
+
+        Assert.Equal(fg, Assert.Single(g.Dlss).Path);
+        Assert.Equal(sl, Assert.Single(g.Streamline).Path);
+    }
+
+    [Fact]
     public void Inspect_UnityPlayerBeatsBiggerModTool()
     {
         var game = Touch(@"Beat Saber.exe", 10);

@@ -228,6 +228,40 @@ public sealed class BuildLibraryTests : IDisposable
     }
 
     [Fact]
+    public void Per_game_opti_rows_follow_the_games_pick_not_the_default_build()
+    {
+        _settings.OptiSource = OptiSources.F5.Repo;
+        _store.Opti = Release(Component.OptiScaler, "v0.1.34-f5", "F5-34");
+        Release(Component.OptiScaler, "v0.1.32-f5", "F5-32");
+        var root = Path.Combine(_tmp, "Game");
+        Write(Path.Combine(root, "Game.exe"), "EXE");
+        var vm = new GameViewModel(GameScanner.Inspect(new GameEntry("Game", root, "Manual")), new Services { Settings = _settings, Store = _store, Installer = new Installer(_store) });
+        GameConfig.SetLayer(_settings.For(vm.Id), false, "HDR", "ForceHDR", "true", false);
+        vm.DetailTab = "Config";
+        GameOptionViewModel Row(string label) => vm.HdrRows.Single(r => r.Label == label);
+        const string force = "Force HDR colour space", output = "HDR output";
+
+        // Default Newest (0.1.34), game pinned to 0.1.32: the 0.1.32 keys show, and its ForceHDR override can be seen.
+        vm.OptiChoice = vm.OptiChoices.Single(c => c.Tag == "v0.1.32-f5");
+        Assert.True(Row(force).IsAvailable);
+        Assert.True(Row(force).IsOverridden);
+        Assert.False(Row(output).IsAvailable);
+
+        vm.OptiChoice = vm.OptiChoices[0];
+        Assert.False(Row(force).IsAvailable);
+        Assert.True(Row(output).IsAvailable);
+
+        // Default pinned to 0.1.32, game pinned to 0.1.34.
+        _settings.OptiTag = "v0.1.32-f5";
+        vm.RebuildAddonChoices();
+        Assert.True(Row(force).IsAvailable);
+        Assert.False(Row(output).IsAvailable);
+        vm.OptiChoice = vm.OptiChoices.Single(c => c.Tag == "v0.1.34-f5");
+        Assert.False(Row(force).IsAvailable);
+        Assert.True(Row(output).IsAvailable);
+    }
+
+    [Fact]
     public async Task Per_game_uplift_build_reaches_the_install_options_and_installs_from_the_library()
     {
         _store.Uplift = Release(Component.Uplift, "v1.4.2", "NEW");

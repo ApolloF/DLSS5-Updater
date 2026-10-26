@@ -640,7 +640,7 @@ public sealed partial class MainViewModel : ObservableObject
                     var o = g.UpdateOptions(m);
                     if (g.HasAntiCheat && g.NeedsInjection(o) && !m.AntiCheatConfirmed)
                         Log.Info($"{g.Name}: skipped because it has anti-cheat. Install it once from its own page to confirm.");
-                    else if (Installer.Conflicts(g.SelectedTarget!.Dir, o) is { Count: > 0 } clash && o.ConfirmedConflict != Installer.ConflictKey(clash))
+                    else if (Installer.Conflicts(g.SelectedTarget!.Dir, o, S.Store.Opti?.Tag) is { Count: > 0 } clash && o.ConfirmedConflict != Installer.ConflictKey(clash))
                         Log.Info($"{g.Name}: skipped because its mods clash and the warning isn't confirmed. Install it once from its own page to confirm.");
                     else
                     {
@@ -1065,7 +1065,7 @@ public sealed partial class MainViewModel : ObservableObject
             o = g.BuildOptions(dlssOnly, acConfirmed: true);
         }
 
-        if (!dlssOnly && Installer.Conflicts(g.SelectedTarget.Dir, o) is { Count: > 0 } conflicts)
+        if (!dlssOnly && Installer.Conflicts(g.SelectedTarget.Dir, o, S.Store.Opti?.Tag) is { Count: > 0 } conflicts)
         {
             var key = Installer.ConflictKey(conflicts);
             if (o.ConfirmedConflict != key)
