@@ -107,8 +107,15 @@ ReShade-only mode with ReShade 6+, a game with native DLSS and the NR runtime `n
   it `renodx-dlss.addon64` is accepted. Importing the same file again changes nothing, an import never deletes another build, and
   Remove deletes the selected one. The first run after the library arrived moves the old `components\renodx-dlss.addon64` into it
   and makes it the default.
-- **Label.** SF builds publish a file version, which is the detected label (for example `0.2026.928.306`). The user can give any
-  build their own name in Settings (for example `SF 0928`); lists show that name, else `<file version> (<import date>)`.
+- **Label.** A build is named by the build stamp its About section shows (`2026-09-28T02:05:38` before the `Build: ` caption),
+  written `yy.MMdd.HHmm` the way the catalog mirror names its releases (`26.0928.0205`, from `renodx-dlss-SF-26.0928.0205`). The
+  file version (`0.2026.928.306`) is stamped at another moment and never matches the mirror, so it is only the fallback for a
+  build without a stamp, in the same form (`26.0928.0306`), and Settings shows it in the build's details. Builds an older app
+  labelled by file version are relabelled from their file on the next start. The user can give any build their own name in
+  Settings (for example `SF 0928`); lists show that name, else the label, without an import date.
+- **Picker.** One list, newest first by label: every library build, then the newest `MaxRenoDxOffers` (5) catalog builds the library
+  lacks as downloads. A catalog build counts as owned when its zip was downloaded or a library build carries its version, so a
+  copy imported by hand is neither offered nor fetched again.
 - **Selection.** Settings picks the default build; a game can pick its own ("Default (...)" follows Settings). The install
   records the build's id next to its tag, and automatic reinstalls keep the build that is installed.
 - **Options.** Each option's first choice, "Add-on default", writes nothing, so the add-on's own default (table above) applies.

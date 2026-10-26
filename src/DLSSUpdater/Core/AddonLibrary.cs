@@ -36,6 +36,8 @@ public sealed record AddonBuild(
         get
         {
             if (!string.IsNullOrWhiteSpace(UserLabel)) return UserLabel.Trim();
+            // ShortFuse's label is its build time; an import date next to it reads like a second, different build date.
+            if (FileName == ComponentStore.RenoDxFile) return DetectedLabel;
             var version = FileVersion.Length > 0 && FileVersion != DetectedLabel ? $" · {FileVersion}" : "";
             return $"{DetectedLabel}{version} ({Imported.ToLocalTime():yyyy-MM-dd})";
         }
@@ -171,7 +173,8 @@ public sealed partial class ComponentStore
                 if (b is not null && ValidId(b.Id) && Path.GetFileName(Path.GetDirectoryName(file)) == b.Id
                     && ValidAddonFile(kind, b.FileName) && File.Exists(Path.Combine(root, b.Id, b.FileName))
                     && (kind != AddonKind.Dfc || File.Exists(Path.Combine(root, b.Id, DfcBridgeFile))))
-                    builds.Add(kind == AddonKind.Lecram && IsSdkLabel(b.DetectedLabel) ? RelabelFromFile(root, b) : b);
+                    builds.Add(kind == AddonKind.Lecram && IsSdkLabel(b.DetectedLabel) ? RelabelFromFile(root, b)
+                        : kind == AddonKind.RenoDx && b.DetectedLabel == b.FileVersion ? RelabelRenoDxFromFile(root, b) : b);
             }
             catch (Exception ex) when (ex is IOException or JsonException)
             { Log.Error($"Could not read add-on library entry {file}", ex); }
@@ -189,6 +192,20 @@ public sealed partial class ComponentStore
         var relabelled = build with { DetectedLabel = label };
         FileUtil.AtomicWriteText(Path.Combine(root, build.Id, BuildRecordFile), JsonSerializer.Serialize(relabelled, JsonCtx.Default.AddonBuild));
         Log.Info($"Lecram build {build.Id[..12]} was labelled {build.DetectedLabel}, the DLSS SDK's version; it is {label} now");
+        return relabelled;
+    }
+
+    /// <summary>
+    /// A ShortFuse build an older version of this app labelled by its file version gets its build time as the label
+    /// (<see cref="RenoDxBuildLabel"/>), so it sorts and matches with the catalog's builds.
+    /// </summary>
+    private static AddonBuild RelabelRenoDxFromFile(string root, AddonBuild build)
+    {
+        var label = RenoDxBuildLabel(File.ReadAllBytes(Path.Combine(root, build.Id, build.FileName)), build.FileVersion);
+        if (label == build.DetectedLabel) return build;
+        var relabelled = build with { DetectedLabel = label };
+        FileUtil.AtomicWriteText(Path.Combine(root, build.Id, BuildRecordFile), JsonSerializer.Serialize(relabelled, JsonCtx.Default.AddonBuild));
+        Log.Info($"ShortFuse build {build.Id[..12]} was labelled by its file version {build.DetectedLabel}; it is {label} now");
         return relabelled;
     }
 

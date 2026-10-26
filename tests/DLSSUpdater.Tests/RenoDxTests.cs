@@ -152,8 +152,8 @@ public sealed class RenoDxTests : IDisposable
         Assert.True(_store.RenoDxImported);
         var build = Assert.Single(_store.RenoDxBuilds);
         Assert.Equal("0.2026.1016.1704", build.FileVersion);
-        Assert.Equal("0.2026.1016.1704", build.DetectedLabel);
-        Assert.Equal("0.2026.1016.1704-" + FileUtil.Sha256(good)[..12], build.Tag);
+        Assert.Equal("26.1016.1704", build.DetectedLabel);
+        Assert.Equal("26.1016.1704-" + FileUtil.Sha256(good)[..12], build.Tag);
         Assert.Equal(ComponentStore.RenoDxFile, Path.GetFileName(ComponentStore.AddonPathOf(AddonKind.RenoDx, build)));
 
         _store.RemoveAddon(AddonKind.RenoDx, build.Id);

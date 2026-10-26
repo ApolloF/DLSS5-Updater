@@ -1,4 +1,6 @@
+using System.Globalization;
 using System.IO.Compression;
+using System.Text;
 using System.Text.Json;
 
 namespace DLSSUpdater.Core;
@@ -35,7 +37,7 @@ public sealed partial class ComponentStore
                 $"Choose ShortFuse's {RenoDxFile}.");
         }
         var version = FileUtil.Format(FileUtil.ReadVersion(source));
-        var build = RetainAddon(AddonKind.RenoDx, source, RenoDxFile, version, null, version, downloaded);
+        var build = RetainAddon(AddonKind.RenoDx, source, RenoDxFile, version, null, RenoDxBuildLabel(File.ReadAllBytes(source), version), downloaded);
         Log.Info($"Imported {RenoDxFile} {build.Label} from {source}");
         return build;
     }
@@ -51,8 +53,7 @@ public sealed partial class ComponentStore
         if (!settings.AutoDownloadRenoDx) return null;
         var newest = section?.Builds.FirstOrDefault(b => b.File.IsInstallable);
         if (newest is null) return null;
-        var zipSha = newest.File.Sha256!.ToLowerInvariant();
-        if (HasRenoDxCatalogBuild(zipSha)) return null;
+        if (HasRenoDxCatalogBuild(newest)) return null;
 
         var build = await FetchRenoDxAsync(newest, downloader, progress, ct);
         if (build is not null && AdoptImportedAddon(settings, AddonKind.RenoDx, build)) Log.Info($"ShortFuse's add-on default is now {build.Label}");
@@ -61,6 +62,15 @@ public sealed partial class ComponentStore
 
     private bool HasRenoDxCatalogBuild(string zipSha) =>
         AddonBuilds(AddonKind.RenoDx).Any(b => string.Equals(b.CatalogSha, zipSha, StringComparison.OrdinalIgnoreCase));
+
+    /// <summary>
+    /// True when the library has the catalog build: downloaded from that zip, or a build with the same version (the mirror names a
+    /// release after the build time the add-on carries, see <see cref="RenoDxBuildLabel"/>), which catches a copy imported by hand.
+    /// </summary>
+    private bool HasRenoDxCatalogBuild(CatalogDlssBuild entry) =>
+        HasRenoDxCatalogBuild(entry.File.Sha256!) || AddonBuilds(AddonKind.RenoDx).Any(b => b.Order == BuildOrder.Key(RenoDxCatalogVersion(entry)));
+
+    private static string RenoDxCatalogVersion(CatalogDlssBuild entry) => string.IsNullOrWhiteSpace(entry.Version) ? entry.Tag : entry.Version;
 
     /// <summary>One catalog build of the add-on into the library, stamped with the catalog hash it came from. Null (logged) when refused.</summary>
     private async Task<AddonBuild?> FetchRenoDxAsync(CatalogDlssBuild entry, ICatalogFetch downloader, IProgress<TransferProgress>? progress, CancellationToken ct)
@@ -100,6 +110,46 @@ public sealed partial class ComponentStore
             catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) { }
         }
     }
+
+    // ---------- build label ----------
+
+    /// <summary>
+    /// What names a build of the add-on: the build time it shows in its About section ("Build: 2026-09-28T02:05:38"), written the way
+    /// the mirror names its releases after it ("26.0928.0205", from renodx-dlss-SF-26.0928.0205). The file version
+    /// (0.2026.928.306) is stamped at another moment and doesn't match the release, so it is only the fallback, in the same form.
+    /// </summary>
+    internal static string RenoDxBuildLabel(ReadOnlySpan<byte> data, string fileVersion) =>
+        FindRenoDxBuildTime(data) is { } time ? StampLabel(time) : RenoDxLabelOfFileVersion(fileVersion);
+
+    private static readonly byte[] BuildCaption = "\0Build: \0"u8.ToArray();
+    private const string BuildTimeFormat = "yyyy-MM-ddTHH:mm:ss";
+
+    /// <summary>The time string right before the About section's "Build: " caption, or null when the binary has none.</summary>
+    internal static DateTime? FindRenoDxBuildTime(ReadOnlySpan<byte> data)
+    {
+        for (var offset = 0; offset < data.Length;)
+        {
+            var at = data[offset..].IndexOf(BuildCaption);
+            if (at < 0) return null;
+            var i = offset + at;
+            offset = i + 1;
+            if (i < BuildTimeFormat.Length) continue;
+            var text = Encoding.ASCII.GetString(data[(i - BuildTimeFormat.Length)..i]);
+            if (DateTime.TryParseExact(text, BuildTimeFormat, CultureInfo.InvariantCulture, DateTimeStyles.None, out var time)) return time;
+        }
+        return null;
+    }
+
+    /// <summary>A file version 0.YYYY.MDD.HMM in the label's form; any other file version as it is.</summary>
+    internal static string RenoDxLabelOfFileVersion(string fileVersion)
+    {
+        if (!Version.TryParse(fileVersion, out var v) || v is not { Major: 0, Minor: >= 2000 and < 2100 }) return fileVersion;
+        var (build, revision) = (Math.Max(v.Build, 0), Math.Max(v.Revision, 0));
+        try { return StampLabel(new DateTime(v.Minor, build / 100, build % 100, revision / 100, revision % 100, 0)); }
+        catch (ArgumentOutOfRangeException) { return fileVersion; }
+    }
+
+    private static string StampLabel(DateTime time) => time.ToString("yy.MMdd.HHmm", CultureInfo.InvariantCulture);
 
     private const long MaxAddonBytes = 256L << 20;
 
