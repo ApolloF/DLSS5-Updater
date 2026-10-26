@@ -13,7 +13,7 @@ public static partial class SettingsOptions
             var value = UpliftConfig.Defaults[key];
             var def = choices.First(c => IniOptionViewModel.Same(c.Value, value));
             return new IniOptionViewModel(label, hint, UpliftConfig.Section, key, rs,
-                [new($"Default ({def.Label})", value, def.Description), .. choices, new("Leave game setting", null)]).About("uplift");
+                [new($"Default · {def.Label}", value, def.Description), .. choices, new("Leave game setting", null)]).About("uplift");
         }
         IniOptionViewModel Enum(string label, string hint, string key, params string[] labels) =>
             Choices(label, hint, key, labels.Select((name, i) => new OptionChoice(name, i.ToString(CultureInfo.InvariantCulture))).ToArray());

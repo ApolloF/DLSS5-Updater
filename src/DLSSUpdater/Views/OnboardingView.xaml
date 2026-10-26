@@ -106,7 +106,7 @@
                                 <StackPanel>
                                     <TextBlock Text="nvngx_dlssnr.dll" Style="{StaticResource Mono}" />
                                     <TextBlock TextWrapping="Wrap" LineHeight="19" Foreground="{StaticResource Muted}" Margin="0,4,0,0"
-                                               Text="The DLSS 5 neural rendering runtime isn't built into the app. It is downloaded and installed automatically; you can import your own copy in Settings → General → Local components." />
+                                               Text="The DLSS 5 neural rendering runtime isn't built into the app. It is downloaded and installed automatically; you can import your own copy in Settings → Components → Local components." />
                                 </StackPanel>
                             </Border>
                         </StackPanel>
@@ -172,7 +172,7 @@
                             <TextBlock TextWrapping="Wrap" LineHeight="19"
                                        Text="That's it. Pick a game on the left and press Install." />
                             <TextBlock TextWrapping="Wrap" LineHeight="19" Margin="0,10,0,0" Foreground="{StaticResource Muted}"
-                                       Text="Settings holds the defaults you just chose, the info buttons explain each option, and every game has its own options on its Install and Game config tabs. Settings → General → Run setup again brings this back." />
+                                       Text="Settings holds the defaults you just chose, the info buttons explain each option, and every game has its own options on its Install and Game config tabs. Settings → App → Run setup again brings this back." />
                         </StackPanel>
                     </Grid>
                 </ScrollViewer>

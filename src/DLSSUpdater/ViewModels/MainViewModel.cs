@@ -75,6 +75,13 @@ public sealed partial class MainViewModel : ObservableObject
         MfgNews = new ReleaseNewsViewModel(Component.MfgUnlock, "MFG Unlock", settings);
         StreamlineNews = new ReleaseNewsViewModel(Component.Streamline, "Streamline", settings);
         ReShadeNews = new ReleaseNewsViewModel(Component.ReShade, "ReShade", settings);
+        foreach (var news in AllNews)
+            news.PropertyChanged += (_, e) =>
+            {
+                if (e.PropertyName != nameof(ReleaseNewsViewModel.IsNew)) return;
+                OnPropertyChanged(nameof(StripHasNews));
+                OnPropertyChanged(nameof(StripSummary));
+            };
 
         GamesView = CollectionViewSource.GetDefaultView(Games);
         GamesView.Filter = o => o is GameViewModel g && Matches(g);
@@ -106,6 +113,24 @@ public sealed partial class MainViewModel : ObservableObject
     public ReleaseNewsViewModel MfgNews { get; }
     public ReleaseNewsViewModel StreamlineNews { get; }
     public ReleaseNewsViewModel ReShadeNews { get; }
+    private ReleaseNewsViewModel[] AllNews => [OptiNews, DlssNews, UpliftNews, MfgNews, StreamlineNews, ReShadeNews];
+
+    /// <summary>The component strip shows its chips; collapsed (the default) it is one summary line. Kept across restarts.</summary>
+    public bool StripExpanded
+    {
+        get => S.Settings.StripExpanded;
+        set
+        {
+            if (S.Settings.StripExpanded == value) return;
+            S.Settings.StripExpanded = value;
+            S.Settings.Save();
+            OnPropertyChanged();
+        }
+    }
+
+    /// <summary>A chip has a release the user hasn't opened yet: the collapsed strip shows a dot.</summary>
+    public bool StripHasNews => AllNews.Any(n => n.IsNew);
+    public string StripSummary => ComponentStripSummary.Text(AllNews.Count(n => n.IsNew), UpdateCount, ComponentsChecked, Online);
 
     internal const int MaxLogLines = 400;
 
@@ -160,10 +185,15 @@ public sealed partial class MainViewModel : ObservableObject
         ? "Lecram v11 update channel; builds are added to the library. Games keep their installed build."
         : "Lecram's DLSS5 add-on, imported by you. Games keep their installed build.";
     [ObservableProperty]
-    [NotifyPropertyChangedFor(nameof(HasUpdates), nameof(UpdateAllName))]
+    [NotifyPropertyChangedFor(nameof(HasUpdates), nameof(UpdateAllName), nameof(StripSummary))]
     private int _updateCount;
 
     public bool HasUpdates => UpdateCount > 0;
+
+    public static string GamesText(int n) => n == 1 ? "1 game" : $"{n} games";
+    public static string UpdatesAvailableText(int n) => n == 1 ? "1 game has updates available" : $"{n} games have updates available";
+    public static string UpdateAllResultText(int updated, int failed) =>
+        failed == 0 ? $"Updated {GamesText(updated)}" : $"{GamesText(failed)} couldn't be updated. Details are in the log.";
 
     /// <summary>What a screen reader says for Update all, which otherwise shows the count in a coloured badge only.</summary>
     public string UpdateAllName => UpdateCount switch
@@ -188,7 +218,9 @@ public sealed partial class MainViewModel : ObservableObject
     [ObservableProperty] private string _reShadeText = "not imported";
     [ObservableProperty] private bool _dlssNrOk;
     [ObservableProperty] private bool _reShadeOk;
-    [ObservableProperty] private bool _online = true;
+    [ObservableProperty, NotifyPropertyChangedFor(nameof(StripSummary))] private bool _online = true;
+    /// <summary>The first release check of this session has finished, so the strip can say whether everything is current.</summary>
+    [ObservableProperty, NotifyPropertyChangedFor(nameof(StripSummary))] private bool _componentsChecked;
     [ObservableProperty, NotifyPropertyChangedFor(nameof(ShowRateLimit))] private bool _rateLimitDismissed;
     [ObservableProperty, NotifyPropertyChangedFor(nameof(ShowRateLimit), nameof(RateLimitText), nameof(CanAddGitHubToken))] private GitHubRateLimit? _rateLimit;
 
@@ -196,14 +228,14 @@ public sealed partial class MainViewModel : ObservableObject
     public string RateLimitText => RateLimit?.Describe() ?? "";
     public bool CanAddGitHubToken => RateLimit is { TokenUsed: false };
 
-    /// <summary>The Settings page is open on the General tab; the window puts the cursor in the GitHub token box.</summary>
+    /// <summary>The Settings page is open on the App tab; the window puts the cursor in the GitHub token box.</summary>
     public event Action? FocusGitHubToken;
 
     [RelayCommand]
     private void AddGitHubToken()
     {
         AboutOpen = false;
-        SettingsVm.Tab = "General";
+        SettingsVm.Tab = "App";
         SettingsOpen = true;
         FocusGitHubToken?.Invoke();
     }
@@ -322,7 +354,7 @@ public sealed partial class MainViewModel : ObservableObject
             // Only now are all install records known, which the cleanup must keep builds for.
             await AutoCleanUpAsync();
         }, lease);
-        if (UpdateCount > 0) Log.Info($"{UpdateCount} game(s) have updates available");
+        if (UpdateCount > 0) Log.Info(UpdatesAvailableText(UpdateCount));
         if (!Demo.Active) await Task.Run(HashCache.Save);
         await SelfUpdate.StartupAsync();
     }
@@ -476,6 +508,7 @@ public sealed partial class MainViewModel : ObservableObject
         }
         var s = S.Store;
         Online = new[] { s.Opti, s.Dlss, s.Mfg, s.Uplift }.Any(r => r is { FromCache: false, Stale: false });
+        ComponentsChecked = true;
         OptiVersion = s.Opti is null ? "—" : s.Opti.Tag + (s.Opti.Prerelease ? " pre" : "");
         DlssVersion = s.Dlss?.Tag.TrimStart('v') ?? "—";
         UpliftVersion = s.Uplift?.Tag ?? "\u2014";
@@ -673,7 +706,7 @@ public sealed partial class MainViewModel : ObservableObject
             catch (NeedsAdminException ex) { failed++; Log.Error($"{g.Name}: {ex.Message}"); }
             catch (Exception ex) when (ex is not OperationCanceledException) { failed++; Log.Error(g.Name, ex); }
         }
-        Log.Info(failed == 0 ? $"Updated {targets.Count} game(s)" : $"{failed} game(s) couldn't be updated. Details are in the log.");
+        Log.Info(UpdateAllResultText(targets.Count, failed));
         await AutoCleanUpAsync();
     });
 
@@ -1109,6 +1142,7 @@ public sealed partial class MainViewModel : ObservableObject
     {
         var g = SelectedGame;
         if (g?.SelectedTarget is null) return Task.CompletedTask;
+        if (!Dialog.Confirm("Restore DLSS", "Puts the game's original DLSS files back. Mods stay installed.", "Restore")) return Task.CompletedTask;
         return Run($"Restoring DLSS for {g.Name}", async ct =>
         {
             await S.Installer.RestoreDlssAsync(g.Info, g.SelectedTarget.Dir, ct);

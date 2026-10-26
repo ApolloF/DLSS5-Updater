@@ -5,7 +5,7 @@
         xmlns:core="clr-namespace:DLSSUpdater.Core"
         xmlns:v="clr-namespace:DLSSUpdater.Views"
         xmlns:sys="clr-namespace:System;assembly=mscorlib"
-        Title="DLSS5 Updater" Width="1240" Height="800" MinWidth="980" MinHeight="680"
+        Title="DLSS5 Updater" Width="1240" Height="800" MinWidth="1180" MinHeight="680"
         WindowStartupLocation="CenterScreen" Icon="Assets/icon.ico"
         Background="{StaticResource Bg}" Foreground="{StaticResource Text}"
         FontFamily="{StaticResource UiFont}" FontSize="13"
@@ -93,6 +93,30 @@
         </DataTemplate>
 
         <!-- Component chip that opens its what's new popover; Tag is the chip's ReleaseNewsViewModel -->
+        <Style x:Key="StripToggle" TargetType="ToggleButton">
+            <Setter Property="Foreground" Value="{StaticResource Text}" />
+            <Setter Property="Background" Value="Transparent" />
+            <Setter Property="Padding" Value="8,6" />
+            <Setter Property="Cursor" Value="Hand" />
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="ToggleButton">
+                        <Border x:Name="Bd" Background="{TemplateBinding Background}" CornerRadius="3" Padding="{TemplateBinding Padding}">
+                            <ContentPresenter VerticalAlignment="Center" />
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="Bd" Property="Background" Value="{StaticResource Surface2}" />
+                            </Trigger>
+                            <Trigger Property="IsKeyboardFocused" Value="True">
+                                <Setter TargetName="Bd" Property="Background" Value="{StaticResource Surface2}" />
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
         <Style x:Key="ReleaseChip" TargetType="ToggleButton">
             <Setter Property="Foreground" Value="{StaticResource Text}" />
             <Setter Property="Background" Value="Transparent" />
@@ -166,9 +190,20 @@
                         </Style>
                     </Button.Style>
                 </Button>
-                <Button Grid.Column="2" Content="Default" Style="{StaticResource BtnGhost}" Margin="8,0,0,0" ToolTip="Leave the game's default"
-                        AutomationProperties.Name="{Binding Label, StringFormat='Default key for {0}'}"
-                        Command="{Binding DataContext.ResetBindCommand, RelativeSource={RelativeSource AncestorType=ItemsControl}}" CommandParameter="{Binding}" />
+                <!-- Only when the key differs from the default; Hidden, not Collapsed, so "Off" stays in its column. It hides itself, so the click hands focus to the key button -->
+                <Button Grid.Column="2" Content="Reset" Margin="8,0,0,0" ToolTip="Back to the default key" Click="OnResetBind"
+                        AutomationProperties.Name="{Binding Label, StringFormat='Reset {0} to its default key'}"
+                        Command="{Binding DataContext.ResetBindCommand, RelativeSource={RelativeSource AncestorType=ItemsControl}}" CommandParameter="{Binding}">
+                    <Button.Style>
+                        <Style TargetType="Button" BasedOn="{StaticResource BtnGhost}">
+                            <Style.Triggers>
+                                <DataTrigger Binding="{Binding IsDefault}" Value="True">
+                                    <Setter Property="Visibility" Value="Hidden" />
+                                </DataTrigger>
+                            </Style.Triggers>
+                        </Style>
+                    </Button.Style>
+                </Button>
                 <Button Grid.Column="3" Content="Off" Style="{StaticResource BtnGhost}" ToolTip="No key" AutomationProperties.Name="{Binding Label, StringFormat='No key for {0}'}"
                         Command="{Binding DataContext.DisableBindCommand, RelativeSource={RelativeSource AncestorType=ItemsControl}}" CommandParameter="{Binding}" />
             </Grid>
@@ -513,13 +548,40 @@
         </Border>
         <!-- ============ Component strip ============ -->
         <Border BorderBrush="{StaticResource Line}" BorderThickness="0,1,0,1" Background="{StaticResource Surface}">
-            <Grid Margin="18,12,18,12">
+            <Grid Margin="18,4,18,4">
                 <Grid.ColumnDefinitions>
                     <ColumnDefinition Width="*" />
                     <ColumnDefinition Width="Auto" />
                 </Grid.ColumnDefinitions>
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto" />
+                    <RowDefinition Height="Auto" />
+                </Grid.RowDefinitions>
+                <!-- Collapsed by default: one summary line; the chips are reference info the user opens when wanted -->
+                <ToggleButton Style="{StaticResource StripToggle}" HorizontalAlignment="Left" Margin="-8,0,0,0" IsChecked="{Binding StripExpanded}"
+                              AutomationProperties.Name="Show component releases" AutomationProperties.HelpText="{Binding StripSummary}"
+                              ToolTip="Show or hide the component versions and release notes">
+                    <StackPanel Orientation="Horizontal">
+                        <Ellipse Width="7" Height="7" Fill="{StaticResource Accent}" VerticalAlignment="Center" Margin="0,0,8,0"
+                                 Visibility="{Binding StripHasNews, Converter={StaticResource BoolToVis}}" />
+                        <TextBlock Text="{Binding StripSummary}" VerticalAlignment="Center" />
+                        <TextBlock FontSize="10" Foreground="{StaticResource Muted}" VerticalAlignment="Center" Margin="10,1,0,0">
+                            <TextBlock.Style>
+                                <Style TargetType="TextBlock" BasedOn="{StaticResource Icon}">
+                                    <Setter Property="Text" Value="&#xE70D;" />
+                                    <Style.Triggers>
+                                        <DataTrigger Binding="{Binding StripExpanded}" Value="True">
+                                            <Setter Property="Text" Value="&#xE70E;" />
+                                        </DataTrigger>
+                                    </Style.Triggers>
+                                </Style>
+                            </TextBlock.Style>
+                        </TextBlock>
+                    </StackPanel>
+                </ToggleButton>
                 <!-- Fixed-width cells so the chips line up in columns when the strip wraps -->
-                <WrapPanel Orientation="Horizontal" ItemWidth="224" Margin="-8,-4,0,-4">
+                <WrapPanel Grid.Row="1" Grid.ColumnSpan="2" Orientation="Horizontal" ItemWidth="224" Margin="-8,4,0,6"
+                           Visibility="{Binding StripExpanded, Converter={StaticResource BoolToVis}}">
                     <ToggleButton Style="{StaticResource ReleaseChip}" Tag="{Binding OptiNews}" AutomationProperties.HelpText="{Binding Compat.Summary}">
                         <StackPanel>
                             <TextBlock Text="{Binding OptiChipTitle}" Style="{StaticResource Caps}" />
@@ -625,9 +687,13 @@
                 <ColumnDefinition Width="320" />
                 <ColumnDefinition Width="*" />
             </Grid.ColumnDefinitions>
+            <Grid.RowDefinitions>
+                <RowDefinition Height="*" />
+                <RowDefinition Height="Auto" />
+            </Grid.RowDefinitions>
 
             <!-- Game list -->
-            <Border BorderBrush="{StaticResource Line}" BorderThickness="0,0,1,0">
+            <Border Grid.RowSpan="2" BorderBrush="{StaticResource Line}" BorderThickness="0,0,1,0">
                 <Grid>
                     <Grid.RowDefinitions>
                         <RowDefinition Height="Auto" />
@@ -637,7 +703,8 @@
                     </Grid.RowDefinitions>
 
                     <Grid Margin="16,16,16,10">
-                        <TextBox Text="{Binding Search, UpdateSourceTrigger=PropertyChanged}" Tag="Search games" AutomationProperties.Name="Search games" Padding="28,7,8,7" />
+                        <TextBox x:Name="SearchBox" Text="{Binding Search, UpdateSourceTrigger=PropertyChanged}" Tag="Search games" AutomationProperties.Name="Search games" Padding="28,7,8,7"
+                                 ToolTip="Search games (Ctrl+F; Esc clears)" />
                         <TextBlock Text="&#xE721;" Style="{StaticResource Icon}" Foreground="{StaticResource Dim}" Margin="10,0,0,0"
                                    HorizontalAlignment="Left" IsHitTestVisible="False" />
                     </Grid>
@@ -686,15 +753,15 @@
                                             </Style>
                                         </WrapPanel.Resources>
                                         <Border Background="{StaticResource Accent}" BorderBrush="{StaticResource Accent}"
-                                                Visibility="{Binding ModBadge, Converter={StaticResource NullToVis}}" ToolTip="{Binding ModBadge}">
+                                                Visibility="{Binding ModBadge, Converter={StaticResource NullToVis}}" ToolTip="{Binding ModBadge, StringFormat='Mods installed: {0}'}">
                                             <TextBlock Text="{Binding ModBadge}" Style="{StaticResource BadgeText}" Foreground="#0B0B0B" TextTrimming="CharacterEllipsis" />
                                         </Border>
                                         <Border BorderBrush="{StaticResource Danger}"
-                                                Visibility="{Binding HasAntiCheat, Converter={StaticResource BoolToVis}}" ToolTip="{Binding AntiCheat}">
+                                                Visibility="{Binding HasAntiCheat, Converter={StaticResource BoolToVis}}" ToolTip="{Binding AntiCheat, StringFormat='{}{0} anti-cheat: mods can get you banned online'}">
                                             <TextBlock Text="AC" Style="{StaticResource BadgeText}" Foreground="{StaticResource Danger}"
                                                        AutomationProperties.Name="{Binding AntiCheat, StringFormat='{}{0} anti-cheat'}" />
                                         </Border>
-                                        <Border Visibility="{Binding HasDlss, Converter={StaticResource BoolToVis}}" ToolTip="{Binding DlssOutdatedTip}">
+                                        <Border Visibility="{Binding HasDlss, Converter={StaticResource BoolToVis}}" ToolTip="{Binding DlssBadgeTip}">
                                             <Border.Style>
                                                 <Style TargetType="Border" BasedOn="{StaticResource {x:Type Border}}">
                                                     <Setter Property="BorderBrush" Value="{StaticResource Warn}" />
@@ -705,7 +772,7 @@
                                                     </Style.Triggers>
                                                 </Style>
                                             </Border.Style>
-                                            <TextBlock Text="{Binding DlssBadgeText}" Style="{StaticResource BadgeText}" AutomationProperties.HelpText="{Binding DlssOutdatedTip}" />
+                                            <TextBlock Text="{Binding DlssBadgeText}" Style="{StaticResource BadgeText}" AutomationProperties.HelpText="{Binding DlssBadgeTip}" />
                                         </Border>
                                         <Border Visibility="{Binding HasFeatureBadge, Converter={StaticResource BoolToVis}}"
                                                 ToolTip="DLSS features found in the game files (Ray Reconstruction, Frame Generation, Reflex)">
@@ -747,11 +814,11 @@
             </Border>
 
             <!-- Detail -->
-            <TextBlock Grid.Column="1" Text="Select a game on the left" Foreground="{StaticResource Muted}" HorizontalAlignment="Center" VerticalAlignment="Center"
+            <TextBlock Grid.Column="1" Grid.RowSpan="2" Text="Select a game on the left" Foreground="{StaticResource Muted}" HorizontalAlignment="Center" VerticalAlignment="Center"
                        Visibility="{Binding SelectedGame, Converter={StaticResource NullToVis}, ConverterParameter=invert}" />
 
             <!-- Disabled while Settings or About covers it, so Tab doesn't walk through controls nobody can see -->
-            <ScrollViewer Grid.Column="1" VerticalScrollBarVisibility="Auto" DataContext="{Binding SelectedGame}"
+            <ScrollViewer x:Name="DetailScroll" Grid.Column="1" VerticalScrollBarVisibility="Auto" DataContext="{Binding SelectedGame}"
                           Visibility="{Binding Converter={StaticResource NullToVis}}">
                 <ScrollViewer.Style>
                     <Style TargetType="ScrollViewer">
@@ -939,7 +1006,7 @@
                                         <Grid Margin="0,0,0,8">
                                             <Button Style="{StaticResource MethodCard}" IsEnabled="{Binding IsClickable}"
                                                     Command="{Binding DataContext.PickMethodCommand, RelativeSource={RelativeSource AncestorType=ItemsControl}}"
-                                                    CommandParameter="{Binding}" AutomationProperties.Name="{Binding Title, StringFormat='Pick {0}'}"
+                                                    CommandParameter="{Binding}" AutomationProperties.Name="{Binding Title, StringFormat='Use {0}'}"
                                                     ToolTip="{Binding CardTip}">
                                                 <Grid>
                                                     <Grid.ColumnDefinitions>
@@ -967,6 +1034,9 @@
                                                             <Border Style="{StaticResource Badge}" Margin="8,0,0,0">
                                                                 <TextBlock Text="{Binding StateText}" Style="{StaticResource BadgeText}" />
                                                             </Border>
+                                                            <Border Style="{StaticResource Badge}" BorderBrush="{StaticResource Accent}" Visibility="{Binding IsTop, Converter={StaticResource BoolToVis}}">
+                                                                <TextBlock Text="Recommended" Style="{StaticResource BadgeText}" Foreground="{StaticResource Accent}" />
+                                                            </Border>
                                                         </StackPanel>
                                                         <TextBlock Text="{Binding Summary}" Foreground="{StaticResource Text}" FontSize="12" TextWrapping="Wrap" Margin="0,3,0,0" />
                                                         <TextBlock Text="{Binding Warning}" Style="{StaticResource MutedText}" FontSize="11.5" TextWrapping="Wrap" Margin="0,3,0,0"
@@ -986,12 +1056,6 @@
                                     </DataTemplate>
                                 </ItemsControl.ItemTemplate>
                             </ItemsControl>
-                            <StackPanel Orientation="Horizontal" Margin="0,6,0,0" Visibility="{Binding CanSelectTop, Converter={StaticResource BoolToVis}}">
-                                <Button Content="{Binding SelectTopLabel}" Style="{StaticResource BtnPrimary}" Command="{Binding SelectTopMethodCommand}"
-                                        ToolTip="Turns on the components of the picked method; nothing is installed until you press Install" />
-                                <TextBlock Text="{Binding SelectTopHint}" Style="{StaticResource MutedText}" FontSize="11.5" Foreground="{StaticResource Warn}"
-                                           VerticalAlignment="Center" Margin="12,0,0,0" />
-                            </StackPanel>
                             <TextBlock Text="{Binding AdviceFooter}" Style="{StaticResource MutedText}" FontSize="11" TextWrapping="Wrap" Margin="0,10,0,0" />
                         </StackPanel>
                     </Border>
@@ -1024,6 +1088,7 @@
                         <Button Style="{StaticResource InfoBtn}" CommandParameter="install-mode" VerticalAlignment="Center"
                                 ToolTip="{Binding Source=install-mode, Converter={StaticResource HelpTip}}" />
                     </StackPanel>
+                    <TextBlock Text="Set by the method you pick above. Change it here to override." Style="{StaticResource MutedText}" FontSize="11.5" Margin="152,4,0,0" />
 
                     <!-- Components -->
                     <TextBlock Text="COMPONENTS" Style="{StaticResource SectionTitle}" />
@@ -1032,7 +1097,7 @@
                             <Grid Margin="16,10,16,8">
                                 <Grid.ColumnDefinitions>
                                     <ColumnDefinition Width="18" />
-                                    <ColumnDefinition Width="*" />
+                                    <ColumnDefinition Width="*" MinWidth="140" />
                                     <ColumnDefinition Width="150" />
                                     <ColumnDefinition Width="280" />
                                     <ColumnDefinition Width="58" />
@@ -1049,7 +1114,7 @@
                                         <Grid Margin="16,9" Visibility="{Binding Visible, Converter={StaticResource BoolToVis}}">
                                             <Grid.ColumnDefinitions>
                                                 <ColumnDefinition Width="18" />
-                                                <ColumnDefinition Width="*" />
+                                                <ColumnDefinition Width="*" MinWidth="140" />
                                                 <ColumnDefinition Width="150" />
                                                 <ColumnDefinition Width="280" />
                                                 <ColumnDefinition Width="58" />
@@ -1176,13 +1241,13 @@
                     <TextBlock Text="NR RUNTIME VERSION" Style="{StaticResource SectionTitle}" />
                     <Border Style="{StaticResource Card}" Padding="16">
                         <StackPanel>
-                            <TextBlock Text="Which NR runtime this game gets when you install or update it. Default uses the one chosen in Settings → Local components. Switch NR puts your choice into the installed game now; Switch back restores the previous file. With a 310.9 runtime, compare models with the Preset option instead of switching versions. Runtimes marked download are older catalog builds; picking one downloads it first."
+                            <TextBlock Text="Which NR runtime this game gets when you install or update it. Default uses the one chosen in Settings → Components. Use this runtime now puts your choice into the installed game now; Restore previous runtime puts the previous file back. With a 310.9 runtime, compare models with the Preset option instead of switching versions. Runtimes marked download are older catalog builds; picking one downloads it first."
                                        Style="{StaticResource MutedText}" TextWrapping="Wrap" Margin="0,0,0,8" />
                             <ComboBox ItemsSource="{Binding NrChoices}" SelectedItem="{Binding NrChoice}" MaxDropDownHeight="300"
                                       AutomationProperties.Name="NR runtime version for this game" />
                             <WrapPanel Margin="0,8,0,0" IsEnabled="{Binding CanSwitchNr}">
-                                <Button Content="Switch NR" Command="{Binding DataContext.SwitchNrCommand, RelativeSource={RelativeSource AncestorType=Window}}" />
-                                <Button Content="Switch back" Command="{Binding DataContext.UndoNrCommand, RelativeSource={RelativeSource AncestorType=Window}}"
+                                <Button Content="Use this runtime now" Command="{Binding DataContext.SwitchNrCommand, RelativeSource={RelativeSource AncestorType=Window}}" />
+                                <Button Content="Restore previous runtime" Command="{Binding DataContext.UndoNrCommand, RelativeSource={RelativeSource AncestorType=Window}}"
                                         IsEnabled="{Binding CanUndoNr}" Margin="8,0,0,0" />
                             </WrapPanel>
                         </StackPanel>
@@ -1588,9 +1653,27 @@
                             </StackPanel>
                         </Border>
                     </StackPanel>
+                    </StackPanel>
+                </StackPanel>
+            </ScrollViewer>
 
-                    <!-- Actions -->
-                    <Grid Margin="0,28,0,0">
+            <!-- Install actions: pinned under the detail view so the primary button never scrolls out of sight -->
+            <Grid Grid.Row="1" Grid.Column="1" DataContext="{Binding SelectedGame}" Visibility="{Binding Converter={StaticResource NullToVis}}">
+                <Border Background="{StaticResource Surface}" BorderBrush="{StaticResource Line}" BorderThickness="0,1,0,0" Padding="36,10"
+                        Visibility="{Binding DetailTab, Converter={StaticResource EqualsToVis}, ConverterParameter=Install}">
+                    <Border.Style>
+                        <Style TargetType="Border">
+                            <Style.Triggers>
+                                <DataTrigger Binding="{Binding DataContext.SettingsOpen, RelativeSource={RelativeSource AncestorType=Window}}" Value="True">
+                                    <Setter Property="IsEnabled" Value="False" />
+                                </DataTrigger>
+                                <DataTrigger Binding="{Binding DataContext.AboutOpen, RelativeSource={RelativeSource AncestorType=Window}}" Value="True">
+                                    <Setter Property="IsEnabled" Value="False" />
+                                </DataTrigger>
+                            </Style.Triggers>
+                        </Style>
+                    </Border.Style>
+                    <Grid MaxWidth="980">
                         <Grid.ColumnDefinitions>
                             <ColumnDefinition Width="Auto" />
                             <ColumnDefinition Width="*" />
@@ -1605,6 +1688,20 @@
                             <Button Content="DLSS only" Margin="8,0,0,0" Padding="16,9" ToolTip="Update only the game's DLSS files. No mods are added."
                                     Command="{Binding DataContext.DlssOnlyCommand, RelativeSource={RelativeSource AncestorType=Window}}" />
                         </StackPanel>
+                        <!-- While a job runs: progress and Cancel here too, for users scrolled away from the status bar's thin line -->
+                        <DockPanel Grid.Column="1" Margin="20,0" VerticalAlignment="Center"
+                                   Visibility="{Binding DataContext.IsBusy, RelativeSource={RelativeSource AncestorType=Window}, Converter={StaticResource BoolToVis}}">
+                            <Button DockPanel.Dock="Right" Content="Cancel" Style="{StaticResource BtnGhost}" Padding="10,5" Margin="12,0,0,0"
+                                    ToolTip="Stop the running job" AutomationProperties.Name="Cancel the running job"
+                                    Command="{Binding DataContext.CancelCommand, RelativeSource={RelativeSource AncestorType=Window}}" />
+                            <ProgressBar DockPanel.Dock="Left" Width="140" Height="4" VerticalAlignment="Center" Background="{StaticResource Line}" Maximum="1"
+                                         Value="{Binding DataContext.Progress, RelativeSource={RelativeSource AncestorType=Window}}"
+                                         IsIndeterminate="{Binding DataContext.ProgressIndeterminate, RelativeSource={RelativeSource AncestorType=Window}}"
+                                         Visibility="{Binding DataContext.ProgressVisible, RelativeSource={RelativeSource AncestorType=Window}, Converter={StaticResource BoolToVis}}"
+                                         AutomationProperties.Name="Progress" />
+                            <TextBlock Text="{Binding DataContext.Status, RelativeSource={RelativeSource AncestorType=Window}}" Style="{StaticResource MutedText}" FontSize="12"
+                                       Margin="12,0,0,0" VerticalAlignment="Center" TextTrimming="CharacterEllipsis" />
+                        </DockPanel>
                         <StackPanel Grid.Column="2" Orientation="Horizontal">
                             <Button Content="Restore DLSS" Style="{StaticResource BtnGhost}" Margin="0,0,8,0" ToolTip="Put back the game's original DLSS and Streamline files"
                                     Command="{Binding DataContext.RestoreDlssCommand, RelativeSource={RelativeSource AncestorType=Window}}" />
@@ -1612,12 +1709,11 @@
                                     Command="{Binding DataContext.UninstallCommand, RelativeSource={RelativeSource AncestorType=Window}}" />
                         </StackPanel>
                     </Grid>
-                    </StackPanel>
-                </StackPanel>
-            </ScrollViewer>
+                </Border>
+            </Grid>
 
             <!-- Settings overlay -->
-            <Border Grid.Column="1" Background="{StaticResource Bg}" Visibility="{Binding SettingsOpen, Converter={StaticResource BoolToVis}}">
+            <Border Grid.Column="1" Grid.RowSpan="2" Background="{StaticResource Bg}" Visibility="{Binding SettingsOpen, Converter={StaticResource BoolToVis}}">
                 <v:Deferred x:Name="SettingsHost" Show="{Binding SettingsOpen}">
                     <v:Deferred.Template>
                         <DataTemplate>
@@ -1635,22 +1731,30 @@
                                     <Grid Margin="0,16,0,0">
                                         <StackPanel Orientation="Horizontal">
                                             <TextBlock Text="PRESET" Style="{StaticResource Caps}" VerticalAlignment="Center" Margin="0,0,10,0" />
-                                            <ComboBox Width="200" ItemsSource="{Binding PresetNames}" SelectedItem="{Binding SelectedPreset}"
-                                                      AutomationProperties.Name="Preset" ToolTip="Load a saved preset into the settings below" />
+                                            <Grid Width="200">
+                                                <ComboBox ItemsSource="{Binding PresetNames}" SelectedItem="{Binding SelectedPreset}"
+                                                          AutomationProperties.Name="Preset" ToolTip="Load a saved preset into the settings below" />
+                                                <TextBlock Text="No preset" Foreground="{StaticResource Muted}" Margin="11,0,30,0" VerticalAlignment="Center" IsHitTestVisible="False"
+                                                           Visibility="{Binding SelectedPreset, Converter={StaticResource NullToVis}, ConverterParameter=invert}" />
+                                            </Grid>
                                             <Button Content="Save as…" Style="{StaticResource BtnGhost}" Margin="8,0,0,0" Command="{Binding SavePresetCommand}" />
                                             <Button Content="Delete" Style="{StaticResource BtnGhost}" Command="{Binding DeletePresetCommand}"
                                                     Visibility="{Binding CanDeletePreset, Converter={StaticResource BoolToVis}}" />
                                             <Button Style="{StaticResource InfoBtn}" CommandParameter="presets" VerticalAlignment="Center"
                                                     ToolTip="{Binding Source=presets, Converter={StaticResource HelpTip}}" />
                                         </StackPanel>
-                                        <Button Content="Reset to defaults" Style="{StaticResource BtnGhost}" HorizontalAlignment="Right" Command="{Binding ResetAllCommand}"
-                                                ToolTip="Put all OptiScaler and ReShade settings, keybinds and options back to what each project ships with" />
+                                        <Button Content="Reset mod settings" Style="{StaticResource BtnGhost}" HorizontalAlignment="Right" Command="{Binding ResetAllCommand}"
+                                                ToolTip="Resets every tab's OptiScaler and ReShade settings and keybinds to what each project ships with, not just this tab. Saved presets are kept." />
                                     </Grid>
                                     <Grid Margin="0,14,0,0">
                                         <Border Style="{StaticResource Divider}" VerticalAlignment="Bottom" />
                                         <StackPanel Orientation="Horizontal">
-                                            <RadioButton Style="{StaticResource Segment}" Content="General" GroupName="st" Margin="0,0,24,0"
-                                                         IsChecked="{Binding Tab, Converter={StaticResource EqualsToBool}, ConverterParameter=General}" />
+                                            <RadioButton Style="{StaticResource Segment}" Content="Components" GroupName="st" Margin="0,0,24,0"
+                                                         IsChecked="{Binding Tab, Converter={StaticResource EqualsToBool}, ConverterParameter=Components}" />
+                                            <RadioButton Style="{StaticResource Segment}" Content="Defaults" GroupName="st" Margin="0,0,24,0"
+                                                         IsChecked="{Binding Tab, Converter={StaticResource EqualsToBool}, ConverterParameter=Defaults}" />
+                                            <RadioButton Style="{StaticResource Segment}" Content="App" GroupName="st" Margin="0,0,24,0"
+                                                         IsChecked="{Binding Tab, Converter={StaticResource EqualsToBool}, ConverterParameter=App}" />
                                             <RadioButton Style="{StaticResource Segment}" Content="Keybinds" GroupName="st" Margin="0,0,24,0"
                                                          IsChecked="{Binding Tab, Converter={StaticResource EqualsToBool}, ConverterParameter=Keybinds}" />
                                             <RadioButton Style="{StaticResource Segment}" Content="ReShade add-ons" GroupName="st" Margin="0,0,24,0"
@@ -1668,8 +1772,8 @@
                                 <ScrollViewer x:Name="SettingsScroll" Grid.Row="1" VerticalScrollBarVisibility="Auto">
                                     <StackPanel Margin="36,0,36,36" MaxWidth="860">
 
-                                        <!-- ===== General ===== -->
-                                        <StackPanel Visibility="{Binding Tab, Converter={StaticResource EqualsToVis}, ConverterParameter=General}">
+                                        <!-- ===== Components: the local library and its cleanup ===== -->
+                                        <StackPanel Visibility="{Binding Tab, Converter={StaticResource EqualsToVis}, ConverterParameter=Components}">
                                             <StackPanel Orientation="Horizontal">
                                                 <TextBlock Text="LOCAL COMPONENTS" Style="{StaticResource SectionTitle}" />
                                                 <Button Style="{StaticResource InfoBtn}" CommandParameter="local-components" Margin="4,18,0,0"
@@ -1754,7 +1858,7 @@
                                                         <ComboBox ItemsSource="{Binding NrChoices}" SelectedItem="{Binding SelectedNr}" MaxDropDownHeight="300"
                                                                   AutomationProperties.Name="Default NR runtime" />
                                                         <TextBlock Text="{Binding SelectedNrHint}" Style="{StaticResource MutedText}" FontSize="11.5" TextWrapping="Wrap" Margin="0,6,0,0" />
-                                                        <Button Content="Switch default back" Command="{Binding UndoNrDefaultCommand}" HorizontalAlignment="Left" Margin="0,8,0,0" />
+                                                        <Button Content="Restore previous default" Command="{Binding UndoNrDefaultCommand}" HorizontalAlignment="Left" Margin="0,8,0,0" />
                                                     </StackPanel>
                                                     <Border Style="{StaticResource Divider}" />
                                                     <ContentControl Content="{Binding RenoDx}" ContentTemplate="{StaticResource AddonLibraryRow}" Margin="0,10" />
@@ -1782,6 +1886,59 @@
 
                                             <Button Content="Import DLSS SR / RR / FG…" Command="{Binding ImportDlssCommand}" HorizontalAlignment="Left" Margin="0,8,0,0"
                                                     ToolTip="Adds your own DLSS files as a version and makes it the default DLSS version." />
+
+                                            <!-- Old builds of every library and download leftovers; what games need always stays. -->
+                                            <TextBlock Text="BUILD LIBRARY" Style="{StaticResource SectionTitle}" />
+                                            <Border Style="{StaticResource Card}" Padding="16,6" DataContext="{Binding Cleanup}">
+                                                <StackPanel>
+                                                    <TextBlock Text="Downloaded and imported builds stay so games can switch back. Cleanup keeps the newest builds of each library (per OptiScaler source) and always keeps defaults, builds chosen for a game, builds installed in one and the NR runtime a game can switch back to; a row says why it holds more builds than the number you keep. Builds you imported only go when you clean up by hand."
+                                                               Style="{StaticResource MutedText}" FontSize="11.5" TextWrapping="Wrap" Margin="0,8,0,4" />
+                                                    <ItemsControl ItemsSource="{Binding Rows}" Focusable="False">
+                                                        <ItemsControl.ItemTemplate>
+                                                            <DataTemplate DataType="{x:Type vm:LibraryRowViewModel}">
+                                                                <Grid Margin="0,5">
+                                                                    <Grid.ColumnDefinitions>
+                                                                        <ColumnDefinition Width="190" />
+                                                                        <ColumnDefinition Width="*" />
+                                                                        <ColumnDefinition Width="Auto" />
+                                                                        <ColumnDefinition Width="Auto" />
+                                                                    </Grid.ColumnDefinitions>
+                                                                    <Grid.RowDefinitions>
+                                                                        <RowDefinition Height="Auto" />
+                                                                        <RowDefinition Height="Auto" />
+                                                                    </Grid.RowDefinitions>
+                                                                    <TextBlock Text="{Binding Title}" VerticalAlignment="Center" />
+                                                                    <TextBlock Grid.Column="1" Text="{Binding Summary}" Style="{StaticResource MutedText}" FontSize="12" VerticalAlignment="Center" TextTrimming="CharacterEllipsis" />
+                                                                    <TextBlock Grid.Column="2" Text="Keep newest" Style="{StaticResource MutedText}" FontSize="12" VerticalAlignment="Center" Margin="12,0,8,0" />
+                                                                    <ComboBox Grid.Column="3" Width="64" ItemsSource="{x:Static vm:LibraryRowViewModel.KeepChoices}" SelectedItem="{Binding Keep}"
+                                                                              AutomationProperties.Name="{Binding Title, StringFormat='Keep this many newest {0} builds'}" />
+                                                                    <TextBlock Grid.Row="1" Grid.Column="1" Grid.ColumnSpan="3" Text="{Binding Note}" Style="{StaticResource MutedText}" FontSize="11.5" Margin="0,2,0,0"
+                                                                               ToolTip="{Binding NoteDetails}"
+                                                                               Visibility="{Binding Note, Converter={StaticResource NullToVis}}" />
+                                                                </Grid>
+                                                            </DataTemplate>
+                                                        </ItemsControl.ItemTemplate>
+                                                    </ItemsControl>
+                                                    <CheckBox IsChecked="{Binding AutoClean}" Margin="0,10,0,4" AutomationProperties.Name="Delete old downloads automatically after each download">
+                                                        <TextBlock Text="Delete old downloads automatically after each download (imported builds always stay)" TextWrapping="Wrap" />
+                                                    </CheckBox>
+                                                    <TextBlock Text="{Binding AutoSkipped}" Style="{StaticResource MutedText}" FontSize="11.5" TextWrapping="Wrap" Margin="26,0,0,2"
+                                                               Visibility="{Binding AutoSkipped, Converter={StaticResource NullToVis}}" />
+                                                    <Grid Margin="0,6,0,8">
+                                                        <Grid.ColumnDefinitions>
+                                                            <ColumnDefinition Width="*" />
+                                                            <ColumnDefinition Width="Auto" />
+                                                        </Grid.ColumnDefinitions>
+                                                        <TextBlock Text="{Binding Freeable}" Style="{StaticResource MutedText}" FontSize="12" TextWrapping="Wrap" VerticalAlignment="Center" />
+                                                        <Button Grid.Column="1" Content="Clean up old builds…" Command="{Binding CleanCommand}" Margin="12,0,0,0"
+                                                                ToolTip="Shows what goes and how much space it frees, then asks before deleting" />
+                                                    </Grid>
+                                                </StackPanel>
+                                            </Border>
+                                        </StackPanel>
+
+                                        <!-- ===== Defaults: what new installs and games without a choice of their own use ===== -->
+                                        <StackPanel Visibility="{Binding Tab, Converter={StaticResource EqualsToVis}, ConverterParameter=Defaults}">
                                             <TextBlock Text="DEFAULTS" Style="{StaticResource SectionTitle}" />
                                             <Border Style="{StaticResource Card}" Padding="16,6">
                                                 <StackPanel>
@@ -1995,56 +2152,10 @@
                                                     </StackPanel>
                                                 </StackPanel>
                                             </Border>
+                                        </StackPanel>
 
-                                            <!-- Old builds of every library and download leftovers; what games need always stays. -->
-                                            <TextBlock Text="BUILD LIBRARY" Style="{StaticResource SectionTitle}" />
-                                            <Border Style="{StaticResource Card}" Padding="16,6" DataContext="{Binding Cleanup}">
-                                                <StackPanel>
-                                                    <TextBlock Text="Downloaded and imported builds stay so games can switch back. Cleanup keeps the newest builds of each library (per OptiScaler source) and always keeps defaults, builds chosen for a game, builds installed in one and the NR runtime a game can switch back to; a row says why it holds more builds than the number you keep. Builds you imported only go when you clean up by hand."
-                                                               Style="{StaticResource MutedText}" FontSize="11.5" TextWrapping="Wrap" Margin="0,8,0,4" />
-                                                    <ItemsControl ItemsSource="{Binding Rows}" Focusable="False">
-                                                        <ItemsControl.ItemTemplate>
-                                                            <DataTemplate DataType="{x:Type vm:LibraryRowViewModel}">
-                                                                <Grid Margin="0,5">
-                                                                    <Grid.ColumnDefinitions>
-                                                                        <ColumnDefinition Width="190" />
-                                                                        <ColumnDefinition Width="*" />
-                                                                        <ColumnDefinition Width="Auto" />
-                                                                        <ColumnDefinition Width="Auto" />
-                                                                    </Grid.ColumnDefinitions>
-                                                                    <Grid.RowDefinitions>
-                                                                        <RowDefinition Height="Auto" />
-                                                                        <RowDefinition Height="Auto" />
-                                                                    </Grid.RowDefinitions>
-                                                                    <TextBlock Text="{Binding Title}" VerticalAlignment="Center" />
-                                                                    <TextBlock Grid.Column="1" Text="{Binding Summary}" Style="{StaticResource MutedText}" FontSize="12" VerticalAlignment="Center" TextTrimming="CharacterEllipsis" />
-                                                                    <TextBlock Grid.Column="2" Text="Keep newest" Style="{StaticResource MutedText}" FontSize="12" VerticalAlignment="Center" Margin="12,0,8,0" />
-                                                                    <ComboBox Grid.Column="3" Width="64" ItemsSource="{x:Static vm:LibraryRowViewModel.KeepChoices}" SelectedItem="{Binding Keep}"
-                                                                              AutomationProperties.Name="{Binding Title, StringFormat='Keep this many newest {0} builds'}" />
-                                                                    <TextBlock Grid.Row="1" Grid.Column="1" Grid.ColumnSpan="3" Text="{Binding Note}" Style="{StaticResource MutedText}" FontSize="11.5" Margin="0,2,0,0"
-                                                                               ToolTip="{Binding NoteDetails}"
-                                                                               Visibility="{Binding Note, Converter={StaticResource NullToVis}}" />
-                                                                </Grid>
-                                                            </DataTemplate>
-                                                        </ItemsControl.ItemTemplate>
-                                                    </ItemsControl>
-                                                    <CheckBox IsChecked="{Binding AutoClean}" Margin="0,10,0,4" AutomationProperties.Name="Delete old downloads automatically after each download">
-                                                        <TextBlock Text="Delete old downloads automatically after each download (imported builds always stay)" TextWrapping="Wrap" />
-                                                    </CheckBox>
-                                                    <TextBlock Text="{Binding AutoSkipped}" Style="{StaticResource MutedText}" FontSize="11.5" TextWrapping="Wrap" Margin="26,0,0,2"
-                                                               Visibility="{Binding AutoSkipped, Converter={StaticResource NullToVis}}" />
-                                                    <Grid Margin="0,6,0,8">
-                                                        <Grid.ColumnDefinitions>
-                                                            <ColumnDefinition Width="*" />
-                                                            <ColumnDefinition Width="Auto" />
-                                                        </Grid.ColumnDefinitions>
-                                                        <TextBlock Text="{Binding Freeable}" Style="{StaticResource MutedText}" FontSize="12" TextWrapping="Wrap" VerticalAlignment="Center" />
-                                                        <Button Grid.Column="1" Content="Clean up old builds…" Command="{Binding CleanCommand}" Margin="12,0,0,0"
-                                                                ToolTip="Shows what goes and how much space it frees, then asks before deleting" />
-                                                    </Grid>
-                                                </StackPanel>
-                                            </Border>
-
+                                        <!-- ===== App: game folders, app updates, GitHub token ===== -->
+                                        <StackPanel Visibility="{Binding Tab, Converter={StaticResource EqualsToVis}, ConverterParameter=App}">
                                             <TextBlock Text="GAME FOLDERS" Style="{StaticResource SectionTitle}" />
                                             <Border Style="{StaticResource Card}" Padding="16,6">
                                                 <StackPanel>
@@ -2522,7 +2633,7 @@
             </Border>
 
             <!-- About overlay -->
-            <Border Grid.Column="1" Background="{StaticResource Bg}" Visibility="{Binding AboutOpen, Converter={StaticResource BoolToVis}}">
+            <Border Grid.Column="1" Grid.RowSpan="2" Background="{StaticResource Bg}" Visibility="{Binding AboutOpen, Converter={StaticResource BoolToVis}}">
                 <v:Deferred x:Name="AboutHost" Show="{Binding AboutOpen}">
                     <v:Deferred.Template>
                         <DataTemplate>

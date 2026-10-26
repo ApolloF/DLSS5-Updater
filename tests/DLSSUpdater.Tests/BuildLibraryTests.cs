@@ -120,13 +120,13 @@ public sealed class BuildLibraryTests : IDisposable
         _store.Uplift = Release(Component.Uplift, "v1.4.2", "U2");
         var vm = NewGame();
 
-        Assert.Equal(["Default (v0.9.51)", "OptiScaler-NR v0.9.51", "OptiScaler-NR v0.9.47"], vm.OptiChoices.Select(c => c.Label));
-        Assert.Equal(["Default (v1.4.2)", "v1.4.2", "v1.3.0"], vm.UpliftChoices.Select(c => c.Label));
+        Assert.Equal(["Default · v0.9.51", "OptiScaler-NR v0.9.51", "OptiScaler-NR v0.9.47"], vm.OptiChoices.Select(c => c.Label));
+        Assert.Equal(["Default · v1.4.2", "v1.4.2", "v1.3.0"], vm.UpliftChoices.Select(c => c.Label));
         Assert.Null(vm.OptiChoice?.Tag);
 
         _settings.OptiTag = "v0.9.47";
         vm.RebuildAddonChoices();
-        Assert.Equal("Default (v0.9.47)", vm.OptiChoices[0].Label);
+        Assert.Equal("Default · v0.9.47", vm.OptiChoices[0].Label);
     }
 
     // ---------- migration ----------

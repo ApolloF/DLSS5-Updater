@@ -78,7 +78,7 @@ public static class HelpTopics
             "The runtime nvngx_dlssnr.dll is downloaded automatically too. " +
             "ShortFuse openNR describes compatible FP16 builds, including compat-fp16-310.9.16-cuda13.4.3 for RTX 20/30/40. " +
             "Versions come from DLL resources; hashes distinguish originals, compat builds and unverified files. " +
-            "Choose a default in Settings or a per-game version, then Switch NR. Switch back restores the previous build without changing other components."),
+            "Choose a default in Settings or a per-game version, then Use this runtime now. Restore previous runtime puts the previous build back without changing other components."),
         new("local-components", "General", "Local components", "Your library of imported and downloaded builds; the default is used unless a game picks its own.",
             "nvngx_dlssnr.dll (DLSS 5 neural rendering model) is downloaded automatically into your library, and you can import your own. ShortFuse compat-fp16-310.9.16-cuda13.4.3 targets RTX 20/30/40. Each imported version is kept in your library " +
             "and copied into each game. ReShade has its own library under Settings → ReShade add-ons. " +
@@ -595,7 +595,7 @@ public static class HelpTopics
         ["add-missing"] = "Leave on. It only adds a file to games that have none, and Uninstall removes it again.",
         ["ini-mode"] = "Keep game settings for everyday use: updates never undo tuning you did in-game. Apply app settings once after you changed something here and want " +
                        "it everywhere, then switch back. Fresh config when a mod's config got messy or a new release changed a lot.",
-        ["local-components"] = "The NR runtime is downloaded automatically; import any other nvngx_dlssnr.dll to keep it in the local library too. Choose the default here or a version on a game, then use Switch NR. Switch back restores its previous file. The ShortFuse and Lecram add-ons and Deep Fried Chicken keep a library too: downloaded or imported builds all stay (Lecram's add-on is import only), pick the default, and name builds yourself.",
+        ["local-components"] = "The NR runtime is downloaded automatically; import any other nvngx_dlssnr.dll to keep it in the local library too. Choose the default here or a version on a game, then use Use this runtime now. Restore previous runtime puts its previous file back. The ShortFuse and Lecram add-ons and Deep Fried Chicken keep a library too: downloaded or imported builds all stay (Lecram's add-on is import only), pick the default, and name builds yourself.",
         ["keybinds"] = "Pick keys the game doesn't use: Delete, Insert, End, Page Up/Down and \\ are usually free. Avoid Home if you use ReShade's default overlay key.",
         ["skip-tutorial"] = "On, unless you are new to ReShade.",
         ["performance-mode"] = "Off while you set up effects, on for playing. With only add-ons (RenoDX, MFG Unlock) and no effects it makes no difference.",
@@ -614,7 +614,7 @@ public static class HelpTopics
         ["nr-deferred"] = "Off, unless the cost of running at output resolution is too high.",
         ["nr-residual"] = "Off. Only try it with Ray Reconstruction and Run before upscaling both on.",
         ["nr-automask"] = "Default. Turn off only if people get odd edges.",
-        ["nr-private-upscaler"] = "Default (DLSS).",
+        ["nr-private-upscaler"] = "Default: DLSS.",
         ["mfg-reflex"] = "Game setting. Off (FG-safe) only when a game misbehaves with Reflex while frame generation is forced.",
         ["mfg-fps-cap"] = "Off, or a value a few frames under your refresh rate.",
         ["mfg-vrr-headroom"] = "On with G-Sync / VRR displays when frame times look uneven near the refresh rate.",
@@ -657,7 +657,7 @@ public static class HelpTopics
         ["dfc-vulkan"] = "Off, unless the game is native Vulkan. Then switch on and restart the game fully.",
         ["dfc-native-look"] = "Off. Try it if the model shifts the game's colours too far.",
         ["dfc-cleanup"] = "Off for one or two passes. Try it when colour casts show up with several passes.",
-        ["dfc-colour"] = "Default (1.0). Lower it in steps if colours look off.",
+        ["dfc-colour"] = "Default: 1.0. Lower it in steps if colours look off.",
         ["dfc-output"] = "Off. Try HUD protection for a crosshair or HUD the model changes, highlight protection for blown-out lights, deband for banding in skies.",
         ["rdx-scale"] = "100% on fast cards; 75% or 50% to save FPS.",
         ["rdx-ui"] = "Add-on default; On if the HUD looks processed.",

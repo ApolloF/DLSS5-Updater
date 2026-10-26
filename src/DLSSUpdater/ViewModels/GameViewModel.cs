@@ -143,6 +143,7 @@ public sealed partial class GameViewModel : ObservableObject
             RefreshAddonPairStatus();
             NotifyDfcHint();
             RefreshModPick();
+            if (!_loading) SyncPick();
         };
         Info = info;
         Load(info);
@@ -197,6 +198,7 @@ public sealed partial class GameViewModel : ObservableObject
         if (_loading) return;
         _s.Settings.For(Id).Mode = value == _s.Settings.DefaultMode ? null : value;
         _s.Settings.Save();
+        SyncPick();
         RefreshStatus();
     }
 
@@ -461,7 +463,7 @@ public sealed partial class GameViewModel : ObservableObject
     private void RebuildIniModeChoices()
     {
         var global = SettingsOptions.IniModes.FirstOrDefault(m => m.Value == _s.Settings.IniMode) ?? SettingsOptions.IniModes[0];
-        IniModeChoices = [new OptionChoice($"Default ({global.Label})", null, "Follows Settings: " + global.Description), .. SettingsOptions.IniModes];
+        IniModeChoices = [new OptionChoice($"Default · {global.Label}", null, "Follows Settings: " + global.Description), .. SettingsOptions.IniModes];
         OnPropertyChanged(nameof(IniModeChoices));
         OnPropertyChanged(nameof(IniModeChoice));
     }
@@ -622,6 +624,8 @@ public sealed partial class GameViewModel : ObservableObject
     public bool DlssOutdated => HasDlss && LatestDlss is not null && !DlssCurrent;
     public string? DlssOutdatedTip => !DlssOutdated ? null : DlssPinned ? "Not the DLSS version chosen for this game" : "Newer DLSS available";
     public string DlssBadgeText => DlssBadge + (DlssOutdated ? " ↑" : "");
+    /// <summary>What the DLSS badge's colour means: yellow outline behind, green outline current.</summary>
+    public string DlssBadgeTip => DlssOutdatedTip ?? (DlssCurrent ? "DLSS up to date" : "DLSS version found in the game");
     public bool DlssCurrent => LatestDlss is { } l && Info.Dlss.All(d => d.Version is { } v && (DlssPinned ? Trim(v) == l : Trim(v) >= l));
 
     [ObservableProperty] private bool _needsUpdate;
@@ -686,7 +690,7 @@ public sealed partial class GameViewModel : ObservableObject
         var pinned = _s.Settings.Games.GetValueOrDefault(Id)?.DlssTag;
         DlssChoices.Clear();
         var global = _s.Settings.DlssTag ?? $"latest{(_s.Store.Dlss is { } l ? " · " + l.Tag : "")}";
-        DlssChoices.Add(new DlssChoice(null, $"Default ({global})"));
+        DlssChoices.Add(new DlssChoice(null, $"Default · {global}"));
         foreach (var r in _s.Store.DlssReleases.Concat(ComponentStore.CachedReleases(Component.Dlss)).DistinctBy(r => r.Tag)) DlssChoices.Add(new DlssChoice(r.Tag, r.Tag));
         if (pinned is not null && DlssChoices.All(c => c.Tag != pinned)) DlssChoices.Add(new DlssChoice(pinned, pinned));
         DlssChoice = DlssChoices.FirstOrDefault(c => c.Tag == pinned) ?? DlssChoices[0];
@@ -704,7 +708,7 @@ public sealed partial class GameViewModel : ObservableObject
         var versions = _s.Store.DlssNrVersions;
         var global = _s.Settings.DlssNrId;
         var follows = versions.FirstOrDefault(v => v.Id == global) ?? (global is null ? versions.FirstOrDefault() : null);
-        NrChoices.Add(new DlssChoice(null, $"Default ({follows?.Version ?? "none in library"})"));
+        NrChoices.Add(new DlssChoice(null, $"Default · {follows?.Version ?? "none in library"}"));
         foreach (var c in BuildPickerList.Merge(versions.Select(v => v.ToPickerEntry()), _s.CatalogOffers(CatalogBuildKind.DlssNr).Select(o => o.ToEntry())))
             NrChoices.Add(new DlssChoice(c.Tag, c.Label));
         if (pin is not null && NrChoices.All(c => c.Tag != pin)) NrChoices.Add(new DlssChoice(pin, "Missing NR file · import again"));
@@ -738,25 +742,25 @@ public sealed partial class GameViewModel : ObservableObject
     internal static string NewestUpliftLabel(ComponentStore store) => store.Uplift is { } r ? $"newest: {r.Tag}" : "newest";
 
     /// <summary>
-    /// "Default (v0.1.32-f5)" naming the tag the default installs (the row already names the build), then the library
+    /// "Default · v0.1.32-f5" naming the tag the default installs (the row already names the build), then the library
     /// newest first, then a game pick the library lost.
     /// </summary>
     private static DlssChoice FillBuildChoices(ObservableCollection<DlssChoice> list, IReadOnlyList<LibraryBuild> builds, string? global, string? newest, string? pin)
     {
         list.Clear();
-        list.Add(new DlssChoice(null, $"Default ({global ?? newest ?? "newest"})"));
+        list.Add(new DlssChoice(null, $"Default · {global ?? newest ?? "newest"}"));
         foreach (var b in builds) list.Add(new DlssChoice(b.Id, b.Label));
         if (pin is not null && list.All(c => c.Tag != pin)) list.Add(new DlssChoice(pin, $"{pin} · not downloaded"));
         return list.FirstOrDefault(c => c.Tag == pin) ?? list[0];
     }
 
-    /// <summary>"Default (...)" naming what the default installs, the moving channels, then every build in the library.</summary>
+    /// <summary>"Default · ..." naming what the default installs, the moving channels, then every build in the library.</summary>
     private DlssChoice FillReShadeChoices(string? pin)
     {
         var store = _s.Store;
         ReShadeChoices.Clear();
         var follows = store.ReShadeBuildFor(null);
-        ReShadeChoices.Add(new DlssChoice(null, $"Default ({follows?.Label ?? (store.ReShade is { } r ? r.Tag + " · not downloaded yet" : "none yet")})"));
+        ReShadeChoices.Add(new DlssChoice(null, $"Default · {follows?.Label ?? (store.ReShade is { } r ? r.Tag + " · not downloaded yet" : "none yet")}"));
         foreach (var c in new[] { ReShadeChannel.Stable, ReShadeChannel.StableNoAddons, ReShadeChannel.Nightly })
             ReShadeChoices.Add(new DlssChoice(ReShadePick.ForChannel(c), "Newest " + ReShadeBuild.ChannelLabel(c).ToLowerInvariant()));
         foreach (var b in store.ReShadeBuilds) ReShadeChoices.Add(new DlssChoice(b.Id, b.Label));
@@ -778,7 +782,7 @@ public sealed partial class GameViewModel : ObservableObject
         var global = _s.Settings.AddonId(kind);
         var follows = builds.FirstOrDefault(b => b.Id == global) ?? builds.FirstOrDefault();
         list.Clear();
-        list.Add(new DlssChoice(null, $"Default ({follows?.Name ?? "none imported"})"));
+        list.Add(new DlssChoice(null, $"Default · {follows?.Name ?? "none imported"}"));
         var offers = catalogKind is { } ck ? _s.CatalogOffers(ck).Select(o => o.ToEntry()) : [];
         foreach (var c in BuildPickerList.Merge(builds.Select(b => b.ToPickerEntry()), offers)) list.Add(new DlssChoice(c.Tag, c.Label));
         if (pin is not null && list.All(c => c.Tag != pin)) list.Add(new DlssChoice(pin, "Missing add-on file · import again"));
@@ -1028,6 +1032,7 @@ public sealed partial class GameViewModel : ObservableObject
         OnPropertyChanged(nameof(DlssCurrent));
         OnPropertyChanged(nameof(DlssOutdated));
         OnPropertyChanged(nameof(DlssOutdatedTip));
+        OnPropertyChanged(nameof(DlssBadgeTip));
         OnPropertyChanged(nameof(DlssBadgeText));
         RefreshHdr();
     }

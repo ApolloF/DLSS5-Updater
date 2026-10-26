@@ -87,7 +87,7 @@ public sealed partial class HdrViewModel(GameViewModel game, Services services) 
 
     public string UeHintText => UeHint;
 
-    /// <summary>"Default (...)" naming the catalog's current build, then the library's builds of the picked mod, newest first.</summary>
+    /// <summary>"Default · ..." naming the catalog's current build, then the library's builds of the picked mod, newest first.</summary>
     public ObservableCollection<DlssChoice> BuildChoices { get; } = [];
 
     [ObservableProperty] private DlssChoice? _buildChoice;
@@ -161,7 +161,7 @@ public sealed partial class HdrViewModel(GameViewModel game, Services services) 
         BuildChoices.Clear();
         if (_picked is { IsOffered: true, Kind: not HdrKind.Custom } picked && library is not null)
         {
-            BuildChoices.Add(new DlssChoice(null, $"Default ({picked.File!.Version})"));
+            BuildChoices.Add(new DlssChoice(null, $"Default · {picked.File!.Version}"));
             foreach (var b in HdrPin.Candidates(picked, library)) BuildChoices.Add(new DlssChoice(b.Id, b.Version));
             if (pin is not null && BuildChoices.All(c => c.Tag != pin)) BuildChoices.Add(new DlssChoice(pin, "Pinned build not in the library"));
             BuildChoice = BuildChoices.FirstOrDefault(c => c.Tag == pin) ?? BuildChoices[0];

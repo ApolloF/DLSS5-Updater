@@ -43,4 +43,40 @@ public class UiTextTests
         news.IsNew = true;
         Assert.Equal("Release notes for DLSS, new release", news.AutomationName);
     }
+
+    [Theory]
+    [InlineData(1, "1 game has updates available")]
+    [InlineData(4, "4 games have updates available")]
+    public void Update_count_uses_a_real_plural(int n, string expected) =>
+        Assert.Equal(expected, MainViewModel.UpdatesAvailableText(n));
+
+    [Theory]
+    [InlineData(1, 0, "Updated 1 game")]
+    [InlineData(3, 0, "Updated 3 games")]
+    [InlineData(3, 1, "1 game couldn't be updated. Details are in the log.")]
+    [InlineData(3, 2, "2 games couldn't be updated. Details are in the log.")]
+    public void Update_all_result_uses_a_real_plural(int updated, int failed, string expected) =>
+        Assert.Equal(expected, MainViewModel.UpdateAllResultText(updated, failed));
+
+    [Fact]
+    public void No_view_model_has_a_picker_label_with_brackets_or_game_s()
+    {
+        var dir = Path.Combine(RepoRoot(), "src", "DLSSUpdater", "ViewModels");
+        foreach (var file in Directory.EnumerateFiles(dir, "*.cs"))
+        {
+            var text = File.ReadAllText(file);
+            // Literal labels too, not just interpolated ones: pickers say "Default · 4".
+            Assert.DoesNotContain("\"Default (", text);
+            Assert.DoesNotContain("\"Inherit (", text);
+            Assert.DoesNotContain("game(s)", text);
+        }
+    }
+
+    private static string RepoRoot()
+    {
+        var dir = new DirectoryInfo(AppContext.BaseDirectory);
+        while (dir is not null && !File.Exists(Path.Combine(dir.FullName, "DLSSUpdater.sln")) && !Directory.Exists(Path.Combine(dir.FullName, ".git")))
+            dir = dir.Parent;
+        return dir?.FullName ?? throw new DirectoryNotFoundException("repo root not found");
+    }
 }

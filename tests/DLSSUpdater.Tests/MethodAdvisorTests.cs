@@ -41,7 +41,7 @@ public sealed class MethodAdvisorTests
         Assert.Equal([1], a.Rows);
         Assert.Equal([Method.DlssUpdate, Method.OptiScaler, Method.NeuralAddon, Method.OptiScalerNr], Order(a));
         Assert.Equal(Method.DlssUpdate, a.Top!.Method);
-        Assert.Contains("cheapest and safest", Option(a, Method.DlssUpdate).Reason);
+        Assert.Contains("Restore DLSS", Option(a, Method.DlssUpdate).Reason);
         Assert.Equal([ComponentRegistry.Dlss], Option(a, Method.DlssUpdate).Components);
     }
 
@@ -543,6 +543,10 @@ public sealed class MethodAdvisorTests
             var summary = MethodAdvisor.SummaryOf(m);
             Assert.False(string.IsNullOrWhiteSpace(summary));
             Assert.EndsWith(".", summary);
+            // Says what goes in or changes: no selling words, no advice, not the card title again.
+            Assert.DoesNotContain(MethodAdvisor.TitleOf(m), summary);
+            foreach (var word in new[] { "sharper", "steadier", "better", "safest", "best", "look" })
+                Assert.DoesNotMatch($@"(?i)\b{word}\b", summary);
         }
         Assert.Equal(MethodAdvisor.SummaryOf(Method.MfgUnlock), Option(Advise(Game(dlss: true, fg: true)), Method.MfgUnlock).Summary);
     }

@@ -159,7 +159,7 @@ public sealed partial class DxvkViewModel(GameViewModel game, Services services)
     {
         _filling = true;
         BuildChoices.Clear();
-        BuildChoices.Add(new DlssChoice(null, $"Default ({DxvkLibrary.AutoLabel(DefaultPick)[6..^1]})"));
+        BuildChoices.Add(new DlssChoice(null, $"Default · {DxvkLibrary.AutoLabel(DefaultPick)[6..^1]}"));
         foreach (var c in Enum.GetValues<DxvkChannel>())
             BuildChoices.Add(new DlssChoice(DxvkChannels.Id(c), $"Newest {DxvkChannels.Label(c)}" + (DxvkLibrary.Choose(DxvkChannels.Id(c)) is { } b ? $" ({b.Label})" : "")));
         foreach (var b in DxvkLibrary.Builds()) BuildChoices.Add(new DlssChoice(b.Id, b.Label));

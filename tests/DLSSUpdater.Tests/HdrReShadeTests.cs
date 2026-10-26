@@ -290,13 +290,13 @@ public class HdrReShadeTests : IDisposable
     public async Task The_picker_lists_Default_and_the_library_builds_of_the_mod_and_stores_the_pick_per_game()
     {
         var vm = Vm(out var s);
-        Assert.Equal(["Default (2026-10-21-aaaaaaa)"], vm.Hdr.BuildChoices.Select(c => c.Label));
+        Assert.Equal(["Default · 2026-10-21-aaaaaaa"], vm.Hdr.BuildChoices.Select(c => c.Label));
         Assert.True(vm.Hdr.ShowBuildChoices);
         await vm.Hdr.InstallAsync(null, default);
         var id = CatalogFixtures.Sha(HdrFixtures.UeExtContent);
 
         vm.RefreshHdr();
-        Assert.Equal(["Default (2026-10-21-aaaaaaa)", "2026-10-21-aaaaaaa"], vm.Hdr.BuildChoices.Select(c => c.Label));
+        Assert.Equal(["Default · 2026-10-21-aaaaaaa", "2026-10-21-aaaaaaa"], vm.Hdr.BuildChoices.Select(c => c.Label));
         Assert.Null(vm.Hdr.BuildChoice!.Tag);
 
         vm.Hdr.BuildChoice = vm.Hdr.BuildChoices[1];
