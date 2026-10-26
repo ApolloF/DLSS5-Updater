@@ -518,13 +518,22 @@ public sealed partial class Installer(ComponentStore store)
         if (currentIni is not null && m.Owns(ctx.Rel(iniPath)) && m.OptiIni.Keys.Any(Lacks))
         {
             var cur = IniFile.Parse(currentIni);
+            var dropped = new List<string>();
             foreach (var id in m.OptiIni.Keys.Where(Lacks).ToList())
             {
                 var slash = id.IndexOf('/');
-                if (string.Equals(cur.Get(id[..slash], id[(slash + 1)..]), m.OptiIni[id], StringComparison.OrdinalIgnoreCase)) cur.Remove(id[..slash], id[(slash + 1)..]);
+                if (string.Equals(cur.Get(id[..slash], id[(slash + 1)..]), m.OptiIni[id], StringComparison.OrdinalIgnoreCase))
+                {
+                    cur.Remove(id[..slash], id[(slash + 1)..]);
+                    dropped.Add($"[{id[..slash]}] {id[(slash + 1)..]}={m.OptiIni[id]}");
+                }
                 m.OptiIni.Remove(id);
             }
             currentIni = cur.ToString();
+            // Not mapped to the new HDR output keys on purpose: ForceHDR only set the colour space, HDR output does much more.
+            if (dropped.Count > 0)
+                Log.Info($"  OptiScaler {tag} doesn't read {string.Join(", ", dropped)} any more, removed from OptiScaler.ini"
+                         + (dropped.Any(d => d.StartsWith("[HDR] ForceHDR", StringComparison.OrdinalIgnoreCase)) ? ". HDR output is off until you turn it on in the game's options" : ""));
         }
         var profile = ConfigProfile.WithRequired(o.Overrides, o);
         profile.RemoveAll(x => Lacks(x.Id));
@@ -976,9 +985,14 @@ public sealed partial class Installer(ComponentStore store)
     private static IEnumerable<(string Section, string Key)> MfgKeysOf(string? optiTag) =>
         optiTag is null ? MfgConflictKeys : MfgConflictKeys.Where(k => !OptiSources.OfTag(optiTag).Lacks(k.Section, k.Key, optiTag));
 
-    /// <summary>[DLSSG] keys are true/false; [MFGUnlock] keys are auto/false (off), detect or true.</summary>
-    private static bool IsUnlockOn(string? value) =>
-        value is not null && (value.Equals("true", StringComparison.OrdinalIgnoreCase) || value == "1" || value.Equals("detect", StringComparison.OrdinalIgnoreCase));
+    /// <summary>
+    /// [DLSSG] keys are true/false (1 counts as on). [MFGUnlock] keys follow F5's MfgUnlock::ParseMode: true/on and detect run the
+    /// unlock; auto, empty, false/off and anything else leave it off.
+    /// </summary>
+    private static bool IsUnlockOn(string section, string? value) =>
+        value is not null && (section.Equals("MFGUnlock", StringComparison.OrdinalIgnoreCase)
+            ? value.Equals("true", StringComparison.OrdinalIgnoreCase) || value.Equals("on", StringComparison.OrdinalIgnoreCase) || value.Equals("detect", StringComparison.OrdinalIgnoreCase)
+            : value.Equals("true", StringComparison.OrdinalIgnoreCase) || value == "1");
 
     private static bool MfgAddonInPlay(string targetDir, InstallOptions o) =>
         !o.ReShadeOnly && (o.Mfg || (o.KeepMfg && o.Opti && InstallManifest.Read(targetDir)?.Mfg == true));
@@ -1001,7 +1015,9 @@ public sealed partial class Installer(ComponentStore store)
         if (!o.Opti) { if (!File.Exists(iniPath)) return null; o = o with { Overrides = [], CarryOverIni = true }; optiTag = record?.OptiTag; }
         var current = o.CarryOverIni && File.Exists(iniPath) ? File.ReadAllText(iniPath) : null;
         var effective = IniFile.Parse(ConfigProfile.Merge(current ?? "", current, o.Overrides, o.CarryOverIni, record?.OptiIni, o.OverwriteIni).Text);
-        var on = MfgKeysOf(optiTag).Where(k => IsUnlockOn(effective.Get(k.Section, k.Key))).Select(k => $"[{k.Section}] {k.Key}").ToList();
+        // One section tag per group keeps the 3.0.0 text ("[DLSSG] AdaMfgUnlock, AmpereMfgUnlock"): it is the conflict key stored confirmations match.
+        var on = MfgKeysOf(optiTag).Where(k => IsUnlockOn(k.Section, effective.Get(k.Section, k.Key)))
+            .GroupBy(k => k.Section).Select(g => $"[{g.Key}] {string.Join(", ", g.Select(k => k.Key))}").ToList();
         return on.Count == 0 ? null
             : $"OptiScaler's built-in MFG unlock ({string.Join(", ", on)}) is on next to the MFG Unlock add-on: both unlock MFG, and OptiScaler says never to combine them.";
     }

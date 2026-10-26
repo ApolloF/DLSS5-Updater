@@ -1227,6 +1227,17 @@ public class InstallerTests : IDisposable
     }
 
     [Fact]
+    public async Task MfgAddonWithOpti_AConfirmationStoredBy300_StillMatches()
+    {
+        File.WriteAllText(Path.Combine(_target, "OptiScaler.ini"), "[DLSSG]\nAdaMfgUnlock=true\nAmpereMfgUnlock=1\n");
+        const string stored = "OptiScaler's built-in MFG unlock ([DLSSG] AdaMfgUnlock, AmpereMfgUnlock) is on next to the MFG Unlock add-on: both unlock MFG, and OptiScaler says never to combine them.";
+
+        Assert.Equal(stored, Installer.ConflictKey(Installer.Conflicts(_target, Full)));
+        await new Installer(_store).InstallAsync(Game(), _target, Full with { ConfirmedConflict = stored }, null, default);
+        Assert.Equal(stored, InstallManifest.Read(_target)!.ConfirmedConflict);
+    }
+
+    [Fact]
     public async Task MfgAddonWithOpti_ConfirmedOverride_KeepsBoth_AndTheWarningStays()
     {
         var keepBoth = Full with { Overrides = [.. TestProfiles.Recommended(), new("DLSSG", "AdaMfgUnlock", "true")] };
@@ -1330,9 +1341,14 @@ public class InstallerTests : IDisposable
         Assert.Equal("false", ini.Get("DLSSG", "AmpereMfgUnlock"));
         Assert.Null(ini.Get("MFGUnlock", "RTX40"));
 
-        // 0.1.34 reads a ForceHDR=true left behind as HDR output on, so the one we wrote goes with the other removed keys.
+        // 0.1.34 reads a ForceHDR=true left behind as HDR output on, so the one we wrote goes with the other removed keys, and the log says so.
         SeedF5("v0.1.34-f5", F5NewIni, bundledStreamline: true);
-        await installer.InstallAsync(Game(), _target, o, null, default);
+        var lines = new List<string>();
+        void Capture(string line) { lock (lines) lines.Add(line); }
+        Log.Line += Capture;
+        try { await installer.InstallAsync(Game(), _target, o, null, default); }
+        finally { Log.Line -= Capture; }
+        Assert.Contains(lines, l => l.Contains("[HDR] ForceHDR=true") && l.Contains("HDR output is off"));
         ini = IniFile.Load(Path.Combine(_target, "OptiScaler.ini"));
         Assert.Null(ini.Get("HDR", "ForceHDR"));
         Assert.Null(ini.Get("HDR", "SkipColorSpace"));
@@ -1365,8 +1381,12 @@ public class InstallerTests : IDisposable
     [Theory]
     [InlineData("detect", true)]
     [InlineData("true", true)]
+    [InlineData("on", true)]
+    [InlineData("ON", true)]
     [InlineData("auto", false)]
     [InlineData("false", false)]
+    [InlineData("off", false)]
+    [InlineData("1", false)]
     public async Task F5MfgUnlock_DetectOrOnNextToTheAddon_IsAConflict(string value, bool conflict)
     {
         SeedF5("v0.1.34-f5", F5NewIni, bundledStreamline: false);
