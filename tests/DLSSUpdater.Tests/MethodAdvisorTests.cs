@@ -86,6 +86,26 @@ public sealed class MethodAdvisorTests
     }
 
     [Fact]
+    public void Row4_MfgUnlockIsAnAddOn_NeverAChoiceOrTheRecommendation()
+    {
+        var a = Advise(Game(dlss: true, fg: true), Rtx40);
+
+        Assert.True(Option(a, Method.MfgUnlock).IsAddOn);
+        Assert.Equal([Method.MfgUnlock], a.AddOns.Select(m => m.Method));
+        Assert.DoesNotContain(a.Choices, m => m.Method == Method.MfgUnlock);
+        Assert.All(a.Choices, m => Assert.False(m.IsAddOn));
+        Assert.Equal(Method.DlssUpdate, a.Top?.Method);
+    }
+
+    [Fact]
+    public void MfgUnlockIsNotRecommended_EvenWhenNothingElseIsSelectable()
+    {
+        var mfg = new MethodOption(Method.MfgUnlock, "MFG Unlock", Availability.Available, "r", [ComponentRegistry.MfgUnlock], [], null, false);
+
+        Assert.Null(new MethodAdvice([mfg], [4], null).Top);
+    }
+
+    [Fact]
     public void Row4_OnRtx50_MfgUnlockIsNotNeeded()
     {
         var a = Advise(Game(dlss: true, fg: true), Rtx50);
