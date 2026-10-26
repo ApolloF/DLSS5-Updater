@@ -146,6 +146,3 @@ Measured against this guideline on main (after #63, #66 and #67). Each is fixed 
 - **OptiScaler F5 vendor-neutral forwarder**: since 0.1.33 F5 releases carry `Optional-Vendor-Neutral-DLSS5-Forwarder.zip`, an
   `nvngx.dll_dlssnr.dll` that runs the NR model itself so AMD and Intel GPUs can use DLSS-NR (DirectML, DirectX 12, 310.9
   `nvngx_dlssnr.dll` only). The app installs only the main zip and its NVIDIA forwarder; it doesn't offer this one as an option.
-- **Per-game OptiScaler key availability**: options of one F5 version only (`OptiSource.VersionedKeys`) are shown for the
-  Settings default build, also on a game page that picks another build. The installer still writes only the keys of the
-  build it installs.

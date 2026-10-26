@@ -289,6 +289,12 @@ public sealed partial class GameViewModel : ObservableObject
     public ObservableCollection<DlssChoice> UpliftChoices { get; } = [];
     /// <summary>The OptiScaler build this game installs: its own pick, else the default; null is the newest release of the selected source.</summary>
     public string? EffectiveOptiTag => OptiChoice?.Tag ?? _s.Settings.OptiTag;
+    /// <summary>
+    /// The build the next install writes this game's OptiScaler options for: its pick, else the default, else the newest release of
+    /// the source (unknown before the first check, which means the tested build).
+    /// </summary>
+    internal (OptiSource Source, string? Tag) OptiBuildForRows =>
+        (SelectedBuild, EffectiveOptiTag ?? (_s.Store.Opti is { } latest && OptiSources.OfTag(latest.Tag) == SelectedBuild ? latest.Tag : null));
     public string? EffectiveUpliftTag => UpliftChoice?.Tag ?? _s.Settings.UpliftTag;
     public bool RenoDxEnabled => On("renodx");
     public bool LecramEnabled => On("lecram");
@@ -516,6 +522,7 @@ public sealed partial class GameViewModel : ObservableObject
         OnPropertyChanged(nameof(ModeHint));
         RefreshModPick();
         RefreshStatus();
+        if (_rowsBuilt) RefreshConfigRows();
     }
 
     private void NotifyModShown()
@@ -553,14 +560,14 @@ public sealed partial class GameViewModel : ObservableObject
         Fill(LecramRows, GameOptionViewModel.Definitions.Lecram, true, () => _s.Store.LecramBuildFor(EffectiveLecramId));
         Fill(UpliftRows, GameOptionViewModel.Definitions.Uplift, true);
         Fill(DfcRows, GameOptionViewModel.Definitions.Dfc, true, available: key => _s.Store.DfcCompat([key], EffectiveDfcId) is not { MissingKeys.Count: > 0 });
-        Fill(NrRows, GameOptionViewModel.Definitions.Nr, false);
-        Fill(TonemapRows, GameOptionViewModel.Definitions.Tonemap, false);
-        Fill(HdrRows, GameOptionViewModel.Definitions.HdrOutput, false);
+        Fill(NrRows, GameOptionViewModel.Definitions.Nr, false, opti: () => OptiBuildForRows);
+        Fill(TonemapRows, GameOptionViewModel.Definitions.Tonemap, false, opti: () => OptiBuildForRows);
+        Fill(HdrRows, GameOptionViewModel.Definitions.HdrOutput, false, opti: () => OptiBuildForRows);
 
         void Fill(ObservableCollection<GameOptionViewModel> rows, IEnumerable<IniOptionViewModel> defs, bool reShade, Func<AddonBuild?>? lecram = null,
-            Func<string, bool>? available = null)
+            Func<string, bool>? available = null, Func<(OptiSource, string?)>? opti = null)
         {
-            foreach (var d in defs) rows.Add(new GameOptionViewModel(d, reShade, _s.Settings, Id, lecram, available));
+            foreach (var d in defs) rows.Add(new GameOptionViewModel(d, reShade, _s.Settings, Id, lecram, available, opti));
         }
     }
 
