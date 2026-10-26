@@ -88,7 +88,8 @@ public sealed class LecramUpdateTests : IDisposable
     }
 
     /// <summary>Serves a listing (<paramref name="folders"/> maps folder key to its files), landing pages and downloads.</summary>
-    private static FakeMediaFire Server(Dictionary<string, Remote[]> folders, Func<Remote, byte[]>? serve = null, int perChunk = 100) => new(r =>
+    private static FakeMediaFire Server(Dictionary<string, Remote[]> folders, Func<Remote, byte[]>? serve = null, int perChunk = 100,
+        Func<Remote, HttpContent>? content = null) => new(r =>
     {
         var url = r.RequestUri!;
         if (url.Host == "www.mediafire.com" && url.AbsolutePath.StartsWith("/api/"))
@@ -107,7 +108,7 @@ public sealed class LecramUpdateTests : IDisposable
         if (url.Host == "download1.mediafire.test")
         {
             var remote = folders.Values.SelectMany(f => f).First(f => f.Key == url.AbsolutePath.Trim('/'));
-            return new HttpResponseMessage(HttpStatusCode.OK) { Content = new ByteArrayContent(serve?.Invoke(remote) ?? remote.Data) };
+            return new HttpResponseMessage(HttpStatusCode.OK) { Content = content?.Invoke(remote) ?? new ByteArrayContent(serve?.Invoke(remote) ?? remote.Data) };
         }
         var key = url.Segments[2].Trim('/');
         return new HttpResponseMessage(HttpStatusCode.OK)
@@ -342,6 +343,68 @@ public sealed class LecramUpdateTests : IDisposable
         Assert.False(File.Exists(dest));
     }
 
+    /// <summary>Sends the first <paramref name="sent"/> bytes, then nothing until the read is cancelled, as MediaFire does when it stalls.</summary>
+    private sealed class StallingStream(byte[] data, int sent) : Stream
+    {
+        private int _pos;
+        public override async ValueTask<int> ReadAsync(Memory<byte> buffer, CancellationToken ct = default)
+        {
+            if (_pos >= sent) await Task.Delay(Timeout.Infinite, ct);
+            var n = Math.Min(buffer.Length, sent - _pos);
+            data.AsMemory(_pos, n).CopyTo(buffer);
+            _pos += n;
+            return n;
+        }
+        public override int Read(byte[] buffer, int offset, int count) => throw new NotSupportedException();
+        public override bool CanRead => true;
+        public override bool CanSeek => false;
+        public override bool CanWrite => false;
+        public override long Length => data.Length;
+        public override long Position { get => _pos; set => throw new NotSupportedException(); }
+        public override void Flush() { }
+        public override long Seek(long offset, SeekOrigin origin) => throw new NotSupportedException();
+        public override void SetLength(long value) => throw new NotSupportedException();
+        public override void Write(byte[] buffer, int offset, int count) => throw new NotSupportedException();
+    }
+
+    private static HttpContent Stalling(Remote remote)
+    {
+        var content = new StreamContent(new StallingStream(remote.Data, remote.Data.Length / 2));
+        content.Headers.ContentLength = remote.Data.Length;
+        return content;
+    }
+
+    [Fact]
+    public async Task Download_GivesUpWhenMediaFireStopsSending()
+    {
+        var setup = SetupRemote("v12.0.0", "2026-10-24T04:25:22Z");
+        var client = new MediaFireClient(Server(Channel(setup), content: Stalling)) { StallTimeout = TimeSpan.FromMilliseconds(200) };
+        var latest = (await client.CheckAsync(Folder, CancellationToken.None)).Latest!;
+        var dest = Path.Combine(_tmp, "dl", "file");
+
+        var ex = await Assert.ThrowsAsync<HttpRequestException>(() => client.DownloadAsync(latest, dest, CancellationToken.None).WaitAsync(TimeSpan.FromSeconds(20)));
+        Assert.Contains("sent nothing", ex.Message);
+        Assert.False(File.Exists(dest));
+    }
+
+    [Fact]
+    public async Task Download_ReportsItsProgress()
+    {
+        var setup = SetupRemote("v12.0.0", "2026-10-24T04:25:22Z");
+        var client = new MediaFireClient(Server(Channel(setup)));
+        var latest = (await client.CheckAsync(Folder, CancellationToken.None)).Latest!;
+        var reports = new List<TransferProgress>();
+
+        await client.DownloadAsync(latest, Path.Combine(_tmp, "dl", "file"), CancellationToken.None, new SyncProgress(reports.Add));
+
+        Assert.Contains(reports, p => p.Text.StartsWith("Downloading DLSS5-NR-Setup-v12.0.0.exe") && p.Fraction is > 0 and <= 1);
+    }
+
+    private sealed class SyncProgress(Action<TransferProgress> report) : IProgress<TransferProgress>
+    {
+        public void Report(TransferProgress value) => report(value);
+    }
+
     // ---------- the library ----------
 
     private static Remote SetupRemote(string version, string created, bool absolute = false) =>
@@ -409,6 +472,30 @@ public sealed class LecramUpdateTests : IDisposable
         Assert.Equal("v12.0.0", _store.LecramBuildFor(null)!.DetectedLabel);
         Assert.Equal(("r1xp6x0i043wx", "v12.0.0"), (settings.LecramFolderKey, settings.LecramLastVersion));
         Assert.Contains("v12.0.0", settings.LecramLastResult);
+    }
+
+    [Fact]
+    public async Task Update_AStalledV12Download_FinishesTheCheckAndKeepsTheLibrary()
+    {
+        var v119 = SetupRemote("v11.9.0", "2026-10-21T23:11:05Z");
+        var settings = new AppSettings { LecramFolderKey = "wrwi1qkpgy0qu" };
+        await _store.CheckLecramAsync(settings, new MediaFireClient(Server(new() { ["wrwi1qkpgy0qu"] = [v119] })), CancellationToken.None);
+        var folders = new Dictionary<string, Remote[]>
+        {
+            ["r1xp6x0i043wx"] = [SetupRemote("v12.0.0", "2026-10-24T04:25:22Z")],
+            ["wrwi1qkpgy0qu"] = [v119],
+        };
+        var stalled = new MediaFireClient(Server(folders, content: Stalling)) { StallTimeout = TimeSpan.FromMilliseconds(200) };
+
+        await _store.CheckLecramAsync(settings, stalled, CancellationToken.None).WaitAsync(TimeSpan.FromSeconds(20));
+
+        Assert.StartsWith("Check failed", settings.LecramLastResult);
+        Assert.Equal("v11.9.0", Assert.Single(_store.LecramBuilds).DetectedLabel);
+        Assert.Empty(Directory.GetDirectories(AppPaths.Cache, "lecram-download-*"));
+
+        // The next check, with MediaFire sending again, brings v12 in.
+        await _store.CheckLecramAsync(settings, new MediaFireClient(Server(folders)), CancellationToken.None);
+        Assert.Equal("v12.0.0", _store.LecramBuildFor(null)!.DetectedLabel);
     }
 
     [Fact]

@@ -27,6 +27,18 @@ public static class AppPaths
         }
     }
 
+    /// <summary>
+    /// The folder after <c>--data-root</c>, for checking a real start against a copy of the data (settings, library, games)
+    /// without touching the user's own folder. Only a folder under %TEMP% counts; anything else is null.
+    /// </summary>
+    public static string? TempRootArg(IReadOnlyList<string> args)
+    {
+        var i = args.ToList().FindIndex(a => a.Equals("--data-root", StringComparison.OrdinalIgnoreCase));
+        if (i < 0 || i + 1 >= args.Count || args[i + 1].StartsWith("--")) return null;
+        var root = Path.GetFullPath(args[i + 1]);
+        return FileUtil.IsUnder(root, Path.GetTempPath()) ? root : null;
+    }
+
     public static string Cache => Path.Combine(Root, "cache");
     public static string Components => Path.Combine(Root, "components");
     public static string SettingsFile => Path.Combine(Root, "settings.json");
