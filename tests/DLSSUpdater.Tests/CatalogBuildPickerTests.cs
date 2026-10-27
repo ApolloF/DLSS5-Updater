@@ -382,7 +382,10 @@ public sealed class CatalogBuildPickerTests : IDisposable
             return true;
         }, sections);
 
-        Assert.Equal([null, "catalog:" + newest.Sha256, "catalog:" + older.Sha256, own.Id], vm.NrChoices.Select(c => c.Tag));
+        // The default follows the library's own 310.7.0 (the first row); the catalog's 310.8.3 is newer and marked so.
+        Assert.Equal([null, "catalog:" + newest.Sha256, "catalog:" + older.Sha256], vm.NrChoices.Select(c => c.Tag));
+        Assert.StartsWith("Default · 310.7.0", vm.NrChoices[0].Label);
+        Assert.Equal("310.8.3 · newest · download", vm.NrChoices[1].Label);
         Assert.Equal("310.8.0 · download", vm.NrChoices[2].Label);
 
         vm.NrChoice = vm.NrChoices[2];

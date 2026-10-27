@@ -1192,14 +1192,14 @@
                                                       SelectedItem="{Binding DataContext.DfcChoice, RelativeSource={RelativeSource AncestorType=ItemsControl}}"
                                                       AutomationProperties.Name="Deep Fried Chicken version for this game" ToolTip="Which imported Deep Fried Chicken build this game installs; it decides the files and default cfg" />
                                             <DockPanel Grid.Column="3" Margin="0,0,8,0" Visibility="{Binding Key, Converter={StaticResource EqualsToVis}, ConverterParameter=feeder}">
-                                                <Button DockPanel.Dock="Right" Content="Reset to auto" Style="{StaticResource BtnGhost}" Margin="6,0,0,0" Padding="8,0"
+                                                <Button DockPanel.Dock="Right" Content="Reset to default" Style="{StaticResource BtnGhost}" Margin="6,0,0,0" Padding="8,0"
                                                         Command="{Binding DataContext.ResetFeederToAutoCommand, RelativeSource={RelativeSource AncestorType=ItemsControl}}"
                                                         Visibility="{Binding DataContext.FeederIsManual, RelativeSource={RelativeSource AncestorType=ItemsControl}, Converter={StaticResource BoolToVis}}"
-                                                        ToolTip="Follow Auto again for this game" />
+                                                        ToolTip="Follow the default again for this game" />
                                                 <ComboBox MaxDropDownHeight="300"
                                                           ItemsSource="{Binding DataContext.FeederChoices, RelativeSource={RelativeSource AncestorType=ItemsControl}}"
                                                           SelectedItem="{Binding DataContext.FeederChoice, RelativeSource={RelativeSource AncestorType=ItemsControl}}"
-                                                          AutomationProperties.Name="DLSS5-Feeder version for this game" ToolTip="Auto installs the newest build; pick one to keep this game on it" />
+                                                          AutomationProperties.Name="DLSS5-Feeder version for this game" ToolTip="The first entry follows Settings (the newest build unless a build is chosen there); pick a build to keep this game on it" />
                                             </DockPanel>
                                             <CheckBox Grid.Column="4" IsChecked="{Binding Enabled}" IsEnabled="{Binding Editable}" HorizontalAlignment="Right" ToolTip="Include in install"
                                                       AutomationProperties.Name="{Binding Name, StringFormat='Install {0}'}" />

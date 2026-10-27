@@ -574,9 +574,10 @@ public sealed class AddonLibraryTests : IDisposable
         var sf = Sf(new Version(0, 2026, 928, 306));
         _settings.RenoDxId = sf.Id;
         var vm = NewGame();
-        Assert.Equal($"Default · {sf.Name}", vm.RenoDxChoices[0].Label);
+        // The pinned default is the only build: one row, the stamp as its date, marked newest.
+        Assert.Equal("Default · 2026-09-28 03:06 · newest", vm.RenoDxChoices[0].Label);
         Assert.Equal("Default · none imported", vm.LecramChoices[0].Label);
-        Assert.Equal(new string?[] { null, sf.Id }, vm.RenoDxChoices.Select(c => c.Tag));
+        Assert.Equal(new string?[] { null }, vm.RenoDxChoices.Select(c => c.Tag));
 
         _settings.For(vm.Id).RenoDxId = new string('e', 64);
         vm.RebuildAddonChoices();

@@ -151,6 +151,12 @@ public sealed partial class ComponentStore
 
     private static string StampLabel(DateTime time) => time.ToString("yy.MMdd.HHmm", CultureInfo.InvariantCulture);
 
+    /// <summary>A build stamp label ("26.1016.1304") as the date it is ("2026-10-16 13:04"); any other label as it is.</summary>
+    public static string ReadableStamp(string label) =>
+        DateTime.TryParseExact(label, "yy.MMdd.HHmm", CultureInfo.InvariantCulture, DateTimeStyles.None, out var time)
+            ? time.ToString("yyyy-MM-dd HH:mm", CultureInfo.InvariantCulture)
+            : label;
+
     private const long MaxAddonBytes = 256L << 20;
 
     /// <summary>The add-on out of the release zip, by file name only (no path from the archive is used).</summary>
