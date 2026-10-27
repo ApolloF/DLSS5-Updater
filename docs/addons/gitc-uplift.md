@@ -1,6 +1,6 @@
 # GITC Uplift
 
-ReShade add-on by ghostinthecamera that runs DLSS-NR (`nvngx_dlssnr.dll`, user-supplied) on the game image.
+ReShade add-on by ghostinthecamera that runs DLSS-NR (`nvngx_dlssnr.dll`, not shipped with it) on the game image.
 Open source (MIT): https://github.com/ghostinthecamera/GITC-Uplift. Facts below come from the source at commit e1681d1
 (v1.6.2, 2026-10-22); file:line references are into that tree. Re-check them for every new release.
 v1.4.2 → v1.6.2 changed no existing key, default or range; it added `AllowCrossQueuePasses` (1.5.0) and the hidden
@@ -120,8 +120,8 @@ Hidden / no effect: `Language` (1.5.0+, 0 English, 1 Simplified Chinese; set fro
 
 ## App
 
-DLSS5 Updater installs the x64 add-on, helper and both effects, writes `[Uplift] Enabled=1`, and places the user-supplied
-runtime in `GITC-Uplift\nvngx_dlssnr.dll`. It never downloads the runtime. ReShade + add-ons mode is required; other NR
+DLSS5 Updater installs the x64 add-on, helper and both effects, writes `[Uplift] Enabled=1`, and places the NR runtime
+from the NR library (downloaded from the catalog mirror or imported) in `GITC-Uplift\nvngx_dlssnr.dll`. ReShade + add-ons mode is required; other NR
 routes are displaced and restored on uninstall. Releases newer than tested v1.6.2 warn in the log.
 
 The app exposes the main stage, resolution, strength, face protection, exposure, compatibility (including cross-queue passes) and diagnostics options.
