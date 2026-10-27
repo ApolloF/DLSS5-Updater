@@ -284,11 +284,11 @@ public sealed partial class GameViewModel
     {
         if (!m.Selectable) return "";
         var text = "Turns on: " + MethodMatch.Names(m.Components, RowName);
-        return m.Mode is { } mode ? $"{text}. Install mode: {Modes.First(x => x.Mode == mode).Label}" : text;
+        return m.Mode == InstallMode.ReShadeOnly ? $"{text}. Turns off: {RowName(ComponentRegistry.OptiScaler)}" : text;
     }
 
     /// <summary>
-    /// Turns on the rows of the method (and the install mode it needs), and turns off the rows only the <paramref name="previous"/>
+    /// Turns on the rows of the method (and the install mode it needs, which ticks or unticks the OptiScaler row), and turns off the rows only the <paramref name="previous"/>
     /// card used, so switching from OptiScaler + MFG to OptiScaler leaves MFG off. Nothing is installed until the user presses Install.
     /// </summary>
     private void SelectMethod(MethodRow row, MethodRow? previous)

@@ -51,6 +51,48 @@ public sealed class MethodPickTests : IDisposable
     }
 
     [Fact]
+    public void UntickingTheOptiScalerRow_InstallsReShadeInstead_AndTickingItGoesBack()
+    {
+        var vm = NewGame();
+        var opti = Component(vm, "opti");
+        var reShade = Component(vm, "reshade");
+        Assert.True(opti is { Visible: true, Editable: true, Enabled: true });
+        Assert.True(vm.ShowOptiBuild);
+
+        opti.Enabled = false;
+
+        Assert.Equal(InstallMode.ReShadeOnly, vm.Mode);
+        Assert.True(opti.Visible);
+        Assert.True(reShade is { Enabled: true, Editable: false });
+        Assert.False(vm.ShowOptiBuild);
+
+        opti.Enabled = true;
+
+        Assert.Equal(InstallMode.OptiScaler, vm.Mode);
+        Assert.True(reShade.Editable);
+        Assert.False(Component(vm, "renodx").Visible);
+    }
+
+    [Fact]
+    public void PickingACardThatNeedsReShadeOnly_UnticksTheOptiScalerRow_AndTheOptiScalerCardTicksItAgain()
+    {
+        var vm = NewGame();
+        vm.Methods.Clear();
+        var addon = Row(Method.NeuralAddon, InstallMode.ReShadeOnly, ComponentRegistry.ReShade, ComponentRegistry.RenoDx);
+        var optiCard = Row(Method.OptiScaler, InstallMode.OptiScaler, ComponentRegistry.OptiScaler);
+        vm.Methods.Add(optiCard);
+        vm.Methods.Add(addon);
+
+        vm.PickMethodCommand.Execute(addon);
+        Assert.False(Component(vm, "opti").Enabled);
+
+        vm.PickMethodCommand.Execute(optiCard);
+        Assert.True(Component(vm, "opti").Enabled);
+        Assert.Equal(InstallMode.OptiScaler, vm.Mode);
+        Assert.True(optiCard.IsPicked);
+    }
+
+    [Fact]
     public void PickingACardWithoutComponents_OnlyOpensItsDetails()
     {
         var vm = NewGame();
@@ -293,7 +335,7 @@ public sealed class MethodPickTests : IDisposable
 
         vm.PickMethodCommand.Execute(dlss);
 
-        Assert.Equal("Turns on: ReShade · NR runtime · Lecram DLSS5 add-on. Install mode: ReShade + add-ons", nr.TurnsOn);
+        Assert.Equal("Turns on: ReShade · NR runtime · Lecram DLSS5 add-on. Turns off: " + Component(vm, "opti").Name, nr.TurnsOn);
         Assert.Equal("Turns on: " + Component(vm, "dlss").Name, dlss.TurnsOn);
     }
 
