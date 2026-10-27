@@ -936,7 +936,7 @@ public sealed partial class Installer(ComponentStore store)
     /// </summary>
     public static bool HasNativeDlss(GameInfo game, InstallManifest? m, string targetDir) =>
         game.Dlss.Concat(game.Streamline)
-            .Where(d => GameInfo.FeaturesOf([d], []).HasFlag(GameFeatures.SR))
+            .Where(d => GameInfo.FeatureOf(d) == GameFeatures.SR)
             .Any(d => m is null || !OwnedBy(m, d.Path, targetDir, game.Root));
 
     private static bool OwnedBy(InstallManifest m, string path, string targetDir, string root)

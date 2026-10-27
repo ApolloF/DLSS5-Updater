@@ -180,6 +180,6 @@ public static class FrameLimitHint
     public static string? Text(GameInfo game, int refreshHz, int fgFactor = 2)
     {
         if (FrameGenerationSource(game) is not { } source || Recommend(refreshHz, fgFactor) is not { } cap) return null;
-        return $"This game has {source}. With {fgFactor}x, a cap of {cap} FPS suits your {refreshHz} Hz display (refresh rate ÷ {fgFactor}); with a higher factor, divide by that factor instead. This is a suggestion, nothing is set for you.";
+        return $"This game ships {source}. With {fgFactor}x, a cap of {cap} FPS suits your {refreshHz} Hz display (refresh rate ÷ {fgFactor}); with a higher factor, divide by that factor instead. This is a suggestion, nothing is set for you.";
     }
 }

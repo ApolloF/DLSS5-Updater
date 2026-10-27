@@ -413,6 +413,29 @@ public sealed class InstallManifest
 
     public bool Owns(string rel) => Files.Contains(rel, StringComparer.OrdinalIgnoreCase);
 
+    /// <summary>
+    /// Full paths of the files and folders DLSS5 Updater added, for telling the game's own files from ours. A file that
+    /// replaced an original (a DLSS update) is left out: the backed-up original was the game's. An entry that doesn't
+    /// resolve is left out too; never use this for changes, see <see cref="Contain"/>.
+    /// </summary>
+    public List<string> AddedPaths(string targetDir)
+    {
+        var target = FileUtil.Normalize(targetDir);
+        var list = new List<string>();
+        try
+        {
+            var root = FileUtil.Normalize(Path.Combine(target, RootRel));
+            foreach (var entry in Files.Concat(Dirs).Concat(Components.SelectMany(c => c.Files.Select(f => f.Path))))
+            {
+                if (BackupOf(entry) is not null) continue;
+                try { list.Add(FileUtil.Normalize(Resolve(entry, target, root))); }
+                catch (Exception ex) when (ex is UnsafeManifestException or ArgumentException or NotSupportedException) { }
+            }
+        }
+        catch (Exception ex) when (ex is ArgumentException or NotSupportedException) { }
+        return list;
+    }
+
     public void AddFile(string rel)
     {
         if (!Owns(rel)) Files.Add(rel);

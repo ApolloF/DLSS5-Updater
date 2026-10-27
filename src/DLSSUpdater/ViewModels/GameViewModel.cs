@@ -963,7 +963,7 @@ public sealed partial class GameViewModel : ObservableObject
         OnPropertyChanged(nameof(ReShadeForeignWarning));
         OnPropertyChanged(nameof(HasReShadeForeignWarning));
         Row("mfg", m?.Mfg == true ? m.MfgTag : null, store.Mfg?.Tag, true);
-        if (!Info.Streamline.Any(d => d.Name.Equals("sl.dlss_g.dll", StringComparison.OrdinalIgnoreCase)) && m?.Mfg != true)
+        if (!Info.Streamline.Any(d => !d.Installed && d.Name.Equals("sl.dlss_g.dll", StringComparison.OrdinalIgnoreCase)) && m?.Mfg != true)
         {
             // MFG Unlock only unlocks frame generation the game ships through Streamline; the installer skips it here.
             var mfgRow = Components.First(c => c.Key == "mfg");
