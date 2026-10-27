@@ -36,7 +36,7 @@ registration needs administrator rights), `READ-ME-FIRST.txt` and `Verify-DLSS5F
   (`NrAddons.FeederRefusal`, checked in `Installer`) refuses Feeder without it and next to stock OptiScaler, the DX11 bridge,
   ShortFuse's RenoDX add-on, Lecram or GITC Uplift. Feeder's README also names `renodx-dlss5` and an OptiScaler DLSS-NR fork as
   consumers; the app only pairs it with DFC, the one it can install in a game without DLSS.
-- **ReShade 6.8+ with add-on support**, the user's imported `nvngx_dlssnr.dll` (never downloaded by the app) and an
+- **ReShade 6.8+ with add-on support**, `nvngx_dlssnr.dll` (from the NR library: downloaded from the catalog mirror or imported) and an
   `nvngx_dlss.dll` (the app places NVIDIA's, as for DFC without DLSS).
 - **A motion-vector shader** in `reshade-shaders\Shaders`, picked with `DLSS5_MV_PROVIDER` in the overlay. LumeniteFX Kernel is
   recommended; its AGNYA licence ("all rights reserved unless explicitly stated") stops the app from shipping it. The advisor

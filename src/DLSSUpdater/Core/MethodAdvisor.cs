@@ -113,6 +113,8 @@ public sealed record AdvisorInput(GameInfo Game, GpuInfo Gpu)
     public IReadOnlyList<NrAddon> InstalledRoutes { get; init; } = [];
     /// <summary>A motion-vector provider shader for Feeder (LumeniteFX, ...) is already in the game's shader folder.</summary>
     public bool MotionProviderPresent { get; init; }
+    /// <summary>The NR add-ons (component ids) switched on in the game page's table: the neural rendering card uses the one the table has on.</summary>
+    public IReadOnlyList<string> AddonsOn { get; init; } = [];
 }
 
 /// <summary>
@@ -133,7 +135,7 @@ public static class MethodAdvisor
     public static string TitleOf(Method m) => m switch
     {
         Method.DlssUpdate => "Update the DLSS files",
-        Method.NeuralAddon => "Neural rendering add-on (ReShade)",
+        Method.NeuralAddon => "Neural rendering add-on",
         Method.OptiScalerNr => "OptiScaler with neural rendering",
         Method.OptiScaler => "OptiScaler (FSR, XeSS, frame generation)",
         Method.Feeder => "DLSS5-Feeder + Deep Fried Chicken",
@@ -151,9 +153,9 @@ public static class MethodAdvisor
     public static string SummaryOf(Method m) => m switch
     {
         Method.DlssUpdate => "Replaces the game's DLSS files with the newest release.",
-        Method.NeuralAddon => "Installs ReShade, nvngx_dlssnr.dll and an NR add-on that works on top of the game's own DLSS.",
-        Method.OptiScalerNr => "Installs OptiScaler and nvngx_dlssnr.dll; OptiScaler replaces the game's upscaler and adds neural rendering.",
-        Method.OptiScaler => "Installs OptiScaler, which replaces the game's upscaler and adds frame generation.",
+        Method.NeuralAddon => "Adds neural rendering on top of the game's own DLSS, loaded through ReShade.",
+        Method.OptiScalerNr => "OptiScaler replaces the game's upscaler and adds neural rendering.",
+        Method.OptiScaler => "OptiScaler replaces the game's upscaler and adds frame generation.",
         Method.Feeder => "Runs neural rendering through ReShade in a game without DLSS, at native resolution (no FPS gain).",
         Method.MfgUnlock => "Adds a mod that turns on multi frame generation in a game with DLSS frame generation: DLSS-G on RTX 40, Intel XeMFG on RTX 20/30.",
         Method.SmoothMotion => "Turns on NVIDIA's driver frame generation from the game's NVIDIA profile tab; adds no files.",
@@ -512,9 +514,11 @@ public static class MethodAdvisor
 
     private static MethodOption Neural(Ctx c, string reason, string? extraNeed, bool unverified = false, string? unverifiedWhy = null)
     {
-        // The add-on already in the game stays (the install keeps it); otherwise the first one the user has imported, and GITC Uplift downloads itself when none is.
-        var addon = new[] { (NrAddon.RenoDx, ComponentRegistry.RenoDx), (NrAddon.Lecram, ComponentRegistry.Lecram), (NrAddon.Dfc, ComponentRegistry.Dfc), (NrAddon.Uplift, ComponentRegistry.Uplift) }
-            .Where(x => c.In.InstalledRoutes.Contains(x.Item1)).Select(x => x.Item2).FirstOrDefault()
+        // The add-on the table has on (what Install puts in), else the one already in the game (the install keeps it), else the first
+        // one the user has imported, and GITC Uplift downloads itself when none is.
+        var addons = new[] { (NrAddon.RenoDx, ComponentRegistry.RenoDx), (NrAddon.Lecram, ComponentRegistry.Lecram), (NrAddon.Dfc, ComponentRegistry.Dfc), (NrAddon.Uplift, ComponentRegistry.Uplift) };
+        var addon = addons.Select(x => x.Item2).FirstOrDefault(id => c.In.AddonsOn.Contains(id, StringComparer.OrdinalIgnoreCase))
+            ?? addons.Where(x => c.In.InstalledRoutes.Contains(x.Item1)).Select(x => x.Item2).FirstOrDefault()
             ?? new[] { ComponentRegistry.RenoDx, ComponentRegistry.Lecram, ComponentRegistry.Dfc }.FirstOrDefault(c.Has) ?? ComponentRegistry.Uplift;
         var needs = new List<string>();
         if (NrRuntimeNeed(c) is { } nr) needs.Add(nr);
@@ -524,7 +528,8 @@ public static class MethodAdvisor
         var route = addon == ComponentRegistry.RenoDx ? NrAddon.RenoDx : addon == ComponentRegistry.Lecram ? NrAddon.Lecram : addon == ComponentRegistry.Dfc ? NrAddon.Dfc : NrAddon.Uplift;
         return Opt(Method.NeuralAddon, needs.Count == 0 ? Availability.Available : Availability.NeedsSetup,
             $"{reason} {cost}".Trim() + (addon == ComponentRegistry.Uplift ? " GITC Uplift downloads itself; ShortFuse's, Lecram's and Deep Fried Chicken's are imported." : ""),
-            [ComponentRegistry.ReShade, ComponentRegistry.DlssNr, addon], needs, InstallMode.ReShadeOnly, unverified) with { Route = route };
+            [ComponentRegistry.ReShade, ComponentRegistry.DlssNr, addon], needs, InstallMode.ReShadeOnly, unverified)
+            with { Route = route, Title = $"Neural rendering with {ComponentTable.NameOf(addon)}" };
     }
 
     private static MethodOption OptiNr(Ctx c, string reason)

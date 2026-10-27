@@ -15,8 +15,15 @@ public sealed partial class MethodRow(MethodOption option, bool isTop, string? p
     public string Summary => Option.Summary;
     public string Reason => Option.Reason;
     public bool IsAddOn => Option.IsAddOn;
-    /// <summary>The row is the method the page is set to: the user clicked it, or its mode and components are all on. An add-on row is picked while its components are on.</summary>
+    /// <summary>The row is the method the component table installs (<see cref="MethodMatch.Picked"/>). An add-on row is picked while its components are on.</summary>
     [ObservableProperty] private bool _isPicked;
+    /// <summary>"Turns on: ..." with the names of the component table's rows, and the install mode the card sets.</summary>
+    [ObservableProperty] private string _turnsOn = "";
+    /// <summary>On the picked card: the rows on in the table that this card and the add-ons don't bring; null when there are none.</summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(HasAlsoOn))]
+    private string? _alsoOn;
+    public bool HasAlsoOn => AlsoOn is not null;
     /// <summary>The long reason is open below the row.</summary>
     [ObservableProperty] private bool _isExpanded;
     public string DetailsLabel => IsExpanded ? "Hide details" : "Details";
@@ -41,9 +48,6 @@ public sealed partial class MethodRow(MethodOption option, bool isTop, string? p
     public bool IsAdviceOnly => Option.Availability is Availability.Available or Availability.NeedsSetup && Option.Components.Count == 0;
     /// <summary>Dim and disabled cards are the ones that can neither be picked nor opened.</summary>
     public bool IsClickable => IsSelectable || IsAdviceOnly;
-    public string CardTip => IsAdviceOnly ? "Installed from its own section further down this page"
-        : IsAddOn ? "Turns this add-on on or off next to the method you picked. Nothing is installed until you press Install."
-        : "Turns on this method's components and sets the install mode it needs. Nothing is installed until you press Install.";
     /// <summary>Methods that can't be used are shown dimmed, with the reason they can't.</summary>
     public bool IsDim => Option.Availability is Availability.NotPossible or Availability.Coming;
     public bool IsUnavailable => Option.Availability == Availability.NotPossible;
@@ -59,6 +63,13 @@ public sealed partial class GameViewModel
     [ObservableProperty] private string? _adviceBlocked;
     [ObservableProperty] private string? _adviceCaution;
     [ObservableProperty] private string _adviceFooter = "";
+    /// <summary>Set when the table matches no card: the rows that are on, so the panel never shows a card the table doesn't install.</summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(HasCustomSelection))]
+    private string? _customSelection;
+    public bool HasCustomSelection => CustomSelection is not null;
+    /// <summary>The input of the last advice, so a change of NR add-on in the table can re-advise without reading the disk again.</summary>
+    private AdvisorInput? _adviceInput;
 
     public bool HasAdviceBlocked => AdviceBlocked is not null;
     /// <summary>
@@ -76,22 +87,6 @@ public sealed partial class GameViewModel
         OnPropertyChanged(nameof(HasAdviceCaution));
     }
     partial void OnAdviceCautionChanged(string? value) => OnPropertyChanged(nameof(HasAdviceCaution));
-
-    /// <summary>Component id -> the key of its row on the game page.</summary>
-    private static readonly Dictionary<string, string> RowKeys = new(StringComparer.OrdinalIgnoreCase)
-    {
-        [ComponentRegistry.OptiScaler] = "opti",
-        [ComponentRegistry.ReShade] = "reshade",
-        [ComponentRegistry.MfgUnlock] = "mfg",
-        [ComponentRegistry.DlssNr] = "dlssnr",
-        [ComponentRegistry.Dlss] = "dlss",
-        [ComponentRegistry.Streamline] = "streamline",
-        [ComponentRegistry.RenoDx] = "renodx",
-        [ComponentRegistry.Lecram] = "lecram",
-        [ComponentRegistry.Dfc] = "dfc",
-        [ComponentRegistry.Uplift] = "uplift",
-        [ComponentRegistry.Feeder] = "feeder",
-    };
 
     // ---------- the Feeder build: Auto, or the user's own pick ----------
 
@@ -159,6 +154,7 @@ public sealed partial class GameViewModel
             DfcRunsWithoutDlss = dfc is null || ComponentStore.DfcSupportsNonDlssGames(dfc),
             InstalledRoutes = NrAddons.PresentIn(target, Manifest),
             MotionProviderPresent = Directory.Exists(shaders) && Directory.EnumerateFiles(shaders, "lumenite_*.fx").Any(),
+            AddonsOn = AddonsOn(),
         };
     }
 
@@ -166,12 +162,22 @@ public sealed partial class GameViewModel
     public void RefreshAdvice()
     {
         MethodAdvice advice;
-        try { advice = MethodAdvisor.Advise(AdviceInput()); }
+        try
+        {
+            _adviceInput = AdviceInput();
+            advice = MethodAdvisor.Advise(_adviceInput);
+        }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or UnsafeManifestException)
         {
             Log.Info($"{Name}: method advice not computed ({ex.Message})");
+            _adviceInput = null;
             advice = new MethodAdvice([], [], null);
         }
+        ShowAdvice(advice);
+    }
+
+    private void ShowAdvice(MethodAdvice advice)
+    {
         var top = advice.Top;
         var keep = Methods.FirstOrDefault(m => m.IsPicked)?.Option.Method;
         var rows = advice.Choices.Select(m => new MethodRow(m, ReferenceEquals(m, top), advice.Caution)).ToList();
@@ -215,29 +221,70 @@ public sealed partial class GameViewModel
     }
 
     /// <summary>
-    /// Marks the card the page is set to, so a picked card always means "applied": the last pick while the page still matches it,
-    /// else the most specific method whose install mode and components are all on, else none. Runs after a refresh and whenever
-    /// the user changes the mode or a component by hand.
+    /// Marks the card the component table installs (<see cref="MethodMatch.Picked"/>; the card clicked last only breaks a tie), fills
+    /// each card's "Turns on" line and the picked card's "Also on" line, or the custom-selection line when no card matches. Runs
+    /// after a refresh and whenever the user changes the mode or a component by hand.
     /// </summary>
-    private void SyncPick(Method? keep)
+    private void SyncPick(Method? clicked)
     {
-        var picked = Methods.FirstOrDefault(r => r.Option.Method == keep && PageMatches(r))
-            ?? Methods.Where(PageMatches).MaxBy(r => r.Option.Components.Count);
-        foreach (var m in Methods) m.IsPicked = ReferenceEquals(m, picked);
-        foreach (var a in AddOns) a.IsPicked = AddOnOn(a);
+        if (NeuralCardIsStale()) return;
+        var table = Table();
+        var picked = MethodMatch.Picked(Methods.Select(m => m.Option), table, Mode, clicked);
+        var outside = MethodMatch.Outside(picked, AddOns.Where(AddOnOn).Select(a => a.Option), table);
+        var also = outside.Count > 0 ? MethodMatch.Names(outside, RowName) : null;
+        foreach (var m in Methods)
+        {
+            m.IsPicked = ReferenceEquals(m.Option, picked);
+            m.AlsoOn = m.IsPicked ? also : null;
+            m.TurnsOn = TurnsOnText(m.Option);
+        }
+        foreach (var a in AddOns)
+        {
+            a.IsPicked = AddOnOn(a);
+            a.TurnsOn = TurnsOnText(a.Option);
+        }
+        CustomSelection = picked is null ? also : null;
     }
 
     private void SyncPick() => SyncPick(Methods.FirstOrDefault(m => m.IsPicked)?.Option.Method);
 
-    /// <summary>The page already has this method's mode (when it needs one) and every one of its components that the page shows on (the mode's loader always is).</summary>
-    private bool PageMatches(MethodRow row)
+    /// <summary>
+    /// The neural rendering card names the add-on it installs. When the table has another NR add-on on, the card is advised again
+    /// with that one (reusing the last input, so no disk reads); the refresh marks the pick.
+    /// </summary>
+    private bool NeuralCardIsStale()
     {
-        if (!row.IsSelectable || row.Option.Mode is { } mode && mode != Mode) return false;
-        var rows = row.Option.Components
-            .Select(id => RowKeys.TryGetValue(id, out var key) ? Components.FirstOrDefault(c => c.Key == key) : null)
-            .Where(c => c is { Visible: true })
-            .ToList();
-        return rows.Count > 0 && rows.All(c => c!.Enabled);
+        if (_adviceInput is null || Methods.FirstOrDefault(m => m.Option.Method == Method.NeuralAddon) is not { IsSelectable: true } neural) return false;
+        var on = AddonsOn();
+        if (on.Count == 0 || on.SequenceEqual(_adviceInput.AddonsOn) || on.Any(id => neural.Option.Components.Contains(id, StringComparer.OrdinalIgnoreCase))) return false;
+        _adviceInput = _adviceInput with { AddonsOn = on };
+        ShowAdvice(MethodAdvisor.Advise(_adviceInput));
+        return true;
+    }
+
+    /// <summary>The NR add-ons switched on in the table.</summary>
+    private IReadOnlyList<string> AddonsOn() =>
+        [.. new[] { ComponentRegistry.RenoDx, ComponentRegistry.Lecram, ComponentRegistry.Uplift, ComponentRegistry.Dfc }
+            .Where(id => TableRowOf(id) is { Visible: true, Enabled: true })];
+
+    private Dictionary<string, TableRow> Table()
+    {
+        var table = new Dictionary<string, TableRow>(StringComparer.OrdinalIgnoreCase);
+        foreach (var r in ComponentTable.Rows)
+            if (TableRowOf(r.Id) is { } c) table[r.Id] = new TableRow(c.Visible, c.Enabled);
+        return table;
+    }
+
+    private ComponentRow? TableRowOf(string id) => ComponentTable.KeyOf(id) is { } key ? Components.FirstOrDefault(c => c.Key == key) : null;
+
+    /// <summary>The name the table shows for a component (the OptiScaler row is named after its build).</summary>
+    private string RowName(string id) => TableRowOf(id)?.Name ?? ComponentTable.NameOf(id);
+
+    private string TurnsOnText(MethodOption m)
+    {
+        if (!m.Selectable) return "";
+        var text = "Turns on: " + MethodMatch.Names(m.Components, RowName);
+        return m.Mode is { } mode ? $"{text}. Install mode: {Modes.First(x => x.Mode == mode).Label}" : text;
     }
 
     /// <summary>
@@ -277,6 +324,5 @@ public sealed partial class GameViewModel
         OnPropertyChanged(nameof(AnyEnabled));
     }
 
-    private ComponentRow? EditableRow(string id) =>
-        RowKeys.TryGetValue(id, out var key) && Components.FirstOrDefault(c => c.Key == key) is { Visible: true, Editable: true } component ? component : null;
+    private ComponentRow? EditableRow(string id) => TableRowOf(id) is { Visible: true, Editable: true } component ? component : null;
 }
