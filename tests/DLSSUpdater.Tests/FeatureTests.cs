@@ -114,7 +114,10 @@ public class FeatureTests
         var fg = new DriverProfileViewModel(@"C:\g\game.exe", "Game", GameFeatures.SR | GameFeatures.FG, new Version(310, 4, 0, 0));
         Assert.Equal(["nv-rr-preset"], fg.Other.Select(o => o.Topic).ToArray());
         Assert.Contains("MFG capable", fg.FeatureSummary);
-        Assert.Contains("use that instead", fg.Relevant.Single(o => o.Topic == "nv-smooth-motion").Note);
+        // Shipping the runtime doesn't mean the game's menu offers it (Unreal games with NVIDIA's plugin often don't).
+        var smooth = fg.Relevant.Single(o => o.Topic == "nv-smooth-motion").Note!;
+        Assert.StartsWith("The game ships DLSS Frame Generation", smooth);
+        Assert.Contains("If its settings offer Frame Generation, use that instead; if not, Smooth Motion works.", smooth);
 
         var unknown = new DriverProfileViewModel(@"C:\g\game.exe", "Game");
         Assert.Empty(unknown.Other);
