@@ -1000,14 +1000,18 @@
                                        Visibility="{Binding HasAdviceBlocked, Converter={StaticResource BoolToVis}}" />
                             <TextBlock Text="{Binding AdviceCaution}" Style="{StaticResource MutedText}" Foreground="{StaticResource Danger}" TextWrapping="Wrap" Margin="0,0,0,10"
                                        Visibility="{Binding HasAdviceCaution, Converter={StaticResource BoolToVis}}" />
+                            <TextBlock Text="Picking a card switches its rows on in Components below. Nothing is installed until you press Install."
+                                       Style="{StaticResource MutedText}" FontSize="11.5" TextWrapping="Wrap" Margin="0,0,0,8"
+                                       Visibility="{Binding HasMethods, Converter={StaticResource BoolToVis}}" />
+                            <TextBlock Text="{Binding CustomSelection, StringFormat='No card matches your own selection in Components: {0}'}" Style="{StaticResource MutedText}"
+                                       FontSize="11.5" TextWrapping="Wrap" Margin="0,0,0,8" Visibility="{Binding HasCustomSelection, Converter={StaticResource BoolToVis}}" />
                             <ItemsControl x:Name="MethodList" ItemsSource="{Binding Methods}" Visibility="{Binding HasMethods, Converter={StaticResource BoolToVis}}">
                                 <ItemsControl.ItemTemplate>
                                     <DataTemplate>
                                         <Grid Margin="0,0,0,8">
                                             <Button Style="{StaticResource MethodCard}" IsEnabled="{Binding IsClickable}"
                                                     Command="{Binding DataContext.PickMethodCommand, RelativeSource={RelativeSource AncestorType=ItemsControl}}"
-                                                    CommandParameter="{Binding}" AutomationProperties.Name="{Binding Title, StringFormat='Use {0}'}"
-                                                    ToolTip="{Binding CardTip}">
+                                                    CommandParameter="{Binding}" AutomationProperties.Name="{Binding Title, StringFormat='Use {0}'}">
                                                 <Grid>
                                                     <Grid.ColumnDefinitions>
                                                         <ColumnDefinition Width="Auto" />
@@ -1050,6 +1054,10 @@
                                                             </Border>
                                                         </StackPanel>
                                                         <TextBlock Text="{Binding Summary}" Foreground="{StaticResource Text}" FontSize="12" TextWrapping="Wrap" Margin="0,3,0,0" />
+                                                        <TextBlock Text="{Binding TurnsOn}" Style="{StaticResource MutedText}" FontSize="11.5" TextWrapping="Wrap" Margin="0,3,0,0"
+                                                                   Visibility="{Binding IsSelectable, Converter={StaticResource BoolToVis}}" />
+                                                        <TextBlock Text="{Binding AlsoOn, StringFormat='Also on: {0}'}" Style="{StaticResource MutedText}" FontSize="11.5" TextWrapping="Wrap" Margin="0,3,0,0"
+                                                                   Visibility="{Binding HasAlsoOn, Converter={StaticResource BoolToVis}}" />
                                                         <TextBlock Text="{Binding Warning}" Style="{StaticResource MutedText}" FontSize="11.5" TextWrapping="Wrap" Margin="0,3,0,0"
                                                                    Foreground="{StaticResource Danger}" Visibility="{Binding HasWarning, Converter={StaticResource BoolToVis}}" />
                                                         <TextBlock Text="{Binding NeedsText}" Style="{StaticResource MutedText}" FontSize="11.5" TextWrapping="Wrap" Margin="0,3,0,0"
