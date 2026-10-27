@@ -240,13 +240,17 @@ public sealed class FeederImportTests : IDisposable
         var b = FeederLibrary.Import(Folder("1.19.0"));
         var (vm, settings, id) = Game();
         vm.RebuildAddonChoices();
-        Assert.Equal([null, b.Id, a.Id], vm.FeederChoices.Select(c => c.Tag));
-        Assert.StartsWith("Auto (", vm.FeederChoices[0].Label);
+        Assert.Equal([null, a.Id], vm.FeederChoices.Select(c => c.Tag));
+        Assert.StartsWith("Newest · ", vm.FeederChoices[0].Label);
         Assert.Null(vm.EffectiveFeederId);
         Assert.False(vm.FeederIsManual);
 
         settings.SetDefaultBuild(ComponentRegistry.Feeder, a.Id);
         Assert.Equal(a.Id, vm.EffectiveFeederId);
+        vm.RebuildAddonChoices();
+        Assert.Equal([null, b.Id], vm.FeederChoices.Select(c => c.Tag));
+        Assert.StartsWith("Default · ", vm.FeederChoices[0].Label);
+        Assert.EndsWith(" · newest", vm.FeederChoices[1].Label);
 
         vm.FeederChoice = vm.FeederChoices.Single(c => c.Tag == b.Id);
         Assert.Equal(b.Id, settings.Games[id].BuildPick(ComponentRegistry.Feeder));
@@ -264,6 +268,7 @@ public sealed class FeederImportTests : IDisposable
     public void ThePickSurvivesAReload_AndALostPickStaysVisible()
     {
         var a = FeederLibrary.Import(Folder("1.17.0"));
+        FeederLibrary.Import(Folder("1.19.0"));
         var (vm, settings, id) = Game();
         vm.RebuildAddonChoices();
         vm.FeederChoice = vm.FeederChoices.Single(c => c.Tag == a.Id);

@@ -702,26 +702,30 @@ public sealed partial class GameViewModel : ObservableObject
         var versions = _s.Store.DlssNrVersions;
         var global = _s.Settings.DlssNrId;
         var follows = versions.FirstOrDefault(v => v.Id == global) ?? (global is null ? versions.FirstOrDefault() : null);
-        NrChoices.Add(new DlssChoice(null, $"Default · {follows?.Version ?? "none in library"}"));
-        foreach (var c in BuildPickerList.Merge(versions.Select(v => v.ToPickerEntry()), _s.CatalogOffers(CatalogBuildKind.DlssNr).Select(o => o.ToEntry())))
-            NrChoices.Add(new DlssChoice(c.Tag, c.Label));
+        var def = new PickerDefault(follows?.Id, follows?.ToPickerEntry().Label ?? "none in library", global is null);
+        var builds = BuildPickerList.Merge(versions.Select(v => v.ToPickerEntry()), _s.CatalogOffers(CatalogBuildKind.DlssNr).Select(o => o.ToEntry()));
+        foreach (var c in GamePickerLabels.Compose(def, builds, pin: pin)) NrChoices.Add(new DlssChoice(c.Tag, c.Label));
         if (pin is not null && NrChoices.All(c => c.Tag != pin)) NrChoices.Add(new DlssChoice(pin, "Missing NR file · import again"));
         NrChoice = NrChoices.FirstOrDefault(c => c.Tag == pin) ?? NrChoices[0];
         _loading = loading;
     }
 
-    /// <summary>The build dropdowns of the add-ons, OptiScaler and GITC Uplift: "Default" plus every library build, newest first.</summary>
+    /// <summary>
+    /// The build dropdowns of the component table (add-ons, ReShade, OptiScaler, GITC Uplift, DLSS5-Feeder): the default first, then
+    /// the builds newest first, labelled by <see cref="GamePickerLabels"/>.
+    /// </summary>
     public void RebuildAddonChoices()
     {
         var loading = _loading;
         _loading = true;
         var over = _s.Settings.Games.GetValueOrDefault(Id);
-        RenoDxChoice = FillAddonChoices(RenoDxChoices, AddonKind.RenoDx, over?.RenoDxId, CatalogBuildKind.RenoDx);
-        LecramChoice = FillAddonChoices(LecramChoices, AddonKind.Lecram, over?.LecramId, CatalogBuildKind.Lecram);
-        DfcChoice = FillAddonChoices(DfcChoices, AddonKind.Dfc, over?.DfcId, null);
-        ReShadeChoice = FillReShadeChoices(over?.ReShadeId);
-        OptiChoice = FillBuildChoices(OptiChoices, _s.Store.Library(LibraryKind.OptiScaler), _s.Settings.OptiTag, _s.Store.Opti?.Tag, over?.OptiTag);
-        UpliftChoice = FillBuildChoices(UpliftChoices, _s.Store.Library(LibraryKind.Uplift), _s.Settings.UpliftTag, _s.Store.Uplift?.Tag, over?.UpliftTag);
+        var m = Manifest;
+        RenoDxChoice = FillAddonChoices(RenoDxChoices, AddonKind.RenoDx, over?.RenoDxId, CatalogBuildKind.RenoDx, m?.RenoDx == true ? (m.RenoDxId, m.RenoDxTag) : null);
+        LecramChoice = FillAddonChoices(LecramChoices, AddonKind.Lecram, over?.LecramId, CatalogBuildKind.Lecram, m?.Lecram == true ? (m.LecramId, m.LecramTag) : null);
+        DfcChoice = FillAddonChoices(DfcChoices, AddonKind.Dfc, over?.DfcId, null, m?.Dfc == true ? (m.DfcId, m.DfcTag) : null);
+        ReShadeChoice = FillReShadeChoices(over?.ReShadeId, m?.ReShade == true ? m.ReShadeId : null);
+        OptiChoice = FillBuildChoices(OptiChoices, _s.Store.Library(LibraryKind.OptiScaler), _s.Settings.OptiTag, _s.Store.Opti?.Tag, over?.OptiTag, m?.Opti == true ? m.OptiTag : null);
+        UpliftChoice = FillBuildChoices(UpliftChoices, _s.Store.Library(LibraryKind.Uplift), _s.Settings.UpliftTag, _s.Store.Uplift?.Tag, over?.UpliftTag, m?.Uplift == true ? m.UpliftTag : null);
         FillFeederChoices(over);
         _loading = loading;
         OnPropertyChanged(nameof(EffectiveLecramGeneration));
@@ -736,28 +740,38 @@ public sealed partial class GameViewModel : ObservableObject
     internal static string NewestUpliftLabel(ComponentStore store) => store.Uplift is { } r ? $"newest: {r.Tag}" : "newest";
 
     /// <summary>
-    /// "Default · v0.1.32-f5" naming the tag the default installs (the row already names the build), then the library
-    /// newest first, then a game pick the library lost.
+    /// The default first ("Newest · OptiScaler-NR v0.9.51", "· download" while the release isn't in the library), then the library
+    /// newest first, then a game pick the library lost (downloaded on install).
     /// </summary>
-    private static DlssChoice FillBuildChoices(ObservableCollection<DlssChoice> list, IReadOnlyList<LibraryBuild> builds, string? global, string? newest, string? pin)
+    private static DlssChoice FillBuildChoices(ObservableCollection<DlssChoice> list, IReadOnlyList<LibraryBuild> builds, string? global, string? newest, string? pin, string? installed)
     {
+        var tag = global ?? newest;
+        var inLibrary = builds.FirstOrDefault(b => b.Id == tag);
+        var def = new PickerDefault(tag, inLibrary?.Label ?? tag ?? "newest", global is null, Download: tag is not null && inLibrary is null);
         list.Clear();
-        list.Add(new DlssChoice(null, $"Default · {global ?? newest ?? "newest"}"));
-        foreach (var b in builds) list.Add(new DlssChoice(b.Id, b.Label));
-        if (pin is not null && list.All(c => c.Tag != pin)) list.Add(new DlssChoice(pin, $"{pin} · not downloaded"));
+        foreach (var c in GamePickerLabels.Compose(def, builds.Select(b => new PickerChoice(b.Id, b.Label)).ToList(), installed, pin, newest))
+            list.Add(new DlssChoice(c.Tag, c.Label));
+        if (pin is not null && list.All(c => c.Tag != pin)) list.Add(new DlssChoice(pin, pin + BuildPickerList.DownloadSuffix));
         return list.FirstOrDefault(c => c.Tag == pin) ?? list[0];
     }
 
-    /// <summary>"Default · ..." naming what the default installs, the moving channels, then every build in the library.</summary>
-    private DlssChoice FillReShadeChoices(string? pin)
+    /// <summary>
+    /// The default first: "Newest · 6.8.0 · Stable (add-on)" while it follows a channel, "Default · &lt;build&gt;" when it names one build.
+    /// Then the other moving channels and every build in the library. Channels have no single newest build, so no row is marked newest.
+    /// </summary>
+    private DlssChoice FillReShadeChoices(string? pin, string? installed)
     {
         var store = _s.Store;
-        ReShadeChoices.Clear();
+        var effective = store.EffectiveReShadePick(null);
         var follows = store.ReShadeBuildFor(null);
-        ReShadeChoices.Add(new DlssChoice(null, $"Default · {follows?.Label ?? (store.ReShade is { } r ? r.Tag + " · not downloaded yet" : "none yet")}"));
-        foreach (var c in new[] { ReShadeChannel.Stable, ReShadeChannel.StableNoAddons, ReShadeChannel.Nightly })
-            ReShadeChoices.Add(new DlssChoice(ReShadePick.ForChannel(c), "Newest " + ReShadeBuild.ChannelLabel(c).ToLowerInvariant()));
-        foreach (var b in store.ReShadeBuilds) ReShadeChoices.Add(new DlssChoice(b.Id, b.Label));
+        var channel = ReShadePick.IsChannel(effective);
+        var def = new PickerDefault(effective, follows?.Label ?? store.ReShade?.Tag ?? "none yet", channel, Download: follows is null && store.ReShade is not null);
+        var builds = new[] { ReShadeChannel.Stable, ReShadeChannel.StableNoAddons, ReShadeChannel.Nightly }
+            .Select(c => new PickerChoice(ReShadePick.ForChannel(c), "Newest " + ReShadeBuild.ChannelLabel(c).ToLowerInvariant()))
+            .Concat(store.ReShadeBuilds.Select(b => new PickerChoice(b.Id, b.Label))).ToList();
+        ReShadeChoices.Clear();
+        foreach (var c in GamePickerLabels.Compose(def, builds, installed, pin, channel ? effective : string.Empty))
+            ReShadeChoices.Add(new DlssChoice(c.Tag, c.Label));
         if (pin is not null && ReShadeChoices.All(c => c.Tag != pin)) ReShadeChoices.Add(new DlssChoice(pin, "Missing ReShade build · import again"));
         return ReShadeChoices.FirstOrDefault(c => c.Tag == pin) ?? ReShadeChoices[0];
     }
@@ -770,15 +784,18 @@ public sealed partial class GameViewModel : ObservableObject
         RefreshStatus();
     }
 
-    private DlssChoice FillAddonChoices(ObservableCollection<DlssChoice> list, AddonKind kind, string? pin, CatalogBuildKind? catalogKind)
+    private DlssChoice FillAddonChoices(ObservableCollection<DlssChoice> list, AddonKind kind, string? pin, CatalogBuildKind? catalogKind, (string? Id, string? Tag)? installed)
     {
         var builds = _s.Store.AddonBuilds(kind);
         var global = _s.Settings.AddonId(kind);
-        var follows = builds.FirstOrDefault(b => b.Id == global) ?? builds.FirstOrDefault();
-        list.Clear();
-        list.Add(new DlssChoice(null, $"Default · {follows?.Name ?? "none imported"}"));
+        var pinned = builds.FirstOrDefault(b => b.Id == global);
+        var follows = pinned ?? builds.FirstOrDefault();
+        var def = new PickerDefault(follows?.Id, follows?.PickerLabel ?? "none imported", pinned is null);
         var offers = catalogKind is { } ck ? _s.CatalogOffers(ck).Select(o => o.ToEntry()) : [];
-        foreach (var c in BuildPickerList.Merge(builds.Select(b => b.ToPickerEntry()), offers)) list.Add(new DlssChoice(c.Tag, c.Label));
+        var inGame = installed is { } i ? builds.FirstOrDefault(b => b.Matches(i.Id, i.Tag))?.Id : null;
+        list.Clear();
+        foreach (var c in GamePickerLabels.Compose(def, BuildPickerList.Merge(builds.Select(b => b.ToPickerEntry()), offers), inGame, pin))
+            list.Add(new DlssChoice(c.Tag, c.Label));
         if (pin is not null && list.All(c => c.Tag != pin)) list.Add(new DlssChoice(pin, "Missing add-on file · import again"));
         return list.FirstOrDefault(c => c.Tag == pin) ?? list[0];
     }
@@ -927,6 +944,9 @@ public sealed partial class GameViewModel : ObservableObject
         Set("dlss", m?.Dlss ?? HasDlss); // nothing to replace in games that don't ship DLSS
         Set("streamline", m?.Streamline ?? (_s.Settings.InstallStreamline && HasStreamline));
         ApplyModeToRows();
+        // The pickers mark the build installed in this target.
+        RebuildNrChoices();
+        RebuildAddonChoices();
         if (!ProxyNames.Contains(Proxy, StringComparer.OrdinalIgnoreCase)) Proxy = "dxgi.dll";
         _loading = false;
         RefreshStatus();
@@ -1105,7 +1125,9 @@ public sealed partial class GameViewModel : ObservableObject
 
     /// <summary>What the game has, by the library's name for that build, else the version part of its recorded tag.</summary>
     private string? InstalledAddon(AddonKind kind, string? id, string? tag) =>
-        _s.Store.AddonBuilds(kind).FirstOrDefault(b => b.Matches(id, tag))?.Name ?? RenoDxVersionOf(tag);
+        _s.Store.AddonBuilds(kind).FirstOrDefault(b => b.Matches(id, tag)) is { } b
+            ? kind == AddonKind.RenoDx && b.UserLabel is null ? ComponentStore.ReadableStamp(b.Name) : b.Name
+            : RenoDxVersionOf(tag);
 
     private string? InstalledVersion(string file) =>
         SelectedTarget is null ? null : FileUtil.Format(FileUtil.ReadVersion(Path.Combine(SelectedTarget.Dir, file)));

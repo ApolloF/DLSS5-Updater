@@ -43,7 +43,25 @@ public sealed record AddonBuild(
         }
     }
 
-    public PickerEntry ToPickerEntry() => new(Id, DetectedLabel, Label, Id, ParsedVersion);
+    /// <summary>
+    /// What build pickers call it: the user's label, else ShortFuse's build stamp as a date ("2026-10-16 13:04"), else the detected
+    /// label with the file version only when it says more ("v12.5.0", not "v12.5.0 · 12.5.0.3000"). No import date: the pickers mark
+    /// newest and download themselves, and a second date read like the build's own.
+    /// </summary>
+    [JsonIgnore]
+    public string PickerLabel
+    {
+        get
+        {
+            if (!string.IsNullOrWhiteSpace(UserLabel)) return UserLabel.Trim();
+            if (FileName == ComponentStore.RenoDxFile) return ComponentStore.ReadableStamp(DetectedLabel);
+            var core = DetectedLabel.TrimStart('v', 'V').Split('-')[0];
+            var said = FileVersion.Length == 0 || FileVersion.StartsWith(core, StringComparison.OrdinalIgnoreCase);
+            return said ? DetectedLabel : $"{DetectedLabel} · {FileVersion}";
+        }
+    }
+
+    public PickerEntry ToPickerEntry() => new(Id, DetectedLabel, PickerLabel, Id, ParsedVersion);
 
     /// <summary>"{detected label}-{sha[..12]}", what an install records and the Installed column shows.</summary>
     [JsonIgnore]

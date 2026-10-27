@@ -14,11 +14,11 @@ public sealed record CatalogOffer(CatalogBuildKind Kind, string Sha256, string L
 
     public string Tag => TagPrefix + Sha256;
 
-    /// <summary>The picker entry: the plain version, since the picker offers one build per version.</summary>
+    /// <summary>The picker entry: the plain version, since the picker offers one build per version (ShortFuse's build stamp as its date).</summary>
     public PickerEntry ToEntry()
     {
         var version = Version.Length > 0 ? Version : Label;
-        return new PickerEntry(Tag, version, version, Sha256);
+        return new PickerEntry(Tag, version, Kind == CatalogBuildKind.RenoDx ? ComponentStore.ReadableStamp(version) : version, Sha256);
     }
 
     public static bool IsOffer(string? tag) => tag is not null && tag.StartsWith(TagPrefix, StringComparison.Ordinal);

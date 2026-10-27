@@ -277,7 +277,7 @@ public sealed class RenoDxCatalogTests : IDisposable
 
         var list = BuildPickerList.Merge(_store.RenoDxBuilds.Select(b => b.ToPickerEntry()), offers.Select(o => o.ToEntry()));
 
-        Assert.Equal(["26.1016.1304", "26.1003.2350", "26.0928.0205", "26.0927.2125 · download", "0.55 · download"], list.Select(c => c.Label));
+        Assert.Equal(["2026-10-16 13:04", "2026-10-03 23:50", "2026-09-28 02:05", "2026-09-27 21:25 · download", "0.55 · download"], list.Select(c => c.Label));
     }
 
     [Fact]

@@ -61,4 +61,109 @@ public sealed class BuildPickerListTests
     {
         Assert.Equal("Newest · 5.0.0 (2026-10-20)", ViewModels.AddonLibraryViewModel.NewestLabel("5.0.0 (2026-10-20)"));
     }
+
+    // ---------- the game page's labels (GamePickerLabels) ----------
+
+    private static PickerChoice Row(string tag, string name, bool download = false) => new(tag, name, download);
+
+    private static IEnumerable<string> Labels(IEnumerable<PickerChoice> list) => list.Select(c => c.Label);
+
+    [Fact]
+    public void A_default_that_follows_the_newest_build_is_one_newest_row_without_a_duplicate()
+    {
+        var list = GamePickerLabels.Compose(new PickerDefault("b3", "2026-10-16 13:04", FollowsNewest: true),
+            [Row("b3", "2026-10-16 13:04"), Row("b2", "2026-10-03 23:50"), Row("b1", "2026-09-28 02:05"), Row("catalog:x", "2026-09-27 21:25", true)]);
+
+        Assert.Equal(["Newest · 2026-10-16 13:04", "2026-10-03 23:50", "2026-09-28 02:05", "2026-09-27 21:25 · download"], Labels(list));
+        Assert.Equal([null, "b2", "b1", "catalog:x"], list.Select(c => c.Tag));
+    }
+
+    [Fact]
+    public void A_pinned_default_says_default_and_the_newest_build_is_marked()
+    {
+        var list = GamePickerLabels.Compose(new PickerDefault("b1", "v11.9.0", FollowsNewest: false), [Row("b2", "v12.5.0"), Row("b1", "v11.9.0")]);
+
+        Assert.Equal(["Default · v11.9.0", "v12.5.0 · newest"], Labels(list));
+    }
+
+    [Fact]
+    public void A_pinned_default_that_is_the_newest_build_says_so()
+    {
+        var list = GamePickerLabels.Compose(new PickerDefault("b2", "5.0.0", FollowsNewest: false), [Row("b2", "5.0.0"), Row("b1", "2.0.0")]);
+
+        Assert.Equal(["Default · 5.0.0 · newest", "2.0.0"], Labels(list));
+    }
+
+    [Fact]
+    public void A_newer_download_than_the_library_keeps_the_first_row_default_and_marks_the_download_newest()
+    {
+        var list = GamePickerLabels.Compose(new PickerDefault("own", "310.7.0", FollowsNewest: true),
+            [Row("catalog:n", "310.8.3", true), Row("own", "310.7.0")]);
+
+        Assert.Equal(["Default · 310.7.0", "310.8.3 · newest · download"], Labels(list));
+    }
+
+    [Fact]
+    public void The_build_in_the_game_is_marked_installed()
+    {
+        var list = GamePickerLabels.Compose(new PickerDefault("b2", "v1.4.2", FollowsNewest: true), [Row("b2", "v1.4.2"), Row("b1", "v1.3.0")], installed: "b1");
+        Assert.Equal(["Newest · v1.4.2", "v1.3.0 · installed"], Labels(list));
+
+        var current = GamePickerLabels.Compose(new PickerDefault("b2", "v1.4.2", FollowsNewest: true), [Row("b2", "v1.4.2")], installed: "B2");
+        Assert.Equal(["Newest · v1.4.2 · installed"], Labels(current));
+    }
+
+    [Fact]
+    public void A_game_pick_of_the_default_build_keeps_its_row()
+    {
+        var list = GamePickerLabels.Compose(new PickerDefault("b2", "v1.4.2", FollowsNewest: true), [Row("b2", "v1.4.2"), Row("b1", "v1.3.0")], pin: "b2");
+
+        Assert.Equal([null, "b2", "b1"], list.Select(c => c.Tag));
+    }
+
+    [Fact]
+    public void A_default_release_not_in_the_library_yet_is_newest_and_downloads()
+    {
+        var list = GamePickerLabels.Compose(new PickerDefault("v0.9.51", "v0.9.51", FollowsNewest: true, Download: true),
+            [Row("v0.9.47", "OptiScaler-NR v0.9.47")], newest: "v0.9.51");
+
+        Assert.Equal(["Newest · v0.9.51 · download", "OptiScaler-NR v0.9.47"], Labels(list));
+    }
+
+    [Fact]
+    public void An_empty_library_that_downloads_on_install_reads_newest_download_and_one_that_cannot_says_default()
+    {
+        Assert.Equal(["Newest · download"], Labels(GamePickerLabels.Compose(new PickerDefault(null, "", FollowsNewest: true, Download: true), [])));
+        Assert.Equal(["Default · none imported", "26.1 · newest · download"],
+            Labels(GamePickerLabels.Compose(new PickerDefault(null, "none imported", FollowsNewest: true), [Row("catalog:x", "26.1", true)])));
+    }
+
+    [Fact]
+    public void An_explicit_empty_newest_marks_nothing()
+    {
+        var list = GamePickerLabels.Compose(new PickerDefault("id1", "6.8.0 · Stable (add-on)", FollowsNewest: false),
+            [Row("channel:stable", "Newest stable (add-on)"), Row("id1", "6.8.0 · Stable (add-on)")], newest: string.Empty);
+
+        Assert.Equal(["Default · 6.8.0 · Stable (add-on)", "Newest stable (add-on)"], Labels(list));
+    }
+
+    [Theory]
+    [InlineData("26.1016.1304", "2026-10-16 13:04")]
+    [InlineData("26.0928.0205", "2026-09-28 02:05")]
+    [InlineData("26.1340.1304", "26.1340.1304")]
+    [InlineData("0.55", "0.55")]
+    [InlineData("v12.5.0", "v12.5.0")]
+    public void A_shortfuse_build_stamp_reads_as_its_date(string label, string shown) => Assert.Equal(shown, ComponentStore.ReadableStamp(label));
+
+    [Theory]
+    [InlineData("v12.5.0", "12.5.0.3000", "v12.5.0")]
+    [InlineData("5.0.0", "", "5.0.0")]
+    [InlineData("v11.0.0-beta.6", "11.0.0.6", "v11.0.0-beta.6")]
+    [InlineData("v10.7.0", "1.2.3.4", "v10.7.0 · 1.2.3.4")]
+    public void An_add_on_picker_label_drops_the_import_date_and_a_file_version_that_says_nothing_new(string detected, string file, string shown)
+    {
+        var build = new AddonBuild(new string('a', 64), "dlss5.addon64", file, null, detected, null, new DateTime(2026, 10, 27));
+
+        Assert.Equal(shown, build.PickerLabel);
+    }
 }

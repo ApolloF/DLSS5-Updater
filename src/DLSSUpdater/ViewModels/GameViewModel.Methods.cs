@@ -96,13 +96,20 @@ public sealed partial class GameViewModel
     /// <summary>True when the game pins a Feeder build instead of following Auto.</summary>
     public bool FeederIsManual => FeederChoice?.Tag is not null;
 
-    /// <summary>"Auto (1.19.0)" first, then every build in the library; a pin the library lost stays visible.</summary>
+    /// <summary>"Newest · 1.19.0" (or "Default · ..." when Settings chose a build) first, then the other library builds; a pin the library lost stays visible.</summary>
     private void FillFeederChoices(GameOverride? over)
     {
         var pin = over?.BuildPick(ComponentRegistry.Feeder);
+        var defaultPick = _s.Settings.DefaultBuild(ComponentRegistry.Feeder);
+        var builds = FeederLibrary.Builds();
+        var pinned = builds.FirstOrDefault(b => b.Id.Equals(defaultPick, StringComparison.OrdinalIgnoreCase));
+        var follows = pinned ?? builds.FirstOrDefault();
+        // An empty library still installs: the newest release downloads with the first install.
+        var def = new PickerDefault(follows?.Id, follows?.Label ?? "", pinned is null, Download: follows is null);
+        var installed = Manifest?.Component(ComponentRegistry.Feeder)?.BuildId;
         FeederChoices.Clear();
-        FeederChoices.Add(new DlssChoice(null, FeederLibrary.AutoLabel(_s.Settings.DefaultBuild(ComponentRegistry.Feeder))));
-        foreach (var b in FeederLibrary.Builds()) FeederChoices.Add(new DlssChoice(b.Id, b.Label));
+        foreach (var c in GamePickerLabels.Compose(def, builds.Select(b => new PickerChoice(b.Id, b.Label)).ToList(), installed, pin))
+            FeederChoices.Add(new DlssChoice(c.Tag, c.Label));
         if (pin is not null && FeederChoices.All(c => c.Tag != pin)) FeederChoices.Add(new DlssChoice(pin, $"{pin} · not in the library"));
         FeederChoice = FeederChoices.FirstOrDefault(c => c.Tag == pin) ?? FeederChoices[0];
     }
@@ -116,7 +123,7 @@ public sealed partial class GameViewModel
         RefreshStatus();
     }
 
-    /// <summary>Back to following Auto for this game.</summary>
+    /// <summary>Back to following the default for this game.</summary>
     [RelayCommand]
     private void ResetFeederToAuto() => FeederChoice = FeederChoices.FirstOrDefault();
 

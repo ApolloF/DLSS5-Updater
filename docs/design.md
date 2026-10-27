@@ -27,7 +27,7 @@ Each component has exactly these parts. A part that doesn't apply is explicitly 
 | Build id | SHA-256 of the build's main file (downloads may use the release tag when the release publishes digests). Duplicate imports dedupe by id. |
 | Order | Newest first by the component's version (tag, version resource or detected label; one `BuildOrder` implementation). Ties: newer date first. |
 | Default | Settings hold the build by component id (`AppSettings.DefaultBuild(id)`: `<Component>Id` for the components from before 3.0, `Components[id].Build` for the rest); **null means "Newest"** and follows the newest build in the library automatically. Picking a build pins it; picking "Newest" unpins. The app never pins on its own. |
-| Per-game pick | `GameOverride.BuildPick(id)` (`<Component>Id` or `Components[id]`), same semantics (null = follow the default). The game page shows the same picker for every component with more than one build: "Default (<label>)", then the builds. |
+| Per-game pick | `GameOverride.BuildPick(id)` (`<Component>Id` or `Components[id]`), same semantics (null = follow the default). The game page shows the same picker for every component with more than one build, labelled as in section 5. |
 | Cleanup | Every library is in `BuildCleanup` with a keep count (default 2). Protected: the default, per-game picks, builds installed in a game, the runtime a game can switch back to. Automatic cleanup removes downloaded builds only; imported builds go only by hand. The UI shows why extra builds stay. |
 | Install | One generic record per component in the game's install record (`InstallManifest.Components`, an `InstalledComponent`): component id, build id, version label, the files placed with the SHA-256 of what was placed, backups (original -> backup), config keys set (file, section, key, value, the previous value or absent), file attributes changed, and a string map for extras. `Installer.InstallComponentAsync` takes a `ComponentPlan` (the whole wanted set) and records each step before it is taken. Removal undoes exactly what the record lists, in reverse order (attributes, keys, files), originals restored; a file, key or attribute that changed since we set it stays as it is and is reported as changed by the user or the game, never deleted silently. Placed files and backups are also kept in the record-level `Files`/`Backups` lists, so an older version still restores the originals. |
 | Config | If the app writes the mod's config: a `<Component>Config` with `TestedVersion` (+ schema when the mod has one), a compat report, merge rules shared with the ini merger, options defined once with help topics. Options a build doesn't know are hidden and not written. |
@@ -73,6 +73,12 @@ automatic cleanup may remove it like any downloaded build, and the picker offers
 
 - Every component row on the game page: installed version, latest/default (with picker when the library has more
   than one build), switch. Same columns, same picker control for all components.
+- Every build picker in that table uses one label scheme (`GamePickerLabels`), newest first. The first entry follows the
+  default: "Newest · <build>" when the default is "Newest" and that build is the newest listed, else "Default · <build>".
+  The build it names is not listed a second time (unless the game picked exactly that build). After a build's name come, in
+  this order: "newest" (the newest build listed, when the first entry doesn't say so), "installed" (the build in this
+  game) and "download" (not in the library; fetched when picked or installed). ShortFuse's build stamps (26.MMDD.HHMM)
+  show as the date they are ("2026-10-16 13:04"); add-on builds drop the import date and a file version that repeats the label.
 - Settings → Local components: one row per import-capable component, with the same buttons ("Import…" for a file or
   .zip, "Folder…" for a release folder where the mod ships as a folder) and an info line (imported version, tested
   version, compat warning).
