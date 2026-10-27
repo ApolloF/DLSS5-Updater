@@ -109,20 +109,7 @@ public sealed partial class GameViewModel : ObservableObject
         Dxvk = new DxvkViewModel(this, services);
         Luma = new LumaViewModel(this, services);
         _modChoices = ModPicker.Available(false, SelectedBuild.Name);
-        Components =
-        [
-            new ComponentRow("opti", "OptiScaler-NR"),
-            new ComponentRow("reshade", "ReShade"),
-            new ComponentRow("mfg", "MFG Unlock"),
-            new ComponentRow("dlssnr", "NR runtime"),
-            new ComponentRow("renodx", "ShortFuse RenoDX DLSS add-on"),
-            new ComponentRow("lecram", "Lecram DLSS5 add-on"),
-            new ComponentRow("uplift", "GITC Uplift"),
-            new ComponentRow("dfc", "Deep Fried Chicken"),
-            new ComponentRow("feeder", "DLSS5-Feeder"),
-            new ComponentRow("dlss", "DLSS (SR · RR · FG)"),
-            new ComponentRow("streamline", "Streamline (for Dynamic MFG)"),
-        ];
+        Components = [.. ComponentTable.Rows.Select(r => new ComponentRow(r.Key, r.Name))];
         foreach (var c in Components) c.PropertyChanged += (_, e) =>
         {
             if (e.PropertyName != nameof(ComponentRow.Enabled)) return;

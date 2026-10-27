@@ -256,6 +256,90 @@ public sealed class MethodPickTests : IDisposable
     }
 
     [Fact]
+    public void ADlssCardPickedEarlier_GivesWayWhenTheNeuralRowsGoOnByHand()
+    {
+        var vm = NewGame();
+        vm.Methods.Clear();
+        vm.AddOns.Clear();
+        var dlss = Row(Method.DlssUpdate, null, ComponentRegistry.Dlss);
+        var nr = Row(Method.NeuralAddon, InstallMode.ReShadeOnly, ComponentRegistry.ReShade, ComponentRegistry.DlssNr, ComponentRegistry.Lecram);
+        vm.Methods.Add(dlss);
+        vm.Methods.Add(nr);
+        vm.Mode = InstallMode.ReShadeOnly;
+        Component(vm, "mfg").Enabled = false;
+        Component(vm, "streamline").Enabled = false;
+        vm.PickMethodCommand.Execute(dlss);
+        Assert.True(dlss.IsPicked);
+
+        Component(vm, "dlssnr").Enabled = true;
+        Component(vm, "lecram").Enabled = true;
+
+        Assert.True(nr.IsPicked);
+        Assert.False(dlss.IsPicked);
+        Assert.Equal("DLSS (SR · RR · FG)", nr.AlsoOn);
+        Assert.Null(dlss.AlsoOn);
+        Assert.Null(vm.CustomSelection);
+    }
+
+    [Fact]
+    public void CardsListTheTableRowsTheyTurnOn_WithTheTablesNames()
+    {
+        var vm = NewGame();
+        vm.Methods.Clear();
+        var nr = Row(Method.NeuralAddon, InstallMode.ReShadeOnly, ComponentRegistry.ReShade, ComponentRegistry.DlssNr, ComponentRegistry.Lecram);
+        var dlss = Row(Method.DlssUpdate, null, ComponentRegistry.Dlss);
+        vm.Methods.Add(nr);
+        vm.Methods.Add(dlss);
+
+        vm.PickMethodCommand.Execute(dlss);
+
+        Assert.Equal("Turns on: ReShade · NR runtime · Lecram DLSS5 add-on. Install mode: ReShade + add-ons", nr.TurnsOn);
+        Assert.Equal("Turns on: " + Component(vm, "dlss").Name, dlss.TurnsOn);
+    }
+
+    [Fact]
+    public void ATableNoCardMatches_ShowsTheCustomSelection_AndNoPickedCard()
+    {
+        var vm = NewGame();
+        vm.Methods.Clear();
+        vm.AddOns.Clear();
+        var nr = Row(Method.NeuralAddon, InstallMode.ReShadeOnly, ComponentRegistry.ReShade, ComponentRegistry.DlssNr, ComponentRegistry.Lecram);
+        vm.Methods.Add(nr);
+        vm.Mode = InstallMode.ReShadeOnly;
+        foreach (var key in new[] { "mfg", "dlssnr", "dlss", "streamline" }) Component(vm, key).Enabled = false;
+
+        Component(vm, "streamline").Enabled = true;
+
+        Assert.False(nr.IsPicked);
+        Assert.Equal("ReShade · Streamline (for Dynamic MFG)", vm.CustomSelection);
+        Assert.True(vm.HasCustomSelection);
+    }
+
+    [Fact]
+    public void SwitchingTheNrAddOnInTheTable_RenamesTheNeuralCard()
+    {
+        var root = Path.Combine(_tmp, "nr-game");
+        Directory.CreateDirectory(root);
+        var info = new GameInfo { Id = root, Root = root, Name = "NR game", Installs = [root] };
+        info.Tech = new GameTech { Apis = GraphicsApis.Dx12, Bits = 64 };
+        info.Dlss.Add(new DlssDll { Name = "nvngx_dlss.dll", Path = Path.Combine(root, "nvngx_dlss.dll") });
+        var store = new ComponentStore(new GitHubClient(), () => true);
+        var vm = new GameViewModel(info, new Services { Settings = new AppSettings(), Store = store, Installer = new Installer(store) });
+        vm.RefreshAdvice();
+        var neural = vm.Methods.Single(r => r.Option.Method == Method.NeuralAddon);
+        Assert.Equal("Neural rendering with GITC Uplift", neural.Title);
+        vm.PickMethodCommand.Execute(neural);
+
+        Component(vm, "uplift").Enabled = false;
+        Component(vm, "lecram").Enabled = true;
+
+        neural = vm.Methods.Single(r => r.Option.Method == Method.NeuralAddon);
+        Assert.Equal("Neural rendering with Lecram DLSS5 add-on", neural.Title);
+        Assert.Contains(ComponentRegistry.Lecram, neural.Option.Components);
+        Assert.True(neural.IsPicked);
+    }
+
+    [Fact]
     public void AntiCheatCaution_IsNotRepeatedUnderTheAntiCheatBanner()
     {
         var vm = NewGame("EasyAntiCheat");

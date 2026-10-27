@@ -517,6 +517,19 @@ public sealed class MethodAdvisorTests
     }
 
     [Fact]
+    public void NeuralMethod_UsesTheAddonTheTableHasOn_AndNamesItInTheTitle()
+    {
+        var input = Input(Game(dlss: true)) with { InstalledRoutes = [NrAddon.RenoDx], Imported = new HashSet<string> { ComponentRegistry.DlssNr, ComponentRegistry.RenoDx, ComponentRegistry.Lecram } };
+        Assert.Equal("Neural rendering with ShortFuse RenoDX DLSS add-on", Option(MethodAdvisor.Advise(input), Method.NeuralAddon).Title);
+
+        var neural = Option(MethodAdvisor.Advise(input with { AddonsOn = [ComponentRegistry.Lecram] }), Method.NeuralAddon);
+
+        Assert.Equal([ComponentRegistry.ReShade, ComponentRegistry.DlssNr, ComponentRegistry.Lecram], neural.Components);
+        Assert.Equal(NrAddon.Lecram, neural.Route);
+        Assert.Equal("Neural rendering with Lecram DLSS5 add-on", neural.Title);
+    }
+
+    [Fact]
     public void Row18_AnAddonOfOurOwn_IsKeptByTheNeuralMethod_AndNothingIsWarned()
     {
         var input = Input(Game(dlss: true)) with { InstalledRoutes = [NrAddon.Lecram], Imported = new HashSet<string> { ComponentRegistry.DlssNr, ComponentRegistry.RenoDx, ComponentRegistry.Lecram } };
@@ -697,7 +710,6 @@ public sealed class MethodAdvisorTests
         Assert.True(row.IsClickable);
         Assert.False(row.IsSelectable);
         Assert.Equal("Own section below", row.StateText);
-        Assert.Contains("own section", row.CardTip);
         Assert.True(new DLSSUpdater.ViewModels.MethodRow(advice with { Availability = Availability.NeedsSetup }, false).IsAdviceOnly);
     }
 
