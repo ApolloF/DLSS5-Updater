@@ -23,6 +23,11 @@ public sealed class DlssDll
     public string Path { get; set; } = "";
     public string Name { get; set; } = "";
     public Version? Version { get; set; }
+    /// <summary>
+    /// DLSS5 Updater added this file (its install record owns it and backed up no original), so it says nothing about
+    /// what the game supports. Files it only updated stay the game's.
+    /// </summary>
+    public bool Installed { get; set; }
 
     public string Kind => Name.ToLowerInvariant() switch
     {
@@ -86,9 +91,9 @@ public sealed class GameInfo
     [JsonIgnore]
     public GameFeatures Features => FeaturesOf(Dlss, Streamline);
 
-    /// <summary>Newest DLSS Frame Generation dll version, if the game has one.</summary>
+    /// <summary>Newest DLSS Frame Generation dll version, if the game has one of its own.</summary>
     [JsonIgnore]
-    public Version? FgVersion => Dlss.Where(d => d.Kind == "FG").Select(d => d.Version).Max();
+    public Version? FgVersion => Dlss.Where(d => d.Kind == "FG" && !d.Installed).Select(d => d.Version).Max();
 
     private static readonly (string File, GameFeatures Feature)[] FeatureFiles =
     [
@@ -97,13 +102,20 @@ public sealed class GameInfo
         ("sl.reflex.dll", GameFeatures.Reflex), ("sl.interposer.dll", GameFeatures.Streamline),
     ];
 
+    /// <summary>What the game's own files support; files DLSS5 Updater added don't count.</summary>
     public static GameFeatures FeaturesOf(IEnumerable<DlssDll> dlss, IEnumerable<DlssDll> streamline)
     {
         var f = GameFeatures.None;
-        foreach (var d in dlss.Concat(streamline))
-            foreach (var (file, feature) in FeatureFiles)
-                if (d.Name.Equals(file, StringComparison.OrdinalIgnoreCase)) f |= feature;
+        foreach (var d in dlss.Concat(streamline).Where(d => !d.Installed)) f |= FeatureOf(d);
         return f;
+    }
+
+    /// <summary>The feature one runtime file stands for, whoever put it there.</summary>
+    public static GameFeatures FeatureOf(DlssDll d)
+    {
+        foreach (var (file, feature) in FeatureFiles)
+            if (d.Name.Equals(file, StringComparison.OrdinalIgnoreCase)) return feature;
+        return GameFeatures.None;
     }
 }
 

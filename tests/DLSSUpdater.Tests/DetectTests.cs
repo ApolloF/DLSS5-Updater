@@ -594,6 +594,81 @@ public class DetectTests : IDisposable
         Assert.True(g.Features.HasFlag(GameFeatures.Streamline));
     }
 
+    // ---------- the game's own DLSS-G vs files our installs added ----------
+
+    private const string Bin = @"Game\Binaries\Win64";
+
+    /// <summary>An install record in <see cref="Bin"/>, its entries relative to the game root as the installer writes them.</summary>
+    private void Record(Action<InstallManifest> fill)
+    {
+        var target = Path.Combine(_game, Bin);
+        var m = new InstallManifest { RootRel = Path.GetRelativePath(target, _game) };
+        fill(m);
+        m.Save(target);
+    }
+
+    [Fact]
+    public void DlssG_OurInstallAdded_IsNotTheGamesFrameGeneration()
+    {
+        Pe($@"{Bin}\Game-Win64-Shipping.exe", true, ["d3d12.dll"]);
+        Put($@"{Bin}\nvngx_dlss.dll");
+        Put($@"{Bin}\nvngx_dlssg.dll");
+        Record(m => m.Files.Add($@"{Bin}\nvngx_dlssg.dll"));
+
+        var g = Scan();
+        Assert.Contains(g.Dlss, d => d.Name == "nvngx_dlssg.dll" && d.Installed);
+        Assert.Equal(GameFeatures.SR, g.Features);
+        Assert.Null(FrameLimitHint.FrameGenerationSource(g));
+    }
+
+    [Fact]
+    public void DlssG_InAFolderOurInstallOwns_IsNotTheGames()
+    {
+        Pe($@"{Bin}\Game-Win64-Shipping.exe", true, ["d3d12.dll"]);
+        Put($@"{Bin}\Mod\nvngx_dlssg.dll");
+        Put($@"{Bin}\Mod\sl.interposer.dll");
+        Put($@"{Bin}\Mod\sl.dlss_g.dll");
+        Record(m => m.Dirs.Add($@"{Bin}\Mod"));
+
+        var g = Scan();
+        Assert.Equal(GameFeatures.None, g.Features);
+    }
+
+    [Fact]
+    public void DlssG_OurInstallUpdated_StaysTheGames()
+    {
+        Pe($@"{Bin}\Game-Win64-Shipping.exe", true, ["d3d12.dll"]);
+        Put($@"{Bin}\nvngx_dlssg.dll");
+        // A DLSS update replaced the game's file: the record owns it but backed up the original.
+        Record(m =>
+        {
+            m.Files.Add($@"{Bin}\nvngx_dlssg.dll");
+            m.Backups.Add(new BackupEntry { Original = $@"{Bin}\nvngx_dlssg.dll", Backup = $@"{Bin}\nvngx_dlssg.dll" });
+        });
+
+        var g = Scan();
+        Assert.DoesNotContain(g.Dlss, d => d.Installed);
+        Assert.True(g.Features.HasFlag(GameFeatures.FG));
+    }
+
+    [Fact]
+    public void DlssG_TheGamesStreamlinePlugin_CountsBesideAnInstallOfOurs()
+    {
+        // Unreal games with NVIDIA's Streamline plugin keep DLSS-G in the plugin, away from the folder we install into.
+        const string sl = @"Engine\Plugins\Marketplace\StreamlineCore\Binaries\ThirdParty\Win64";
+        Pe($@"{Bin}\Game-Win64-Shipping.exe", true, ["d3d12.dll"]);
+        Put($@"{sl}\sl.interposer.dll");
+        Put($@"{sl}\sl.dlss_g.dll");
+        Put($@"{sl}\sl.reflex.dll");
+        Put($@"{sl}\nvngx_dlssg.dll");
+        Put($@"{Bin}\OptiScaler.ini");
+        Record(m => m.Files.Add($@"{Bin}\OptiScaler.ini"));
+
+        var g = Scan();
+        Assert.Equal(GameFeatures.FG | GameFeatures.Reflex | GameFeatures.Streamline, g.Features);
+        Assert.Equal("DLSS frame generation", FrameLimitHint.FrameGenerationSource(g));
+    }
+
     // ---------- cache ----------
 
     [Fact]

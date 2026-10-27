@@ -111,6 +111,7 @@ public static partial class GameInspector
 
         game.Dlss = game.Dlss.OrderBy(d => d.Path, StringComparer.OrdinalIgnoreCase).ToList();
         game.Streamline = game.Streamline.OrderBy(d => d.Path, StringComparer.OrdinalIgnoreCase).ToList();
+        MarkInstalled(game);
         game.Exes = RankExes(root, exes, game.Name);
         // The user's main exe leads, so the API, bitness and mod folder below are read from it.
         if (game.Manual?.MainExe is { } main && File.Exists(main))
@@ -121,6 +122,20 @@ public static partial class GameInspector
         }
         game.Tech = GameDetector.Detect(root, game.Exes, exes, signals, versionOf);
         game.Scanned = DateTime.UtcNow;
+    }
+
+    /// <summary>
+    /// Flags the DLSS and Streamline files our installs added (a DLSS-G runtime placed for DFC, for example), so they
+    /// aren't read as the game's own DLSS, frame generation or Reflex.
+    /// </summary>
+    private static void MarkInstalled(GameInfo game)
+    {
+        if (game.Installs.Count == 0) return;
+        var added = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        foreach (var dir in game.Installs)
+            if (InstallManifest.Load(dir) is { } m) added.UnionWith(m.AddedPaths(dir));
+        foreach (var d in game.Dlss.Concat(game.Streamline))
+            d.Installed = added.Any(a => FileUtil.IsUnder(d.Path, a));
     }
 
     /// <summary>
