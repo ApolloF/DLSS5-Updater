@@ -55,15 +55,11 @@ public sealed class OptiBuildNameTests : IDisposable
         var settings = new AppSettings { OptiSource = ComponentStore.OptiRepo };
         var vm = NewGame(settings);
         Assert.Equal("OptiScaler-NR", OptiRowName(vm));
-        Assert.Equal("OptiScaler-NR", vm.ModeChoice.Label);
 
         settings.OptiSource = OptiSources.F5.Repo;
         vm.RefreshBuildName();
 
         Assert.Equal("OptiScaler F5", OptiRowName(vm));
-        Assert.Equal("OptiScaler F5", vm.ModeChoice.Label);
-        Assert.Contains(vm.Modes, m => m.Label == "OptiScaler F5");
-        Assert.StartsWith("OptiScaler F5,", vm.ModeHint);
         Assert.Equal("OptiScaler F5", vm.ModChoices.First(c => c.Mod == Mod.OptiScalerNr).Label);
         Assert.Equal("OptiScaler F5", vm.ModSelection.Label);
     }
@@ -78,7 +74,6 @@ public sealed class OptiBuildNameTests : IDisposable
             m.Save(root);
         });
         Assert.Equal("OptiScaler-NR", OptiRowName(vm));
-        Assert.Equal("OptiScaler F5", vm.ModeChoice.Label);
 
         var f5Game = NewGame(new AppSettings(), root =>
         {

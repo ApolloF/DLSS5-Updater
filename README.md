@@ -100,7 +100,7 @@ On a fresh install a short setup opens over the window: a welcome, the default i
 2. Choose how to install:
    - **OptiScaler** is the default (the F5 build unless you pick OptiScaler-NR under **OptiScaler build** in Settings). It installs OptiScaler as a proxy DLL (`dxgi.dll` unless you change it), plus ReShade, MFG Unlock and the DLSS files.
    - **ReShade + add-ons** installs ReShade itself as the proxy, with MFG Unlock and the DLSS and Streamline updates, and without OptiScaler.
-   - You can set the default mode in Settings and change it for a single game.
+   - You can set the default mode in Settings. For a single game, tick or untick the OptiScaler row in its components (the method cards do this for you). The same game page picks its OptiScaler build, in that row or at the top of **Game config**.
 3. Press **Install**. The button reads **Update** when a newer release is available and **Reinstall** when the game is current.
 4. Press **DLSS only** if you just want the game's DLSS files replaced and nothing else added.
 5. After a new release or a game patch, press **Update all** at the top to re-apply everything to every managed game.

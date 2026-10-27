@@ -16,9 +16,9 @@ public sealed partial class ComponentRow(string key, string initialName) : Obser
     /// <summary>The OptiScaler row is renamed to the build it shows.</summary>
     [ObservableProperty] private string _name = initialName;
     [ObservableProperty] private bool _enabled = true;
-    /// <summary>Hidden when it doesn't apply to the install mode (OptiScaler / DLSSNR in ReShade-only).</summary>
+    /// <summary>Hidden when it doesn't apply to the install mode (the NR add-ons in OptiScaler mode, see <see cref="ComponentTable.Rule"/>).</summary>
     [ObservableProperty] private bool _visible = true;
-    /// <summary>False when the mode requires this component (OptiScaler in OptiScaler mode, ReShade in ReShade-only).</summary>
+    /// <summary>False when the mode requires this component (ReShade in ReShade-only mode).</summary>
     [ObservableProperty] private bool _editable = true;
     [ObservableProperty] private string _installed = "—";
     [ObservableProperty] private string _latest = "—";
@@ -113,6 +113,7 @@ public sealed partial class GameViewModel : ObservableObject
         foreach (var c in Components) c.PropertyChanged += (_, e) =>
         {
             if (e.PropertyName != nameof(ComponentRow.Enabled)) return;
+            if (c.Key == "opti" && !_loading) Mode = ComponentTable.ModeFor(c.Enabled);
             // Feeder only feeds Deep Fried Chicken (NrAddons.FeederRefusal): turning it on turns DFC on, and DFC going off takes it along.
             if (c.Key == "feeder" && c.Enabled && !_loading) Components.First(r => r.Key == "dfc").Enabled = true;
             if (c.Key == "dfc" && !c.Enabled) Components.First(r => r.Key == "feeder").Enabled = false;
@@ -154,27 +155,15 @@ public sealed partial class GameViewModel : ObservableObject
     public IReadOnlyList<string> ProxyNames => IsReShadeOnly ? AppSettings.ReShadeProxyNames : AppSettings.ProxyNames;
     /// <summary>The OptiScaler source this game installs: that of its chosen build, else the one selected in Settings.</summary>
     private OptiSource SelectedBuild => EffectiveOptiTag is { } tag ? OptiSources.OfTag(tag) : OptiSources.For(_s.Settings.OptiSource);
-    public IReadOnlyList<ModeChoice> Modes => ModeChoice.For(SelectedBuild);
-    public string ModeHint => $"{SelectedBuild.Name}, or ReShade + add-ons without OptiScaler";
 
     [ObservableProperty]
-    [NotifyPropertyChangedFor(nameof(IsReShadeOnly), nameof(ProxyNames), nameof(ModeChoice), nameof(ProxyHint))]
+    [NotifyPropertyChangedFor(nameof(IsReShadeOnly), nameof(ProxyNames), nameof(ProxyHint), nameof(ShowOptiBuild))]
     private InstallMode _mode;
 
     public bool IsReShadeOnly => Mode == InstallMode.ReShadeOnly;
     public string ProxyHint => IsReShadeOnly
         ? "Files go next to the game's .exe. This is the file name the game loads ReShade as: dxgi.dll for DirectX 10–12, d3d9.dll for DirectX 9, opengl32.dll for OpenGL."
         : "Files go next to the game's .exe. This is the file name the game loads OptiScaler as.";
-
-    public ModeChoice ModeChoice
-    {
-        get => Modes.First(m => m.Mode == Mode);
-        set
-        {
-            if (value is null) return;
-            Mode = value.Mode;
-        }
-    }
 
     partial void OnModeChanged(InstallMode value)
     {
@@ -193,12 +182,10 @@ public sealed partial class GameViewModel : ObservableObject
     {
         foreach (var c in Components)
         {
-            c.Visible = !(IsReShadeOnly && c.Key == "opti");
-            // The loader of the mode is always installed: without it nothing else in the game loads.
-            c.Editable = c.Key != (IsReShadeOnly ? "reshade" : "opti");
-            if (!c.Editable) c.Enabled = true;
-            // The add-on replaces OptiScaler's NR, so it exists in ReShade-only mode alone.
-            if (c.Key is "renodx" or "lecram" or "dfc" or "uplift" or "feeder" && !IsReShadeOnly) { c.Visible = false; c.Enabled = false; }
+            var rule = ComponentTable.Rule(c.Key, Mode);
+            c.Visible = rule.Visible;
+            c.Editable = rule.Editable;
+            if (rule.On is { } on) c.Enabled = on;
         }
         OnPropertyChanged(nameof(AnyEnabled));
     }
@@ -481,6 +468,8 @@ public sealed partial class GameViewModel : ObservableObject
     private Mod DefaultMod => ModPicker.DefaultFor(IsReShadeOnly, On("uplift"), On("dfc"), On("lecram"), On("renodx"));
 
     public bool ShowOptiNr => ModPicker.Shows(ModSelection.Mod, Mod.OptiScalerNr);
+    /// <summary>The build picker above OptiScaler's options; ReShade-only mode installs no OptiScaler.</summary>
+    public bool ShowOptiBuild => ShowOptiNr && !IsReShadeOnly;
     public bool ShowReShade => ModPicker.Shows(ModSelection.Mod, Mod.ReShade);
     public bool ShowMfg => ModPicker.Shows(ModSelection.Mod, Mod.Mfg);
     public bool ShowRenoDx => IsReShadeOnly && ModPicker.Shows(ModSelection.Mod, Mod.RenoDx);
@@ -501,14 +490,12 @@ public sealed partial class GameViewModel : ObservableObject
         NotifyModShown();
     }
 
-    /// <summary>The selected OptiScaler build changed: rename the mode entry, the mod entry and the component row.</summary>
+    /// <summary>The selected OptiScaler build changed: rename the mod entry, the component row and the cards that name it.</summary>
     public void RefreshBuildName()
     {
-        OnPropertyChanged(nameof(Modes));
-        OnPropertyChanged(nameof(ModeChoice));
-        OnPropertyChanged(nameof(ModeHint));
         RefreshModPick();
         RefreshStatus();
+        if (!_loading) SyncPick();
         if (_rowsBuilt) RefreshConfigRows();
     }
 
@@ -516,6 +503,7 @@ public sealed partial class GameViewModel : ObservableObject
     {
         OnPropertyChanged(nameof(ModSelection));
         OnPropertyChanged(nameof(ShowOptiNr));
+        OnPropertyChanged(nameof(ShowOptiBuild));
         OnPropertyChanged(nameof(ShowReShade));
         OnPropertyChanged(nameof(ShowMfg));
         OnPropertyChanged(nameof(ShowRenoDx));

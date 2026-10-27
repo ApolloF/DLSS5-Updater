@@ -33,6 +33,25 @@ public sealed class MethodMatchTests
     }
 
     [Fact]
+    public void TheOptiScalerTick_IsTheInstallMode()
+    {
+        Assert.Equal(InstallMode.OptiScaler, ComponentTable.ModeFor(true));
+        Assert.Equal(InstallMode.ReShadeOnly, ComponentTable.ModeFor(false));
+    }
+
+    [Theory]
+    [InlineData("opti", InstallMode.OptiScaler, true, true, true)]
+    [InlineData("opti", InstallMode.ReShadeOnly, true, true, false)]
+    [InlineData("reshade", InstallMode.OptiScaler, true, true, null)]
+    [InlineData("reshade", InstallMode.ReShadeOnly, true, false, true)]
+    [InlineData("lecram", InstallMode.OptiScaler, false, true, false)]
+    [InlineData("feeder", InstallMode.OptiScaler, false, true, false)]
+    [InlineData("lecram", InstallMode.ReShadeOnly, true, true, null)]
+    [InlineData("mfg", InstallMode.OptiScaler, true, true, null)]
+    public void RowRules_FollowTheMode(string key, InstallMode mode, bool visible, bool editable, bool? on) =>
+        Assert.Equal(new ComponentTable.RowRule(visible, editable, on), ComponentTable.Rule(key, mode));
+
+    [Fact]
     public void ACardNeedingTheOtherMode_DoesNotMatch()
     {
         var table = Table(ComponentRegistry.ReShade, ComponentRegistry.DlssNr, ComponentRegistry.Lecram);

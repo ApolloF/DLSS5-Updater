@@ -24,6 +24,24 @@ public static class ComponentTable
     public static string? KeyOf(string id) => Rows.FirstOrDefault(r => r.Id.Equals(id, StringComparison.OrdinalIgnoreCase))?.Key;
 
     public static string NameOf(string id) => Rows.FirstOrDefault(r => r.Id.Equals(id, StringComparison.OrdinalIgnoreCase))?.Name ?? id;
+
+    /// <summary>The OptiScaler row's tick is the install mode: ticked, OptiScaler loads into the game; unticked, ReShade does.</summary>
+    public static InstallMode ModeFor(bool optiOn) => optiOn ? InstallMode.OptiScaler : InstallMode.ReShadeOnly;
+
+    /// <summary>
+    /// How a row looks in <paramref name="mode"/>. The OptiScaler row always shows and its tick follows the mode. ReShade is the loader
+    /// in ReShade-only mode, so it stays on there. The NR add-ons replace OptiScaler's NR, so they exist in ReShade-only mode alone.
+    /// <see cref="RowRule.On"/> is the tick the mode forces; null leaves the user's tick.
+    /// </summary>
+    public static RowRule Rule(string key, InstallMode mode) => key switch
+    {
+        "opti" => new(true, true, mode == InstallMode.OptiScaler),
+        "reshade" when mode == InstallMode.ReShadeOnly => new(true, false, true),
+        "renodx" or "lecram" or "dfc" or "uplift" or "feeder" when mode == InstallMode.OptiScaler => new(false, true, false),
+        _ => new(true, true, null),
+    };
+
+    public sealed record RowRule(bool Visible, bool Editable, bool? On);
 }
 
 /// <summary>One component row as the picker sees it.</summary>

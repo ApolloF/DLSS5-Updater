@@ -34,7 +34,7 @@ mod) are listed as **coming**, so the answer is complete without promising an in
 
 Each method is a clickable card: a one-line plain summary (`MethodAdvisor.SummaryOf`), the availability badge, the warning and the
 "Needs:" line; the long reason opens under **Details**. Clicking a card applies it: the method's components go on on the game
-page and the install mode follows. It never installs; the user presses Install. The picked card is the one the page is set to:
+page and the install mode follows (the OptiScaler row's tick is the mode: ticked OptiScaler, unticked ReShade + add-ons). It never installs; the user presses Install. The picked card is the one the page is set to:
 after a refresh, or when the user changes the mode or a component by hand, the app marks the most specific method whose mode and
 components are all on (or none).
 MFG Unlock (H) is an add-on, not a method (`MethodAdvisor.IsAddOn`): it shows as a checkbox card under the methods ("Add to the

@@ -976,6 +976,16 @@
                             </Border>
                         </StackPanel>
                         <StackPanel Visibility="{Binding ShowOptiNr, Converter={StaticResource BoolToVis}}">
+                            <StackPanel Visibility="{Binding ShowOptiBuild, Converter={StaticResource BoolToVis}}">
+                                <TextBlock Text="OPTISCALER BUILD" Style="{StaticResource SectionTitle}" />
+                                <StackPanel Orientation="Horizontal">
+                                    <ComboBox Width="320" MaxDropDownHeight="300" ItemsSource="{Binding OptiChoices}" SelectedItem="{Binding OptiChoice}"
+                                              AutomationProperties.Name="OptiScaler build for this game" ToolTip="Which OptiScaler build this game installs; Default follows Settings" />
+                                    <Button Style="{StaticResource InfoBtn}" CommandParameter="opti-build" VerticalAlignment="Center"
+                                            ToolTip="{Binding Source=opti-build, Converter={StaticResource HelpTip}}" AutomationProperties.Name="About the OptiScaler build" />
+                                </StackPanel>
+                                <TextBlock Text="Same pick as the OptiScaler row on the Install tab. The options below follow this build." Style="{StaticResource MutedText}" FontSize="11.5" Margin="0,4,0,0" />
+                            </StackPanel>
                             <TextBlock Text="NEURAL RENDERING" Style="{StaticResource SectionTitle}" />
                             <Border Style="{StaticResource Card}" Padding="16,4">
                                 <ItemsControl ItemsSource="{Binding NrRows}" ItemTemplate="{StaticResource GameOptionRow}" />
@@ -1103,15 +1113,6 @@
                         <TextBlock Text="{Binding ProxyAutoText}" DockPanel.Dock="Right" Style="{StaticResource MutedText}" FontSize="11.5" Margin="12,0,0,0" />
                         <TextBlock Text="{Binding ProxyHint}" Style="{StaticResource MutedText}" FontSize="11.5" TextWrapping="Wrap" />
                     </DockPanel>
-                    <StackPanel Orientation="Horizontal" Margin="0,14,0,0">
-                        <TextBlock Text="INSTALL MODE" Style="{StaticResource Caps}" VerticalAlignment="Center" Margin="0,0,12,0" Width="140" />
-                        <ComboBox Width="240" ItemsSource="{Binding Modes}" SelectedItem="{Binding ModeChoice}"
-                                  ItemContainerStyle="{StaticResource DescribedItem}" AutomationProperties.Name="Install mode"
-                                  ToolTip="{Binding ModeHint}" />
-                        <Button Style="{StaticResource InfoBtn}" CommandParameter="install-mode" VerticalAlignment="Center"
-                                ToolTip="{Binding Source=install-mode, Converter={StaticResource HelpTip}}" />
-                    </StackPanel>
-                    <TextBlock Text="Set by the method you pick above. Change it here to override." Style="{StaticResource MutedText}" FontSize="11.5" Margin="152,4,0,0" />
 
                     <!-- Components -->
                     <TextBlock Text="COMPONENTS" Style="{StaticResource SectionTitle}" />

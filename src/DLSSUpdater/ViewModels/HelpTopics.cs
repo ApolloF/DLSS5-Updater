@@ -42,6 +42,7 @@ public static class HelpTopics
         new("install-mode", "General", "Install mode", "Whether OptiScaler or ReShade is the proxy the game loads; set per game.",
             "OptiScaler (default; the build chosen under OptiScaler build) is the main use: OptiScaler is the proxy, loads ReShade and its add-ons, and runs the NR runtime. " +
             "ReShade + add-ons installs ReShade itself as the proxy (dxgi.dll by default) with MFG Unlock, the DLSS and Streamline updates, and one NR route instead of OptiScaler's: the ShortFuse RenoDX DLSS add-on, the Lecram DLSS5 add-on, Deep Fried Chicken or GITC Uplift. One NR route per game is the rule: turning on a second one shows a warning, and Install asks you to confirm it. Each needs the NR runtime. " +
+            "On a game page the OptiScaler row sets it: ticked installs OptiScaler, unticked installs ReShade + add-ons. The method cards tick or untick it for you. " +
             "Switching a game between the two removes the other mode's files and puts back what they replaced. Each game can use its own mode."),
         new("proxy", "General", "Proxy DLL name", "The dll name the game loads the mod as; dxgi.dll works for most DX12 games.",
             "The file name the game loads the mod as: OptiScaler's in OptiScaler mode, ReShade's in ReShade + add-ons mode (dxgi.dll for DirectX 10-12, d3d9.dll for DirectX 9, opengl32.dll for OpenGL). dxgi.dll works for most DX12 games. " +
@@ -55,6 +56,7 @@ public static class HelpTopics
             "Which fork of OptiScaler is installed. OptiScaler F5 (janblade) is the default for new installs; OptiScaler-NR (ShyVortex) is the fork this app was first built around. " +
             "F5 is experimental and releases often; it needs its own open-source NGX forwarder (nvngx.dll_dlssnr.dll), which is installed next to OptiScaler and removed again when you switch back. " +
             "A few DLSSNR options it does not have are hidden, and so are options only some F5 versions have. Games keep the build they have until you update them. " +
+            "Each game can pick its own build, in the OptiScaler row on the Install tab or at the top of Game config; both show the same pick. Untick the row to install ReShade + add-ons without OptiScaler. " +
             "From 0.1.33 the F5 zip ships NVIDIA's DLSS frame generation and Streamline files in OptiScaler\\streamline; they are installed with it, only used when DLSS-G is OptiScaler's frame generation output, and never counted as the game's own DLSS or Streamline files. " +
             "RTX 30: F5's troubleshooting guide reports games hanging the GPU (\"device hung\") seconds after start when the game's own DLSS frame generation is on and an nvngx_dlssg.dll is in the OptiScaler folder. " +
             "Its fix: remove that file from the OptiScaler folder or turn DLSS Frame Generation off in the game, and use OptiScaler's frame generation with FSR FG or XeFG output instead."),
