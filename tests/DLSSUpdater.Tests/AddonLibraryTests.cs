@@ -32,10 +32,10 @@ public sealed class AddonLibraryTests : IDisposable
         _store.SelectedRenoDx = () => _settings.RenoDxId;
         _store.SelectedLecram = () => _settings.LecramId;
         _store.PairTests = () => _settings.AddonPairTests;
-        FakeVersionDll.Write(_store.ReShadePath, new Version(6, 8, 0, 0), ComponentStore.ReShadeFile);
+        FakeVersionDll.Write(ComponentStore.ReShadePath, new Version(6, 8, 0, 0), ComponentStore.ReShadeFile);
         var nr = Path.Combine(_tmp, "nr.dll");
         FakeVersionDll.Write(nr, new Version(310, 9, 16, 0), ComponentStore.DlssNrFile);
-        _nr = _store.ImportDlssNr(nr);
+        _nr = ComponentStore.ImportDlssNr(nr);
         _game = new GameInfo { Id = _root, Root = _root, Name = "Addon game", Dlss = [new DlssDll { Name = "nvngx_dlss.dll" }] };
     }
 
@@ -89,8 +89,15 @@ public sealed class AddonLibraryTests : IDisposable
 
     private InstallOptions Options(string? renoDxId = null, string? lecramId = null, bool renoDx = false, bool lecram = false) => new()
     {
-        Mode = InstallMode.ReShadeOnly, ReShade = true, RenoDx = renoDx, Lecram = lecram, DlssNr = renoDx || lecram, DlssNrId = _nr.Id,
-        Proxy = "dxgi.dll", RenoDxId = renoDxId, LecramId = lecramId,
+        Mode = InstallMode.ReShadeOnly,
+        ReShade = true,
+        RenoDx = renoDx,
+        Lecram = lecram,
+        DlssNr = renoDx || lecram,
+        DlssNrId = _nr.Id,
+        Proxy = "dxgi.dll",
+        RenoDxId = renoDxId,
+        LecramId = lecramId,
         ConfirmedConflict = renoDx && lecram ? Installer.ConflictKey(NrAddons.Conflicts([NrAddon.RenoDx, NrAddon.Lecram])) : null,
     };
 
@@ -503,7 +510,7 @@ public sealed class AddonLibraryTests : IDisposable
         Assert.Contains("no longer in the library", missing.Message);
         Assert.Equal(sfNew.Id, FileUtil.Sha256(G(ComponentStore.RenoDxFile)));
 
-        await installer.UninstallAsync(_game, _root, default);
+        await Installer.UninstallAsync(_game, _root, default);
         Assert.False(File.Exists(G(ComponentStore.RenoDxFile)));
     }
 

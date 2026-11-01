@@ -6,12 +6,12 @@ namespace DLSSUpdater.Tests;
 
 public class MfgCompatTests
 {
-    private static List<DlssDll> Set(string dir, string version, params string[] extra) =>
-        new[] { "sl.interposer.dll", "sl.common.dll", "sl.dlss_g.dll", "sl.reflex.dll" }.Concat(extra)
+    private static List<DlssDll> Set(string dir, string version, params string[] extra) => SlDlls.Concat(extra)
             .Select(n => new DlssDll { Name = n, Path = Path.Combine(dir, n), Version = Version.Parse(version) }).ToList();
 
     private static readonly Version Fg9_1 = new(310, 9, 1, 0);
     private static readonly Version Fg9_16 = new(310, 9, 16, 0);
+    private static readonly string[] SlDlls = new[] { "sl.interposer.dll", "sl.common.dll", "sl.dlss_g.dll", "sl.reflex.dll" };
 
     [Fact]
     public void Game_without_streamline_dlss_g_is_skipped()

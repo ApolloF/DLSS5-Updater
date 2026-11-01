@@ -1,4 +1,5 @@
 using System.Collections.ObjectModel;
+using System.Diagnostics.CodeAnalysis;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using DLSSUpdater.Core;
@@ -85,6 +86,7 @@ public sealed partial class HdrViewModel(GameViewModel game, Services services) 
         }
     }
 
+    [SuppressMessage("Performance", "CA1822", Justification = "bound from XAML through the view model instance; WPF bindings cannot target static members")]
     public string UeHintText => UeHint;
 
     /// <summary>"Default · ..." naming the catalog's current build, then the library's builds of the picked mod, newest first.</summary>
@@ -188,7 +190,7 @@ public sealed partial class HdrViewModel(GameViewModel game, Services services) 
     internal async Task RemoveAsync(CancellationToken ct)
     {
         if (game.SelectedTarget is not { } target || services.Hdr is not { } hdr) return;
-        await hdr.RemoveAsync(game.Info, target.Dir, ct);
+        await HdrService.RemoveAsync(game.Info, target.Dir, ct);
         Log.Info($"{game.Name}: RenoDX HDR mod removed");
     }
 }

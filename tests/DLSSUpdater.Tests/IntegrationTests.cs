@@ -1,4 +1,4 @@
-﻿using DLSSUpdater.Core;
+using DLSSUpdater.Core;
 using DLSSUpdater.Scan;
 
 namespace DLSSUpdater.Tests;
@@ -41,9 +41,14 @@ public class IntegrationTests
 
         var o = new InstallOptions
         {
-            Opti = true, Mfg = true, Dlss = true, AddMissingDlss = true,
-            ReShade = true, DlssNr = haveLocal,
-            Proxy = "dxgi.dll", Overrides = TestProfiles.Recommended(),
+            Opti = true,
+            Mfg = true,
+            Dlss = true,
+            AddMissingDlss = true,
+            ReShade = true,
+            DlssNr = haveLocal,
+            Proxy = "dxgi.dll",
+            Overrides = TestProfiles.Recommended(),
         };
         var installer = new Installer(store);
         await installer.InstallAsync(info, target, o, null, default);
@@ -73,10 +78,10 @@ public class IntegrationTests
             new InstallOptions { Streamline = true }, null, default);
         var sl = FileUtil.ReadVersion(Path.Combine(target, "sl.interposer.dll"))!;
         Assert.Equal(store.Streamline!.Version!.Minor, sl.Minor);
-        await installer.RestoreDlssAsync(GameScanner.Inspect(new GameEntry("G", game, "Manual")), target, default);
+        await Installer.RestoreDlssAsync(GameScanner.Inspect(new GameEntry("G", game, "Manual")), target, default);
         File.Delete(Path.Combine(target, "sl.interposer.dll"));
 
-        await installer.UninstallAsync(GameScanner.Inspect(new GameEntry("G", game, "Manual")), target, default);
+        await Installer.UninstallAsync(GameScanner.Inspect(new GameEntry("G", game, "Manual")), target, default);
         Assert.Equal(["G-Win64-Shipping.exe"], Directory.EnumerateFileSystemEntries(target).Select(f => Path.GetFileName(f)!).ToArray());
     }
 }

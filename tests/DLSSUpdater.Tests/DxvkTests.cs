@@ -452,7 +452,7 @@ public sealed class DxvkTests : IDisposable
 
         await Apply(Service(), g, build.Id, confirmed: true);
         Assert.Equal("v1:x64:d3d11.dll", File.ReadAllText(T("d3d11.dll")));
-                Assert.Equal(2, Record()!.Backups.Count);
+        Assert.Equal(2, Record()!.Backups.Count);
 
         await Remove(g);
         Assert.Equal("SOMEONE ELSE'S", File.ReadAllText(T("d3d11.dll")));

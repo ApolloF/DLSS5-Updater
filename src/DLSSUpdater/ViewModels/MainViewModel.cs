@@ -1,6 +1,7 @@
 using System.Collections.ObjectModel;
 using System.ComponentModel;
 using System.Diagnostics;
+using System.Diagnostics.CodeAnalysis;
 using System.Windows;
 using System.Windows.Data;
 using System.Windows.Threading;
@@ -33,8 +34,12 @@ public sealed partial class MainViewModel : ObservableObject
         var installer = new Installer(store);
         S = new Services
         {
-            Settings = settings, Store = store, Installer = installer,
-            Catalog = new CatalogState(new CatalogClient(gh)), Hdr = new HdrService(store, installer, new CatalogDownloader(gh)), Luma = new LumaService(store, installer, new CatalogDownloader(gh)),
+            Settings = settings,
+            Store = store,
+            Installer = installer,
+            Catalog = new CatalogState(new CatalogClient(gh)),
+            Hdr = new HdrService(store, installer, new CatalogDownloader(gh)),
+            Luma = new LumaService(store, installer, new CatalogDownloader(gh)),
             FrameLimit = new FrameLimitService(store, installer, new CatalogDownloader(gh), NvidiaProfile.Real),
             Dxvk = new DxvkService(installer, gh, NvidiaProfile.Real),
         };
@@ -44,7 +49,7 @@ public sealed partial class MainViewModel : ObservableObject
             if (_ui.CheckAccess()) RateLimit = gh.RateLimit;
             else _ui.BeginInvoke(() => RateLimit = gh.RateLimit);
         };
-        S.Extras = new ReShadeExtras(S.Installer, settings, new CatalogDownloader(gh), ct => new CatalogClient(gh).LoadAsync(ct));
+        S.Extras = new ReShadeExtras(settings, new CatalogDownloader(gh), ct => new CatalogClient(gh).LoadAsync(ct));
         S.RunJob = RunJob;
         S.Progress = TransferProgress;
         S.Rescan = RescanOne;
@@ -178,9 +183,13 @@ public sealed partial class MainViewModel : ObservableObject
         .ToList();
     private List<GuideEntry>? _guide;
 
+    [SuppressMessage("Performance", "CA1822", Justification = "bound from XAML through the view model instance; WPF bindings cannot target static members")]
     public string AppVersion => "v" + (typeof(MainViewModel).Assembly.GetName().Version?.ToString(3) ?? "1.0.0");
+    [SuppressMessage("Performance", "CA1822", Justification = "bound from XAML through the view model instance; WPF bindings cannot target static members")]
     public bool IsPrivateBuild => BuildFlags.LecramChannel;
+    [SuppressMessage("Performance", "CA1822", Justification = "bound from XAML through the view model instance; WPF bindings cannot target static members")]
     public string PrivateBuildText => "Private build (Lecram channel on)";
+    [SuppressMessage("Performance", "CA1822", Justification = "bound from XAML through the view model instance; WPF bindings cannot target static members")]
     public string LecramStripTip => BuildFlags.LecramChannel
         ? "Lecram v11 update channel; builds are added to the library. Games keep their installed build."
         : "Lecram's DLSS5 add-on, imported by you. Games keep their installed build.";
@@ -241,6 +250,7 @@ public sealed partial class MainViewModel : ObservableObject
     }
 
     [RelayCommand]
+    [SuppressMessage("Performance", "CA1822", Justification = "bound from XAML as a command; the generated command needs an instance member")]
     private void OpenGitHubTokenPage() => OpenUrl("https://github.com/settings/personal-access-tokens/new");
 
     [RelayCommand]
@@ -341,7 +351,7 @@ public sealed partial class MainViewModel : ObservableObject
                         S.Settings.ReShadeId = pin;
                         S.Settings.Save();
                     }
-                });
+                }, ct);
             }
             await RefreshLocalComponentsAsync();
             S.Gpu = Demo.Active ? Demo.Gpu : await Task.Run(GpuDetector.Detect);
@@ -364,7 +374,7 @@ public sealed partial class MainViewModel : ObservableObject
     {
         var store = S.Store;
         var seen = S.Settings.NewestDlssNrSeen;
-        if (store.AdoptNewerDlssNr(S.Settings) is { } newer) Log.Info($"DLSSNR default is now the newer {newer.Label}");
+        if (ComponentStore.AdoptNewerDlssNr(S.Settings) is { } newer) Log.Info($"DLSSNR default is now the newer {newer.Label}");
         var defaultsChanged = store.EnsureAddonDefaults(S.Settings);
         if (store.SeedTestedAddonPair(S.Settings) | defaultsChanged | (S.Settings.NewestDlssNrSeen != seen)) S.Settings.Save();
         var rsPath = store.CurrentReShadePath;
@@ -463,7 +473,7 @@ public sealed partial class MainViewModel : ObservableObject
             var fetch = new CatalogDownloader(Gh);
             var sections = catalog.Document?.Sections;
             var build = await S.Store.CheckRenoDxCatalogAsync(S.Settings, sections?.RenodxDlss, fetch, TransferProgress(), ct);
-            var nr = await S.Store.CheckDlssNrCatalogAsync(S.Settings, sections?.Neural?.Dlssnr, fetch, TransferProgress(), ct);
+            var nr = await ComponentStore.CheckDlssNrCatalogAsync(S.Settings, sections?.Neural?.Dlssnr, fetch, TransferProgress(), ct);
             // The private build keeps its own MediaFire channel for Lecram; public builds import it (BuildFlags.LecramCatalog).
             var lecram = BuildFlags.LecramCatalogOff ? null : await S.Store.CheckLecramCatalogAsync(S.Settings, sections?.Neural?.Lecram, fetch, TransferProgress(), ct);
             if (build is null && nr is null && lecram is null) return;
@@ -651,7 +661,7 @@ public sealed partial class MainViewModel : ObservableObject
                 if (g.CoreNeedsUpdate && g.Manifest is { } m)
                 {
                     var o = g.UpdateOptions(m);
-                    if (g.HasAntiCheat && g.NeedsInjection(o) && !m.AntiCheatConfirmed)
+                    if (g.HasAntiCheat && GameViewModel.NeedsInjection(o) && !m.AntiCheatConfirmed)
                         Log.Info($"{g.Name}: skipped because it has anti-cheat. Install it once from its own page to confirm.");
                     else if (Installer.Conflicts(g.SelectedTarget!.Dir, o, S.Store.Opti?.Tag) is { Count: > 0 } clash && o.ConfirmedConflict != Installer.ConflictKey(clash))
                         Log.Info($"{g.Name}: skipped because its mods clash and the warning isn't confirmed. Install it once from its own page to confirm.");
@@ -1068,7 +1078,7 @@ public sealed partial class MainViewModel : ObservableObject
         if (g?.SelectedTarget is null) return;
         var o = g.BuildOptions(dlssOnly, acConfirmed: g.Manifest?.AntiCheatConfirmed == true, g.Manifest?.ConfirmedConflict);
 
-        if (g.HasAntiCheat && g.NeedsInjection(o) && !o.AntiCheatConfirmed)
+        if (g.HasAntiCheat && GameViewModel.NeedsInjection(o) && !o.AntiCheatConfirmed)
         {
             var ok = Dialog.Confirm($"{g.AntiCheat} detected",
                 $"{g.Name} ships {g.AntiCheat}. Injecting OptiScaler, ReShade or add-ons into a game protected by anti-cheat can get your account banned, " +
@@ -1097,7 +1107,7 @@ public sealed partial class MainViewModel : ObservableObject
         if (!dlssOnly && o.ReShade && g.ReShadeForeignWarning is { } foreign
             && !Dialog.Confirm("Another mod's dll is in the way", foreign + "\n\nContinue?", "Install ReShade", danger: true)) return;
 
-        if (!dlssOnly && o.Opti && g.SelectedTarget.Exe is null && !g.Info.Exes.Any())
+        if (!dlssOnly && o.Opti && g.SelectedTarget.Exe is null && g.Info.Exes.Count == 0)
             Log.Info($"{g.Name}: no game .exe found in the install location. OptiScaler only works next to the game's .exe; pick that folder under Install location.");
 
         await Run(dlssOnly ? $"Updating DLSS for {g.Name}" : $"Installing to {g.Name}", async ct =>
@@ -1141,11 +1151,11 @@ public sealed partial class MainViewModel : ObservableObject
             return;
         await Run($"Uninstalling from {g.Name}", async ct =>
         {
-            await S.Installer.UninstallAsync(g.Info, g.SelectedTarget.Dir, ct);
+            await Installer.UninstallAsync(g.Info, g.SelectedTarget.Dir, ct);
             if (g.DriverExe is { } exe)
-                await Task.Run(() => UninstallDriverRestore.Run(NvidiaProfile.Real, new NvidiaGame(exe, g.Name, S.Settings.For(g.Id)), S.Settings.Save));
+                await Task.Run(() => UninstallDriverRestore.Run(NvidiaProfile.Real, new NvidiaGame(exe, g.Name, S.Settings.For(g.Id)), S.Settings.Save), ct);
             var dir = g.SelectedTarget.Dir;
-            await Task.Run(() => KnownInstalls.Forget([dir]));
+            await Task.Run(() => KnownInstalls.Forget([dir]), ct);
             await RescanOne(g);
         });
     }
@@ -1158,7 +1168,7 @@ public sealed partial class MainViewModel : ObservableObject
         if (!Dialog.Confirm("Restore DLSS", "Puts the game's original DLSS files back. Mods stay installed.", "Restore")) return Task.CompletedTask;
         return Run($"Restoring DLSS for {g.Name}", async ct =>
         {
-            await S.Installer.RestoreDlssAsync(g.Info, g.SelectedTarget.Dir, ct);
+            await Installer.RestoreDlssAsync(g.Info, g.SelectedTarget.Dir, ct);
             await RescanOne(g);
         });
     }
@@ -1232,7 +1242,7 @@ public sealed partial class MainViewModel : ObservableObject
                 $"Delete these for good and free {BuildCleanup.FormatBytes(plan.Sum(p => p.Bytes))}?{Environment.NewLine}{Environment.NewLine}{list}{Environment.NewLine}{Environment.NewLine}" +
                 "Defaults, builds chosen for a game and builds installed in one always stay." +
                 (kept is null ? "" : $"{Environment.NewLine}{Environment.NewLine}Kept beyond the newest:{Environment.NewLine}{kept}"), "Delete", danger: true)) return;
-        await Run("Cleaning up old builds", async _ =>
+        await Run("Cleaning up old builds", async ct =>
         {
             // Something may have changed while the question was open: only what both plans name goes.
             var confirmed = plan.Select(p => p.Path).ToHashSet(StringComparer.OrdinalIgnoreCase);
@@ -1241,7 +1251,7 @@ public sealed partial class MainViewModel : ObservableObject
             {
                 if (PlanManual(S.Store, S.Settings, dirsNow) is { } now) S.Store.RunCleanup(now.Where(p => confirmed.Contains(p.Path)));
                 else Log.Warn("Cleanup skipped: an install record can't be read");
-            });
+            }, ct);
             await AfterCleanupAsync();
         });
     }

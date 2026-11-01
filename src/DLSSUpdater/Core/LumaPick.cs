@@ -53,7 +53,11 @@ public static class LumaManual
         Notes = (gameBits == 64 && build.Arch == "x86") || (gameBits == 32 && build.Arch == "x64")
             ? [$"This is a {(build.Arch == "x86" ? "32" : "64")}-bit Luma add-on and the game is {gameBits}-bit; ReShade will not load it."]
             : [],
-        Kind = LumaKind.Custom, ModId = CustomMod, Title = Path.GetFileNameWithoutExtension(build.FileName), PackageId = ImportedPackageId, Version = build.Version,
+        Kind = LumaKind.Custom,
+        ModId = CustomMod,
+        Title = Path.GetFileNameWithoutExtension(build.FileName),
+        PackageId = ImportedPackageId,
+        Version = build.Version,
         File = new CatalogBinary { Name = build.FileName, Arch = build.Arch, Url = build.Url ?? "", Sha256 = build.Id, Version = build.Version, FirstSeen = build.FirstSeen },
         Pinned = build,
         Reason = $"{build.FileName} is a Luma zip you imported; it is installed as it is.",
@@ -151,9 +155,18 @@ public sealed class LumaPicker
             return None($"{mod.Name}: the catalog has no {(bits == 32 ? "32-bit" : "64-bit")} Luma build for this game.", mod, link);
         return new LumaChoice
         {
-            Kind = LumaKind.Named, ModId = mod.Id, Title = mod.Name, Mod = mod, File = file, PackageId = package.Id, Version = _catalog.Release,
+            Kind = LumaKind.Named,
+            ModId = mod.Id,
+            Title = mod.Name,
+            Mod = mod,
+            File = file,
+            PackageId = package.Id,
+            Version = _catalog.Release,
             Reason = $"{mod.Name} has its own Luma mod (matched by {how}).",
-            Link = link, Notes = notes, NeedsDgVoodoo = mod.RequiresDgVoodoo, DgVoodooLines = dg,
+            Link = link,
+            Notes = notes,
+            NeedsDgVoodoo = mod.RequiresDgVoodoo,
+            DgVoodooLines = dg,
         };
     }
 
@@ -191,9 +204,18 @@ public sealed class LumaPicker
         if (args.Count == 0) args = ["-dx11"];
         return new LumaChoice
         {
-            Kind = LumaKind.Unreal, ModId = UnrealId, Title = "Luma for Unreal Engine", File = file, PackageId = package!.Id, Version = _catalog.Release,
-            UnrealGame = row, Reason = why + "Generic Luma for Unreal Engine (DirectX 11).", Link = "https://github.com/Filoppi/Luma-Framework",
-            Notes = notes, EngineIni = row?.EngineIni ?? [], LaunchArgs = args,
+            Kind = LumaKind.Unreal,
+            ModId = UnrealId,
+            Title = "Luma for Unreal Engine",
+            File = file,
+            PackageId = package!.Id,
+            Version = _catalog.Release,
+            UnrealGame = row,
+            Reason = why + "Generic Luma for Unreal Engine (DirectX 11).",
+            Link = "https://github.com/Filoppi/Luma-Framework",
+            Notes = notes,
+            EngineIni = row?.EngineIni ?? [],
+            LaunchArgs = args,
         };
     }
 

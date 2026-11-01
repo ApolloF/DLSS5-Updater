@@ -120,7 +120,7 @@ public sealed partial class ComponentStore
     public static string LimiterPathOf(LimiterBuild build) => Path.Combine(LimiterRoot, build.LimiterId, build.Id, build.FileName);
 
     /// <summary>A build chosen by id: it is in the library, but the file is checked against its hash before it is placed.</summary>
-    public LimiterBuild VerifiedLimiterBuild(LimiterBuild build)
+    public static LimiterBuild VerifiedLimiterBuild(LimiterBuild build)
     {
         var path = LimiterPathOf(build);
         if (!File.Exists(path)) throw new FileNotFoundException($"{build.Label} is no longer in the library. Pick another build or import it again.", path);

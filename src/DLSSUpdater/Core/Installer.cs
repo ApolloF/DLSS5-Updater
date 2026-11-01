@@ -173,7 +173,7 @@ public sealed partial class Installer(ComponentStore store)
         // Fetch everything first so a network failure never leaves a half-installed game.
         var pkg = o.Opti && !o.ReShadeOnly ? await store.EnsureOptiAsync(o.OptiTag, progress, ct) : null;
         var dlssNr = o.DlssNr;
-        var nrPath = dlssNr ? store.VerifiedDlssNrPath(o.DlssNrId ?? store.SelectedDlssNr()) : null;
+        var nrPath = dlssNr ? ComponentStore.VerifiedDlssNrPath(o.DlssNrId ?? store.SelectedDlssNr()) : null;
         if (o.RenoDx && (!o.ReShade || !dlssNr))
             throw new InvalidOperationException("RenoDX needs ReShade with add-on support and the NR runtime (downloaded automatically, or import it in Settings).");
         // DLSS files an earlier install of ours added (for DFC or OptiScaler) don't make the game a DLSS game.
@@ -239,7 +239,7 @@ public sealed partial class Installer(ComponentStore store)
                 if (FileUtil.LinkBelow(FileUtil.IsUnder(full, ctx.Root) ? ctx.Root : ctx.Target, full) is { } link)
                     throw new UnsafeManifestException(targetDir, $"{link} is a link");
         if (m.Uplift && !o.Uplift && (o.ReShade || pkg is not null) && nrPath is null && m.DlssNr)
-            nrPath = store.VerifiedDlssNrPath(m.DlssNrId);
+            nrPath = ComponentStore.VerifiedDlssNrPath(m.DlssNrId);
 
         await Task.Run(() =>
         {
@@ -1318,17 +1318,17 @@ public sealed partial class Installer(ComponentStore store)
         return candidate;
     }
 
-    private void PlaceDlssNr(Ctx ctx, string source)
+    private static void PlaceDlssNr(Ctx ctx, string source)
     {
         var target = ctx.M.Uplift ? UpliftConfig.NrPath(ctx.Target) : Path.Combine(ctx.Target, ComponentStore.DlssNrFile);
         var old = Path.Combine(ctx.Target, ctx.M.DlssNrFile ?? ComponentStore.DlssNrFile);
-        var oldVersion = File.Exists(old) ? store.RetainDlssNr(old) : null;
+        var oldVersion = File.Exists(old) ? ComponentStore.RetainDlssNr(old) : null;
         if (!old.Equals(target, StringComparison.OrdinalIgnoreCase)) RemoveOwned(ctx, old);
         // Uplift refuses a runtime mapped from beside the game exe, including a restored original.
         if (ctx.M.Uplift && File.Exists(Path.Combine(ctx.Target, ComponentStore.DlssNrFile)))
             Displace(ctx, Path.Combine(ctx.Target, ComponentStore.DlssNrFile));
-        var selected = store.RetainDlssNr(source);
-        var previous = File.Exists(target) ? store.RetainDlssNr(target) : oldVersion;
+        var selected = ComponentStore.RetainDlssNr(source);
+        var previous = File.Exists(target) ? ComponentStore.RetainDlssNr(target) : oldVersion;
         Place(ctx, source, target);
         ctx.M.DlssNrFile = Path.GetRelativePath(ctx.Target, target);
         if (previous is not null && previous.Id != selected.Id) ctx.M.PreviousDlssNrId = previous.Id;
@@ -1346,9 +1346,9 @@ public sealed partial class Installer(ComponentStore store)
         m.Contain(targetDir, game.Root);
         if (!m.DlssNr) throw new InvalidOperationException("Install NR in this game first.");
         var ctx = new Ctx(FileUtil.Normalize(game.Root), targetDir, m, null, game);
-        var source = store.VerifiedDlssNrPath(id ?? store.SelectedDlssNr());
+        var source = ComponentStore.VerifiedDlssNrPath(id ?? store.SelectedDlssNr());
         var target = m.Uplift ? UpliftConfig.NrPath(targetDir) : Path.Combine(targetDir, ComponentStore.DlssNrFile);
-        var previous = File.Exists(target) ? store.RetainDlssNr(target) : null;
+        var previous = File.Exists(target) ? ComponentStore.RetainDlssNr(target) : null;
         try
         {
             PlaceDlssNr(ctx, source);
@@ -1357,7 +1357,7 @@ public sealed partial class Installer(ComponentStore store)
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
         {
             // A failed record write must not leave the game on an unrecorded version.
-            if (previous is not null) FileUtil.AtomicCopy(store.VerifiedDlssNrPath(previous.Id), target);
+            if (previous is not null) FileUtil.AtomicCopy(ComponentStore.VerifiedDlssNrPath(previous.Id), target);
             else FileUtil.DeleteFile(target);
             if (ex is IOException io && IsSharingViolation(io)) throw new GameFileInUseException(game.Name, io);
             throw;
@@ -1366,7 +1366,7 @@ public sealed partial class Installer(ComponentStore store)
 
     // ---------- uninstall / restore ----------
 
-    public Task UninstallAsync(GameInfo game, string targetDir, CancellationToken ct) => Demo.Active ? Demo.UninstallAsync(game, targetDir, ct) : Task.Run(() =>
+    public static Task UninstallAsync(GameInfo game, string targetDir, CancellationToken ct) => Demo.Active ? Demo.UninstallAsync(game, targetDir, ct) : Task.Run(() =>
     {
         targetDir = FileUtil.Normalize(targetDir);
         EnsureNotRunning(game.Root);
@@ -1424,7 +1424,7 @@ public sealed partial class Installer(ComponentStore store)
         catch (IOException ex) when (IsSharingViolation(ex)) { throw new GameFileInUseException(game.Name, ex); }
     }, ct);
 
-    public Task RestoreDlssAsync(GameInfo game, string targetDir, CancellationToken ct) => Demo.Active ? Demo.RestoreDlssAsync(game, targetDir, ct) : Task.Run(() =>
+    public static Task RestoreDlssAsync(GameInfo game, string targetDir, CancellationToken ct) => Demo.Active ? Demo.RestoreDlssAsync(game, targetDir, ct) : Task.Run(() =>
     {
         targetDir = FileUtil.Normalize(targetDir);
         EnsureNotRunning(game.Root);

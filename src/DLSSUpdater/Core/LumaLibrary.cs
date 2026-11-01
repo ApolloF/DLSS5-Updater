@@ -122,7 +122,7 @@ public sealed partial class ComponentStore
     public static string LumaPackageDirOf(LumaBuild build) => Path.Combine(LumaRoot, build.Id, LumaPackageFolder);
 
     /// <summary>A build the game is pinned to: already in the library, so nothing is downloaded, but the file is checked against its hash before it is used.</summary>
-    public LumaBuild VerifiedLumaBuild(LumaBuild build)
+    public static LumaBuild VerifiedLumaBuild(LumaBuild build)
     {
         var path = LumaPathOf(build);
         if (!File.Exists(path)) throw new FileNotFoundException($"The pinned Luma build {build.Label} is no longer in the library. Pick another build or the default.", path);

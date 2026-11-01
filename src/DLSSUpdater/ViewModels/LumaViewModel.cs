@@ -1,4 +1,5 @@
 using System.Collections.ObjectModel;
+using System.Diagnostics.CodeAnalysis;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using DLSSUpdater.Core;
@@ -190,6 +191,7 @@ public sealed partial class LumaViewModel(GameViewModel game, Services services)
 
     public bool ShowHdrChoice => _picked is { IsOffered: true };
 
+    [SuppressMessage("Performance", "CA1822", Justification = "bound from XAML through the view model instance; WPF bindings cannot target static members")]
     public string HdrHint => "Writes EnableHDR and DisplayMode in the [Luma] section of ReShade.ini. Auto writes nothing: Luma sets it from the display on its first start.";
 
     partial void OnHdrChoiceChanged(DlssChoice? value)
@@ -209,6 +211,7 @@ public sealed partial class LumaViewModel(GameViewModel game, Services services)
 
     public string LaunchArgsText => string.Join(" ", _choice?.LaunchArgs ?? []);
     public bool HasLaunchArgs => _choice is { IsOffered: true, LaunchArgs.Count: > 0 };
+    [SuppressMessage("Performance", "CA1822", Justification = "bound from XAML through the view model instance; WPF bindings cannot target static members")]
     public string LaunchArgsHint => "Add these to the game's launch options (Steam: Properties → Launch options). The app can't set them for you.";
 
     [RelayCommand]
@@ -223,6 +226,7 @@ public sealed partial class LumaViewModel(GameViewModel game, Services services)
     public bool HasDgVoodoo => _choice is { NeedsDgVoodoo: true };
 
     [RelayCommand]
+    [SuppressMessage("Performance", "CA1822", Justification = "bound from XAML as a command; the generated command needs an instance member")]
     private void OpenDgVoodoo() => MainViewModel.OpenUrl(DgVoodooUrl);
 
     // ---------- refresh ----------
@@ -287,7 +291,7 @@ public sealed partial class LumaViewModel(GameViewModel game, Services services)
     internal async Task RemoveAsync(CancellationToken ct)
     {
         if (game.SelectedTarget is not { } target || services.Luma is not { } luma) return;
-        await luma.RemoveAsync(game.Info, target.Dir, ct);
+        await LumaService.RemoveAsync(game.Info, target.Dir, ct);
         Log.Info($"{game.Name}: Luma mod removed");
     }
 }

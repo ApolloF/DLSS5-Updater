@@ -162,7 +162,7 @@ public sealed partial class ComponentStore
     public OptiSource OptiSource => OptiSources.For(OptiSourceRepo());
     public string DlssNrPath => DlssNrFor(SelectedDlssNr());
     /// <summary>Where 2.x kept a ReShade64.dll the user imported; <see cref="MigrateReShade"/> moves it into the ReShade library.</summary>
-    public string ReShadePath => Path.Combine(AppPaths.Components, ReShadeFile);
+    public static string ReShadePath => Path.Combine(AppPaths.Components, ReShadeFile);
     /// <summary>The user has imported a ReShade build (or still has the old single file).</summary>
     public bool ReShadeImported => File.Exists(ReShadePath) || ReShadeBuilds.Any(b => b.Channel == ReShadeChannel.Custom);
 
@@ -220,10 +220,14 @@ public sealed partial class ComponentStore
             _ => null,
         };
         var notes = repo is null ? null
-            : _gh.CachedReleases(repo).FirstOrDefault(r => string.Equals(r.TagName, c == Component.OptiScaler ? OptiSources.RawTag(cached.Tag) : cached.Tag, StringComparison.OrdinalIgnoreCase))?.Body;
+            : GitHubClient.CachedReleases(repo).FirstOrDefault(r => string.Equals(r.TagName, c == Component.OptiScaler ? OptiSources.RawTag(cached.Tag) : cached.Tag, StringComparison.OrdinalIgnoreCase))?.Body;
         return notes is null ? cached : new ReleaseInfo
         {
-            Tag = cached.Tag, Prerelease = cached.Prerelease, Published = cached.Published, FromCache = true, Notes = notes,
+            Tag = cached.Tag,
+            Prerelease = cached.Prerelease,
+            Published = cached.Published,
+            FromCache = true,
+            Notes = notes,
         };
     }
 
@@ -239,7 +243,11 @@ public sealed partial class ComponentStore
             if (zip is null) continue;
             return new ReleaseInfo
             {
-                Tag = r.TagName + source.TagSuffix, Prerelease = r.Prerelease, Published = r.PublishedAt, Notes = r.Body, Stale = r.Stale,
+                Tag = r.TagName + source.TagSuffix,
+                Prerelease = r.Prerelease,
+                Published = r.PublishedAt,
+                Notes = r.Body,
+                Stale = r.Stale,
                 Files = [(zip.Name, zip.Url, zip.Sha256)],
             };
         }
@@ -255,7 +263,11 @@ public sealed partial class ComponentStore
             if (addon is null) continue;
             return new ReleaseInfo
             {
-                Tag = r.TagName, Prerelease = r.Prerelease, Published = r.PublishedAt, Notes = r.Body, Stale = r.Stale,
+                Tag = r.TagName,
+                Prerelease = r.Prerelease,
+                Published = r.PublishedAt,
+                Notes = r.Body,
+                Stale = r.Stale,
                 Files = [(MfgFile, addon.Url, addon.Sha256)],
             };
         }
@@ -268,12 +280,16 @@ public sealed partial class ComponentStore
             .Where(Accept)
             .Select(r => DlssRelease(r.TagName, r.Prerelease, r.PublishedAt, r.Body, r.Stale))
             .ToList();
-        return DlssReleases.FirstOrDefault();
+        return DlssReleases is [var newest, ..] ? newest : null;
     }
 
     private static ReleaseInfo DlssRelease(string tag, bool pre = false, DateTime? published = null, string? notes = null, bool stale = false) => new()
     {
-        Tag = tag, Prerelease = pre, Published = published, Notes = notes, Stale = stale,
+        Tag = tag,
+        Prerelease = pre,
+        Published = published,
+        Notes = notes,
+        Stale = stale,
         Files = DlssFiles.Select(f => (f, DlssRawUrl(tag, f), (string?)null)).ToList(),
     };
 
@@ -293,7 +309,11 @@ public sealed partial class ComponentStore
             if (zip is null) continue;
             return new ReleaseInfo
             {
-                Tag = r.TagName, Prerelease = r.Prerelease, Published = r.PublishedAt, Notes = r.Body, Stale = r.Stale,
+                Tag = r.TagName,
+                Prerelease = r.Prerelease,
+                Published = r.PublishedAt,
+                Notes = r.Body,
+                Stale = r.Stale,
                 Files = [(zip.Name, zip.Url, zip.Sha256)],
             };
         }
@@ -376,7 +396,10 @@ public sealed partial class ComponentStore
     {
         var releases = CompleteBuilds(c).Select(b => (Release: new ReleaseInfo
         {
-            Tag = b.Meta.Tag, Prerelease = b.Meta.Prerelease, Published = b.Meta.Published, FromCache = true,
+            Tag = b.Meta.Tag,
+            Prerelease = b.Meta.Prerelease,
+            Published = b.Meta.Published,
+            FromCache = true,
         }, Date: b.Meta.Published ?? b.Meta.Fetched)).Where(r => filter is null || filter(r.Release));
         return BuildOrder.NewestFirst(releases, r => c == Component.OptiScaler ? OptiSources.RawTag(r.Release.Tag) : r.Release.Tag, r => r.Date, r => r.Release.Tag)
             .Select(r => r.Release).FirstOrDefault();

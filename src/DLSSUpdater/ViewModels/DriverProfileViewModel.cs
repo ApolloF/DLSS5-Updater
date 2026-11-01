@@ -51,12 +51,12 @@ public sealed partial class NvOptionViewModel : ObservableObject
     {
         Relevant = Requires == GameFeatures.None || features.HasFlag(Requires);
         Note = !Relevant ? $"The game ships no DLSS {Requires switch
-            {
-                GameFeatures.SR => "Super Resolution",
-                GameFeatures.RR => "Ray Reconstruction",
-                GameFeatures.FG => "Frame Generation",
-                _ => Requires.ToString(),
-            }} files, so this has no effect."
+        {
+            GameFeatures.SR => "Super Resolution",
+            GameFeatures.RR => "Ray Reconstruction",
+            GameFeatures.FG => "Frame Generation",
+            _ => Requires.ToString(),
+        }} files, so this has no effect."
             : _def.Key == "smooth-motion"
                 ? features.HasFlag(GameFeatures.FG) ? "The game ships DLSS Frame Generation (nvngx_dlssg / Streamline DLSS-G). If its settings offer Frame Generation, use that instead; if not, Smooth Motion works."
                     : "Recommended here: the game has no DLSS Frame Generation."

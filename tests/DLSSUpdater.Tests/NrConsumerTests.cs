@@ -124,5 +124,5 @@ public sealed class NrConsumerTests : IDisposable
         NrAddons.SetDefault(s, NrAddon.RenoDx, true);
 
         Assert.Equal([NrAddon.RenoDx], NrAddons.Defaults(s));
-            }
+    }
 }

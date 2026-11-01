@@ -61,7 +61,7 @@ public sealed class ShaderPackTests : ExtrasTestBase
         var before = Snapshot(Target);
 
         await Apply();
-        var result = await Extras.RemoveAsync(Game(), Target, ComponentRegistry.ReShadeShaders, default);
+        var result = await ReShadeExtras.RemoveAsync(Game(), Target, ComponentRegistry.ReShadeShaders, default);
 
         Assert.True(result.Ok);
         Assert.Equal(before, Snapshot(Target));
@@ -75,7 +75,7 @@ public sealed class ShaderPackTests : ExtrasTestBase
         await Apply();
         Write(Path.Combine(Shaders, "mine.fx"), "MINE");
 
-        await Extras.RemoveAsync(Game(), Target, ComponentRegistry.ReShadeShaders, default);
+        await ReShadeExtras.RemoveAsync(Game(), Target, ComponentRegistry.ReShadeShaders, default);
 
         Assert.Equal("MINE", File.ReadAllText(Path.Combine(Shaders, "mine.fx")));
         Assert.False(File.Exists(Path.Combine(Shaders, "lilium__a.fx")));
@@ -98,7 +98,7 @@ public sealed class ShaderPackTests : ExtrasTestBase
         Assert.Contains(@".\reshade-shaders\Shaders\**", Ini("GENERAL", "EffectSearchPaths"));
         Assert.Contains(@".\reshade-shaders-managed\Shaders\**", Ini("GENERAL", "EffectSearchPaths"));
 
-        await Extras.RemoveAsync(Game(), Target, ComponentRegistry.ReShadeShaders, default);
+        await ReShadeExtras.RemoveAsync(Game(), Target, ComponentRegistry.ReShadeShaders, default);
         Assert.Equal(users, Snapshot(Path.Combine(Target, "reshade-shaders")));
         Assert.False(Directory.Exists(Path.Combine(Target, "reshade-shaders-managed")));
         Assert.DoesNotContain("managed", Ini("GENERAL", "EffectSearchPaths"));
@@ -115,7 +115,7 @@ public sealed class ShaderPackTests : ExtrasTestBase
         Assert.Equal(@".\reshade-shaders\Shaders\**", Ini("GENERAL", "EffectSearchPaths"));
         Assert.Equal(@".\reshade-shaders\Textures\**", Ini("GENERAL", "TextureSearchPaths"));
 
-        await Extras.RemoveAsync(Game(), Target, ComponentRegistry.ReShadeShaders, default);
+        await ReShadeExtras.RemoveAsync(Game(), Target, ComponentRegistry.ReShadeShaders, default);
         Assert.Equal("", Ini("GENERAL", "EffectSearchPaths"));
         Assert.Equal("0", Ini("GENERAL", "PerformanceMode"));
     }

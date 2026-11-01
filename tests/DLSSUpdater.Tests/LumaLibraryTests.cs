@@ -28,9 +28,10 @@ public class LumaLibraryTests : IDisposable
     {
         try { Directory.Delete(_tmp, true); }
         catch (IOException) { }
+        GC.SuppressFinalize(this);
     }
 
-    private CatalogDownloader Downloader(byte[]? served) => new(new GitHubClient(new FakeWeb(url => url.EndsWith("Luma-Prey.zip") ? served : null)));
+    private static CatalogDownloader Downloader(byte[]? served) => new(new GitHubClient(new FakeWeb(url => url.EndsWith("Luma-Prey.zip") ? served : null)));
 
     private string ZipFile(string name, byte[] bytes)
     {
@@ -141,7 +142,7 @@ public class LumaLibraryTests : IDisposable
         Assert.Equal(newest.File!.Sha256, LumaPin.Apply(newest, "unknown", _store.LumaBuilds).File!.Sha256);
 
         File.WriteAllText(ComponentStore.LumaPathOf(build), "tampered");
-        Assert.Throws<InvalidDataException>(() => _store.VerifiedLumaBuild(build));
+        Assert.Throws<InvalidDataException>(() => ComponentStore.VerifiedLumaBuild(build));
     }
 
     [Theory]

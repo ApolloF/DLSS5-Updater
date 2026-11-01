@@ -697,7 +697,7 @@ public static class HelpTopics
         ["nr-scale"] = "100% at 1440p output. 75% at 4K or on RTX 40 / lower cards to keep the cost down; 50% if FPS drops too much.",
         ["rdx-preset"] = "Preset A for the full look; Preset B when the model costs too much on RTX 20/30/40.",
         ["nr-preset"] = "Quality for the full look; Performance when the model costs too much on RTX 20/30/40.",
-        ["nr-style"] ="Standard. Natural if the result looks over-processed, Cinematic for a graded look.",
+        ["nr-style"] = "Standard. Natural if the result looks over-processed, Cinematic for a graded look.",
         ["nr-strengths"] = "A good start is local structure 0.7, local tone 0.25, skin 0.5: detail without changing the game's lighting too much. " +
                            "Lower local tone first if the image looks re-lit; lower skin structure if faces look aged.",
         ["nr-colour"] = "Low (0.2) keeps the game's art direction. Raise toward 1 only if you like the model's colour grading.",

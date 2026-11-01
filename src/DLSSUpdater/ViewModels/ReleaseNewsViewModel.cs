@@ -55,7 +55,7 @@ public sealed partial class ReleaseNewsViewModel(Component component, string ini
         if (IsNew && ReleaseNotes.Announce(settings.AnnouncedReleases, component, r.Tag))
         {
             changed = true;
-            var what = Summary.Headline ?? Summary.Points.FirstOrDefault();
+            var what = Summary.Headline ?? (Summary.Points is [var firstPoint, ..] ? firstPoint : null);
             Log.Info($"New {Name} {r.Tag}{(what is null ? "" : ": " + what)} (click its version for what's new)");
         }
         if (changed) settings.Save();

@@ -174,7 +174,7 @@ public sealed class LumaService(ComponentStore store, Installer installer, Catal
         if (!choice.IsOffered) throw new InvalidOperationException(choice.Reason);
 
         var build = choice.Pinned is { } pinned
-            ? store.VerifiedLumaBuild(pinned)
+            ? ComponentStore.VerifiedLumaBuild(pinned)
             : await store.EnsureLumaBuildAsync(choice.File!, choice.PackageId ?? choice.Title, choice.Version, downloader, progress, ct);
 
         // Unpacked fresh from the verified zip every time, so the files placed are exactly the zip's.
@@ -192,10 +192,10 @@ public sealed class LumaService(ComponentStore store, Installer installer, Catal
         foreach (var w in plan.Warnings) Log.Warn($"{game.Name}: {w}");
         progress?.Report(new TransferProgress($"Installing {choice.Title} to {game.Name}", null));
         var component = plan.Plan with { Extras = LumaConflict.WithMark(plan.Plan.Extras, clashConfirmed) };
-        var undo = await installer.InstallComponentAsync(game, targetDir, component, ct);
+        var undo = await Installer.InstallComponentAsync(game, targetDir, component, ct);
         return new LumaInstallResult(build, plan, undo);
     }
 
-    public Task<ComponentUndo> RemoveAsync(GameInfo game, string targetDir, CancellationToken ct) =>
-        installer.RemoveComponentAsync(game, targetDir, ComponentRegistry.Luma, ct);
+    public static Task<ComponentUndo> RemoveAsync(GameInfo game, string targetDir, CancellationToken ct) =>
+        Installer.RemoveComponentAsync(game, targetDir, ComponentRegistry.Luma, ct);
 }

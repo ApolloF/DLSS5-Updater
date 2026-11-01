@@ -23,10 +23,10 @@ public sealed class ReShadeSearchPathUndoTests : ExtrasTestBase
     {
         await InstallBoth();
 
-        await Extras.RemoveAsync(Game(), Target, ComponentRegistry.ReShadeAddons, default);
+        await ReShadeExtras.RemoveAsync(Game(), Target, ComponentRegistry.ReShadeAddons, default);
         Assert.Equal($@".\Other\**,{Entry}", Ini("GENERAL", "EffectSearchPaths"));
 
-        await Extras.RemoveAsync(Game(), Target, ComponentRegistry.ReShadeShaders, default);
+        await ReShadeExtras.RemoveAsync(Game(), Target, ComponentRegistry.ReShadeShaders, default);
         Assert.Equal(@".\Other\**", Ini("GENERAL", "EffectSearchPaths"));
     }
 
@@ -35,10 +35,10 @@ public sealed class ReShadeSearchPathUndoTests : ExtrasTestBase
     {
         await InstallBoth();
 
-        await Extras.RemoveAsync(Game(), Target, ComponentRegistry.ReShadeShaders, default);
+        await ReShadeExtras.RemoveAsync(Game(), Target, ComponentRegistry.ReShadeShaders, default);
         Assert.Equal($@".\Other\**,{Entry}", Ini("GENERAL", "EffectSearchPaths"));
 
-        await Extras.RemoveAsync(Game(), Target, ComponentRegistry.ReShadeAddons, default);
+        await ReShadeExtras.RemoveAsync(Game(), Target, ComponentRegistry.ReShadeAddons, default);
         Assert.Equal(@".\Other\**", Ini("GENERAL", "EffectSearchPaths"));
     }
 

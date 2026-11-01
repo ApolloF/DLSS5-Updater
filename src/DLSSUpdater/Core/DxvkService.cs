@@ -136,7 +136,7 @@ public sealed class DxvkService(Installer installer, GitHubClient github, Nvidia
         }
 
         progress?.Report(new TransferProgress($"Installing {build.Label} to {r.Game.Name}", null));
-        undone.Add(await installer.InstallComponentAsync(r.Game, targetDir, plan, ct));
+        undone.Add(await Installer.InstallComponentAsync(r.Game, targetDir, plan, ct));
 
         notes.AddRange(DriverProfile(r, present));
         saveSettings();
@@ -151,7 +151,7 @@ public sealed class DxvkService(Installer installer, GitHubClient github, Nvidia
     public async Task<ComponentUndo> RemoveAsync(GameInfo game, string targetDir, NvidiaGame driver, InstallOptions? reShadeBack, Action saveSettings, CancellationToken ct)
     {
         targetDir = FileUtil.Normalize(targetDir);
-        var undo = await installer.RemoveComponentAsync(game, targetDir, ComponentRegistry.Dxvk, ct);
+        var undo = await Installer.RemoveComponentAsync(game, targetDir, ComponentRegistry.Dxvk, ct);
         if (nvidia.Available) nvidia.RestoreLiliumPresentMethod(driver);
         saveSettings();
         if (InstallManifest.Read(targetDir) is { ReShade: true, ReShadeVulkan: true } && ReShadeNaming.ForApi(game.Effective.PrimaryApi) is { } proxy)

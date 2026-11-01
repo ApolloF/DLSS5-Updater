@@ -74,6 +74,9 @@ public sealed partial class DxvkLibrary(GitHubClient github)
         $"https://api.github.com/repos/{StableRepo}/actions/workflows/{DevWorkflow}/runs?branch={DevBranch}&event=push&status=success&per_page=1";
 
     public static string Root => Path.Combine(AppPaths.Components, ComponentRegistry.Dxvk);
+
+    private static readonly string[] Arches = new[] { "x32", "x64" };
+
     private static string DirOf(string id) => Path.Combine(Root, SafeName(id));
     private static string SafeName(string s) => string.Concat(s.Select(ch => Path.GetInvalidFileNameChars().Contains(ch) ? '_' : ch));
 
@@ -145,12 +148,12 @@ public sealed partial class DxvkLibrary(GitHubClient github)
                 case DxvkChannel.Stable: return PickStable(await github.GetReleasesAsync(StableRepo, 15, ct));
                 case DxvkChannel.Lilium: return PickLilium(await github.GetReleasesAsync(LiliumRepo, 15, ct));
                 default:
-                {
-                    var (runs, _) = await github.GetApiJsonAsync(DevRunsUrl, ct);
-                    if (ReShadeSource.ParseNightlyRun(runs) is not { } run) return null;
-                    var (artifacts, _) = await github.GetApiJsonAsync(run.ArtifactsUrl, ct);
-                    return PickDevelopment(run, ReShadeSource.ParseNightlyArtifacts(artifacts));
-                }
+                    {
+                        var (runs, _) = await github.GetApiJsonAsync(DevRunsUrl, ct);
+                        if (ReShadeSource.ParseNightlyRun(runs) is not { } run) return null;
+                        var (artifacts, _) = await github.GetApiJsonAsync(run.ArtifactsUrl, ct);
+                        return PickDevelopment(run, ReShadeSource.ParseNightlyArtifacts(artifacts));
+                    }
             }
         }
         catch (Exception ex) when (!ct.IsCancellationRequested && ex is HttpRequestException or TaskCanceledException or JsonException or IOException)
@@ -158,8 +161,8 @@ public sealed partial class DxvkLibrary(GitHubClient github)
             Log.Info($"DXVK {DxvkChannels.Label(channel)}: GitHub unreachable ({ex.Message})");
             return channel switch
             {
-                DxvkChannel.Stable => PickStable(github.CachedReleases(StableRepo)),
-                DxvkChannel.Lilium => PickLilium(github.CachedReleases(LiliumRepo)),
+                DxvkChannel.Stable => PickStable(GitHubClient.CachedReleases(StableRepo)),
+                DxvkChannel.Lilium => PickLilium(GitHubClient.CachedReleases(LiliumRepo)),
                 _ => null,
             };
         }
@@ -331,7 +334,7 @@ public sealed partial class DxvkLibrary(GitHubClient github)
             if (DllEntry().Match(path) is { Success: true } m)
                 all.Add(new Candidate(m.Groups["prefix"].Value, m.Groups["arch"].Value.ToLowerInvariant(), m.Groups["dll"].Value.ToLowerInvariant() + ".dll", path));
         });
-        var wanted = new[] { "x32", "x64" }.SelectMany(a => DxvkDlls.All.Select(d => (Arch: a, Dll: d))).ToList();
+        var wanted = Arches.SelectMany(a => DxvkDlls.All.Select(d => (Arch: a, Dll: d))).ToList();
         var complete = all.GroupBy(c => c.Prefix, StringComparer.OrdinalIgnoreCase)
             .Where(g => wanted.All(w => g.Any(c => c.Arch == w.Arch && c.Dll == w.Dll)))
             .OrderByDescending(g => g.Key.Equals("normal/", StringComparison.OrdinalIgnoreCase)).ThenBy(g => g.Key.Length).ThenBy(g => g.Key, StringComparer.OrdinalIgnoreCase)

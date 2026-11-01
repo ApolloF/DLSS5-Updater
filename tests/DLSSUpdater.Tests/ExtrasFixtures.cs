@@ -42,8 +42,7 @@ public abstract class ExtrasTestBase : IDisposable
         Directory.CreateDirectory(Target);
         File.WriteAllBytes(Path.Combine(Root, "Game.exe"), SyntheticPe.Build(true, ["d3d11.dll"]));
         Write(Path.Combine(Target, "ReShade.ini"), "[GENERAL]\r\nEffectSearchPaths=.\\reshade-shaders\\Shaders\\**\r\nTextureSearchPaths=.\\reshade-shaders\\Textures\\**\r\n");
-        var store = new ComponentStore(new GitHubClient(), () => true);
-        Extras = new ReShadeExtras(new Installer(store), Settings, new CatalogDownloader(new GitHubClient(new FakeWeb(this))));
+        Extras = new ReShadeExtras(Settings, new CatalogDownloader(new GitHubClient(new FakeWeb(this))));
     }
 
     public void Dispose()
@@ -54,6 +53,7 @@ public abstract class ExtrasTestBase : IDisposable
             Directory.Delete(Tmp, true);
         }
         catch (IOException) { }
+        GC.SuppressFinalize(this);
     }
 
     protected static void Write(string path, string content)
@@ -74,7 +74,7 @@ public abstract class ExtrasTestBase : IDisposable
 
     protected string Ini(string section, string key) => IniFile.Load(Path.Combine(Target, "ReShade.ini")).Get(section, key) ?? "";
 
-    protected Dictionary<string, string> Snapshot(string dir) =>
+    protected static Dictionary<string, string> Snapshot(string dir) =>
         Directory.EnumerateFiles(dir, "*", SearchOption.AllDirectories)
             .Where(f => !f.Contains(InstallManifest.DirName))
             .ToDictionary(f => Path.GetRelativePath(dir, f), File.ReadAllText, StringComparer.OrdinalIgnoreCase);
@@ -108,7 +108,7 @@ public abstract class ExtrasTestBase : IDisposable
     protected static CatalogPayloadItem Item(string entry, string kind = "addon", string? arch = null, string? dest = null) =>
         new() { Entry = entry, Kind = kind, Arch = arch, Dest = dest };
 
-    protected CatalogAddon AddonOf(string id, params CatalogBinary[] files) => new() { Id = id, Name = id, Files = [.. files] };
+    protected static CatalogAddon AddonOf(string id, params CatalogBinary[] files) => new() { Id = id, Name = id, Files = [.. files] };
 
     protected CatalogShaderPack PackOf(string id, byte[] zip, string shaders, string? textures, string[] effects, bool isDefault = false)
     {

@@ -46,8 +46,11 @@ public sealed class OverrideViewModelTests : IDisposable
         var installer = new Installer(_store);
         var s = new Services
         {
-            Settings = _settings, Store = _store, Installer = installer,
-            Catalog = new CatalogState(new CatalogClient(gh)), Hdr = new HdrService(_store, installer, new CatalogDownloader(gh)),
+            Settings = _settings,
+            Store = _store,
+            Installer = installer,
+            Catalog = new CatalogState(new CatalogClient(gh)),
+            Hdr = new HdrService(_store, installer, new CatalogDownloader(gh)),
         };
         s.Catalog.LoadCached();
         tweak?.Invoke(s);

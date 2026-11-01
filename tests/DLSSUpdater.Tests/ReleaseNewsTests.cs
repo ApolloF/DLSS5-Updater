@@ -26,6 +26,7 @@ public class ReleaseNewsTests : IDisposable
     public void Dispose()
     {
         try { Directory.Delete(_tmp, true); } catch (IOException) { }
+        GC.SuppressFinalize(this);
     }
 
     private static void WriteApiCache(string url, string tag, string? body)
@@ -52,10 +53,10 @@ public class ReleaseNewsTests : IDisposable
     {
         WriteApiCache(DlssReleasesUrl, "v310.9.1", DlssNotes);
 
-        var releases = new GitHubClient().CachedReleases(ComponentStore.DlssRepo);
+        var releases = GitHubClient.CachedReleases(ComponentStore.DlssRepo);
 
         Assert.Equal(DlssNotes, Assert.Single(releases).Body);
-        Assert.Empty(new GitHubClient().CachedReleases(ComponentStore.OptiRepo));
+        Assert.Empty(GitHubClient.CachedReleases(ComponentStore.OptiRepo));
     }
 
     [Fact]
@@ -63,7 +64,7 @@ public class ReleaseNewsTests : IDisposable
     {
         WriteEntry(DlssReleasesUrl, "{not json");
 
-        Assert.Empty(new GitHubClient().CachedReleases(ComponentStore.DlssRepo));
+        Assert.Empty(GitHubClient.CachedReleases(ComponentStore.DlssRepo));
     }
 
     [Fact]
@@ -142,7 +143,11 @@ public class ReleaseNewsTests : IDisposable
             var window = new Window
             {
                 Content = new StackPanel { Children = { owner, popup } },
-                Width = 200, Height = 100, Left = -10000, Top = -10000, ShowInTaskbar = false,
+                Width = 200,
+                Height = 100,
+                Left = -10000,
+                Top = -10000,
+                ShowInTaskbar = false,
             };
             window.Show();
             window.Activate();

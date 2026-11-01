@@ -22,10 +22,10 @@ public sealed class DfcTests : IDisposable
         AppPaths.Ensure();
         _root = Path.Combine(_tmp, "game");
         Directory.CreateDirectory(_root);
-        FakeVersionDll.Write(_store.ReShadePath, new Version(6, 8, 0, 0), ComponentStore.ReShadeFile);
+        FakeVersionDll.Write(ComponentStore.ReShadePath, new Version(6, 8, 0, 0), ComponentStore.ReShadeFile);
         var nr = Path.Combine(_tmp, "nr.dll");
         FakeVersionDll.Write(nr, new Version(310, 9, 16, 0), ComponentStore.DlssNrFile);
-        _nr = _store.ImportDlssNr(nr);
+        _nr = ComponentStore.ImportDlssNr(nr);
         _game = new GameInfo { Id = _root, Root = _root, Name = "Dfc game", Dlss = [new DlssDll { Name = "nvngx_dlss.dll" }] };
     }
 
@@ -118,12 +118,22 @@ public sealed class DfcTests : IDisposable
 
     private InstallOptions Dfc() => new()
     {
-        Mode = InstallMode.ReShadeOnly, ReShade = true, Dfc = true, DlssNr = true, DlssNrId = _nr.Id, Proxy = "dxgi.dll",
+        Mode = InstallMode.ReShadeOnly,
+        ReShade = true,
+        Dfc = true,
+        DlssNr = true,
+        DlssNrId = _nr.Id,
+        Proxy = "dxgi.dll",
     };
 
     private InstallOptions Reno() => new()
     {
-        Mode = InstallMode.ReShadeOnly, ReShade = true, RenoDx = true, DlssNr = true, DlssNrId = _nr.Id, Proxy = "dxgi.dll",
+        Mode = InstallMode.ReShadeOnly,
+        ReShade = true,
+        RenoDx = true,
+        DlssNr = true,
+        DlssNrId = _nr.Id,
+        Proxy = "dxgi.dll",
     };
 
     [Theory]
@@ -166,7 +176,7 @@ public sealed class DfcTests : IDisposable
         Assert.Empty(m.DfcCfg);
         backup = Assert.Single(m.Backups, b => b.Original == ComponentStore.DfcConfigFile);
         Assert.Equal(original, File.ReadAllText(Path.Combine(InstallManifest.BackupDirFor(_root), backup.Backup)));
-        await installer.UninstallAsync(_game, _root, default);
+        await Installer.UninstallAsync(_game, _root, default);
         Assert.Equal(original, File.ReadAllText(G(ComponentStore.DfcConfigFile)));
     }
 
@@ -235,7 +245,7 @@ public sealed class DfcTests : IDisposable
         Assert.Equal(Default.Id, m.DfcId);
         Assert.False(File.Exists(G("ReShade.ini")));
 
-        await installer.UninstallAsync(_game, _root, default);
+        await Installer.UninstallAsync(_game, _root, default);
         Assert.False(File.Exists(G(ComponentStore.DfcFile)));
         Assert.False(File.Exists(G(ComponentStore.DfcBridgeFile)));
         Assert.False(File.Exists(G(ComponentStore.DfcConfigFile)));
@@ -254,12 +264,12 @@ public sealed class DfcTests : IDisposable
         Assert.Equal("tuned=1\n", File.ReadAllText(G(ComponentStore.DfcConfigFile)));
         Assert.Equal(FileUtil.Sha256(Stored(Default, ComponentStore.DfcFile)), FileUtil.Sha256(G(ComponentStore.DfcFile)));
 
-        await installer.UninstallAsync(_game, _root, default);
+        await Installer.UninstallAsync(_game, _root, default);
         File.WriteAllText(G(ComponentStore.DfcConfigFile), "users-own\n");
         await installer.InstallAsync(_game, _root, Dfc(), null, default);
         Assert.Equal("users-own\n", File.ReadAllText(G(ComponentStore.DfcConfigFile)));
         Assert.DoesNotContain(ComponentStore.DfcConfigFile, InstallManifest.Read(_root)!.Files);
-        await installer.UninstallAsync(_game, _root, default);
+        await Installer.UninstallAsync(_game, _root, default);
         Assert.Equal("users-own\n", File.ReadAllText(G(ComponentStore.DfcConfigFile)));
     }
 
@@ -311,7 +321,7 @@ public sealed class DfcTests : IDisposable
         Assert.True(m.Dfc);
         Assert.False(m.RenoDx);
 
-        await installer.UninstallAsync(_game, _root, default);
+        await Installer.UninstallAsync(_game, _root, default);
         Assert.Equal("USERS-RENODX", File.ReadAllText(G(ComponentStore.RenoDxFile)));
         Assert.False(File.Exists(G(ComponentStore.DfcFile)));
     }
@@ -337,7 +347,7 @@ public sealed class DfcTests : IDisposable
         Assert.False(File.Exists(G(ComponentStore.DfcBridgeFile)));
         Assert.False(File.Exists(G("dfc-universal-feed.addon64")));
 
-        await installer.UninstallAsync(_game, _root, default);
+        await Installer.UninstallAsync(_game, _root, default);
         Assert.Equal("USERS-DFC", File.ReadAllText(G(ComponentStore.DfcFile)));
         Assert.Equal("USERS-BRIDGE", File.ReadAllText(G(ComponentStore.DfcBridgeFile)));
         Assert.Equal("USERS-FEED", File.ReadAllText(G("dfc-universal-feed.addon64")));
@@ -416,7 +426,7 @@ public sealed class DfcTests : IDisposable
         Assert.Equal("2.0", cfg["passes"]);
         Assert.Equal("2", cfg["hook_mode"]);
 
-        await installer.UninstallAsync(_game, _root, default);
+        await Installer.UninstallAsync(_game, _root, default);
         Assert.Equal(original, File.ReadAllText(G(ComponentStore.DfcConfigFile)));
     }
 
@@ -686,7 +696,7 @@ public sealed class DfcTests : IDisposable
         Assert.Equal(V4Set().Order(StringComparer.OrdinalIgnoreCase), m.DfcFiles.Order(StringComparer.OrdinalIgnoreCase));
         Assert.Equal(@".\,.\reshade-shaders\Shaders\**", IniFile.Load(G("ReShade.ini")).Get("GENERAL", "EffectSearchPaths"));
 
-        await installer.UninstallAsync(_game, _root, default);
+        await Installer.UninstallAsync(_game, _root, default);
         Assert.Empty(Directory.EnumerateFileSystemEntries(_root));
     }
 
@@ -707,7 +717,7 @@ public sealed class DfcTests : IDisposable
         Assert.Equal("PRESENT", File.ReadAllText(G(ComponentStore.DfcPresentSupportFile)));
         Assert.Equal(ini, File.ReadAllText(G("ReShade.ini")));
 
-        await installer.UninstallAsync(_game, _root, default);
+        await Installer.UninstallAsync(_game, _root, default);
         Assert.Equal("USERS-HELPER", File.ReadAllText(neural));
         Assert.Equal("USERS-PRESENT", File.ReadAllText(G(ComponentStore.DfcPresentSupportFile)));
         Assert.Single(Directory.EnumerateFiles(Path.GetDirectoryName(neural)!));
@@ -774,7 +784,7 @@ public sealed class DfcTests : IDisposable
 
         await installer.InstallAsync(_game, _root, opti, null, default);
         Assert.False(File.Exists(G(ComponentStore.DfcPresentSupportFile)));
-        await installer.UninstallAsync(_game, _root, default);
+        await Installer.UninstallAsync(_game, _root, default);
         Assert.Equal("USERS-PRESENT", File.ReadAllText(G(ComponentStore.DfcPresentSupportFile)));
     }
 
@@ -886,7 +896,7 @@ public sealed class DfcTests : IDisposable
         Assert.Equal("NEWER-" + Sr, File.ReadAllText(P(Sr)));
         Assert.Equal([Sr], InstallManifest.Read(PlainRoot)!.DfcRuntimes);
 
-        await installer.UninstallAsync(game, PlainRoot, default);
+        await Installer.UninstallAsync(game, PlainRoot, default);
         Assert.Equal(["Game.exe"], Directory.EnumerateFileSystemEntries(PlainRoot).Select(Path.GetFileName));
     }
 
@@ -945,7 +955,7 @@ public sealed class DfcTests : IDisposable
         Assert.Equal("USERS-FG", File.ReadAllText(P(Fg)));
         Assert.Equal([Sr], InstallManifest.Read(PlainRoot)!.DfcRuntimes);
 
-        await installer.UninstallAsync(PlainGame(), PlainRoot, default);
+        await Installer.UninstallAsync(PlainGame(), PlainRoot, default);
         Assert.Equal("USERS-FG", File.ReadAllText(P(Fg)));
         Assert.False(File.Exists(P(Sr)));
     }
@@ -1001,7 +1011,7 @@ public sealed class DfcTests : IDisposable
         Assert.All(V4Set(), rel => Assert.False(File.Exists(P(rel)), rel));
         Assert.Empty(InstallManifest.Read(PlainRoot)!.DfcRuntimes);
 
-        await installer.UninstallAsync(PlainGame(), PlainRoot, default);
+        await Installer.UninstallAsync(PlainGame(), PlainRoot, default);
         Assert.Equal(["Game.exe"], Directory.EnumerateFileSystemEntries(PlainRoot).Select(Path.GetFileName));
     }
 
@@ -1013,7 +1023,7 @@ public sealed class DfcTests : IDisposable
         var installer = new Installer(_store);
         await installer.InstallAsync(PlainGame(), PlainRoot, Dfc(), null, default);
 
-        await installer.RestoreDlssAsync(PlainGame(), PlainRoot, default);
+        await Installer.RestoreDlssAsync(PlainGame(), PlainRoot, default);
         Assert.Equal("NEW-" + Sr, File.ReadAllText(P(Sr)));
         Assert.Equal([Sr], InstallManifest.Read(PlainRoot)!.DfcRuntimes);
     }
@@ -1222,7 +1232,7 @@ public sealed class DfcTests : IDisposable
     private const string FeederTag = "v1.19.0";
 
     /// <summary>A Feeder build already in the library (what the download leaves), so the install needs no network.</summary>
-    private void SeedFeeder()
+    private static void SeedFeeder()
     {
         var dir = Path.Combine(FeederLibrary.Root, FeederTag);
         foreach (var (rel, text) in new[]
@@ -1262,7 +1272,7 @@ public sealed class DfcTests : IDisposable
         Assert.Equal("F64", File.ReadAllText(P("dlss5-feed.addon64")));
         Assert.NotNull(InstallManifest.Read(PlainRoot)!.Component(ComponentRegistry.Feeder));
 
-        await installer.UninstallAsync(game, PlainRoot, default);
+        await Installer.UninstallAsync(game, PlainRoot, default);
         Assert.Equal(["Game.exe"], Directory.EnumerateFileSystemEntries(PlainRoot).Select(Path.GetFileName));
     }
 

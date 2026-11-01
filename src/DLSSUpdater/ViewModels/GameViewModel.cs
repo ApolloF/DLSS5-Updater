@@ -1,4 +1,5 @@
 using System.Collections.ObjectModel;
+using System.Diagnostics.CodeAnalysis;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using DLSSUpdater.Core;
@@ -580,6 +581,7 @@ public sealed partial class GameViewModel : ObservableObject
     }.OfType<string>());
     public bool HasFeatureBadge => FeatureBadge.Length > 0;
     /// <summary>The NVIDIA driver profile tab; the demo never opens the driver.</summary>
+    [SuppressMessage("Performance", "CA1822", Justification = "bound from XAML through the view model instance; WPF bindings cannot target static members")]
     public bool ShowDriverTab => !Demo.Active;
     /// <summary>"DX12 · 64-bit · Unreal 5.4": what the game's files say about how it renders.</summary>
     public string TechBadge => Info.Manual is { IsEmpty: false } ? Info.Effective.Label + " · set by you" : Info.Effective.Label;
@@ -687,9 +689,9 @@ public sealed partial class GameViewModel : ObservableObject
         _loading = true;
         var pin = _s.Settings.Games.GetValueOrDefault(Id)?.DlssNrId;
         NrChoices.Clear();
-        var versions = _s.Store.DlssNrVersions;
+        var versions = ComponentStore.DlssNrVersions;
         var global = _s.Settings.DlssNrId;
-        var follows = versions.FirstOrDefault(v => v.Id == global) ?? (global is null ? versions.FirstOrDefault() : null);
+        var follows = versions.FirstOrDefault(v => v.Id == global) ?? (global is null && versions is [var first, ..] ? first : null);
         var def = new PickerDefault(follows?.Id, follows?.ToPickerEntry().Label ?? "none in library", global is null);
         var builds = BuildPickerList.Merge(versions.Select(v => v.ToPickerEntry()), _s.CatalogOffers(CatalogBuildKind.DlssNr).Select(o => o.ToEntry()));
         foreach (var c in GamePickerLabels.Compose(def, builds, pin: pin)) NrChoices.Add(new DlssChoice(c.Tag, c.Label));
@@ -777,7 +779,7 @@ public sealed partial class GameViewModel : ObservableObject
         var builds = _s.Store.AddonBuilds(kind);
         var global = _s.Settings.AddonId(kind);
         var pinned = builds.FirstOrDefault(b => b.Id == global);
-        var follows = pinned ?? builds.FirstOrDefault();
+        var follows = pinned ?? (builds is [var first, ..] ? first : null);
         var def = new PickerDefault(follows?.Id, follows?.PickerLabel ?? "none imported", pinned is null);
         var offers = catalogKind is { } ck ? _s.CatalogOffers(ck).Select(o => o.ToEntry()) : [];
         var inGame = installed is { } i ? builds.FirstOrDefault(b => b.Matches(i.Id, i.Tag))?.Id : null;
@@ -970,7 +972,7 @@ public sealed partial class GameViewModel : ObservableObject
             mfgRow.Latest = "game has no Streamline FG";
             mfgRow.State = RowState.Missing;
         }
-        var nrPath = store.DlssNrFor(EffectiveNrId);
+        var nrPath = ComponentStore.DlssNrFor(EffectiveNrId);
         var nrFile = m?.Uplift == true ? Path.Combine(ComponentStore.UpliftNrDir, ComponentStore.DlssNrFile) : ComponentStore.DlssNrFile;
         var gameNr = SelectedTarget is null ? null : Path.Combine(SelectedTarget.Dir, nrFile);
         var nrInGame = gameNr is not null && (Demo.Active ? m?.DlssNr == true : File.Exists(gameNr));
@@ -1199,5 +1201,5 @@ public sealed partial class GameViewModel : ObservableObject
     /// <summary>The Feeder build this game installs: its own pick, else the default; null follows the newest release.</summary>
     public string? EffectiveFeederId => _s.Settings.Games.GetValueOrDefault(Id)?.BuildPick(ComponentRegistry.Feeder) ?? _s.Settings.DefaultBuild(ComponentRegistry.Feeder);
 
-    public bool NeedsInjection(InstallOptions o) => o.Opti || o.ReShade || o.Mfg || o.DlssNr || o.RenoDx || o.Lecram || o.Dfc || o.Uplift || o.Feeder;
+    public static bool NeedsInjection(InstallOptions o) => o.Opti || o.ReShade || o.Mfg || o.DlssNr || o.RenoDx || o.Lecram || o.Dfc || o.Uplift || o.Feeder;
 }

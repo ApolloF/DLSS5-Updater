@@ -18,6 +18,7 @@ public sealed class LecramTests : IDisposable
     private readonly ComponentStore _store = new(new GitHubClient(), () => true);
     private readonly NrVersion _nr;
     private readonly GameInfo _game;
+    private static readonly string[] NrPassKeys = new[] { "NRPass2Preset", "NRPass3Preset", "NRPass4Preset" };
 
     public LecramTests()
     {
@@ -25,10 +26,10 @@ public sealed class LecramTests : IDisposable
         AppPaths.Ensure();
         _root = Path.Combine(_tmp, "game");
         Directory.CreateDirectory(_root);
-        FakeVersionDll.Write(_store.ReShadePath, new Version(6, 8, 0, 0), ComponentStore.ReShadeFile);
+        FakeVersionDll.Write(ComponentStore.ReShadePath, new Version(6, 8, 0, 0), ComponentStore.ReShadeFile);
         var nr = Path.Combine(_tmp, "nr.dll");
         FakeVersionDll.Write(nr, new Version(310, 9, 16, 0), ComponentStore.DlssNrFile);
-        _nr = _store.ImportDlssNr(nr);
+        _nr = ComponentStore.ImportDlssNr(nr);
         _game = new GameInfo { Id = _root, Root = _root, Name = "Lecram game", Dlss = [new DlssDll { Name = "nvngx_dlss.dll" }] };
 
         var pkg = Path.Combine(ComponentStore.TagDir(Component.OptiScaler, "v9.9.9"), "pkg");
@@ -88,8 +89,16 @@ public sealed class LecramTests : IDisposable
 
     private InstallOptions Lec(bool lecram = true, bool renoDx = false, IReadOnlyList<IniOverride>? overrides = null, string? lecramId = null, string? renoDxId = null) => new()
     {
-        Mode = InstallMode.ReShadeOnly, ReShade = true, Lecram = lecram, RenoDx = renoDx, DlssNr = lecram || renoDx, DlssNrId = _nr.Id,
-        Proxy = "dxgi.dll", ReShadeOverrides = overrides ?? [], LecramId = lecramId, RenoDxId = renoDxId,
+        Mode = InstallMode.ReShadeOnly,
+        ReShade = true,
+        Lecram = lecram,
+        RenoDx = renoDx,
+        DlssNr = lecram || renoDx,
+        DlssNrId = _nr.Id,
+        Proxy = "dxgi.dll",
+        ReShadeOverrides = overrides ?? [],
+        LecramId = lecramId,
+        RenoDxId = renoDxId,
         ConfirmedConflict = lecram && renoDx ? Installer.ConflictKey(NrAddons.Conflicts([NrAddon.RenoDx, NrAddon.Lecram])) : null,
     };
 
@@ -304,7 +313,7 @@ public sealed class LecramTests : IDisposable
         Assert.Equal("2", Ini().Get(LecramIni.Section, "NRPasses"));
         Assert.True(InstallManifest.Read(_root)!.ReShadeIni.ContainsKey(LecramIni.Section + "/NRPasses"));
 
-        await installer.UninstallAsync(_game, _root, default);
+        await Installer.UninstallAsync(_game, _root, default);
         Assert.Equal(before, File.ReadAllText(G("ReShade.ini")));
         Assert.False(File.Exists(G(V10File)));
     }
@@ -328,7 +337,7 @@ public sealed class LecramTests : IDisposable
         Assert.Equal("v11.0.0-beta.6", m.LecramTag![..m.LecramTag!.LastIndexOf('-')]);
         Assert.DoesNotContain(m.Files, f => f.Equals(V10File, StringComparison.OrdinalIgnoreCase));
 
-        await installer.UninstallAsync(_game, _root, default);
+        await Installer.UninstallAsync(_game, _root, default);
         Assert.False(File.Exists(G(V11File)));
     }
 
@@ -345,7 +354,7 @@ public sealed class LecramTests : IDisposable
         Assert.Equal("0", ini.Get(LecramIni.Section, "NRGpuCrashWitness"));
         Assert.True(File.Exists(G(V11File)));
 
-        await installer.UninstallAsync(_game, _root, default);
+        await Installer.UninstallAsync(_game, _root, default);
         Assert.False(File.Exists(G("ReShade.ini")) && Ini().Get(LecramIni.Section, "NRPass2Preset") is not null);
         Assert.False(File.Exists(G("ReShade.ini")) && Ini().Get(LecramIni.Section, "NRGpuCrashWitness") is not null);
     }
@@ -366,7 +375,7 @@ public sealed class LecramTests : IDisposable
         Assert.Equal("2", Value("NRHookPoint"));
         Assert.Equal(written ? "1" : null, Value("NRPresentFgPath"));
 
-        await installer.UninstallAsync(_game, _root, default);
+        await Installer.UninstallAsync(_game, _root, default);
         Assert.Null(Value("NRPresentFgPath"));
     }
 
@@ -410,7 +419,7 @@ public sealed class LecramTests : IDisposable
         Assert.False(File.Exists(G(V10File)));
         Assert.NotEqual("FOREIGN-11", File.ReadAllText(G(V11File)));
 
-        await installer.UninstallAsync(_game, _root, default);
+        await Installer.UninstallAsync(_game, _root, default);
         Assert.Equal("FOREIGN-10", File.ReadAllText(G(V10File)));
         Assert.Equal("FOREIGN-11", File.ReadAllText(G(V11File)));
     }
@@ -429,7 +438,7 @@ public sealed class LecramTests : IDisposable
         Assert.False(File.Exists(G(V10File)));
         Assert.True(File.Exists(G(V11File)));
 
-        await installer.UninstallAsync(_game, _root, default);
+        await Installer.UninstallAsync(_game, _root, default);
         Assert.Equal("FOREIGN-10", File.ReadAllText(G(V10File)));
         Assert.False(File.Exists(G(V11File)));
     }
@@ -456,7 +465,7 @@ public sealed class LecramTests : IDisposable
         Assert.True(File.Exists(G(V10File)));
         Assert.Equal("observe", Ini().Get(LecramIni.Section, "ForeignNr"));
 
-        await installer.UninstallAsync(_game, _root, default);
+        await Installer.UninstallAsync(_game, _root, default);
         Assert.False(File.Exists(G(ComponentStore.RenoDxFile)));
         Assert.False(File.Exists(G(V10File)));
     }
@@ -548,7 +557,7 @@ public sealed class LecramTests : IDisposable
         await installer.InstallAsync(_game, _root, Lec(renoDx: true), null, default);
         Assert.True(File.Exists(G(V10File)));
 
-        await installer.UninstallAsync(_game, _root, default);
+        await Installer.UninstallAsync(_game, _root, default);
         Assert.Equal("FOREIGN-11", File.ReadAllText(G(V11File)));
     }
 
@@ -645,7 +654,7 @@ public sealed class LecramTests : IDisposable
         Assert.False(File.Exists(G(V10File)));
         Assert.False(File.Exists(G(V11File)));
 
-        await installer.UninstallAsync(_game, _root, default);
+        await Installer.UninstallAsync(_game, _root, default);
         Assert.Equal("USERS-10", File.ReadAllText(G(V10File)));
         Assert.Equal("USERS-11", File.ReadAllText(G(V11File)));
 
@@ -800,7 +809,7 @@ public sealed class LecramTests : IDisposable
         Assert.All(Numbers(Option(options, "NRStyle")), v => Assert.InRange(v, 0, 2));
         Assert.All(Numbers(Option(options, "NRPreset")), v => Assert.InRange(v, 0, 2));
         // NRPass2..4Preset (beta.29): 0 same as pass 1, 1 and 2 the two models of DLL 310.9.16; 3 is accepted but names no model.
-        Assert.All(new[] { "NRPass2Preset", "NRPass3Preset", "NRPass4Preset" }, k => Assert.Equal([0.0, 1, 2], Numbers(Option(options, k))));
+        Assert.All(NrPassKeys, k => Assert.Equal([0.0, 1, 2], Numbers(Option(options, k))));
         Assert.Equal([0.0, 1], Numbers(Option(options, "NRGpuCrashWitness")));
         // NRPresentFgPath (beta.48): only 1 switches to the new path; 2, -1 and text read as 0.
         Assert.Equal([0.0, 1], Numbers(Option(options, "NRPresentFgPath")));

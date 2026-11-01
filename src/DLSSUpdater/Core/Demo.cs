@@ -282,8 +282,14 @@ public static class Demo
             : [];
         var game = new GameInfo
         {
-            Id = GameInfo.MakeId(root), Name = c.Name, Source = c.Source, Root = root,
-            Exes = [Path.Combine(bin, c.Exe)], Dlss = dlss, Streamline = sl, AntiCheat = c.AntiCheat,
+            Id = GameInfo.MakeId(root),
+            Name = c.Name,
+            Source = c.Source,
+            Root = root,
+            Exes = [Path.Combine(bin, c.Exe)],
+            Dlss = dlss,
+            Streamline = sl,
+            AntiCheat = c.AntiCheat,
             Scanned = DateTime.UtcNow,
         };
         foreach (var d in dlss.Concat(sl)) Originals[d] = d.Version;
@@ -328,7 +334,7 @@ public static class Demo
             m.ReShade = o.ReShade || o.Opti;
             m.Mfg = o.Mfg;
             m.DlssNr = o.DlssNr;
-            m.DlssNrId = o.DlssNr ? o.DlssNrId ?? store.DlssNrVersions.FirstOrDefault()?.Id : null;
+            m.DlssNrId = o.DlssNr ? o.DlssNrId ?? (ComponentStore.DlssNrVersions is [var newest, ..] ? newest.Id : null) : null;
             m.RenoDx = o.RenoDx;
             m.Lecram = o.Lecram;
             m.Uplift = o.Uplift;

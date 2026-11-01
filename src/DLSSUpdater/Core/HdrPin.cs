@@ -28,8 +28,13 @@ public static class HdrPin
             return choice;
         var file = new CatalogBinary
         {
-            Name = build.FileName, Arch = build.Arch, Url = build.Url ?? "", Sha256 = build.Id, Version = build.Version,
-            FirstSeen = build.FirstSeen, License = build.License,
+            Name = build.FileName,
+            Arch = build.Arch,
+            Url = build.Url ?? "",
+            Sha256 = build.Id,
+            Version = build.Version,
+            FirstSeen = build.FirstSeen,
+            License = build.License,
         };
         return choice with { File = file, Pinned = build, Reason = choice.Reason + $" You pinned {build.Version}." };
     }

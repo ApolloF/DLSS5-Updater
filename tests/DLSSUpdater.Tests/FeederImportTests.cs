@@ -193,7 +193,7 @@ public sealed class FeederImportTests : IDisposable
         var game = new GameInfo { Name = "Test", Root = root, Exes = [Path.Combine(root, "game.exe")], Tech = new GameTech { Bits = 64 } };
         var installer = new Installer(new ComponentStore(new GitHubClient(), () => false));
 
-        await installer.InstallComponentAsync(game, root, FeederLibrary.Plan(build, game, root), default);
+        await Installer.InstallComponentAsync(game, root, FeederLibrary.Plan(build, game, root), default);
 
         Assert.Equal("dlss5-feed.addon64@1.19.0", File.ReadAllText(Path.Combine(root, "dlss5-feed.addon64")));
         var c = InstallManifest.Read(root)!.Component(ComponentRegistry.Feeder)!;

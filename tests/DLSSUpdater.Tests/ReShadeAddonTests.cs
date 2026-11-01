@@ -1,5 +1,5 @@
-using DLSSUpdater.Scan;
 using DLSSUpdater.Core;
+using DLSSUpdater.Scan;
 
 namespace DLSSUpdater.Tests;
 
@@ -106,7 +106,7 @@ public sealed class ReShadeAddonTests : ExtrasTestBase
         await Apply();
 
         Assert.Equal(@".\Other\**,.\reshade-shaders\Shaders\**", Ini("GENERAL", "EffectSearchPaths"));
-        await Extras.RemoveAsync(Game(), Target, ComponentRegistry.ReShadeAddons, default);
+        await ReShadeExtras.RemoveAsync(Game(), Target, ComponentRegistry.ReShadeAddons, default);
         Assert.Equal(@".\Other\**", Ini("GENERAL", "EffectSearchPaths"));
     }
 
@@ -120,7 +120,7 @@ public sealed class ReShadeAddonTests : ExtrasTestBase
         await Apply();
         Assert.Equal("SWAP64-1", File.ReadAllText(Path.Combine(Target, "swapchain_override.addon64")));
 
-        var result = await Extras.RemoveAsync(Game(), Target, ComponentRegistry.ReShadeAddons, default);
+        var result = await ReShadeExtras.RemoveAsync(Game(), Target, ComponentRegistry.ReShadeAddons, default);
 
         Assert.True(result.Ok);
         Assert.Equal(before, Snapshot(Target));
@@ -279,7 +279,7 @@ public sealed class ReShadeAddonTests : ExtrasTestBase
         await Apply();
         File.WriteAllText(Path.Combine(Target, "swapchain_override.addon64"), "EDITED");
 
-        var result = await Extras.RemoveAsync(Game(), Target, ComponentRegistry.ReShadeAddons, default);
+        var result = await ReShadeExtras.RemoveAsync(Game(), Target, ComponentRegistry.ReShadeAddons, default);
 
         Assert.Equal("EDITED", File.ReadAllText(Path.Combine(Target, "swapchain_override.addon64")));
         Assert.Contains(result.Notes, n => n.Contains("changed since"));

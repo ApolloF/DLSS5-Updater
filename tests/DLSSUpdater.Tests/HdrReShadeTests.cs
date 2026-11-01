@@ -64,6 +64,7 @@ public class HdrReShadeTests : IDisposable
             Directory.Delete(_tmp, true);
         }
         catch (IOException) { }
+        GC.SuppressFinalize(this);
     }
 
     private HdrService Service(VulkanLayerState layer = VulkanLayerState.NotInstalled) =>
@@ -179,17 +180,19 @@ public class HdrReShadeTests : IDisposable
 
     private GameInfo Unreal() => new()
     {
-        Id = "Game", Name = "Game", Root = _root,
+        Id = "Game",
+        Name = "Game",
+        Root = _root,
         Tech = new GameTech { Engine = GameEngine.Unreal, EngineVersion = "5.3.2", Bits = 64, Apis = GraphicsApis.Dx12, UeProject = "Proj", ModFolder = _target },
     };
 
     private async Task<(HdrBuild Old, HdrBuild New)> TwoBuilds(HdrService svc, GameInfo g)
     {
         var old = (await svc.InstallAsync(g, _target, Choose(g), null, null, null, null, default)).Build;
-        await svc.RemoveAsync(g, _target, default);
+        await HdrService.RemoveAsync(g, _target, default);
         _ueExtContent = "MZ ue-extended build 2";
         var newer = (await svc.InstallAsync(g, _target, Choose(g, HdrFixtures.Json(_ueExtContent, "2026-10-22-bbbbbbb")), null, null, null, null, default)).Build;
-        await svc.RemoveAsync(g, _target, default);
+        await HdrService.RemoveAsync(g, _target, default);
         return (old, newer);
     }
 
@@ -279,8 +282,11 @@ public class HdrReShadeTests : IDisposable
         var installer = new Installer(_store) { VulkanHost = new ReShadeInstallTests.FakeLayer(VulkanLayerState.NotInstalled) };
         s = new Services
         {
-            Settings = _settings, Store = _store, Installer = installer,
-            Catalog = new CatalogState(new CatalogClient(gh)), Hdr = new HdrService(_store, installer, new CatalogDownloader(gh)),
+            Settings = _settings,
+            Store = _store,
+            Installer = installer,
+            Catalog = new CatalogState(new CatalogClient(gh)),
+            Hdr = new HdrService(_store, installer, new CatalogDownloader(gh)),
         };
         s.Catalog.LoadCached();
         return new GameViewModel(Unreal(), s);

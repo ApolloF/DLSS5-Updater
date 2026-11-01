@@ -222,7 +222,7 @@ public sealed class AppUpdateTests : IDisposable
         Assert.False(result.Failed);
         Assert.Equal("v99.1.0", result.Update!.Tag);
         Assert.Contains("from the last check", result.Message);
-        Assert.Equal("v99.1.0", AppUpdate.Newest(gh.CachedReleases(AppUpdate.Repo), new Version(2, 0, 0))!.Tag);
+        Assert.Equal("v99.1.0", AppUpdate.Newest(GitHubClient.CachedReleases(AppUpdate.Repo), new Version(2, 0, 0))!.Tag);
     }
 
     [Fact]
@@ -236,7 +236,7 @@ public sealed class AppUpdateTests : IDisposable
 
     // ---------- download and verify ----------
 
-    private (AppRelease Release, GitHubClient Gh, FakeHttp Http) Served(byte[] exe, string? sums)
+    private static (AppRelease Release, GitHubClient Gh, FakeHttp Http) Served(byte[] exe, string? sums)
     {
         const string tag = "v99.1.0";
         var assets = new List<GhAsset> { Asset(tag, "DLSS5Updater.exe", exe.Length) };

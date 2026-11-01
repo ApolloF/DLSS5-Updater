@@ -1,3 +1,4 @@
+using System.Diagnostics.CodeAnalysis;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using DLSSUpdater.Core;
@@ -45,6 +46,7 @@ public sealed partial class TechOverrideViewModel : ObservableObject
 
     public bool AnySet => _game.Info.Manual is { IsEmpty: false };
 
+    [SuppressMessage("Performance", "CA1822", Justification = "bound from XAML through the view model instance; WPF bindings cannot target static members")]
     public bool Visible => !Demo.Active;
 
     /// <summary>One line with what the app uses now, for the section header.</summary>

@@ -63,21 +63,36 @@ internal static class HdrFixtures
 
     public static GameInfo Unreal(string name, int bits = 64, string version = "5.3.2", int? appId = null, string? root = null, string project = "Proj") => new()
     {
-        Id = name, Name = name, Root = root ?? @"C:\Games\" + name, SteamAppId = appId,
+        Id = name,
+        Name = name,
+        Root = root ?? @"C:\Games\" + name,
+        SteamAppId = appId,
         Tech = new GameTech
         {
-            Engine = GameEngine.Unreal, EngineVersion = version, Bits = bits, UeProject = project,
-            ModFolder = (root ?? @"C:\Games\" + name) + $@"\{project}\Binaries\Win64", Apis = GraphicsApis.Dx12,
+            Engine = GameEngine.Unreal,
+            EngineVersion = version,
+            Bits = bits,
+            UeProject = project,
+            ModFolder = (root ?? @"C:\Games\" + name) + $@"\{project}\Binaries\Win64",
+            Apis = GraphicsApis.Dx12,
         },
     };
 
     public static GameInfo Unity(string name, int bits = 64, int? appId = null) => new()
     {
-        Id = name, Name = name, Root = @"C:\Games\" + name, SteamAppId = appId, Tech = new GameTech { Engine = GameEngine.Unity, Bits = bits, Apis = GraphicsApis.Dx11 },
+        Id = name,
+        Name = name,
+        Root = @"C:\Games\" + name,
+        SteamAppId = appId,
+        Tech = new GameTech { Engine = GameEngine.Unity, Bits = bits, Apis = GraphicsApis.Dx11 },
     };
 
     public static GameInfo Other(string name, GameEngine engine, int bits = 64, int? appId = null) => new()
     {
-        Id = name, Name = name, Root = @"C:\Games\" + name, SteamAppId = appId, Tech = new GameTech { Engine = engine, Bits = bits },
+        Id = name,
+        Name = name,
+        Root = @"C:\Games\" + name,
+        SteamAppId = appId,
+        Tech = new GameTech { Engine = engine, Bits = bits },
     };
 }

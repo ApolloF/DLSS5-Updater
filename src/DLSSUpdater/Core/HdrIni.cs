@@ -36,6 +36,12 @@ public static class HdrIni
     public const int MinPeakNits = 80, MaxPeakNits = 10000;
     public const string PeakKey = "ToneMapPeakNits";
     public static readonly IReadOnlyList<string> PeakSections = ["renodx-preset1", "renodx-preset2", "renodx-preset3"];
+    private static readonly string[] ToggleKeys = new[] { "DumpLUTShaders", "ForceBorderless", "PreventFullscreen", "SettingsMode" };
+    private static readonly string[] UnityKeys =
+    [
+        "Blit_Copy_Hack", "DumpUberShaders", "ForceBorderless", "Force_Pipeline_Cloning", "PreventFullscreen", "Scaling_Offset", "SettingsMode",
+        "Swapchain_Encoding", "Tonemap_Offset", "Use_Resource_Cloning", "Use_Swapchain_Proxy",
+    ];
 
     /// <summary>The [renodx] keys wanted for a pick; empty for a named mod, which has its own config.</summary>
     public static IReadOnlyList<(string Section, string Key, string Value)> ReShadeKeys(HdrChoice choice)
@@ -52,15 +58,11 @@ public static class HdrIni
                 if (ue.CopyDestinations is { } copy) Force(keys, "Upgrade_CopyDestinations", copy ? "1" : "0");
                 break;
             case HdrKind.UnrealGeneric:
-                keys.AddRange(new[] { "DumpLUTShaders", "ForceBorderless", "PreventFullscreen", "SettingsMode" }.Select(k => (k, "")));
+                keys.AddRange(ToggleKeys.Select(k => (k, "")));
                 keys.AddRange(UpgradeKeys.Select(k => (k, "")));
                 break;
             case HdrKind.UnityGeneric:
-                keys.AddRange(new[]
-                {
-                    "Blit_Copy_Hack", "DumpUberShaders", "ForceBorderless", "Force_Pipeline_Cloning", "PreventFullscreen", "Scaling_Offset", "SettingsMode",
-                    "Swapchain_Encoding", "Tonemap_Offset", "Use_Resource_Cloning", "Use_Swapchain_Proxy",
-                }.Select(k => (k, "")));
+                keys.AddRange(UnityKeys.Select(k => (k, "")));
                 keys.AddRange(UpgradeKeys.Select(k => (k, "")));
                 break;
         }

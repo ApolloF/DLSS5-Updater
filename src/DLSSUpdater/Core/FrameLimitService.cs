@@ -24,7 +24,7 @@ public sealed record LimiterResolution(LimiterBuild? Library, CatalogLimiter? Li
         }
         if (catalog?.File(arch) is { IsInstallable: true } file) return new LimiterResolution(null, catalog, file, Auto: true, note);
         // Offline or the catalog has no file for this bitness: whatever the library holds, newest first.
-        if (store.LimiterBuildsOf(limiterId, arch).FirstOrDefault() is { } newest) return new LimiterResolution(newest, null, null, Auto: true, note);
+        if (store.LimiterBuildsOf(limiterId, arch) is [var newest, ..]) return new LimiterResolution(newest, null, null, Auto: true, note);
         return new LimiterResolution(null, catalog, null, Auto: true, note);
     }
 
@@ -112,34 +112,34 @@ public sealed class FrameLimitService(ComponentStore store, Installer installer,
         switch (r.Method)
         {
             case LimitMethod.Driver:
-            {
-                var result = nvidia.SetFrameRateLimit(r.Driver, r.Fps);
-                if (!result.Verified)
-                    throw new InvalidOperationException("The NVIDIA driver didn't keep the frame limit (it may need a newer driver). Nothing else was changed.");
-                FrameLimitSettings.SetDriverCap(r.Driver.Settings, r.Fps);
-                saveSettings();
-                break;
-            }
+                {
+                    var result = nvidia.SetFrameRateLimit(r.Driver, r.Fps);
+                    if (!result.Verified)
+                        throw new InvalidOperationException("The NVIDIA driver didn't keep the frame limit (it may need a newer driver). Nothing else was changed.");
+                    FrameLimitSettings.SetDriverCap(r.Driver.Settings, r.Fps);
+                    saveSettings();
+                    break;
+                }
             case LimitMethod.ReLimiter or LimitMethod.DisplayCommander:
-            {
-                await _host.EnsureAsync(r.Game, targetDir, r.ReShade ?? new HdrReShade(), Purpose, progress, ct);
-                var existing = InstallManifest.Read(targetDir)?.Component(LimitMethods.ComponentOf(r.Method)!);
-                var plan = FrameLimitPlanner.Addon(r.Game, targetDir, r.Method, build!, LimiterPathOf(build!), r.Fps, r.Osd, r.UserIni, r.Force, existing);
-                notes.AddRange(plan.Warnings);
-                foreach (var w in plan.Warnings) Log.Warn($"{r.Game.Name}: {w}");
-                progress?.Report(new TransferProgress($"Installing {build!.Label} to {r.Game.Name}", null));
-                undone.Add(await installer.InstallComponentAsync(r.Game, targetDir, plan.Plan, ct));
-                notes.AddRange(DriverOff(r));
-                saveSettings();
-                break;
-            }
+                {
+                    await _host.EnsureAsync(r.Game, targetDir, r.ReShade ?? new HdrReShade(), Purpose, progress, ct);
+                    var existing = InstallManifest.Read(targetDir)?.Component(LimitMethods.ComponentOf(r.Method)!);
+                    var plan = FrameLimitPlanner.Addon(r.Game, targetDir, r.Method, build!, LimiterPathOf(build!), r.Fps, r.Osd, r.UserIni, r.Force, existing);
+                    notes.AddRange(plan.Warnings);
+                    foreach (var w in plan.Warnings) Log.Warn($"{r.Game.Name}: {w}");
+                    progress?.Report(new TransferProgress($"Installing {build!.Label} to {r.Game.Name}", null));
+                    undone.Add(await Installer.InstallComponentAsync(r.Game, targetDir, plan.Plan, ct));
+                    notes.AddRange(DriverOff(r));
+                    saveSettings();
+                    break;
+                }
             case LimitMethod.Unreal:
-            {
-                var existing = InstallManifest.Read(targetDir)?.Component(ComponentRegistry.UnrealFrameCap);
-                var plan = FrameLimitPlanner.Unreal(r.Game, targetDir, engine!, r.Fps, r.UserIni, r.Force, existing);
-                undone.Add(await installer.InstallComponentAsync(r.Game, targetDir, plan.Plan, ct));
-                break;
-            }
+                {
+                    var existing = InstallManifest.Read(targetDir)?.Component(ComponentRegistry.UnrealFrameCap);
+                    var plan = FrameLimitPlanner.Unreal(r.Game, targetDir, engine!, r.Fps, r.UserIni, r.Force, existing);
+                    undone.Add(await Installer.InstallComponentAsync(r.Game, targetDir, plan.Plan, ct));
+                    break;
+                }
         }
         return new FrameLimitResult(r.Method, undone, notes);
     }
@@ -165,7 +165,7 @@ public sealed class FrameLimitService(ComponentStore store, Installer installer,
                 ? $"{name} has no 32-bit build, and {r.Game.Name} is 32-bit."
                 : $"{name} isn't in the library and the catalog can't be reached. Import {LimiterFiles.Names(limiterId)} in Settings, or try again online.");
         return resolved.Library is { } have
-            ? store.VerifiedLimiterBuild(have)
+            ? ComponentStore.VerifiedLimiterBuild(have)
             : await store.EnsureLimiterBuildAsync(resolved.Limiter!, resolved.File!, downloader, progress, ct);
     }
 
@@ -187,7 +187,7 @@ public sealed class FrameLimitService(ComponentStore store, Installer installer,
             if (nvidia.Available) nvidia.RestoreFrameRateLimit(r.Driver);
             return null;
         }
-        var undo = await installer.RemoveComponentAsync(r.Game, FileUtil.Normalize(r.TargetDir), LimitMethods.ComponentOf(method)!, ct);
+        var undo = await Installer.RemoveComponentAsync(r.Game, FileUtil.Normalize(r.TargetDir), LimitMethods.ComponentOf(method)!, ct);
         // The driver limiter was off only while this add-on was there.
         if (LimitMethods.IsAddon(method) && nvidia.Available) nvidia.RestoreFrameRateLimit(r.Driver);
         return undo;

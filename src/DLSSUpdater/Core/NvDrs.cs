@@ -222,7 +222,7 @@ public sealed class NvDrs : IDrsSession
         return profile;
     }
 
-/// <summary>A setting as the driver reports it for one profile.</summary>
+    /// <summary>A setting as the driver reports it for one profile.</summary>
     /// <param name="Predefined">The value is NVIDIA's shipped default for this profile, not a user value.</param>
     /// <param name="Location">0 = this profile, 1 = inherited from the global profile, 2 = base, 3 = driver default.</param>
     public readonly record struct Setting(uint Value, bool Predefined, int Location)

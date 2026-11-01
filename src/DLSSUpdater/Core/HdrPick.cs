@@ -183,7 +183,7 @@ public sealed class HdrPicker
         return list.DistinctBy(c => c.Id, StringComparer.OrdinalIgnoreCase).OrderBy(c => c.Name, StringComparer.OrdinalIgnoreCase).ToList();
     }
 
-    private HdrChoice Named(CatalogMod mod, string how, int bits)
+    private static HdrChoice Named(CatalogMod mod, string how, int bits)
     {
         var file = FileFor(mod.Files, bits);
         var notes = new List<string>();
@@ -193,7 +193,11 @@ public sealed class HdrPicker
             return None($"{mod.Name}: the catalog has no {(bits == 32 ? "32-bit" : bits == 64 ? "64-bit" : "usable")} build for this game.", mod);
         return new HdrChoice
         {
-            Kind = HdrKind.Named, ModId = mod.Id, Title = mod.Name, Mod = mod, File = file,
+            Kind = HdrKind.Named,
+            ModId = mod.Id,
+            Title = mod.Name,
+            Mod = mod,
+            File = file,
             Reason = $"{mod.Name} has its own RenoDX mod (matched by {how}).",
             Link = mod.Links?.Discussion ?? mod.Links?.Nexus ?? mod.Links?.Discord,
             Notes = notes,
@@ -224,10 +228,17 @@ public sealed class HdrPicker
             var ue = UeSettings.For(game.Effective, entry);
             return new HdrChoice
             {
-                Kind = HdrKind.UeExtended, ModId = UeExtendedId, Title = g!.Name, File = file, EngineGame = entry, Ue = ue,
+                Kind = HdrKind.UeExtended,
+                ModId = UeExtendedId,
+                Title = g!.Name,
+                File = file,
+                EngineGame = entry,
+                Ue = ue,
                 Reason = why + (ueExtended == true ? "Unreal Extended, as you chose." : "Unreal game without its own mod: Unreal Extended is the default.") +
                          (entry is null ? "" : " The wiki lists this game."),
-                Link = ModPage(UeExtendedId), Notes = notes, CanToggleUeExtended = true,
+                Link = ModPage(UeExtendedId),
+                Notes = notes,
+                CanToggleUeExtended = true,
             };
         }
         var plain = _catalog.GenericFor(UnrealId);
@@ -237,9 +248,15 @@ public sealed class HdrPicker
         if (listed?.Compat == "in-progress") notes.Add("Listed as in progress for the generic Unreal add-on.");
         return new HdrChoice
         {
-            Kind = HdrKind.UnrealGeneric, ModId = UnrealId, Title = plain!.Name, File = plainFile, EngineGame = listed,
+            Kind = HdrKind.UnrealGeneric,
+            ModId = UnrealId,
+            Title = plain!.Name,
+            File = plainFile,
+            EngineGame = listed,
             Reason = why + (ueExtended == false ? "Plain generic Unreal add-on, as you chose." : "Plain generic Unreal add-on."),
-            Link = ModPage(UnrealId), Notes = notes, CanToggleUeExtended = true,
+            Link = ModPage(UnrealId),
+            Notes = notes,
+            CanToggleUeExtended = true,
         };
     }
 
@@ -255,9 +272,14 @@ public sealed class HdrPicker
         if (entry?.Notes is { Length: > 0 } n) notes.Add(n.Replace('\n', ' '));
         return new HdrChoice
         {
-            Kind = HdrKind.UnityGeneric, ModId = UnityId, Title = g!.Name + $" ({bits}-bit)", File = file, EngineGame = entry,
+            Kind = HdrKind.UnityGeneric,
+            ModId = UnityId,
+            Title = g!.Name + $" ({bits}-bit)",
+            File = file,
+            EngineGame = entry,
             Reason = why + $"Unity game without its own mod: the generic {bits}-bit Unity add-on.",
-            Link = ModPage(UnityId), Notes = notes,
+            Link = ModPage(UnityId),
+            Notes = notes,
         };
     }
 

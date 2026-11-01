@@ -45,15 +45,13 @@ public sealed record PresetNeeds(IReadOnlyList<string> Missing, IReadOnlyList<Ca
 /// </summary>
 public sealed class ReShadeExtras
 {
-    private readonly Installer _installer;
     private readonly AppSettings _settings;
     private readonly ICatalogFetch _fetch;
     private readonly Func<CancellationToken, Task<CatalogLoad>>? _load;
     private CatalogDocument? _document;
 
-    public ReShadeExtras(Installer installer, AppSettings settings, ICatalogFetch fetch, Func<CancellationToken, Task<CatalogLoad>>? load = null)
+    public ReShadeExtras(AppSettings settings, ICatalogFetch fetch, Func<CancellationToken, Task<CatalogLoad>>? load = null)
     {
-        _installer = installer;
         _settings = settings;
         _fetch = fetch;
         _load = load;
@@ -261,7 +259,7 @@ public sealed class ReShadeExtras
         var extras = WantedAddons(game);
         if (plan.HasEffects && !UserSets(game.Id, "EffectSearchPaths")) extras[ReShadeLayout.OwnedEntryKey("EffectSearchPaths")] = ReShadeLayout.SearchEntry(folder, "Shaders");
         foreach (var id in plan.Placed.Keys) extras["placed:" + id] = plan.Placed[id];
-        var undo = await _installer.InstallComponentAsync(game, target,
+        var undo = await Installer.InstallComponentAsync(game, target,
             new ComponentPlan(ComponentRegistry.ReShadeAddons) { Version = Count(plan.Placed.Count, "add-on"), Files = plan.Files, ConfigEdits = edits, Extras = extras }, ct);
         notes.AddRange(UndoNotes(undo));
         return new ExtrasResult(true, $"{Count(plan.Placed.Count, "add-on")} installed in {game.Name} ({bits}-bit)" + (addonDir == target ? "" : $", in {Path.GetRelativePath(game.Root, addonDir)}"), notes);
@@ -319,7 +317,7 @@ public sealed class ReShadeExtras
             if (!UserSets(game.Id, "EffectSearchPaths")) extras[ReShadeLayout.OwnedEntryKey("EffectSearchPaths")] = ReShadeLayout.SearchEntry(folder, "Shaders");
             if (hasTextures && !UserSets(game.Id, "TextureSearchPaths")) extras[ReShadeLayout.OwnedEntryKey("TextureSearchPaths")] = ReShadeLayout.SearchEntry(folder, "Textures");
             foreach (var id in plan.Placed.Keys) extras["placed:" + id] = plan.Placed[id];
-            var undo = await _installer.InstallComponentAsync(game, target,
+            var undo = await Installer.InstallComponentAsync(game, target,
                 new ComponentPlan(ComponentRegistry.ReShadeShaders) { Version = Count(plan.Placed.Count, "pack"), Files = files, ConfigEdits = edits, Extras = extras }, ct);
             notes.AddRange(UndoNotes(undo));
             return new ExtrasResult(true, $"{Count(plan.Placed.Count, "shader pack")} installed in {game.Name} ({plan.Files.Count} files in {folder.Name})", notes);
@@ -357,7 +355,7 @@ public sealed class ReShadeExtras
         var needs = NeedsOf(game, target, preset);
         if (needs.Missing.Count > 0)
             notes.Add($"The preset needs {Count(needs.Missing.Count, "effect file")} this game doesn't have: {string.Join(", ", needs.Missing.Take(8))}{(needs.Missing.Count > 8 ? ", …" : "")}.");
-        var undo = await _installer.InstallComponentAsync(game, target, new ComponentPlan(ComponentRegistry.ReShadePreset)
+        var undo = await Installer.InstallComponentAsync(game, target, new ComponentPlan(ComponentRegistry.ReShadePreset)
         {
             Version = preset.Name,
             Files = [(preset.Path, Path.Combine(target, ReShadeLayout.PresetsFolder, preset.Name + ".ini"))],
@@ -370,12 +368,12 @@ public sealed class ReShadeExtras
 
     // ---- removal ----
 
-    public async Task<ExtrasResult> RemoveAsync(GameInfo game, string target, string componentId, CancellationToken ct)
+    public static async Task<ExtrasResult> RemoveAsync(GameInfo game, string target, string componentId, CancellationToken ct)
     {
         target = FileUtil.Normalize(target);
         var name = ComponentRegistry.Find(componentId)?.Name ?? componentId;
         if (InstallManifest.Load(target)?.Component(componentId) is null) return new ExtrasResult(true, $"{name} is not installed in {game.Name}.", []);
-        var undo = await _installer.RemoveComponentAsync(game, target, componentId, ct);
+        var undo = await Installer.RemoveComponentAsync(game, target, componentId, ct);
         return new ExtrasResult(true, $"{name} removed from {game.Name}", UndoNotes(undo));
     }
 

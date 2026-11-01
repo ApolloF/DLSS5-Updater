@@ -98,7 +98,7 @@ public sealed class GitHubClient
     }
 
     /// <summary>Releases of <paramref name="repo"/> from the ETag cache only (no request), for when GitHub can't be reached.</summary>
-    public List<GhRelease> CachedReleases(string repo)
+    public static List<GhRelease> CachedReleases(string repo)
     {
         var prefix = $"https://api.github.com/repos/{repo}/releases?";
         var releases = new List<GhRelease>();
@@ -162,7 +162,7 @@ public sealed class GitHubClient
         cts.CancelAfter(TimeSpan.FromSeconds(30));
         try
         {
-            var res = await SendApiAsync(url, token, cached, cts.Token, accept);
+            var res = await SendApiAsync(url, token, cached, accept, cts.Token);
             try
             {
                 if (token is not null && await IsTokenRejectedAsync(res, cts.Token))
@@ -171,7 +171,7 @@ public sealed class GitHubClient
                         Log.Warn($"GitHub rejected the saved access token ({(int)res.StatusCode}); it may be expired or revoked. " +
                                  "Checking without it for now. Replace or clear it in Settings.");
                     res.Dispose();
-                    res = await SendApiAsync(url, null, cached, cts.Token, accept);
+                    res = await SendApiAsync(url, null, cached, accept, cts.Token);
                     token = null;
                 }
                 if (res.IsSuccessStatusCode || res.StatusCode == HttpStatusCode.NotModified) SetRateLimit(null);
@@ -197,7 +197,7 @@ public sealed class GitHubClient
         }
     }
 
-    private async Task<HttpResponseMessage> SendApiAsync(string url, string? token, ApiCacheEntry? cached, CancellationToken ct, string accept)
+    private async Task<HttpResponseMessage> SendApiAsync(string url, string? token, ApiCacheEntry? cached, string accept, CancellationToken ct)
     {
         using var req = new HttpRequestMessage(HttpMethod.Get, url);
         req.Headers.Accept.Add(new MediaTypeWithQualityHeaderValue(accept));

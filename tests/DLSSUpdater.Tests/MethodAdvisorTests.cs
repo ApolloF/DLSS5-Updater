@@ -696,7 +696,7 @@ public sealed class MethodAdvisorTests
         var a = Advise(Game(dlss: true, antiCheat: "EasyAntiCheat"));
 
         Assert.All(a.Methods, m => Assert.False(new DLSSUpdater.ViewModels.MethodRow(m, false, a.Caution).HasWarning));
-        var other = a.Methods.First() with { Warning = "Something else" };
+        var other = a.Methods[0] with { Warning = "Something else" };
         Assert.Equal("Something else", new DLSSUpdater.ViewModels.MethodRow(other, false, a.Caution).Warning);
     }
 

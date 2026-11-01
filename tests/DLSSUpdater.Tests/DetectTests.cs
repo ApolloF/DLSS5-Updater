@@ -24,6 +24,7 @@ public class DetectTests : IDisposable
         AppPaths.Root = _appRoot;
         DetectCache.Reset();
         if (Directory.Exists(_tmp)) Directory.Delete(_tmp, true);
+        GC.SuppressFinalize(this);
     }
 
     private string Put(string rel, byte[]? bytes = null)

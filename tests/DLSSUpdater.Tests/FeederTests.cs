@@ -23,6 +23,7 @@ public sealed class FeederTests : IDisposable
     private readonly string _root;
     private readonly string _target;
     private readonly byte[] _zip;
+    private static readonly string[] FeederFiles = new[] { "dlss5-feed.addon32", "dlss5-feed.addon64", "DLSS5_Feed.fx", "dlss5-feed-host64.exe" };
 
     private sealed class FakeWeb(Func<string, HttpResponseMessage> respond) : HttpMessageHandler
     {
@@ -81,7 +82,9 @@ public sealed class FeederTests : IDisposable
         var version = tag.TrimStart('v');
         return new GhRelease
         {
-            TagName = tag, Prerelease = prerelease, PublishedAt = published ?? new DateTime(2026, 10, 11, 5, 56, 10, DateTimeKind.Utc),
+            TagName = tag,
+            Prerelease = prerelease,
+            PublishedAt = published ?? new DateTime(2026, 10, 11, 5, 56, 10, DateTimeKind.Utc),
             Assets = [new GhAsset { Name = assetName ?? $"DLSS5-Feeder-{version}.zip", Url = $"https://github.com/jlrouzies-fr/DLSS5-Feeder/releases/download/{tag}/DLSS5-Feeder-{version}.zip", Digest = digest }],
         };
     }
@@ -170,7 +173,7 @@ public sealed class FeederTests : IDisposable
         Assert.Equal(LibraryKind.Feeder, build.Kind);
         Assert.Equal(ZipUrl, Assert.Single(web.Urls));
         var pkg = FeederLibrary.PackageOf(build);
-        Assert.Equal(new[] { "dlss5-feed.addon32", "dlss5-feed.addon64", "DLSS5_Feed.fx", "dlss5-feed-host64.exe" }.Order(),
+        Assert.Equal(FeederFiles.Order(),
             Directory.EnumerateFiles(pkg, "*", SearchOption.AllDirectories).Select(Path.GetFileName).Order());
         Assert.False(File.Exists(Path.Combine(build.Dir, Asset)));
         Assert.Equal(Tag, Assert.Single(FeederLibrary.Builds()).Id);
@@ -292,7 +295,7 @@ public sealed class FeederTests : IDisposable
         var build = await Cached();
         var game = GameOf(_root, 64);
 
-        await installer.InstallComponentAsync(game, _target, FeederLibrary.Plan(build, game, _target), default);
+        await Installer.InstallComponentAsync(game, _target, FeederLibrary.Plan(build, game, _target), default);
 
         Assert.Equal("ADDON64", File.ReadAllText(Path.Combine(_target, "dlss5-feed.addon64")));
         Assert.Equal("FX", File.ReadAllText(Path.Combine(_target, @"reshade-shaders\Shaders\DLSS5_Feed.fx")));
@@ -314,7 +317,7 @@ public sealed class FeederTests : IDisposable
         var build = await Cached();
         var game = GameOf(_root, 32);
 
-        await installer.InstallComponentAsync(game, _target, FeederLibrary.Plan(build, game, _target), default);
+        await Installer.InstallComponentAsync(game, _target, FeederLibrary.Plan(build, game, _target), default);
 
         Assert.Equal("ADDON32", File.ReadAllText(Path.Combine(_target, "dlss5-feed.addon32")));
         Assert.Equal("HOST64", File.ReadAllText(Path.Combine(_target, @"host64\dlss5-feed-host64.exe")));
@@ -340,9 +343,9 @@ public sealed class FeederTests : IDisposable
         File.WriteAllText(Path.Combine(_target, @"reshade-shaders\Shaders\Other.fx"), "OTHER");
         var before = Directory.EnumerateFiles(_target, "*", SearchOption.AllDirectories).Where(f => !f.Contains(InstallManifest.DirName)).Order().ToList();
 
-        await installer.InstallComponentAsync(game, _target, FeederLibrary.Plan(build, game, _target), default);
+        await Installer.InstallComponentAsync(game, _target, FeederLibrary.Plan(build, game, _target), default);
         Assert.NotEqual("USERS-OWN", File.ReadAllText(Path.Combine(_target, bits == 64 ? "dlss5-feed.addon64" : "dlss5-feed.addon32")));
-        var undo = await installer.RemoveComponentAsync(game, _target, ComponentRegistry.Feeder, default);
+        var undo = await Installer.RemoveComponentAsync(game, _target, ComponentRegistry.Feeder, default);
 
         Assert.True(undo.Clean);
         Assert.Equal(before, Directory.EnumerateFiles(_target, "*", SearchOption.AllDirectories).Where(f => !f.Contains(InstallManifest.DirName)).Order());
@@ -356,12 +359,12 @@ public sealed class FeederTests : IDisposable
         var installer = new Installer(new ComponentStore(new GitHubClient(), () => false));
         var build = await Cached();
         var game = GameOf(_root, 64);
-        await installer.InstallComponentAsync(game, _target, FeederLibrary.Plan(build, game, _target), default);
+        await Installer.InstallComponentAsync(game, _target, FeederLibrary.Plan(build, game, _target), default);
 
         var newer = BuildZipWith("ADDON64-NEW");
         var release = FeederLibrary.Pick([Release("v1.20.0", Digest(newer))], false)!;
         var second = await new FeederLibrary(new GitHubClient(new FakeWeb(_ => Body(newer)))).EnsureAsync(release, null, default);
-        await installer.InstallComponentAsync(game, _target, FeederLibrary.Plan(second, game, _target), default);
+        await Installer.InstallComponentAsync(game, _target, FeederLibrary.Plan(second, game, _target), default);
 
         Assert.Equal("ADDON64-NEW", File.ReadAllText(Path.Combine(_target, "dlss5-feed.addon64")));
         Assert.Equal("v1.20.0", InstallManifest.Read(_target)!.Component(ComponentRegistry.Feeder)!.BuildId);

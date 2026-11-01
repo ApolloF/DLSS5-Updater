@@ -64,7 +64,12 @@ public sealed class ReShadeInstallTests : IDisposable
 
     private static InstallOptions Opts(string proxy = "dxgi.dll", IReadOnlyList<IniOverride>? template = null, bool vulkan = false, string? build = null) => new()
     {
-        Mode = InstallMode.ReShadeOnly, ReShade = true, Proxy = proxy, ReShadeTemplate = template ?? [], ReShadeVulkan = vulkan, ReShadeBuildPick = build,
+        Mode = InstallMode.ReShadeOnly,
+        ReShade = true,
+        Proxy = proxy,
+        ReShadeTemplate = template ?? [],
+        ReShadeVulkan = vulkan,
+        ReShadeBuildPick = build,
     };
 
     private Installer Installer(VulkanLayerState layer = VulkanLayerState.NotInstalled) => new(_store) { VulkanHost = new FakeLayer(layer) };
@@ -79,7 +84,7 @@ public sealed class ReShadeInstallTests : IDisposable
         var m = InstallManifest.Load(_target)!;
         Assert.Equal(_build.Id, m.ReShadeId);
         Assert.Equal("dxgi.dll", m.Proxy);
-        await Installer().UninstallAsync(Game(64), _target, default);
+        await DLSSUpdater.Core.Installer.UninstallAsync(Game(64), _target, default);
 
         await Installer().InstallAsync(Game(32, GraphicsApis.Dx9), _target, Opts("d3d9.dll"), null, default);
         Assert.Equal(FileUtil.Sha256(ComponentStore.ReShadeFilePath(_build, 32)), FileUtil.Sha256(Path_("d3d9.dll")));
@@ -128,7 +133,7 @@ public sealed class ReShadeInstallTests : IDisposable
         Assert.Null(ReShadeInstall.ForeignWarning(game, _target, "dxgi.dll", InstallManifest.Load(_target)));
         Assert.Contains(InstallManifest.Load(_target)!.Backups, b => b.Original.EndsWith("dxgi.dll"));
 
-        await Installer().UninstallAsync(game, _target, default);
+        await DLSSUpdater.Core.Installer.UninstallAsync(game, _target, default);
         Assert.Equal(bytes, File.ReadAllText(foreign));
     }
 
@@ -162,7 +167,7 @@ public sealed class ReShadeInstallTests : IDisposable
         Assert.Null(ini.Get("RenoDX.DLSS5", "NRHookPoint"));
         Assert.Null(ini.Get("Uplift", "Enabled"));
 
-        await Installer().UninstallAsync(Game(), _target, default);
+        await DLSSUpdater.Core.Installer.UninstallAsync(Game(), _target, default);
         Assert.Equal("[GENERAL]\nEffectSearchPaths=C:\\mine\n[RENODX-DLSS]\nSomething=1\n", File.ReadAllText(Path_("ReShade.ini")));
     }
 
@@ -171,7 +176,7 @@ public sealed class ReShadeInstallTests : IDisposable
     {
         await Installer().InstallAsync(Game(), _target, Opts(template: ReShadeIniTemplate.Parse(ReShadeIniTemplate.DefaultText)), null, default);
         Assert.True(File.Exists(Path_("ReShade.ini")));
-        await Installer().UninstallAsync(Game(), _target, default);
+        await DLSSUpdater.Core.Installer.UninstallAsync(Game(), _target, default);
         Assert.False(File.Exists(Path_("ReShade.ini")));
         Assert.False(File.Exists(Path_("dxgi.dll")));
     }
@@ -200,7 +205,7 @@ public sealed class ReShadeInstallTests : IDisposable
         Assert.True(m.ReShade);
         Assert.Null(m.Proxy);
 
-        await Installer(VulkanLayerState.Installed).UninstallAsync(Game(64, GraphicsApis.Vulkan), _target, default);
+        await DLSSUpdater.Core.Installer.UninstallAsync(Game(64, GraphicsApis.Vulkan), _target, default);
         Assert.False(File.Exists(Path_("ReShade.ini")));
     }
 

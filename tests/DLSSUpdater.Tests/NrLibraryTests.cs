@@ -30,49 +30,49 @@ public sealed class NrLibraryTests : IDisposable
     [Fact]
     public void VersionComesFromResource_AndImportsKeepSameVersionVariants()
     {
-        var old = _store.ImportDlssNr(Dll("renamed.dll", new Version(310, 8, 0, 0)));
-        var newer = _store.ImportDlssNr(Dll("new.dll", new Version(310, 9, 16, 0)));
-        var future = _store.ImportDlssNr(Dll("future.dll", new Version(500, 12, 34, 56)));
+        var old = ComponentStore.ImportDlssNr(Dll("renamed.dll", new Version(310, 8, 0, 0)));
+        var newer = ComponentStore.ImportDlssNr(Dll("new.dll", new Version(310, 9, 16, 0)));
+        var future = ComponentStore.ImportDlssNr(Dll("future.dll", new Version(500, 12, 34, 56)));
         var variantPath = Dll("variant.dll", new Version(310, 9, 16, 0));
         using (var stream = File.Open(variantPath, FileMode.Append)) stream.WriteByte(42);
-        var variant = _store.ImportDlssNr(variantPath);
+        var variant = ComponentStore.ImportDlssNr(variantPath);
         Assert.Equal("310.8.0", old.Version);
         Assert.Equal("310.9.16", newer.Version);
         Assert.Equal("500.12.34.56", future.Version);
         Assert.NotEqual(newer.Id, variant.Id);
-        Assert.Equal(4, _store.DlssNrVersions.Count);
-        Assert.All(_store.DlssNrVersions, v => Assert.True(File.Exists(_store.VerifiedDlssNrPath(v.Id))));
+        Assert.Equal(4, ComponentStore.DlssNrVersions.Count);
+        Assert.All(ComponentStore.DlssNrVersions, v => Assert.True(File.Exists(ComponentStore.VerifiedDlssNrPath(v.Id))));
         Assert.Contains("Unverified", newer.Label);
-        _store.ImportDlssNr(variantPath);
-        Assert.Equal(4, _store.DlssNrVersions.Count);
+        ComponentStore.ImportDlssNr(variantPath);
+        Assert.Equal(4, ComponentStore.DlssNrVersions.Count);
     }
 
     [Fact]
     public void NewerBuild_BecomesDefaultOnce_SwitchingBackSticks_AndOldSettingsKeepTheirChoice()
     {
         var s = new AppSettings();
-        var old = _store.ImportDlssNr(Dll("old.dll", new Version(310, 8, 0, 0)));
-        Assert.Equal(old.Id, _store.AdoptNewerDlssNr(s)?.Id);
+        var old = ComponentStore.ImportDlssNr(Dll("old.dll", new Version(310, 8, 0, 0)));
+        Assert.Equal(old.Id, ComponentStore.AdoptNewerDlssNr(s)?.Id);
         Assert.Equal(old.Id, s.DlssNrId);
 
-        var newer = _store.ImportDlssNr(Dll("new.dll", new Version(310, 9, 16, 0)));
-        Assert.Equal(newer.Id, _store.AdoptNewerDlssNr(s)?.Id);
+        var newer = ComponentStore.ImportDlssNr(Dll("new.dll", new Version(310, 9, 16, 0)));
+        Assert.Equal(newer.Id, ComponentStore.AdoptNewerDlssNr(s)?.Id);
         Assert.Equal(newer.Id, s.DlssNrId);
         Assert.Equal(old.Id, s.PreviousDlssNrId);
 
         s.SelectDlssNr(old.Id);
-        Assert.Null(_store.AdoptNewerDlssNr(s));
+        Assert.Null(ComponentStore.AdoptNewerDlssNr(s));
         Assert.Equal(old.Id, s.DlssNrId);
 
         var sameVersion = Dll("variant.dll", new Version(310, 9, 16, 0));
         using (var stream = File.Open(sameVersion, FileMode.Append)) stream.WriteByte(42);
         s.SelectDlssNr(newer.Id);
-        _store.ImportDlssNr(sameVersion);
-        Assert.Null(_store.AdoptNewerDlssNr(s));
+        ComponentStore.ImportDlssNr(sameVersion);
+        Assert.Null(ComponentStore.AdoptNewerDlssNr(s));
         Assert.Equal(newer.Id, s.DlssNrId);
 
         var legacy = new AppSettings { DlssNrId = old.Id };
-        Assert.Null(_store.AdoptNewerDlssNr(legacy));
+        Assert.Null(ComponentStore.AdoptNewerDlssNr(legacy));
         Assert.Equal(old.Id, legacy.DlssNrId);
         Assert.NotNull(legacy.NewestDlssNrSeen);
     }
@@ -111,12 +111,12 @@ public sealed class NrLibraryTests : IDisposable
         FakeVersionDll.Write(path, new Version(310, 9, 16, 0), "CL 39025366", "DLSSNR");
         Assert.Equal("CL 39025366", FileUtil.OriginalFilename(path));
         Assert.Equal("DLSSNR", FileUtil.InternalName(path));
-        Assert.Equal("310.9.16", _store.ImportDlssNr(path).Version);
+        Assert.Equal("310.9.16", ComponentStore.ImportDlssNr(path).Version);
 
         var other = Path.Combine(_tmp, "other.dll");
         FakeVersionDll.Write(other, new Version(310, 9, 16, 0), "CL 39025366", "DLSS");
-        Assert.Throws<InvalidDataException>(() => _store.ImportDlssNr(other));
-        Assert.Throws<InvalidDataException>(() => _store.ImportDlss(path));
+        Assert.Throws<InvalidDataException>(() => ComponentStore.ImportDlssNr(other));
+        Assert.Throws<InvalidDataException>(() => ComponentStore.ImportDlss(path));
     }
 
     [Fact]
@@ -125,13 +125,13 @@ public sealed class NrLibraryTests : IDisposable
         var text = Path.Combine(_tmp, "fake.dll");
         File.WriteAllText(text, "not a DLL");
         Assert.Null(FileUtil.ReadVersion(text));
-        Assert.Throws<InvalidDataException>(() => _store.ImportDlssNr(text));
-        Assert.Throws<InvalidDataException>(() => _store.ImportDlssNr(Dll("wrong.dll", new Version(1, 2, 3, 4), "other.dll")));
-        Assert.Throws<InvalidDataException>(() => _store.DlssNrFor("..\\outside"));
-        Assert.Throws<FileNotFoundException>(() => _store.VerifiedDlssNrPath(new string('a', 64)));
-        var v = _store.ImportDlssNr(Dll("good.dll", new Version(310, 9, 16, 0)));
-        File.WriteAllText(_store.DlssNrFor(v.Id), "changed");
-        Assert.Throws<InvalidDataException>(() => _store.VerifiedDlssNrPath(v.Id));
+        Assert.Throws<InvalidDataException>(() => ComponentStore.ImportDlssNr(text));
+        Assert.Throws<InvalidDataException>(() => ComponentStore.ImportDlssNr(Dll("wrong.dll", new Version(1, 2, 3, 4), "other.dll")));
+        Assert.Throws<InvalidDataException>(() => ComponentStore.DlssNrFor("..\\outside"));
+        Assert.Throws<FileNotFoundException>(() => ComponentStore.VerifiedDlssNrPath(new string('a', 64)));
+        var v = ComponentStore.ImportDlssNr(Dll("good.dll", new Version(310, 9, 16, 0)));
+        File.WriteAllText(ComponentStore.DlssNrFor(v.Id), "changed");
+        Assert.Throws<InvalidDataException>(() => ComponentStore.VerifiedDlssNrPath(v.Id));
     }
 
     [Fact]
@@ -139,10 +139,10 @@ public sealed class NrLibraryTests : IDisposable
     {
         var legacy = Path.Combine(AppPaths.Components, ComponentStore.DlssNrFile);
         FakeVersionDll.Write(legacy, new Version(310, 8, 0, 0), ComponentStore.DlssNrFile);
-        var v = _store.MigrateDlssNr()!;
-        Assert.Equal(v.Id, _store.MigrateDlssNr()!.Id);
+        var v = ComponentStore.MigrateDlssNr()!;
+        Assert.Equal(v.Id, ComponentStore.MigrateDlssNr()!.Id);
         Assert.True(File.Exists(legacy));
-        Assert.Single(_store.DlssNrVersions);
+        Assert.Single(ComponentStore.DlssNrVersions);
         FileUtil.AtomicWriteText(AppPaths.SettingsFile, """{"OptiSource":"wilsjo2/OptiScaler-DLSSNR-PreSR-Multipass","DlssTag":"v310.1.0","Games":{"game":{"Proxy":"winmm.dll","DlssTag":"v3.7.0"}}}""");
         var settings = AppSettings.Load();
         Assert.Equal(ComponentStore.OptiRepo, settings.OptiSource);
@@ -170,8 +170,8 @@ public sealed class NrLibraryTests : IDisposable
         FakeVersionDll.Write(destination, new Version(300, 1, 0, 0), ComponentStore.DlssNrFile);
         var original = FileUtil.Sha256(destination);
         File.WriteAllText(Path.Combine(root, "other.txt"), "untouched");
-        var old = _store.ImportDlssNr(Dll("old.dll", new Version(310, 8, 0, 0)));
-        var newer = _store.ImportDlssNr(Dll("new.dll", new Version(310, 9, 16, 0)));
+        var old = ComponentStore.ImportDlssNr(Dll("old.dll", new Version(310, 8, 0, 0)));
+        var newer = ComponentStore.ImportDlssNr(Dll("new.dll", new Version(310, 9, 16, 0)));
         var installer = new Installer(_store);
         await installer.InstallAsync(game, root, new InstallOptions { DlssNr = true, DlssNrId = old.Id }, null, default);
         await installer.SwitchDlssNrAsync(game, root, newer.Id, default);
@@ -184,7 +184,7 @@ public sealed class NrLibraryTests : IDisposable
         Assert.Equal(newer.Id, InstallManifest.Read(root)!.PreviousDlssNrId);
         await Assert.ThrowsAsync<FileNotFoundException>(() => installer.SwitchDlssNrAsync(game, root, new string('f', 64), default));
         Assert.Equal(old.Id, FileUtil.Sha256(destination));
-        await installer.UninstallAsync(game, root, default);
+        await Installer.UninstallAsync(game, root, default);
         Assert.Equal(original, FileUtil.Sha256(destination));
         Assert.Equal("untouched", File.ReadAllText(Path.Combine(root, "other.txt")));
     }
@@ -209,8 +209,8 @@ public sealed class NrLibraryTests : IDisposable
     {
         var root = Path.Combine(_tmp, "locked-game"); Directory.CreateDirectory(root);
         var game = new GameInfo { Id = root, Root = root, Name = "Fake locked game" };
-        var old = _store.ImportDlssNr(Dll("old.dll", new Version(310, 8, 0, 0)));
-        var newer = _store.ImportDlssNr(Dll("new.dll", new Version(310, 9, 16, 0)));
+        var old = ComponentStore.ImportDlssNr(Dll("old.dll", new Version(310, 8, 0, 0)));
+        var newer = ComponentStore.ImportDlssNr(Dll("new.dll", new Version(310, 9, 16, 0)));
         var installer = new Installer(_store);
         await installer.InstallAsync(game, root, new InstallOptions { DlssNr = true, DlssNrId = old.Id }, null, default);
         using (var locked = new FileStream(InstallManifest.PathFor(root), FileMode.Open, FileAccess.Read, FileShare.Read))
@@ -225,7 +225,7 @@ public sealed class NrLibraryTests : IDisposable
     [Fact]
     public async Task ImportedAndDownloadedDlssVersionsRemainAvailable()
     {
-        var imported = _store.ImportDlss(Dll("sr.dll", new Version(310, 9, 16, 0), "nvngx_dlss.dll"));
+        var imported = ComponentStore.ImportDlss(Dll("sr.dll", new Version(310, 9, 16, 0), "nvngx_dlss.dll"));
         for (var i = 0; i < 7; i++)
         {
             var r = new ReleaseInfo { Tag = $"v310.{i}.0" };
@@ -239,7 +239,7 @@ public sealed class NrLibraryTests : IDisposable
         var files = await _store.EnsureDlssAsync(imported.Tag, null, default);
         Assert.Single(files);
         Assert.Equal(new Version(310, 9, 16, 0), FileUtil.ReadVersion(files["nvngx_dlss.dll"]));
-        Assert.Throws<InvalidDataException>(() => _store.ImportDlss(Dll("nr.dll", new Version(310, 9, 16, 0))));
+        Assert.Throws<InvalidDataException>(() => ComponentStore.ImportDlss(Dll("nr.dll", new Version(310, 9, 16, 0))));
     }
 }
 

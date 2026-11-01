@@ -17,7 +17,6 @@ public class ComponentRecordTests : IDisposable
     private readonly string _local;
     private readonly string _src;
     private readonly ComponentStore _store;
-    private readonly Installer _installer;
     private readonly ComponentDefinition _dummy;
 
     public ComponentRecordTests()
@@ -30,11 +29,12 @@ public class ComponentRecordTests : IDisposable
         _src = Path.Combine(_tmp, "build");
         InstallManifest.KnownFolder = tag => tag == "|localappdata|" ? _local : null;
         _store = new ComponentStore(new GitHubClient(), () => true);
-        _installer = new Installer(_store);
         // The one registration a new component needs.
         _dummy = ComponentRegistry.Register(new ComponentDefinition("test-hdr-" + Guid.NewGuid().ToString("N")[..8], "Test HDR mod")
         {
-            Library = LibraryKind.Uplift, Label = "TestHDR", OwnedFiles = ["test-hdr.addon64", @"reshade-shaders\Shaders\TestHdr*.fx"],
+            Library = LibraryKind.Uplift,
+            Label = "TestHDR",
+            OwnedFiles = ["test-hdr.addon64", @"reshade-shaders\Shaders\TestHdr*.fx"],
         });
 
         Write(Path.Combine(_target, "Game-Win64-Shipping.exe"), "EXE");
@@ -57,6 +57,7 @@ public class ComponentRecordTests : IDisposable
             Directory.Delete(_tmp, true);
         }
         catch (IOException) { }
+        GC.SuppressFinalize(this);
     }
 
     private string EngineIni => Path.Combine(_local, @"TestGame\Saved\Config\Windows\Engine.ini");
@@ -76,13 +77,14 @@ public class ComponentRecordTests : IDisposable
         return g;
     }
 
-    private Dictionary<string, string> Snapshot(string dir) =>
+    private static Dictionary<string, string> Snapshot(string dir) =>
         Directory.EnumerateFiles(dir, "*", SearchOption.AllDirectories)
             .ToDictionary(f => Path.GetRelativePath(dir, f), File.ReadAllText, StringComparer.OrdinalIgnoreCase);
 
     private ComponentPlan Plan(string build = "b1", bool lut = true, bool hdrKey = true) => new(_dummy.Id)
     {
-        BuildId = build, Version = build,
+        BuildId = build,
+        Version = build,
         Files =
         [
             (Path.Combine(_src, "test-hdr.addon64"), Path.Combine(_target, "test-hdr.addon64")),
@@ -102,7 +104,7 @@ public class ComponentRecordTests : IDisposable
     [Fact]
     public async Task Install_RecordsEveryStep()
     {
-        await _installer.InstallComponentAsync(Game(), _target, Plan(), default);
+        await Installer.InstallComponentAsync(Game(), _target, Plan(), default);
 
         Assert.Equal("HDR-1", File.ReadAllText(Path.Combine(_target, "test-hdr.addon64")));
         Assert.Contains("HDR=1", File.ReadAllText(Path.Combine(_target, "game.ini")));
@@ -143,8 +145,8 @@ public class ComponentRecordTests : IDisposable
         var game = Snapshot(_root);
         var local = Snapshot(_local);
 
-        await _installer.InstallComponentAsync(Game(), _target, Plan(), default);
-        await _installer.UninstallAsync(Game(), _target, default);
+        await Installer.InstallComponentAsync(Game(), _target, Plan(), default);
+        await Installer.UninstallAsync(Game(), _target, default);
 
         Assert.Equal(game, Snapshot(_root));
         Assert.Equal(local, Snapshot(_local));
@@ -158,11 +160,11 @@ public class ComponentRecordTests : IDisposable
     {
         File.SetAttributes(EngineIni, FileAttributes.ReadOnly);
         var local = Snapshot(_local);
-        await _installer.InstallComponentAsync(Game(), _target, Plan(), default);
+        await Installer.InstallComponentAsync(Game(), _target, Plan(), default);
         // Already read-only: nothing to record for it.
         Assert.Empty(InstallManifest.Read(_target)!.Components[0].Attributes);
 
-        var undo = await _installer.RemoveComponentAsync(Game(), _target, _dummy.Id, default);
+        var undo = await Installer.RemoveComponentAsync(Game(), _target, _dummy.Id, default);
 
         Assert.True(undo.Clean);
         Assert.Equal(local, Snapshot(_local));
@@ -175,13 +177,13 @@ public class ComponentRecordTests : IDisposable
     [Fact]
     public async Task ChangedSince_IsLeftInPlaceAndReported()
     {
-        await _installer.InstallComponentAsync(Game(), _target, Plan(), default);
+        await Installer.InstallComponentAsync(Game(), _target, Plan(), default);
         // The user swaps in their own build, edits a key, and unlocks Engine.ini.
         File.WriteAllText(Path.Combine(_target, "test-hdr.addon64"), "USER-BUILD");
         File.WriteAllText(Path.Combine(_target, "game.ini"), "[Video]\nHDR=2\n");
         File.SetAttributes(EngineIni, FileAttributes.Normal);
 
-        var undo = await _installer.RemoveComponentAsync(Game(), _target, _dummy.Id, default);
+        var undo = await Installer.RemoveComponentAsync(Game(), _target, _dummy.Id, default);
 
         Assert.Equal([@"Game\Binaries\Win64\test-hdr.addon64"], undo.ChangedFiles);
         Assert.Equal([@"Game\Binaries\Win64\game.ini [Video] HDR"], undo.ChangedKeys);
@@ -197,11 +199,11 @@ public class ComponentRecordTests : IDisposable
     [Fact]
     public async Task Update_DropsWhatTheNewBuildLacks_AndKeepsAChangedFileAsPrevious()
     {
-        await _installer.InstallComponentAsync(Game(), _target, Plan(), default);
+        await Installer.InstallComponentAsync(Game(), _target, Plan(), default);
         File.WriteAllText(Path.Combine(_target, "test-hdr.addon64"), "USER-BUILD");
         Write(Path.Combine(_src, "test-hdr.addon64"), "HDR-2");
 
-        await _installer.InstallComponentAsync(Game(), _target, Plan("b2", lut: false, hdrKey: false), default);
+        await Installer.InstallComponentAsync(Game(), _target, Plan("b2", lut: false, hdrKey: false), default);
 
         Assert.Equal("HDR-2", File.ReadAllText(Path.Combine(_target, "test-hdr.addon64")));
         Assert.Equal("USER-BUILD", File.ReadAllText(Path.Combine(InstallManifest.DirFor(_target), "previous", "test-hdr.addon64")));
@@ -216,18 +218,18 @@ public class ComponentRecordTests : IDisposable
         // The original from before the first install is still the one kept.
         Assert.Equal("GAME-ORIGINAL", File.ReadAllText(Path.Combine(InstallManifest.BackupDirFor(_target), c.Backups.Single().Value)));
 
-        await _installer.UninstallAsync(Game(), _target, default);
+        await Installer.UninstallAsync(Game(), _target, default);
         Assert.Equal("GAME-ORIGINAL", File.ReadAllText(Path.Combine(_target, "test-hdr.addon64")));
     }
 
     [Fact]
     public async Task ReinstallingTheSameBuild_ChangesNothing()
     {
-        await _installer.InstallComponentAsync(Game(), _target, Plan(), default);
+        await Installer.InstallComponentAsync(Game(), _target, Plan(), default);
         var before = Snapshot(_root);
         var record = InstallManifest.Read(_target)!.Components.Single();
 
-        await _installer.InstallComponentAsync(Game(), _target, Plan(), default);
+        await Installer.InstallComponentAsync(Game(), _target, Plan(), default);
 
         var after = Snapshot(_root);
         before.Remove(@"Game\Binaries\Win64\.dlssupdater\manifest.json");
@@ -241,8 +243,8 @@ public class ComponentRecordTests : IDisposable
     [Fact]
     public async Task Plan_ForAnUnregisteredOrLegacyComponent_IsRefused()
     {
-        await Assert.ThrowsAsync<InvalidOperationException>(() => _installer.InstallComponentAsync(Game(), _target, new ComponentPlan("nobody-registered-this"), default));
-        await Assert.ThrowsAsync<InvalidOperationException>(() => _installer.InstallComponentAsync(Game(), _target, new ComponentPlan(ComponentRegistry.ReShade), default));
+        await Assert.ThrowsAsync<InvalidOperationException>(() => Installer.InstallComponentAsync(Game(), _target, new ComponentPlan("nobody-registered-this"), default));
+        await Assert.ThrowsAsync<InvalidOperationException>(() => Installer.InstallComponentAsync(Game(), _target, new ComponentPlan(ComponentRegistry.ReShade), default));
         Assert.Null(InstallManifest.Read(_target));
     }
 
@@ -253,7 +255,7 @@ public class ComponentRecordTests : IDisposable
         Write(outside, "[a]\nb=1\n");
         var plan = new ComponentPlan(_dummy.Id) { ConfigEdits = [(outside, "a", "b", "2")] };
 
-        await Assert.ThrowsAsync<UnsafeManifestException>(() => _installer.InstallComponentAsync(Game(), _target, plan, default));
+        await Assert.ThrowsAsync<UnsafeManifestException>(() => Installer.InstallComponentAsync(Game(), _target, plan, default));
         Assert.Equal("[a]\nb=1\n", File.ReadAllText(outside));
     }
 
@@ -261,10 +263,10 @@ public class ComponentRecordTests : IDisposable
     public async Task FileOfAnotherComponent_IsNotTakenOver()
     {
         var other = ComponentRegistry.Register(new ComponentDefinition("test-other-" + Guid.NewGuid().ToString("N")[..8], "Other"));
-        await _installer.InstallComponentAsync(Game(), _target, Plan(), default);
+        await Installer.InstallComponentAsync(Game(), _target, Plan(), default);
         var plan = new ComponentPlan(other.Id) { Files = [(Path.Combine(_src, "TestHdr.fx"), Path.Combine(Shaders, "TestHdr.fx"))] };
 
-        await Assert.ThrowsAsync<InvalidOperationException>(() => _installer.InstallComponentAsync(Game(), _target, plan, default));
+        await Assert.ThrowsAsync<InvalidOperationException>(() => Installer.InstallComponentAsync(Game(), _target, plan, default));
         Assert.Single(InstallManifest.Read(_target)!.Components);
     }
 
@@ -286,12 +288,12 @@ public class ComponentRecordTests : IDisposable
         m.ReShadeSha = FileUtil.Sha256(Path.Combine(_target, "dxgi.dll"));
         m.Save(_target);
 
-        await _installer.InstallComponentAsync(Game(), _target, Plan(hdrKey: false), default);
+        await Installer.InstallComponentAsync(Game(), _target, Plan(hdrKey: false), default);
         var view = InstallManifest.Read(_target)!.InstalledComponents();
         Assert.Equal([_dummy.Id, ComponentRegistry.ReShade], view.Select(c => c.Id));
         Assert.DoesNotContain(view.Single(c => c.Legacy).Files, f => f.Path.Contains("test-hdr"));
 
-        await _installer.UninstallAsync(Game(), _target, default);
+        await Installer.UninstallAsync(Game(), _target, default);
         Assert.Equal(before, Snapshot(_root));
     }
 
@@ -306,7 +308,7 @@ public class ComponentRecordTests : IDisposable
         Write(Path.Combine(_target, "renodx-mfgunlock.addon64"), "MFG");
         m.Save(_target);
 
-        await _installer.UninstallAsync(Game(), _target, default);
+        await Installer.UninstallAsync(Game(), _target, default);
 
         Assert.Equal("MY-RESHADE", File.ReadAllText(Path.Combine(_target, "dxgi.dll")));
         Assert.False(File.Exists(Path.Combine(_target, "renodx-mfgunlock.addon64")));
@@ -318,9 +320,9 @@ public class ComponentRecordTests : IDisposable
     {
         Write(Path.Combine(_src, "nvngx_dlssg.dll"), "FEEDER-FG");
         var plan = new ComponentPlan(_dummy.Id) { BuildId = "b1", Files = [(Path.Combine(_src, "nvngx_dlssg.dll"), Path.Combine(_target, "nvngx_dlssg.dll"))] };
-        await _installer.InstallComponentAsync(Game(), _target, plan, default);
+        await Installer.InstallComponentAsync(Game(), _target, plan, default);
 
-        await _installer.RestoreDlssAsync(Game(), _target, default);
+        await Installer.RestoreDlssAsync(Game(), _target, default);
 
         Assert.Equal("FEEDER-FG", File.ReadAllText(Path.Combine(_target, "nvngx_dlssg.dll")));
         Assert.Single(InstallManifest.Read(_target)!.Components);
@@ -329,7 +331,7 @@ public class ComponentRecordTests : IDisposable
     [Fact]
     public async Task CleanupAndKnownInstalls_ProtectTheComponentsBuildsById()
     {
-        await _installer.InstallComponentAsync(Game(), _target, Plan(), default);
+        await Installer.InstallComponentAsync(Game(), _target, Plan(), default);
         var s = new AppSettings();
         s.SetDefaultBuild(_dummy.Id, "b-default");
         s.For("game").SetBuildPick(_dummy.Id, "b-picked");

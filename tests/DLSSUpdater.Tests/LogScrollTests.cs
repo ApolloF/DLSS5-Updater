@@ -78,8 +78,14 @@ public class LogScrollTests
         VirtualizingPanel.SetIsVirtualizing(list, true);
         var window = new Window
         {
-            Content = list, Width = 300, Height = 160, ShowInTaskbar = false, ShowActivated = false,
-            WindowStyle = WindowStyle.None, Left = -10000, Top = -10000,
+            Content = list,
+            Width = 300,
+            Height = 160,
+            ShowInTaskbar = false,
+            ShowActivated = false,
+            WindowStyle = WindowStyle.None,
+            Left = -10000,
+            Top = -10000,
         };
         window.Show();
         Pump();

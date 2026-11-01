@@ -37,6 +37,7 @@ public class LumaViewModelTests : IDisposable
     {
         try { Directory.Delete(_tmp, true); }
         catch (IOException) { }
+        GC.SuppressFinalize(this);
     }
 
     private static void Write(string path, string content)
@@ -64,7 +65,10 @@ public class LumaViewModelTests : IDisposable
         var installer = new Installer(_store);
         return new Services
         {
-            Settings = _settings, Store = _store, Installer = installer, Catalog = new CatalogState(new CatalogClient(gh)),
+            Settings = _settings,
+            Store = _store,
+            Installer = installer,
+            Catalog = new CatalogState(new CatalogClient(gh)),
             Luma = luma ? new LumaService(_store, installer, new CatalogDownloader(gh)) : null,
         };
     }

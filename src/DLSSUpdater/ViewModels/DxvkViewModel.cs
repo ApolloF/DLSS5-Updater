@@ -1,4 +1,5 @@
 using System.Collections.ObjectModel;
+using System.Diagnostics.CodeAnalysis;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using DLSSUpdater.Core;
@@ -103,6 +104,7 @@ public sealed partial class DxvkViewModel(GameViewModel game, Services services)
         }
     }
 
+    [SuppressMessage("Performance", "CA1822", Justification = "bound from XAML through the view model instance; WPF bindings cannot target static members")]
     public string ConfHint => "Lines for dxvk.conf, one key = value per line (# starts a comment). They win over what this app writes and go back with DXVK.";
 
     // ---------- text ----------

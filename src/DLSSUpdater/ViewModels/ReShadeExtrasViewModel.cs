@@ -38,7 +38,7 @@ public sealed partial class ReShadeExtrasViewModel : ObservableObject
     public IReadOnlyList<OptionChoice> BitsChoices { get; }
 
     /// <summary>Why nothing can be done in this game (anti-cheat, no ReShade), or null.</summary>
-    [ObservableProperty] [NotifyPropertyChangedFor(nameof(CanUse), nameof(IsBlocked))] private string? _blocked;
+    [ObservableProperty][NotifyPropertyChangedFor(nameof(CanUse), nameof(IsBlocked))] private string? _blocked;
     public bool IsBlocked => Blocked is not null;
     public bool CanUse => Blocked is null;
 
@@ -247,19 +247,19 @@ public sealed partial class ReShadeExtrasViewModel : ObservableObject
     private Task ApplyAddons() => Job("Installing ReShade add-ons", (t, p, ct) => Extras!.ApplyAddonsAsync(Info, t, p, ct));
 
     [RelayCommand(CanExecute = nameof(CanUse))]
-    private Task RemoveAddons() => Job("Removing ReShade add-ons", (t, _, ct) => Extras!.RemoveAsync(Info, t, ComponentRegistry.ReShadeAddons, ct));
+    private Task RemoveAddons() => Job("Removing ReShade add-ons", (t, _, ct) => ReShadeExtras.RemoveAsync(Info, t, ComponentRegistry.ReShadeAddons, ct));
 
     [RelayCommand(CanExecute = nameof(CanUse))]
     private Task ApplyPacks() => Job("Installing shader packs", (t, p, ct) => Extras!.ApplyShadersAsync(Info, t, p, ct));
 
     [RelayCommand(CanExecute = nameof(CanUse))]
-    private Task RemovePacks() => Job("Removing shader packs", (t, _, ct) => Extras!.RemoveAsync(Info, t, ComponentRegistry.ReShadeShaders, ct));
+    private Task RemovePacks() => Job("Removing shader packs", (t, _, ct) => ReShadeExtras.RemoveAsync(Info, t, ComponentRegistry.ReShadeShaders, ct));
 
     [RelayCommand(CanExecute = nameof(CanUse))]
     private Task ApplyPreset() => Job("Applying the preset", (t, _, ct) => Extras!.ApplyPresetAsync(Info, t, _presetPick, ct));
 
     [RelayCommand(CanExecute = nameof(CanUse))]
-    private Task RemovePreset() => Job("Removing the preset", (t, _, ct) => Extras!.RemoveAsync(Info, t, ComponentRegistry.ReShadePreset, ct));
+    private Task RemovePreset() => Job("Removing the preset", (t, _, ct) => ReShadeExtras.RemoveAsync(Info, t, ComponentRegistry.ReShadePreset, ct));
 
     /// <summary>Adds the packs that hold the preset's missing shaders to this game's selection and installs them.</summary>
     [RelayCommand(CanExecute = nameof(CanUse))]

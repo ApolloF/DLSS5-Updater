@@ -231,7 +231,7 @@ public sealed class HdrManualTests : IDisposable
         Assert.Equal(HdrState.Current, HdrStatus.Of(choice, rec, null).State);
         Assert.False(File.Exists(ReShadeIni) && IniFile.Load(ReShadeIni).Get("renodx", "SettingsMode") is not null);
 
-        var undo = await _service.RemoveAsync(g, _target, default);
+        var undo = await HdrService.RemoveAsync(g, _target, default);
         Assert.True(undo.Clean);
         Assert.False(File.Exists(Path.Combine(_target, "renodx-mine.addon64")));
     }
@@ -320,7 +320,7 @@ public sealed class HdrManualTests : IDisposable
         Assert.Equal("900", ini.Get("renodx-preset1", "ToneMapPeakNits"));
         Assert.Equal("1000", ini.Get("renodx-preset2", "ToneMapPeakNits"));
 
-        await _service.RemoveAsync(g, _target, default);
+        await HdrService.RemoveAsync(g, _target, default);
         Assert.Equal("old", IniFile.Load(ReShadeIni).Get("renodx", "MyKey"));
         Assert.Equal("9", IniFile.Load(ReShadeIni).Get("renodx", "SettingsMode"));
     }
@@ -347,7 +347,7 @@ public sealed class HdrManualTests : IDisposable
         Assert.Equal("2", ini.Get("SystemSettings", "r.Bar"));
         Assert.Equal("keep", IniFile.Load(ReShadeIni).Get("GENERAL", "EffectSearchPaths"));
 
-        await _service.RemoveAsync(g, _target, default);
+        await HdrService.RemoveAsync(g, _target, default);
         Assert.Equal(original, File.ReadAllText(EngineIni));
     }
 

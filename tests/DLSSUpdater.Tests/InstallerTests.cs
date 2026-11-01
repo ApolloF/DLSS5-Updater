@@ -47,6 +47,7 @@ public class InstallerTests : IDisposable
             Directory.Delete(_tmp, true);
         }
         catch (IOException) { }
+        GC.SuppressFinalize(this);
     }
 
     private static void Write(string path, string content)
@@ -94,8 +95,15 @@ public class InstallerTests : IDisposable
 
     private static InstallOptions Full => new()
     {
-        Opti = true, ReShade = true, Mfg = true, DlssNr = true, Dlss = true, AddMissingDlss = true,
-        Proxy = "dxgi.dll", Overrides = TestProfiles.Recommended(), CarryOverIni = true,
+        Opti = true,
+        ReShade = true,
+        Mfg = true,
+        DlssNr = true,
+        Dlss = true,
+        AddMissingDlss = true,
+        Proxy = "dxgi.dll",
+        Overrides = TestProfiles.Recommended(),
+        CarryOverIni = true,
     };
 
     private string T(string rel) => File.ReadAllText(Path.Combine(_target, rel));
@@ -149,7 +157,7 @@ public class InstallerTests : IDisposable
         await installer.InstallAsync(Game(), _target, Full, null, default);
         Assert.Equal("NEWER-nvngx_dlssg.dll", T("nvngx_dlssg.dll"));
 
-        await installer.UninstallAsync(Game(), _target, default);
+        await Installer.UninstallAsync(Game(), _target, default);
 
         var after = Snapshot();
         var expected = new Dictionary<string, string>(before, StringComparer.OrdinalIgnoreCase)
@@ -171,7 +179,7 @@ public class InstallerTests : IDisposable
         Assert.Equal("OTHER-MOD", T("dxgi.dll"));
         Assert.Equal("NEW-nvngx_dlssg.dll", T("nvngx_dlssg.dll"));
 
-        await installer.RestoreDlssAsync(Game(), _target, default);
+        await Installer.RestoreDlssAsync(Game(), _target, default);
         Assert.Equal(before.OrderBy(k => k.Key), Snapshot().OrderBy(k => k.Key));
     }
 
@@ -200,7 +208,7 @@ public class InstallerTests : IDisposable
         Assert.Equal("0x24", ini.Get("Menu", "ShortcutKey"));
 
         // Uninstall brings back the hand-made ini untouched.
-        await installer.UninstallAsync(Game(), _target, default);
+        await Installer.UninstallAsync(Game(), _target, default);
         Assert.Equal("[Menu]\nShortcutKey=0x24\n[DlssNr]\nLocalTone=0.100000\nEnabled=false\n", T("OptiScaler.ini"));
     }
 
@@ -216,7 +224,7 @@ public class InstallerTests : IDisposable
         Assert.Equal("lic", T(@"Licenses\XeSS_LICENSE.txt"));
         Assert.DoesNotContain(@"Game\Binaries\Win64\Licenses", InstallManifest.Load(_target)!.Dirs);
 
-        await installer.UninstallAsync(Game(), _target, default);
+        await Installer.UninstallAsync(Game(), _target, default);
         Assert.Equal(before.OrderBy(k => k.Key), Snapshot().OrderBy(k => k.Key));
     }
 
@@ -243,7 +251,7 @@ public class InstallerTests : IDisposable
         await installer.InstallAsync(Game(), _target, o, null, default);
         Assert.Equal("0", IniFile.Load(Path.Combine(_target, "ReShade.ini")).Get("RenoDX.MFGUnlock", "DynamicMFG"));
 
-        await installer.UninstallAsync(Game(), _target, default);
+        await Installer.UninstallAsync(Game(), _target, default);
         Assert.Equal("[INPUT]\nKeyOverlay=36,0,0,0\n[OVERLAY]\nShowFPS=2\n", T("ReShade.ini"));
     }
 
@@ -273,7 +281,7 @@ public class InstallerTests : IDisposable
         Assert.False(File.Exists(Path.Combine(slDir, "sl.dlss_g.dll"))); // never adds plugins the game didn't ship
         Assert.Equal("v2.14.1", InstallManifest.Load(_target)!.StreamlineTag);
 
-        await installer.RestoreDlssAsync(Game(), _target, default);
+        await Installer.RestoreDlssAsync(Game(), _target, default);
         Assert.Equal(before.OrderBy(k => k.Key), Snapshot().OrderBy(k => k.Key));
     }
 
@@ -310,7 +318,7 @@ public class InstallerTests : IDisposable
         await installer.InstallAsync(Game(), _target, Full, null, default);
         Assert.Equal("NEW-nvngx_dlss.dll", T("nvngx_dlss.dll"));
 
-        await installer.UninstallAsync(Game(), _target, default);
+        await Installer.UninstallAsync(Game(), _target, default);
         Assert.False(File.Exists(Path.Combine(_target, "nvngx_dlss.dll")));
     }
 
@@ -334,7 +342,7 @@ public class InstallerTests : IDisposable
         Assert.Equal("OPTI-1", T("dxgi.dll"));
         Assert.False(File.Exists(Path.Combine(_target, "nvngx.dll_dlssnr.dll")));
 
-        await installer.UninstallAsync(Game(), _target, default);
+        await Installer.UninstallAsync(Game(), _target, default);
         Assert.Equal(before, Snapshot());
     }
 
@@ -432,7 +440,7 @@ public class InstallerTests : IDisposable
         await installer.InstallAsync(Game(), _target, o, null, default);
         Assert.Equal("NEWER-nvngx_dlss.dll", T("nvngx_dlss.dll"));
 
-        await installer.UninstallAsync(Game(), _target, default);
+        await Installer.UninstallAsync(Game(), _target, default);
         Assert.False(File.Exists(Path.Combine(_target, "nvngx_dlss.dll")));
     }
 
@@ -495,7 +503,10 @@ public class InstallerTests : IDisposable
 
     private static InstallOptions ReShadeOnly(string proxy = "dxgi.dll") => new()
     {
-        Mode = InstallMode.ReShadeOnly, ReShade = true, Mfg = true, Proxy = proxy,
+        Mode = InstallMode.ReShadeOnly,
+        ReShade = true,
+        Mfg = true,
+        Proxy = proxy,
         ReShadeOverrides = [new("OVERLAY", "TutorialProgress", "4")],
     };
 
@@ -516,7 +527,7 @@ public class InstallerTests : IDisposable
         Assert.Equal(InstallMode.ReShadeOnly, m.Mode);
         Assert.False(m.Opti);
 
-        await installer.UninstallAsync(Game(), _target, default);
+        await Installer.UninstallAsync(Game(), _target, default);
         Assert.Equal(before.OrderBy(k => k.Key), Snapshot().OrderBy(k => k.Key));
     }
 
@@ -553,7 +564,7 @@ public class InstallerTests : IDisposable
         Assert.False(File.Exists(Path.Combine(_target, "ReShade64.dll")));
         Assert.Equal(InstallMode.ReShadeOnly, InstallManifest.Load(_target)!.Mode);
 
-        await installer.UninstallAsync(Game(), _target, default);
+        await Installer.UninstallAsync(Game(), _target, default);
         Assert.Equal(before.OrderBy(k => k.Key), Snapshot().OrderBy(k => k.Key));
     }
 
@@ -564,7 +575,12 @@ public class InstallerTests : IDisposable
         var installer = new Installer(_store);
         var opti = new InstallOptions
         {
-            Opti = true, ReShade = true, Mfg = true, DlssNr = true, Proxy = "winmm.dll", Overrides = ConfigProfile.Defaults(),
+            Opti = true,
+            ReShade = true,
+            Mfg = true,
+            DlssNr = true,
+            Proxy = "winmm.dll",
+            Overrides = ConfigProfile.Defaults(),
         };
 
         await installer.InstallAsync(Game(), _target, opti, null, default);
@@ -592,7 +608,7 @@ public class InstallerTests : IDisposable
         Assert.Equal("RESHADE", T("ReShade64.dll"));
         Assert.Equal(InstallMode.OptiScaler, InstallManifest.Load(_target)!.Mode);
 
-        await installer.UninstallAsync(Game(), _target, default);
+        await Installer.UninstallAsync(Game(), _target, default);
         Assert.Equal(before.OrderBy(k => k.Key), Snapshot().OrderBy(k => k.Key));
     }
 
@@ -642,7 +658,9 @@ public class InstallerTests : IDisposable
     {
         var psi = new System.Diagnostics.ProcessStartInfo("cmd.exe", $"/c mklink /J \"{link}\" \"{target}\"")
         {
-            UseShellExecute = false, CreateNoWindow = true, RedirectStandardOutput = true,
+            UseShellExecute = false,
+            CreateNoWindow = true,
+            RedirectStandardOutput = true,
         };
         using var p = System.Diagnostics.Process.Start(psi)!;
         p.WaitForExit();
@@ -688,8 +706,8 @@ public class InstallerTests : IDisposable
         });
         var before = Snapshot();
 
-        await Assert.ThrowsAsync<UnsafeManifestException>(() => installer.UninstallAsync(Game(), _target, default));
-        await Assert.ThrowsAsync<UnsafeManifestException>(() => installer.RestoreDlssAsync(Game(), _target, default));
+        await Assert.ThrowsAsync<UnsafeManifestException>(() => Installer.UninstallAsync(Game(), _target, default));
+        await Assert.ThrowsAsync<UnsafeManifestException>(() => Installer.RestoreDlssAsync(Game(), _target, default));
 
         Assert.Equal(["keep.txt"], Directory.EnumerateFiles(victim).Select(Path.GetFileName));
         Assert.Equal("precious", File.ReadAllText(Path.Combine(victim, "keep.txt")));
@@ -727,7 +745,7 @@ public class InstallerTests : IDisposable
         {
             EditManifest(m => m.Files.Add(@"Game\Binaries\Win64\Link\keep.txt"));
 
-            await Assert.ThrowsAsync<UnsafeManifestException>(() => installer.UninstallAsync(Game(), _target, default));
+            await Assert.ThrowsAsync<UnsafeManifestException>(() => Installer.UninstallAsync(Game(), _target, default));
             Assert.Equal("precious", File.ReadAllText(Path.Combine(victim, "keep.txt")));
         }
         finally
@@ -746,7 +764,7 @@ public class InstallerTests : IDisposable
         var inner = GameScanner.Inspect(new GameEntry("Game", Path.Combine(_root, "Game"), "Manual"));
         await Assert.ThrowsAsync<UnsafeManifestException>(() => installer.InstallAsync(inner, _target, new InstallOptions { Dlss = true }, null, default));
 
-        await installer.RestoreDlssAsync(Game(), _target, default);
+        await Installer.RestoreDlssAsync(Game(), _target, default);
         Assert.Equal("OLD-FG", T("nvngx_dlssg.dll"));
         Assert.Equal("OLD-SR", File.ReadAllText(Engine("nvngx_dlss.dll")));
     }
@@ -760,7 +778,7 @@ public class InstallerTests : IDisposable
         await installer.InstallAsync(inner, _target, new InstallOptions { Dlss = true }, null, default);
         await installer.InstallAsync(Game(), _target, new InstallOptions { Dlss = true }, null, default);
 
-        await installer.RestoreDlssAsync(Game(), _target, default);
+        await Installer.RestoreDlssAsync(Game(), _target, default);
         Assert.Equal(before.OrderBy(k => k.Key), Snapshot().OrderBy(k => k.Key));
     }
 
@@ -825,7 +843,7 @@ public class InstallerTests : IDisposable
         await installer.InstallAsync(Game(), _target, new InstallOptions { Dlss = true }, null, default);
         File.WriteAllText(Path.Combine(_target, "nvngx_dlssg.dll"), "GAME-PATCH-3.8");
 
-        await installer.RestoreDlssAsync(Game(), _target, default);
+        await Installer.RestoreDlssAsync(Game(), _target, default);
         Assert.Equal("GAME-PATCH-3.8", T("nvngx_dlssg.dll"));
         Assert.Equal("OLD-SR", File.ReadAllText(Engine("nvngx_dlss.dll")));
     }
@@ -855,7 +873,7 @@ public class InstallerTests : IDisposable
         await installer.InstallAsync(Game(), elsewhere, Full, null, default);
         Assert.Equal("OPTI-2", File.ReadAllText(Path.Combine(elsewhere, "dxgi.dll")));
 
-        await installer.UninstallAsync(Game(), elsewhere, default);
+        await Installer.UninstallAsync(Game(), elsewhere, default);
         Assert.Equal(before.OrderBy(k => k.Key), Snapshot().OrderBy(k => k.Key));
         Assert.Equal(beforeElsewhere.OrderBy(k => k.Key), Snapshot(elsewhere).OrderBy(k => k.Key));
         Assert.False(Directory.Exists(InstallManifest.DirFor(elsewhere)));
@@ -896,7 +914,7 @@ public class InstallerTests : IDisposable
         Assert.Equal([@"|install|\OptiScaler"], m.Dirs);
         Assert.NotNull(m.BackupOf(@"|install|\dxgi.dll"));
 
-        await new Installer(_store).UninstallAsync(Game(), elsewhere, default);
+        await Installer.UninstallAsync(Game(), elsewhere, default);
         Assert.Equal("ELSEWHERE-MOD", File.ReadAllText(Path.Combine(elsewhere, "dxgi.dll")));
         Assert.False(Directory.Exists(Path.Combine(elsewhere, "OptiScaler")));
         Assert.Equal("OLD-FG", T("nvngx_dlssg.dll"));
@@ -926,7 +944,9 @@ public class InstallerTests : IDisposable
         {
             var psi = new System.Diagnostics.ProcessStartInfo("subst.exe", args)
             {
-                UseShellExecute = false, CreateNoWindow = true, RedirectStandardOutput = true,
+                UseShellExecute = false,
+                CreateNoWindow = true,
+                RedirectStandardOutput = true,
             };
             using var p = System.Diagnostics.Process.Start(psi)!;
             p.WaitForExit();
@@ -972,11 +992,11 @@ public class InstallerTests : IDisposable
         await installer.InstallAsync(Game(), via, Full, null, default);
         Assert.Equal("OPTI-2", File.ReadAllText(Path.Combine(elsewhere, "dxgi.dll")));
 
-        await installer.RestoreDlssAsync(Game(), via, default);
+        await Installer.RestoreDlssAsync(Game(), via, default);
         Assert.Equal("OLD-FG", T("nvngx_dlssg.dll"));
         Assert.Equal("OLD-SR", File.ReadAllText(Engine("nvngx_dlss.dll")));
 
-        await installer.UninstallAsync(Game(), via, default);
+        await Installer.UninstallAsync(Game(), via, default);
         Assert.Equal(before.OrderBy(k => k.Key), Snapshot().OrderBy(k => k.Key));
         Assert.Equal(beforeElsewhere.OrderBy(k => k.Key), Snapshot(elsewhere).OrderBy(k => k.Key));
         Assert.False(Directory.Exists(InstallManifest.DirFor(elsewhere)));
@@ -1000,7 +1020,11 @@ public class InstallerTests : IDisposable
         File.WriteAllText(Path.Combine(_target, "nvngx_dlssg.dll"), "NEW-nvngx_dlssg.dll");
         new InstallManifest
         {
-            RootRel = _root, Proxy = "dxgi.dll", Mode = InstallMode.OptiScaler, Opti = true, Dlss = true,
+            RootRel = _root,
+            Proxy = "dxgi.dll",
+            Mode = InstallMode.OptiScaler,
+            Opti = true,
+            Dlss = true,
             Files = [proxy],
             Dirs = [Path.Combine(via, "OptiScaler")],
             Backups =
@@ -1011,11 +1035,11 @@ public class InstallerTests : IDisposable
         }.Save(via);
         var installer = new Installer(_store);
 
-        await installer.RestoreDlssAsync(Game(), via, default);
+        await Installer.RestoreDlssAsync(Game(), via, default);
         Assert.Equal("OLD-FG", T("nvngx_dlssg.dll"));
         Assert.Equal([@"|install|\dxgi.dll"], InstallManifest.Read(via)!.Files);
 
-        await installer.UninstallAsync(Game(), via, default);
+        await Installer.UninstallAsync(Game(), via, default);
         Assert.Equal("ELSEWHERE-MOD", File.ReadAllText(Path.Combine(elsewhere, "dxgi.dll")));
         Assert.Equal(["dxgi.dll"], Directory.EnumerateFileSystemEntries(elsewhere).Select(Path.GetFileName));
     }
@@ -1046,10 +1070,10 @@ public class InstallerTests : IDisposable
 
         // The game's SR dll is held open: its restore fails after dxgi.dll's original is already back.
         using (new FileStream(Engine("nvngx_dlss.dll"), FileMode.Open, FileAccess.Read, FileShare.Read))
-            await Assert.ThrowsAnyAsync<Exception>(() => installer.UninstallAsync(Game(), _target, default));
+            await Assert.ThrowsAnyAsync<Exception>(() => Installer.UninstallAsync(Game(), _target, default));
         Assert.Equal("OTHER-MOD", T("dxgi.dll"));
 
-        await installer.UninstallAsync(Game(), _target, default);
+        await Installer.UninstallAsync(Game(), _target, default);
         Assert.Equal(before.OrderBy(k => k.Key), Snapshot().OrderBy(k => k.Key));
         Assert.False(Directory.Exists(InstallManifest.DirFor(_target)));
     }
@@ -1061,9 +1085,9 @@ public class InstallerTests : IDisposable
         await installer.InstallAsync(Game(), _target, Full, null, default);
 
         using (new FileStream(Engine("nvngx_dlss.dll"), FileMode.Open, FileAccess.ReadWrite, FileShare.None))
-            await Assert.ThrowsAsync<GameFileInUseException>(() => installer.UninstallAsync(Game(), _target, default));
+            await Assert.ThrowsAsync<GameFileInUseException>(() => Installer.UninstallAsync(Game(), _target, default));
 
-        await installer.UninstallAsync(Game(), _target, default);
+        await Installer.UninstallAsync(Game(), _target, default);
     }
 
     [Fact]
@@ -1073,7 +1097,7 @@ public class InstallerTests : IDisposable
         await installer.InstallAsync(Game(), _target, Full, null, default);
 
         using (new FileStream(Engine("nvngx_dlss.dll"), FileMode.Open, FileAccess.ReadWrite, FileShare.None))
-            await Assert.ThrowsAsync<GameFileInUseException>(() => installer.RestoreDlssAsync(Game(), _target, default));
+            await Assert.ThrowsAsync<GameFileInUseException>(() => Installer.RestoreDlssAsync(Game(), _target, default));
     }
 
     [Fact]
@@ -1086,7 +1110,7 @@ public class InstallerTests : IDisposable
         File.SetAttributes(held, FileAttributes.ReadOnly);
         EditManifest(m => m.Dirs.Add(InstallManifest.Entry(Path.Combine(_target, "OptiScaler"), _target, _root)));
 
-        await installer.UninstallAsync(Game(), _target, default);
+        await Installer.UninstallAsync(Game(), _target, default);
 
         Assert.False(Directory.Exists(Path.Combine(_target, "OptiScaler")));
         Assert.False(Directory.Exists(InstallManifest.DirFor(_target)));
@@ -1140,7 +1164,7 @@ public class InstallerTests : IDisposable
         Assert.False(m.Owns(Rel(Path.Combine(_target, "dxgi.dll"))));
         Assert.Null(m.BackupOf(Rel(Path.Combine(_target, "dxgi.dll"))));
 
-        await installer.UninstallAsync(Game(), _target, default);
+        await Installer.UninstallAsync(Game(), _target, default);
         Assert.Equal(before, Snapshot());
     }
 
@@ -1157,7 +1181,7 @@ public class InstallerTests : IDisposable
         Assert.Equal("OTHER-MOD", T("dxgi.dll"));
         Assert.Equal("winmm.dll", InstallManifest.Read(_target)!.Proxy);
 
-        await installer.UninstallAsync(Game(), _target, default);
+        await Installer.UninstallAsync(Game(), _target, default);
         Assert.Equal(before, Snapshot());
     }
 
@@ -1307,7 +1331,7 @@ public class InstallerTests : IDisposable
         var game = Game();
         Assert.DoesNotContain(game.Dlss.Concat(game.Streamline), d => d.Path.Contains(@"\OptiScaler\streamline\", StringComparison.OrdinalIgnoreCase));
 
-        await installer.UninstallAsync(Game(), _target, default);
+        await Installer.UninstallAsync(Game(), _target, default);
         Assert.Equal(before, Snapshot());
     }
 
@@ -1497,7 +1521,7 @@ public class InstallerTests : IDisposable
         Directory.Delete(dll + ".dlssu-tmp");
         await installer.InstallAsync(Game(), _target, new InstallOptions { Dlss = true }, null, default);
         Assert.Equal("NEW-nvngx_dlss.dll", File.ReadAllText(dll));
-        await installer.UninstallAsync(Game(), _target, default);
+        await Installer.UninstallAsync(Game(), _target, default);
         Assert.Equal("OLD-SR", File.ReadAllText(dll));
     }
 
@@ -1522,7 +1546,7 @@ public class InstallerTests : IDisposable
 
         await installer.InstallAsync(Game(), _target, o, null, default);
         Assert.NotEqual(original, File.ReadAllText(path));
-        await installer.UninstallAsync(Game(), _target, default);
+        await Installer.UninstallAsync(Game(), _target, default);
         Assert.Equal(original, File.ReadAllText(path));
     }
 
@@ -1545,7 +1569,7 @@ public class InstallerTests : IDisposable
         Assert.Equal("NEWER-nvngx_dlss.dll", File.ReadAllText(Engine("nvngx_dlss.dll")));
 
         foreach (var dir in firstInstallGoesFirst ? new[] { _target, other } : [other, _target])
-            if (InstallManifest.Read(dir) is not null) await installer.UninstallAsync(Game(), dir, default);
+            if (InstallManifest.Read(dir) is not null) await Installer.UninstallAsync(Game(), dir, default);
         Assert.Equal("OLD-SR", File.ReadAllText(Engine("nvngx_dlss.dll")));
         Assert.Equal("OLD-FG", T("nvngx_dlssg.dll"));
     }
@@ -1569,7 +1593,7 @@ public class InstallerTests : IDisposable
         // A file we placed and the user locked afterwards still goes on uninstall.
         File.SetAttributes(Path.Combine(_target, "dxgi.dll"), FileAttributes.ReadOnly);
 
-        await installer.UninstallAsync(Game(), _target, default);
+        await Installer.UninstallAsync(Game(), _target, default);
         Assert.Equal(before, Snapshot());
         Assert.True(new FileInfo(dll).IsReadOnly);
     }
@@ -1592,7 +1616,7 @@ public class InstallerTests : IDisposable
         Assert.Equal("2", IniFile.Load(previous).Get("Mine", "Edit"));
         Assert.Single(Directory.EnumerateFiles(Path.GetDirectoryName(previous)!));
 
-        await installer.UninstallAsync(Game(), _target, default);
+        await Installer.UninstallAsync(Game(), _target, default);
         Assert.Equal("[Hotfix]\nManualInputPolling=true\n", T("OptiScaler.ini"));
         Assert.False(Directory.Exists(InstallManifest.DirFor(_target)));
     }
@@ -1606,7 +1630,7 @@ public class InstallerTests : IDisposable
         Write(stray, "LEFTOVER");
         File.SetAttributes(stray, FileAttributes.ReadOnly);
 
-        await installer.UninstallAsync(Game(), _target, default);
+        await Installer.UninstallAsync(Game(), _target, default);
         Assert.False(Directory.Exists(InstallManifest.DirFor(_target)));
         Assert.Equal("OTHER-MOD", T("dxgi.dll"));
     }
@@ -1663,7 +1687,7 @@ public class InstallerTests : IDisposable
             await Assert.ThrowsAnyAsync<Exception>(() => installer.InstallAsync(Game(), _target, new InstallOptions { Dlss = true }, null, default));
         Assert.Equal("GAME-PATCH", File.ReadAllText(dll));
 
-        await installer.RestoreDlssAsync(Game(), _target, default);
+        await Installer.RestoreDlssAsync(Game(), _target, default);
         Assert.Equal("GAME-PATCH", File.ReadAllText(dll));
     }
 

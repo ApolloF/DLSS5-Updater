@@ -74,12 +74,17 @@ internal static class LumaFixtures
 
     public static GameInfo Unreal(string name, int bits = 64, string version = "4.27.2", GraphicsApis apis = GraphicsApis.Dx11, string? root = null) => new()
     {
-        Id = name, Name = name, Root = root ?? @"C:\Games\" + name,
+        Id = name,
+        Name = name,
+        Root = root ?? @"C:\Games\" + name,
         Tech = new GameTech { Engine = GameEngine.Unreal, EngineVersion = version, Bits = bits, Apis = apis, UeProject = "Proj" },
     };
 
     public static GameInfo Plain(string name, int bits = 64, GraphicsApis apis = GraphicsApis.Dx11) => new()
     {
-        Id = name, Name = name, Root = @"C:\Games\" + name, Tech = new GameTech { Engine = GameEngine.Unknown, Bits = bits, Apis = apis },
+        Id = name,
+        Name = name,
+        Root = @"C:\Games\" + name,
+        Tech = new GameTech { Engine = GameEngine.Unknown, Bits = bits, Apis = apis },
     };
 }

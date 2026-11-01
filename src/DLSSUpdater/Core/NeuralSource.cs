@@ -8,7 +8,7 @@ namespace DLSSUpdater.Core;
 /// </summary>
 public sealed partial class ComponentStore
 {
-    public async Task<NrVersion?> CheckDlssNrCatalogAsync(AppSettings settings, CatalogNeuralLine? line, ICatalogFetch fetch,
+    public static async Task<NrVersion?> CheckDlssNrCatalogAsync(AppSettings settings, CatalogNeuralLine? line, ICatalogFetch fetch,
         IProgress<TransferProgress>? progress, CancellationToken ct)
     {
         if (!settings.AutoDownloadDlssNr || line?.Current is not { } newest || newest.ToBinary() is not { IsInstallable: true }) return null;
@@ -23,7 +23,7 @@ public sealed partial class ComponentStore
     }
 
     /// <summary>One catalog build of nvngx_dlssnr.dll into the library: downloaded, size and SHA-256 checked, PE checked. Null (logged) when refused.</summary>
-    private Task<NrVersion?> FetchDlssNrAsync(CatalogNeuralLine line, CatalogNeuralBuild build, ICatalogFetch fetch,
+    private static Task<NrVersion?> FetchDlssNrAsync(CatalogNeuralLine line, CatalogNeuralBuild build, ICatalogFetch fetch,
         IProgress<TransferProgress>? progress, CancellationToken ct)
     {
         var sha = build.Sha256.ToLowerInvariant();

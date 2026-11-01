@@ -52,7 +52,7 @@ public sealed class CatalogClient(GitHubClient github, string? repo = null)
     }
 
     /// <summary>The last good copy, without any request (startup, offline mode).</summary>
-    public CatalogLoad LoadCached() => FromCache(null);
+    public static CatalogLoad LoadCached() => FromCache(null);
 
     private static CatalogLoad FromCache(string? note)
     {

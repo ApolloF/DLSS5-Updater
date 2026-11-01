@@ -45,7 +45,9 @@ public static class HdrManual
         Notes = (gameBits == 64 && build.Arch == "x86") || (gameBits == 32 && build.Arch == "x64")
             ? [$"This is a {(build.Arch == "x86" ? "32" : "64")}-bit add-on and the game is {gameBits}-bit; ReShade will not load it."]
             : [],
-        Kind = HdrKind.Custom, ModId = ImportedModId, Title = build.ModName,
+        Kind = HdrKind.Custom,
+        ModId = ImportedModId,
+        Title = build.ModName,
         File = new CatalogBinary { Name = build.FileName, Arch = build.Arch, Url = build.Url ?? "", Sha256 = build.Id, Version = build.Version, FirstSeen = build.FirstSeen, License = build.License },
         Pinned = build,
         Reason = $"{build.ModName} is an add-on you imported; it is installed as it is.",
