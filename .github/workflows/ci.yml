@@ -22,6 +22,18 @@ jobs:
       - name: Build
         run: dotnet build -warnaserror
 
+      - name: Format
+        run: dotnet format --verify-no-changes --no-restore
+
+      - name: Vulnerable packages
+        shell: pwsh
+        run: |
+          # dotnet list package exits 0 even when it finds something, so the output decides.
+          $out = dotnet list package --vulnerable --include-transitive 2>&1 | Out-String
+          Write-Host $out
+          if ($LASTEXITCODE -ne 0) { throw "dotnet list package failed" }
+          if ($out -match 'following vulnerable packages' -or $out -notmatch 'no vulnerable packages') { throw "vulnerable packages found" }
+
       - name: Test
         run: dotnet test
 
