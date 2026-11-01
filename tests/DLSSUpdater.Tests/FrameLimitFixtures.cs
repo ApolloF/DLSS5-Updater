@@ -37,11 +37,17 @@ internal static class FrameLimitFixtures
 
     public static GameInfo Game(string name, GameEngine engine = GameEngine.Unknown, int bits = 64, string? antiCheat = null, string project = "Proj", string? root = null) => new()
     {
-        Id = name, Name = name, Root = root ?? @"C:\Games\" + name, AntiCheat = antiCheat,
+        Id = name,
+        Name = name,
+        Root = root ?? @"C:\Games\" + name,
+        AntiCheat = antiCheat,
         Tech = new GameTech
         {
-            Engine = engine, EngineVersion = engine == GameEngine.Unreal ? "5.3.2" : null, Bits = bits,
-            UeProject = engine == GameEngine.Unreal ? project : null, Apis = GraphicsApis.Dx12,
+            Engine = engine,
+            EngineVersion = engine == GameEngine.Unreal ? "5.3.2" : null,
+            Bits = bits,
+            UeProject = engine == GameEngine.Unreal ? project : null,
+            Apis = GraphicsApis.Dx12,
         },
     };
 

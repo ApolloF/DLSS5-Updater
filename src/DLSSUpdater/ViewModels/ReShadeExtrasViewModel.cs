@@ -38,7 +38,7 @@ public sealed partial class ReShadeExtrasViewModel : ObservableObject
     public IReadOnlyList<OptionChoice> BitsChoices { get; }
 
     /// <summary>Why nothing can be done in this game (anti-cheat, no ReShade), or null.</summary>
-    [ObservableProperty] [NotifyPropertyChangedFor(nameof(CanUse), nameof(IsBlocked))] private string? _blocked;
+    [ObservableProperty][NotifyPropertyChangedFor(nameof(CanUse), nameof(IsBlocked))] private string? _blocked;
     public bool IsBlocked => Blocked is not null;
     public bool CanUse => Blocked is null;
 

@@ -81,7 +81,9 @@ public sealed class FeederTests : IDisposable
         var version = tag.TrimStart('v');
         return new GhRelease
         {
-            TagName = tag, Prerelease = prerelease, PublishedAt = published ?? new DateTime(2026, 10, 11, 5, 56, 10, DateTimeKind.Utc),
+            TagName = tag,
+            Prerelease = prerelease,
+            PublishedAt = published ?? new DateTime(2026, 10, 11, 5, 56, 10, DateTimeKind.Utc),
             Assets = [new GhAsset { Name = assetName ?? $"DLSS5-Feeder-{version}.zip", Url = $"https://github.com/jlrouzies-fr/DLSS5-Feeder/releases/download/{tag}/DLSS5-Feeder-{version}.zip", Digest = digest }],
         };
     }

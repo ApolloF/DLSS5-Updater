@@ -529,14 +529,16 @@ public static class MethodAdvisor
         return Opt(Method.NeuralAddon, needs.Count == 0 ? Availability.Available : Availability.NeedsSetup,
             $"{reason} {cost}".Trim() + (addon == ComponentRegistry.Uplift ? " GITC Uplift downloads itself; ShortFuse's, Lecram's and Deep Fried Chicken's are imported." : ""),
             [ComponentRegistry.ReShade, ComponentRegistry.DlssNr, addon], needs, InstallMode.ReShadeOnly, unverified)
-            with { Route = route, Title = $"Neural rendering with {ComponentTable.NameOf(addon)}" };
+            with
+        { Route = route, Title = $"Neural rendering with {ComponentTable.NameOf(addon)}" };
     }
 
     private static MethodOption OptiNr(Ctx c, string reason)
     {
         var needs = NrRuntimeNeed(c) is { } nr ? new List<string> { nr } : [];
         return Opt(Method.OptiScalerNr, needs.Count == 0 ? Availability.Available : Availability.NeedsSetup, $"{reason} {NrCost(c.Gpu)}".Trim(),
-            [ComponentRegistry.OptiScaler, ComponentRegistry.DlssNr], needs, InstallMode.OptiScaler) with { Route = NrAddon.OptiScaler };
+            [ComponentRegistry.OptiScaler, ComponentRegistry.DlssNr], needs, InstallMode.OptiScaler) with
+        { Route = NrAddon.OptiScaler };
     }
 
     private static MethodOption Opti(Ctx c, string reason)
@@ -593,7 +595,8 @@ public static class MethodAdvisor
         if (unverifiedWhy is not null) reason += $" Unverified: {unverifiedWhy}.";
         if (unverified && unverifiedWhy is null) reason += " Unverified: low confidence in the research.";
         return Opt(Method.Feeder, needs.Count == 0 ? Availability.Available : Availability.NeedsSetup, reason,
-            [ComponentRegistry.ReShade, ComponentRegistry.DlssNr, ComponentRegistry.Dfc, ComponentRegistry.Feeder], needs, InstallMode.ReShadeOnly, unverified) with { Route = NrAddon.Dfc };
+            [ComponentRegistry.ReShade, ComponentRegistry.DlssNr, ComponentRegistry.Dfc, ComponentRegistry.Feeder], needs, InstallMode.ReShadeOnly, unverified) with
+        { Route = NrAddon.Dfc };
     }
 
     /// <summary>

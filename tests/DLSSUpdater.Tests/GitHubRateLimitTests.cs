@@ -66,7 +66,8 @@ public sealed class GitHubRateLimitTests : IDisposable
             var res = new HttpResponseMessage(HttpStatusCode.TooManyRequests);
             res.Headers.RetryAfter = new System.Net.Http.Headers.RetryConditionHeaderValue(TimeSpan.FromSeconds(120));
             return res;
-        })) { Token = "ghp_test" };
+        }))
+        { Token = "ghp_test" };
         var before = DateTimeOffset.UtcNow;
 
         await gh.GetReleasesAsync(Repo, 10, default);

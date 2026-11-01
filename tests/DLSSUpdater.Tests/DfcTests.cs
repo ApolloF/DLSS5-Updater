@@ -118,12 +118,22 @@ public sealed class DfcTests : IDisposable
 
     private InstallOptions Dfc() => new()
     {
-        Mode = InstallMode.ReShadeOnly, ReShade = true, Dfc = true, DlssNr = true, DlssNrId = _nr.Id, Proxy = "dxgi.dll",
+        Mode = InstallMode.ReShadeOnly,
+        ReShade = true,
+        Dfc = true,
+        DlssNr = true,
+        DlssNrId = _nr.Id,
+        Proxy = "dxgi.dll",
     };
 
     private InstallOptions Reno() => new()
     {
-        Mode = InstallMode.ReShadeOnly, ReShade = true, RenoDx = true, DlssNr = true, DlssNrId = _nr.Id, Proxy = "dxgi.dll",
+        Mode = InstallMode.ReShadeOnly,
+        ReShade = true,
+        RenoDx = true,
+        DlssNr = true,
+        DlssNrId = _nr.Id,
+        Proxy = "dxgi.dll",
     };
 
     [Theory]

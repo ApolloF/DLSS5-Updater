@@ -88,8 +88,16 @@ public sealed class LecramTests : IDisposable
 
     private InstallOptions Lec(bool lecram = true, bool renoDx = false, IReadOnlyList<IniOverride>? overrides = null, string? lecramId = null, string? renoDxId = null) => new()
     {
-        Mode = InstallMode.ReShadeOnly, ReShade = true, Lecram = lecram, RenoDx = renoDx, DlssNr = lecram || renoDx, DlssNrId = _nr.Id,
-        Proxy = "dxgi.dll", ReShadeOverrides = overrides ?? [], LecramId = lecramId, RenoDxId = renoDxId,
+        Mode = InstallMode.ReShadeOnly,
+        ReShade = true,
+        Lecram = lecram,
+        RenoDx = renoDx,
+        DlssNr = lecram || renoDx,
+        DlssNrId = _nr.Id,
+        Proxy = "dxgi.dll",
+        ReShadeOverrides = overrides ?? [],
+        LecramId = lecramId,
+        RenoDxId = renoDxId,
         ConfirmedConflict = lecram && renoDx ? Installer.ConflictKey(NrAddons.Conflicts([NrAddon.RenoDx, NrAddon.Lecram])) : null,
     };
 

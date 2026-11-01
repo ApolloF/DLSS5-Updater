@@ -77,7 +77,11 @@ public sealed class CatalogBuildPickerTests : IDisposable
         var sha = Sha(bytes);
         var entry = new CatalogNeuralBuild
         {
-            Name = name, Version = version, Sha256 = sha, Size = bytes.Length, Generation = generation,
+            Name = name,
+            Version = version,
+            Sha256 = sha,
+            Size = bytes.Length,
+            Generation = generation,
             MirrorUrl = Mirror + sha[..16] + "-" + name,
         };
         if (serve) _served[entry.MirrorUrl!] = bytes;
@@ -99,7 +103,8 @@ public sealed class CatalogBuildPickerTests : IDisposable
         var sha = Sha(bytes);
         var build = new CatalogDlssBuild
         {
-            Tag = "renodx-dlss-SF-" + label, Version = label,
+            Tag = "renodx-dlss-SF-" + label,
+            Version = label,
             File = new CatalogBinary { Name = "renodx-dlss_SF.zip", Sha256 = sha, Size = bytes.Length, MirrorUrl = Mirror + sha[..16] + "-renodx-dlss_SF.zip" },
         };
         _served[build.File.MirrorUrl!] = bytes;

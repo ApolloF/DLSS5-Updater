@@ -109,7 +109,9 @@ public class DemoTests : IDisposable
         var before = Files(_game);
         var game = new GameInfo
         {
-            Id = GameInfo.MakeId(_game), Name = "Real game", Root = _game,
+            Id = GameInfo.MakeId(_game),
+            Name = "Real game",
+            Root = _game,
             Dlss = [new DlssDll { Path = dll, Name = "nvngx_dlss.dll", Version = new Version(3, 7, 10, 0) }],
         };
         var installer = new Installer(_store);

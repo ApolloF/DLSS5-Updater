@@ -1,5 +1,5 @@
-using DLSSUpdater.Scan;
 using DLSSUpdater.Core;
+using DLSSUpdater.Scan;
 
 namespace DLSSUpdater.Tests;
 

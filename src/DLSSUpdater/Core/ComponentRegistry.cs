@@ -78,7 +78,8 @@ public static class ComponentRegistry
         Register(new(Lecram, "Lecram DLSS5") { Library = LibraryKind.Lecram, Legacy = true, OwnedFiles = ComponentStore.LecramFiles });
         Register(new(Dfc, "Deep Fried Chicken")
         {
-            Library = LibraryKind.Dfc, Legacy = true,
+            Library = LibraryKind.Dfc,
+            Legacy = true,
             OwnedFiles = [.. ComponentStore.DfcPackageFiles, ComponentStore.DfcConfigFile, ComponentStore.DfcNeuralDir + @"\*",
                 Path.Combine(ComponentStore.DfcShaderDir, ComponentStore.DfcShaderPrefix + "*")],
         });
@@ -96,7 +97,9 @@ public static class ComponentRegistry
         Register(new(ReLimiter, "ReLimiter") { Library = LibraryKind.FrameLimiter, Label = "ReLimiter", OwnedFiles = ["relimiter.addon64", "relimiter.addon32"] });
         Register(new(DisplayCommander, "Display Commander")
         {
-            Library = LibraryKind.FrameLimiter, Label = "Display Commander", OwnedFiles = ["zzz_display_commander.addon64", "zzz_display_commander.addon32"],
+            Library = LibraryKind.FrameLimiter,
+            Label = "Display Commander",
+            OwnedFiles = ["zzz_display_commander.addon64", "zzz_display_commander.addon32"],
         });
         Register(new(UnrealFrameCap, "Unreal frame cap") { Label = "UE frame cap" });
         Register(new(Dxvk, "DXVK") { Library = LibraryKind.Dxvk, Label = "DXVK", OwnedFiles = [.. DxvkDlls.All, DxvkConf.FileName] });

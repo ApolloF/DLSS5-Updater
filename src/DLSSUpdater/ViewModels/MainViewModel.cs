@@ -33,8 +33,12 @@ public sealed partial class MainViewModel : ObservableObject
         var installer = new Installer(store);
         S = new Services
         {
-            Settings = settings, Store = store, Installer = installer,
-            Catalog = new CatalogState(new CatalogClient(gh)), Hdr = new HdrService(store, installer, new CatalogDownloader(gh)), Luma = new LumaService(store, installer, new CatalogDownloader(gh)),
+            Settings = settings,
+            Store = store,
+            Installer = installer,
+            Catalog = new CatalogState(new CatalogClient(gh)),
+            Hdr = new HdrService(store, installer, new CatalogDownloader(gh)),
+            Luma = new LumaService(store, installer, new CatalogDownloader(gh)),
             FrameLimit = new FrameLimitService(store, installer, new CatalogDownloader(gh), NvidiaProfile.Real),
             Dxvk = new DxvkService(installer, gh, NvidiaProfile.Real),
         };

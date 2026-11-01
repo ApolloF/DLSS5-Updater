@@ -188,10 +188,12 @@ public sealed class RenoDxCatalogTests : IDisposable
 
     private static CatalogDlssBuild Listed(string version) => new()
     {
-        Tag = "renodx-dlss-SF-" + version, Version = version,
+        Tag = "renodx-dlss-SF-" + version,
+        Version = version,
         File = new CatalogBinary
         {
-            Name = "renodx-dlss_SF_" + version + ".zip", Url = "https://github.com/RankFTW/rhi-repo/releases/download/x/" + version + ".zip",
+            Name = "renodx-dlss_SF_" + version + ".zip",
+            Url = "https://github.com/RankFTW/rhi-repo/releases/download/x/" + version + ".zip",
             Sha256 = Convert.ToHexString(SHA256.HashData(Encoding.ASCII.GetBytes(version))).ToLowerInvariant(),
         },
     };

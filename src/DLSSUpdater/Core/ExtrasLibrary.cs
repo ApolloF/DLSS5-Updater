@@ -90,7 +90,10 @@ public static class ExtrasLibrary
             var hash = Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(string.Join("\n", files.Select(f => FileUtil.Sha256(f)))))).ToLowerInvariant();
             list.Add(new CatalogAddon
             {
-                Id = Prefix + slug, Name = slug, Imported = true, Description = "Imported by you.",
+                Id = Prefix + slug,
+                Name = slug,
+                Imported = true,
+                Description = "Imported by you.",
                 Files = [new CatalogBinary { Name = slug, Arch = "both", Url = "imported://" + slug, Sha256 = hash, Payload = payload }],
             });
         }
@@ -147,10 +150,18 @@ public static class ExtrasLibrary
             var effects = Directory.EnumerateFiles(Path.Combine(dir, "Shaders"), "*.fx", SearchOption.AllDirectories).Select(Path.GetFileName).Order(StringComparer.OrdinalIgnoreCase).ToList();
             list.Add(new CatalogShaderPack
             {
-                Id = Prefix + slug, Name = slug, Imported = true, Description = "Imported by you.", Category = "general", Source = "imported", Version = "imported",
+                Id = Prefix + slug,
+                Name = slug,
+                Imported = true,
+                Description = "Imported by you.",
+                Category = "general",
+                Source = "imported",
+                Version = "imported",
                 File = new CatalogBinary
                 {
-                    Name = slug, Url = "imported://" + slug, Sha256 = sha,
+                    Name = slug,
+                    Url = "imported://" + slug,
+                    Sha256 = sha,
                     Layout = new CatalogPackLayout { ShadersDir = "Shaders/", TexturesDir = Directory.Exists(Path.Combine(dir, "Textures")) ? "Textures/" : null, Effects = effects! },
                 },
             });

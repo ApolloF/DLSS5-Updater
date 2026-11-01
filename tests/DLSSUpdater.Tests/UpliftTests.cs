@@ -65,7 +65,9 @@ public sealed class UpliftTests : IDisposable
         FileUtil.AtomicWriteText(G("ReShade.ini"), original);
         await new Installer(_store).InstallAsync(_game, _root, Options with
         {
-            CarryOverIni = carryOver, OverwriteIni = overwrite, ReShadeOverrides = [new(UpliftConfig.Section, "PassCount", "2")],
+            CarryOverIni = carryOver,
+            OverwriteIni = overwrite,
+            ReShadeOverrides = [new(UpliftConfig.Section, "PassCount", "2")],
         }, null, default);
         var ini = Ini();
         Assert.Equal(passes, ini.Get(UpliftConfig.Section, "PassCount"));
@@ -94,7 +96,9 @@ public sealed class UpliftTests : IDisposable
         var installer = new Installer(_store);
         await installer.InstallAsync(_game, _root, Options with
         {
-            Uplift = false, ReShade = true, RenoDx = true,
+            Uplift = false,
+            ReShade = true,
+            RenoDx = true,
             ReShadeOverrides = [new(RenoDxIni.Section, "DirectNeuralRenderingHookStage", "1")],
         }, null, default);
         Assert.True(Manifest().Owns("ReShade.ini"));
@@ -443,7 +447,10 @@ public sealed class UpliftTests : IDisposable
     {
         GhRelease Release(string tag, int day, bool draft = false, bool pre = false) => new()
         {
-            TagName = tag, Draft = draft, Prerelease = pre, PublishedAt = new DateTime(2026, 10, day),
+            TagName = tag,
+            Draft = draft,
+            Prerelease = pre,
+            PublishedAt = new DateTime(2026, 10, day),
             Assets = [new() { Name = $"GITC-Uplift-{tag.TrimStart('v')}.zip", Url = "https://example.invalid/package.zip" }],
         };
         var selected = ComponentStore.UpliftRelease([Release("v1.4.2", 17), Release("v1.4.3", 19, draft: true), Release("v1.4.3-beta", 18, pre: true)]);

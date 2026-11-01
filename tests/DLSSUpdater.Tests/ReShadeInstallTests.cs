@@ -64,7 +64,12 @@ public sealed class ReShadeInstallTests : IDisposable
 
     private static InstallOptions Opts(string proxy = "dxgi.dll", IReadOnlyList<IniOverride>? template = null, bool vulkan = false, string? build = null) => new()
     {
-        Mode = InstallMode.ReShadeOnly, ReShade = true, Proxy = proxy, ReShadeTemplate = template ?? [], ReShadeVulkan = vulkan, ReShadeBuildPick = build,
+        Mode = InstallMode.ReShadeOnly,
+        ReShade = true,
+        Proxy = proxy,
+        ReShadeTemplate = template ?? [],
+        ReShadeVulkan = vulkan,
+        ReShadeBuildPick = build,
     };
 
     private Installer Installer(VulkanLayerState layer = VulkanLayerState.NotInstalled) => new(_store) { VulkanHost = new FakeLayer(layer) };

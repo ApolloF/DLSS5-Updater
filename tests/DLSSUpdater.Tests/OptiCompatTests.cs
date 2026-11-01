@@ -102,7 +102,8 @@ public sealed class OptiCompatTests
 
         var advice = MethodAdvisor.Advise(new AdvisorInput(game, new GpuInfo(GpuVendor.Nvidia, RtxTier.Rtx40, "RTX 4070"))
         {
-            OptiCompat = index.Find(game.Name), HudfixIncompatible = index.IsHudfixIncompatible(game.Name),
+            OptiCompat = index.Find(game.Name),
+            HudfixIncompatible = index.IsHudfixIncompatible(game.Name),
         });
 
         Assert.Contains(6, advice.Rows);

@@ -85,8 +85,11 @@ public class HdrViewModelTests : IDisposable
         return catalog
             ? new Services
             {
-                Settings = _settings, Store = _store, Installer = installer,
-                Catalog = new CatalogState(new CatalogClient(gh)), Hdr = new HdrService(_store, installer, new CatalogDownloader(gh)),
+                Settings = _settings,
+                Store = _store,
+                Installer = installer,
+                Catalog = new CatalogState(new CatalogClient(gh)),
+                Hdr = new HdrService(_store, installer, new CatalogDownloader(gh)),
             }
             : services;
     }

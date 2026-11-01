@@ -111,7 +111,7 @@ public sealed partial class SettingsViewModel : ObservableObject
         }
     }
 
-        private Mod DefaultMod => ModPicker.DefaultInSettings(Settings.DefaultMode == InstallMode.ReShadeOnly, Settings.InstallUplift, false, Settings.InstallLecram, Settings.InstallRenoDx);
+    private Mod DefaultMod => ModPicker.DefaultInSettings(Settings.DefaultMode == InstallMode.ReShadeOnly, Settings.InstallUplift, false, Settings.InstallLecram, Settings.InstallRenoDx);
 
     public bool ShowReShade => ModPicker.Shows(ModSelection.Mod, Mod.ReShade);
     public bool ShowMfg => ModPicker.Shows(ModSelection.Mod, Mod.Mfg);

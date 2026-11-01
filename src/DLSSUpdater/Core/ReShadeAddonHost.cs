@@ -34,11 +34,17 @@ public sealed class ReShadeAddonHost(ComponentStore store, Installer installer)
         Log.Info($"{game.Name}: no ReShade yet, installing it as {target.Display} (ReShade + add-ons) for {purpose.Name}");
         var o = new InstallOptions
         {
-            Mode = InstallMode.ReShadeOnly, ReShade = true, Proxy = target.DllName ?? ReShadeNaming.Default,
-            ReShadeVulkan = target.VulkanLayer, ReShadeBuildPick = setup.BuildPick,
-            ReShadeOverrides = setup.Overrides ?? [], ReShadeTemplate = setup.Template ?? [],
-            Mfg = m?.Mfg == true, KeepMfg = m?.Mfg == true,
-            DlssNr = m?.DlssNr == true, DlssNrId = m?.DlssNrId,
+            Mode = InstallMode.ReShadeOnly,
+            ReShade = true,
+            Proxy = target.DllName ?? ReShadeNaming.Default,
+            ReShadeVulkan = target.VulkanLayer,
+            ReShadeBuildPick = setup.BuildPick,
+            ReShadeOverrides = setup.Overrides ?? [],
+            ReShadeTemplate = setup.Template ?? [],
+            Mfg = m?.Mfg == true,
+            KeepMfg = m?.Mfg == true,
+            DlssNr = m?.DlssNr == true,
+            DlssNrId = m?.DlssNrId,
             Streamline = m?.Streamline == true && game.Streamline.Count > 0,
         };
         await installer.InstallAsync(game, targetDir, o, progress, ct);

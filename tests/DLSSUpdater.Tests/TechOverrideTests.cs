@@ -26,7 +26,10 @@ public sealed class TechOverrideTests : IDisposable
 
     private static GameInfo Game(GraphicsApis apis = GraphicsApis.Dx12, int bits = 64, GameEngine engine = GameEngine.Unreal, string version = "5.3.2") => new()
     {
-        Id = "g1", Name = "Test Game", Root = @"C:\Games\Test", Exes = [@"C:\Games\Test\game.exe"],
+        Id = "g1",
+        Name = "Test Game",
+        Root = @"C:\Games\Test",
+        Exes = [@"C:\Games\Test\game.exe"],
         Tech = new GameTech { Apis = apis, Bits = bits, Engine = engine, EngineVersion = engine == GameEngine.Unreal ? version : null, UeProject = "Proj", ModFolder = @"C:\Games\Test\Proj\Binaries\Win64" },
     };
 

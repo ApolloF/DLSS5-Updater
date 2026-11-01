@@ -145,12 +145,12 @@ public sealed partial class DxvkLibrary(GitHubClient github)
                 case DxvkChannel.Stable: return PickStable(await github.GetReleasesAsync(StableRepo, 15, ct));
                 case DxvkChannel.Lilium: return PickLilium(await github.GetReleasesAsync(LiliumRepo, 15, ct));
                 default:
-                {
-                    var (runs, _) = await github.GetApiJsonAsync(DevRunsUrl, ct);
-                    if (ReShadeSource.ParseNightlyRun(runs) is not { } run) return null;
-                    var (artifacts, _) = await github.GetApiJsonAsync(run.ArtifactsUrl, ct);
-                    return PickDevelopment(run, ReShadeSource.ParseNightlyArtifacts(artifacts));
-                }
+                    {
+                        var (runs, _) = await github.GetApiJsonAsync(DevRunsUrl, ct);
+                        if (ReShadeSource.ParseNightlyRun(runs) is not { } run) return null;
+                        var (artifacts, _) = await github.GetApiJsonAsync(run.ArtifactsUrl, ct);
+                        return PickDevelopment(run, ReShadeSource.ParseNightlyArtifacts(artifacts));
+                    }
             }
         }
         catch (Exception ex) when (!ct.IsCancellationRequested && ex is HttpRequestException or TaskCanceledException or JsonException or IOException)

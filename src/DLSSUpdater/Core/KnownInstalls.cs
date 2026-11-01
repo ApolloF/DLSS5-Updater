@@ -27,9 +27,19 @@ public sealed record InstallRefs
 
     public static InstallRefs From(InstallManifest m) => new()
     {
-        OptiTag = m.OptiTag, UpliftTag = m.UpliftTag, DlssNrId = m.DlssNrId, PreviousDlssNrId = m.PreviousDlssNrId,
-        RenoDxId = m.RenoDxId, RenoDxTag = m.RenoDxTag, LecramId = m.LecramId, LecramTag = m.LecramTag, DfcId = m.DfcId, DfcTag = m.DfcTag,
-        MfgTag = m.MfgTag, DlssTag = m.DlssTag, StreamlineTag = m.StreamlineTag,
+        OptiTag = m.OptiTag,
+        UpliftTag = m.UpliftTag,
+        DlssNrId = m.DlssNrId,
+        PreviousDlssNrId = m.PreviousDlssNrId,
+        RenoDxId = m.RenoDxId,
+        RenoDxTag = m.RenoDxTag,
+        LecramId = m.LecramId,
+        LecramTag = m.LecramTag,
+        DfcId = m.DfcId,
+        DfcTag = m.DfcTag,
+        MfgTag = m.MfgTag,
+        DlssTag = m.DlssTag,
+        StreamlineTag = m.StreamlineTag,
         Components = m.Components.Where(c => c.BuildId is not null).GroupBy(c => c.Id, StringComparer.OrdinalIgnoreCase)
             .ToDictionary(g => g.Key, g => g.First().BuildId!, StringComparer.OrdinalIgnoreCase) is { Count: > 0 } builds ? builds : null,
     };
@@ -37,9 +47,20 @@ public sealed record InstallRefs
     /// <summary>A record holding only the references, which is all <see cref="ComponentStore.PlanCleanup"/> reads.</summary>
     public InstallManifest ToManifest(string dir) => new()
     {
-        Dir = dir, OptiTag = OptiTag, UpliftTag = UpliftTag, DlssNrId = DlssNrId, PreviousDlssNrId = PreviousDlssNrId,
-        RenoDxId = RenoDxId, RenoDxTag = RenoDxTag, LecramId = LecramId, LecramTag = LecramTag, DfcId = DfcId, DfcTag = DfcTag,
-        MfgTag = MfgTag, DlssTag = DlssTag, StreamlineTag = StreamlineTag,
+        Dir = dir,
+        OptiTag = OptiTag,
+        UpliftTag = UpliftTag,
+        DlssNrId = DlssNrId,
+        PreviousDlssNrId = PreviousDlssNrId,
+        RenoDxId = RenoDxId,
+        RenoDxTag = RenoDxTag,
+        LecramId = LecramId,
+        LecramTag = LecramTag,
+        DfcId = DfcId,
+        DfcTag = DfcTag,
+        MfgTag = MfgTag,
+        DlssTag = DlssTag,
+        StreamlineTag = StreamlineTag,
         Components = Components?.Select(c => new InstalledComponent { Id = c.Key, BuildId = c.Value }).ToList() ?? [],
     };
 

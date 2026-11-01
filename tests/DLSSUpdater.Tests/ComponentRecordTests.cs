@@ -34,7 +34,9 @@ public class ComponentRecordTests : IDisposable
         // The one registration a new component needs.
         _dummy = ComponentRegistry.Register(new ComponentDefinition("test-hdr-" + Guid.NewGuid().ToString("N")[..8], "Test HDR mod")
         {
-            Library = LibraryKind.Uplift, Label = "TestHDR", OwnedFiles = ["test-hdr.addon64", @"reshade-shaders\Shaders\TestHdr*.fx"],
+            Library = LibraryKind.Uplift,
+            Label = "TestHDR",
+            OwnedFiles = ["test-hdr.addon64", @"reshade-shaders\Shaders\TestHdr*.fx"],
         });
 
         Write(Path.Combine(_target, "Game-Win64-Shipping.exe"), "EXE");
@@ -82,7 +84,8 @@ public class ComponentRecordTests : IDisposable
 
     private ComponentPlan Plan(string build = "b1", bool lut = true, bool hdrKey = true) => new(_dummy.Id)
     {
-        BuildId = build, Version = build,
+        BuildId = build,
+        Version = build,
         Files =
         [
             (Path.Combine(_src, "test-hdr.addon64"), Path.Combine(_target, "test-hdr.addon64")),

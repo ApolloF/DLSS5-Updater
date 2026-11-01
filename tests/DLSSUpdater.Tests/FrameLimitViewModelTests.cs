@@ -83,7 +83,9 @@ public class FrameLimitViewModelTests : IDisposable
         var installer = new Installer(_store);
         return new Services
         {
-            Settings = _settings, Store = _store, Installer = installer,
+            Settings = _settings,
+            Store = _store,
+            Installer = installer,
             Catalog = new CatalogState(new CatalogClient(gh)),
             FrameLimit = frameLimit ? new FrameLimitService(_store, installer, new CatalogDownloader(gh), new NvidiaProfile(_drs)) : null,
             RefreshHz = () => _hz,

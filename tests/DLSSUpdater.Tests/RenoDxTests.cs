@@ -59,7 +59,12 @@ public sealed class RenoDxTests : IDisposable
 
     private InstallOptions Reno(bool renoDx = true) => new()
     {
-        Mode = InstallMode.ReShadeOnly, ReShade = true, RenoDx = renoDx, DlssNr = renoDx, DlssNrId = _nr.Id, Proxy = "dxgi.dll",
+        Mode = InstallMode.ReShadeOnly,
+        ReShade = true,
+        RenoDx = renoDx,
+        DlssNr = renoDx,
+        DlssNrId = _nr.Id,
+        Proxy = "dxgi.dll",
         ReShadeOverrides = [new("RENODX-DLSS", "DirectNeuralRenderingHookStage", "1"), new(RenoDxIni.PresetSection, "DirectNeuralRenderingPassCount", "2")],
     };
 
@@ -331,11 +336,18 @@ public sealed class RenoDxTests : IDisposable
         Directory.CreateDirectory(InstallManifest.DirFor(_root));
         new InstallManifest
         {
-            RootRel = ".", Mode = InstallMode.ReShadeOnly, Proxy = "dxgi.dll", ReShade = true, RenoDx = true, RenoDxTag = "snapshot-old",
+            RootRel = ".",
+            Mode = InstallMode.ReShadeOnly,
+            Proxy = "dxgi.dll",
+            ReShade = true,
+            RenoDx = true,
+            RenoDxTag = "snapshot-old",
             Files = [Fix],
             ReShadeIni = new(StringComparer.OrdinalIgnoreCase)
             {
-                ["RenoDX.DLSS5/NRHookPoint"] = "1", ["RenoDX.DLSS5/NRPasses"] = "1", ["RenoDX.DLSS5/NRDetailStability"] = "2",
+                ["RenoDX.DLSS5/NRHookPoint"] = "1",
+                ["RenoDX.DLSS5/NRPasses"] = "1",
+                ["RenoDX.DLSS5/NRDetailStability"] = "2",
             },
         }.Save(_root);
 
@@ -423,7 +435,11 @@ public sealed class RenoDxTests : IDisposable
         var before = Snapshot();
         var o = new InstallOptions
         {
-            Mode = InstallMode.OptiScaler, Opti = true, Mfg = true, Proxy = "dxgi.dll", CarryOverIni = true,
+            Mode = InstallMode.OptiScaler,
+            Opti = true,
+            Mfg = true,
+            Proxy = "dxgi.dll",
+            CarryOverIni = true,
             Overrides = overrideKey is null ? [] : [new("DLSSG", overrideKey, "true")],
         };
 

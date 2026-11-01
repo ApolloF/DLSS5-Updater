@@ -105,8 +105,13 @@ public sealed class CatalogNeuralBuild
 
     public CatalogBinary ToBinary() => new()
     {
-        Name = Name, Sha256 = Sha256, Size = Size, Version = Version, FirstSeen = FirstSeen,
-        MirrorUrl = MirrorUrl, Url = Url ?? "",
+        Name = Name,
+        Sha256 = Sha256,
+        Size = Size,
+        Version = Version,
+        FirstSeen = FirstSeen,
+        MirrorUrl = MirrorUrl,
+        Url = Url ?? "",
     };
 }
 

@@ -94,8 +94,15 @@ public class InstallerTests : IDisposable
 
     private static InstallOptions Full => new()
     {
-        Opti = true, ReShade = true, Mfg = true, DlssNr = true, Dlss = true, AddMissingDlss = true,
-        Proxy = "dxgi.dll", Overrides = TestProfiles.Recommended(), CarryOverIni = true,
+        Opti = true,
+        ReShade = true,
+        Mfg = true,
+        DlssNr = true,
+        Dlss = true,
+        AddMissingDlss = true,
+        Proxy = "dxgi.dll",
+        Overrides = TestProfiles.Recommended(),
+        CarryOverIni = true,
     };
 
     private string T(string rel) => File.ReadAllText(Path.Combine(_target, rel));
@@ -495,7 +502,10 @@ public class InstallerTests : IDisposable
 
     private static InstallOptions ReShadeOnly(string proxy = "dxgi.dll") => new()
     {
-        Mode = InstallMode.ReShadeOnly, ReShade = true, Mfg = true, Proxy = proxy,
+        Mode = InstallMode.ReShadeOnly,
+        ReShade = true,
+        Mfg = true,
+        Proxy = proxy,
         ReShadeOverrides = [new("OVERLAY", "TutorialProgress", "4")],
     };
 
@@ -564,7 +574,12 @@ public class InstallerTests : IDisposable
         var installer = new Installer(_store);
         var opti = new InstallOptions
         {
-            Opti = true, ReShade = true, Mfg = true, DlssNr = true, Proxy = "winmm.dll", Overrides = ConfigProfile.Defaults(),
+            Opti = true,
+            ReShade = true,
+            Mfg = true,
+            DlssNr = true,
+            Proxy = "winmm.dll",
+            Overrides = ConfigProfile.Defaults(),
         };
 
         await installer.InstallAsync(Game(), _target, opti, null, default);
@@ -642,7 +657,9 @@ public class InstallerTests : IDisposable
     {
         var psi = new System.Diagnostics.ProcessStartInfo("cmd.exe", $"/c mklink /J \"{link}\" \"{target}\"")
         {
-            UseShellExecute = false, CreateNoWindow = true, RedirectStandardOutput = true,
+            UseShellExecute = false,
+            CreateNoWindow = true,
+            RedirectStandardOutput = true,
         };
         using var p = System.Diagnostics.Process.Start(psi)!;
         p.WaitForExit();
@@ -926,7 +943,9 @@ public class InstallerTests : IDisposable
         {
             var psi = new System.Diagnostics.ProcessStartInfo("subst.exe", args)
             {
-                UseShellExecute = false, CreateNoWindow = true, RedirectStandardOutput = true,
+                UseShellExecute = false,
+                CreateNoWindow = true,
+                RedirectStandardOutput = true,
             };
             using var p = System.Diagnostics.Process.Start(psi)!;
             p.WaitForExit();
@@ -1000,7 +1019,11 @@ public class InstallerTests : IDisposable
         File.WriteAllText(Path.Combine(_target, "nvngx_dlssg.dll"), "NEW-nvngx_dlssg.dll");
         new InstallManifest
         {
-            RootRel = _root, Proxy = "dxgi.dll", Mode = InstallMode.OptiScaler, Opti = true, Dlss = true,
+            RootRel = _root,
+            Proxy = "dxgi.dll",
+            Mode = InstallMode.OptiScaler,
+            Opti = true,
+            Dlss = true,
             Files = [proxy],
             Dirs = [Path.Combine(via, "OptiScaler")],
             Backups =

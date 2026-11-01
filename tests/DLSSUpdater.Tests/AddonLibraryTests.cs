@@ -89,8 +89,15 @@ public sealed class AddonLibraryTests : IDisposable
 
     private InstallOptions Options(string? renoDxId = null, string? lecramId = null, bool renoDx = false, bool lecram = false) => new()
     {
-        Mode = InstallMode.ReShadeOnly, ReShade = true, RenoDx = renoDx, Lecram = lecram, DlssNr = renoDx || lecram, DlssNrId = _nr.Id,
-        Proxy = "dxgi.dll", RenoDxId = renoDxId, LecramId = lecramId,
+        Mode = InstallMode.ReShadeOnly,
+        ReShade = true,
+        RenoDx = renoDx,
+        Lecram = lecram,
+        DlssNr = renoDx || lecram,
+        DlssNrId = _nr.Id,
+        Proxy = "dxgi.dll",
+        RenoDxId = renoDxId,
+        LecramId = lecramId,
         ConfirmedConflict = renoDx && lecram ? Installer.ConflictKey(NrAddons.Conflicts([NrAddon.RenoDx, NrAddon.Lecram])) : null,
     };
 

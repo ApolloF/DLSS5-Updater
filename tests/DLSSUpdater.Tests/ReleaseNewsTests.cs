@@ -142,7 +142,11 @@ public class ReleaseNewsTests : IDisposable
             var window = new Window
             {
                 Content = new StackPanel { Children = { owner, popup } },
-                Width = 200, Height = 100, Left = -10000, Top = -10000, ShowInTaskbar = false,
+                Width = 200,
+                Height = 100,
+                Left = -10000,
+                Top = -10000,
+                ShowInTaskbar = false,
             };
             window.Show();
             window.Activate();

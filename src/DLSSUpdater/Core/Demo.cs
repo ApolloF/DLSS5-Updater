@@ -282,8 +282,14 @@ public static class Demo
             : [];
         var game = new GameInfo
         {
-            Id = GameInfo.MakeId(root), Name = c.Name, Source = c.Source, Root = root,
-            Exes = [Path.Combine(bin, c.Exe)], Dlss = dlss, Streamline = sl, AntiCheat = c.AntiCheat,
+            Id = GameInfo.MakeId(root),
+            Name = c.Name,
+            Source = c.Source,
+            Root = root,
+            Exes = [Path.Combine(bin, c.Exe)],
+            Dlss = dlss,
+            Streamline = sl,
+            AntiCheat = c.AntiCheat,
             Scanned = DateTime.UtcNow,
         };
         foreach (var d in dlss.Concat(sl)) Originals[d] = d.Version;
