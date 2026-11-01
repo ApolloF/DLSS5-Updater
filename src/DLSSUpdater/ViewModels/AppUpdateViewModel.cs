@@ -106,7 +106,7 @@ public sealed partial class AppUpdateViewModel : ObservableObject
         if (_exe is not null) AppUpdate.Cleanup(_exe, AppUpdate.ParseVersion(Settings.AppUpdateStaged));
         if (!Settings.CheckAppUpdates) return;
         if (AppUpdate.IsDue(Settings.AppUpdateLastCheck, DateTime.UtcNow)) await CheckAsync();
-        else Show(AppUpdate.Newest(_main.Gh.CachedReleases(AppUpdate.Repo), AppUpdate.Current));
+        else Show(AppUpdate.Newest(GitHubClient.CachedReleases(AppUpdate.Repo), AppUpdate.Current));
     }
 
     /// <summary>Logs whether the install started last time took, and forgets what it staged.</summary>

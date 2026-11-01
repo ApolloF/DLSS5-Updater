@@ -7,6 +7,7 @@ namespace DLSSUpdater.Tests;
 public sealed class ReShadeLibraryTests : IDisposable
 {
     private readonly string _tmp = Path.Combine(Path.GetTempPath(), "dlssu-rslib-" + Guid.NewGuid().ToString("N")[..8]);
+    private static readonly string[] FourBuilds = new[] { "6.5.1.1", "6.6.0.1", "6.7.0.1", "6.8.0.1" };
 
     public ReShadeLibraryTests()
     {
@@ -20,7 +21,7 @@ public sealed class ReShadeLibraryTests : IDisposable
         catch (IOException) { }
     }
 
-    private ComponentStore Store(ReShadeFixtures.FakeNet? net = null) => new(new GitHubClient(net ?? new ReShadeFixtures.FakeNet(_ => new HttpResponseMessage(HttpStatusCode.NotFound))), () => true);
+    private static ComponentStore Store(ReShadeFixtures.FakeNet? net = null) => new(new GitHubClient(net ?? new ReShadeFixtures.FakeNet(_ => new HttpResponseMessage(HttpStatusCode.NotFound))), () => true);
 
     private string Src(string name, string version, string tag = "", bool only64 = false) => ReShadeFixtures.Folder(Path.Combine(_tmp, "src"), name, version, tag, only64);
 
@@ -163,10 +164,10 @@ public sealed class ReShadeLibraryTests : IDisposable
     {
         var store = Store();
         Directory.CreateDirectory(AppPaths.Components);
-        File.WriteAllText(store.ReShadePath, "RESHADE-IMPORTED");   // not even a PE: the old import never checked
+        File.WriteAllText(ComponentStore.ReShadePath, "RESHADE-IMPORTED");   // not even a PE: the old import never checked
         store.MigrateReShade();
 
-        Assert.False(File.Exists(store.ReShadePath));
+        Assert.False(File.Exists(ComponentStore.ReShadePath));
         var build = Assert.Single(store.ReShadeBuilds);
         Assert.Equal(ReShadeChannel.Custom, build.Channel);
         Assert.Equal("RESHADE-IMPORTED", File.ReadAllText(ComponentStore.ReShadeFilePath(build, 64)));
@@ -305,7 +306,7 @@ public sealed class ReShadeLibraryTests : IDisposable
 
     // ---- nightly ----
 
-    private ReShadeFixtures.FakeNet NightlyNet(string dir, bool digests = true, string? wrongDigest64 = null)
+    private static ReShadeFixtures.FakeNet NightlyNet(string dir, bool digests = true, string? wrongDigest64 = null)
     {
         var zip64 = ReShadeFixtures.Zip(dir, ReShadeBuild.File64);
         var zip32 = ReShadeFixtures.Zip(dir, ReShadeBuild.File32);
@@ -368,7 +369,7 @@ public sealed class ReShadeLibraryTests : IDisposable
     public void TheCleanup_KeepsTheDefaultPicksAndInstalledBuilds_AndAskingForEachByName()
     {
         var store = Store();
-        var builds = new[] { "6.5.1.1", "6.6.0.1", "6.7.0.1", "6.8.0.1" }.Select((v, i) => store.ImportReShade(Src("b" + i, v))).ToList();
+        var builds = FourBuilds.Select((v, i) => store.ImportReShade(Src("b" + i, v))).ToList();
         var settings = new AppSettings { ReShadeId = builds[0].Id };
         settings.KeepBuilds[LibraryKind.ReShade.ToString()] = 1;
         settings.For("g").ReShadeId = builds[1].Id;

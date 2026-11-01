@@ -125,7 +125,7 @@ public sealed class CatalogBuildPickerTests : IDisposable
         var noUrl = new CatalogNeuralBuild { Name = ComponentStore.DlssNrFile, Version = "310.5.0", Sha256 = new string('c', 64) };
         var path = Path.Combine(_tmp, "own.dll");
         File.WriteAllBytes(path, ownedBytes);
-        _store.ImportDlssNr(path);
+        ComponentStore.ImportDlssNr(path);
 
         var offers = _store.OfferedBuilds(CatalogBuildKind.DlssNr, Sections(Line(newest, a, b, owned, noHash, noUrl)), false);
 
@@ -210,7 +210,7 @@ public sealed class CatalogBuildPickerTests : IDisposable
         var id = await _store.DownloadCatalogBuildAsync(CatalogBuildKind.DlssNr, sections, older.Sha256, _fetch, null, false, default);
 
         Assert.Equal(older.Sha256, id);
-        Assert.Equal(older.Sha256, Assert.Single(_store.DlssNrVersions).Id);
+        Assert.Equal(older.Sha256, Assert.Single(ComponentStore.DlssNrVersions).Id);
         Assert.Equal([older.MirrorUrl!], _web.Urls);
         Assert.Null(_settings.CatalogDlssNrFetched);
         Assert.Null(_settings.NewestDlssNrSeen);
@@ -227,13 +227,13 @@ public sealed class CatalogBuildPickerTests : IDisposable
         var line = Line(newest, older);
         await _store.DownloadCatalogBuildAsync(CatalogBuildKind.DlssNr, Sections(line), older.Sha256, _fetch, null, false, default);
 
-        var fetched = await _store.CheckDlssNrCatalogAsync(_settings, line, _fetch, null, default);
+        var fetched = await ComponentStore.CheckDlssNrCatalogAsync(_settings, line, _fetch, null, default);
 
         Assert.Equal(newest.Sha256, fetched!.Id);
         Assert.Equal(newest.Sha256, _settings.CatalogDlssNrFetched);
         Assert.Equal([older.MirrorUrl!, newest.MirrorUrl!], _web.Urls);
         var requests = _web.Urls.Count;
-        Assert.Null(await _store.CheckDlssNrCatalogAsync(_settings, line, _fetch, null, default));
+        Assert.Null(await ComponentStore.CheckDlssNrCatalogAsync(_settings, line, _fetch, null, default));
         Assert.Equal(requests, _web.Urls.Count);
     }
 
@@ -243,14 +243,14 @@ public sealed class CatalogBuildPickerTests : IDisposable
         var newest = Entry(ComponentStore.DlssNrFile, "310.8.3", NrDll(new Version(310, 8, 3, 0)));
         var older = Entry(ComponentStore.DlssNrFile, "310.8.0", NrDll(new Version(310, 8, 0, 0)));
         var line = Line(newest, older);
-        await _store.CheckDlssNrCatalogAsync(_settings, line, _fetch, null, default);
+        await ComponentStore.CheckDlssNrCatalogAsync(_settings, line, _fetch, null, default);
         var defaultId = _settings.DlssNrId;
 
         await _store.DownloadCatalogBuildAsync(CatalogBuildKind.DlssNr, Sections(line), older.Sha256, _fetch, null, false, default);
 
         Assert.Equal(newest.Sha256, _settings.CatalogDlssNrFetched);
         Assert.Equal(defaultId, _settings.DlssNrId);
-        Assert.Equal(2, _store.DlssNrVersions.Count);
+        Assert.Equal(2, ComponentStore.DlssNrVersions.Count);
     }
 
     [Fact]
@@ -271,7 +271,7 @@ public sealed class CatalogBuildPickerTests : IDisposable
         var id = await _store.DownloadCatalogBuildAsync(CatalogBuildKind.DlssNr, Sections(Line(older)), older.Sha256, _fetch, null, false, default);
 
         Assert.Null(id);
-        Assert.Empty(_store.DlssNrVersions);
+        Assert.Empty(ComponentStore.DlssNrVersions);
         Assert.Null(_settings.CatalogDlssNrFetched);
     }
 
@@ -286,7 +286,7 @@ public sealed class CatalogBuildPickerTests : IDisposable
         Assert.Empty(_web.Urls);
         _served.Clear();
         Assert.Null(await _store.DownloadCatalogBuildAsync(CatalogBuildKind.DlssNr, sections, older.Sha256, _fetch, null, false, default));
-        Assert.Empty(_store.DlssNrVersions);
+        Assert.Empty(ComponentStore.DlssNrVersions);
     }
 
     [Fact]
@@ -378,7 +378,7 @@ public sealed class CatalogBuildPickerTests : IDisposable
         var sections = Sections(Line(newest, older));
         var local = Path.Combine(_tmp, "local.dll");
         File.WriteAllBytes(local, NrDll(new Version(310, 7, 0, 0)));
-        var own = _store.ImportDlssNr(local);
+        var own = ComponentStore.ImportDlssNr(local);
         var vm = NewGame(async (kind, tag, select) =>
         {
             var id = await _store.DownloadCatalogBuildAsync(kind, sections, CatalogOffer.ShaOf(tag)!, _fetch, null, false, default);
@@ -421,7 +421,7 @@ public sealed class CatalogBuildPickerTests : IDisposable
 
         Assert.Single(_web.Urls);
         Assert.Null(_settings.Games.GetValueOrDefault(vm.Id)?.DlssNrId);
-        Assert.Empty(_store.DlssNrVersions);
+        Assert.Empty(ComponentStore.DlssNrVersions);
     }
 
     [Fact]

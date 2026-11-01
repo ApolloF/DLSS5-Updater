@@ -71,6 +71,7 @@ public static class VulkanLayer
     public const string LayerName = "VK_LAYER_reshade";
     /// <summary>Our own record next to the layer, so a layer installed by ReShade's setup is never removed by us.</summary>
     public const string MarkerFile = "DLSS5Updater.layer.json";
+    private static readonly int[] BitsOrder = new[] { 64, 32 };
 
     /// <summary>
     /// Why a build must not become the system-wide layer, or null. A nightly without the digest GitHub publishes was only fetched through
@@ -165,7 +166,7 @@ public static class VulkanLayer
                 done.Add(bits);
             }
             // Replacing an older install: a bitness this build lacks is no longer ours.
-            foreach (var bits in new[] { 64, 32 }.Except(done)) RemoveBits(host, bits);
+            foreach (var bits in BitsOrder.Except(done)) RemoveBits(host, bits);
             WriteMarker(host, files.Version, files.Dll64 is null ? null : files.Sha64, files.Dll32 is null ? null : files.Sha32);
         }
         catch

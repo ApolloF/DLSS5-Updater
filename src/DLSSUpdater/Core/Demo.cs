@@ -334,7 +334,7 @@ public static class Demo
             m.ReShade = o.ReShade || o.Opti;
             m.Mfg = o.Mfg;
             m.DlssNr = o.DlssNr;
-            m.DlssNrId = o.DlssNr ? o.DlssNrId ?? store.DlssNrVersions.FirstOrDefault()?.Id : null;
+            m.DlssNrId = o.DlssNr ? o.DlssNrId ?? (ComponentStore.DlssNrVersions is [var newest, ..] ? newest.Id : null) : null;
             m.RenoDx = o.RenoDx;
             m.Lecram = o.Lecram;
             m.Uplift = o.Uplift;

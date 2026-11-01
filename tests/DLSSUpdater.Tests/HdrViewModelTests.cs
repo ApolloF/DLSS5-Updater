@@ -50,6 +50,7 @@ public class HdrViewModelTests : IDisposable
             Directory.Delete(_tmp, true);
         }
         catch (IOException) { }
+        GC.SuppressFinalize(this);
     }
 
     private static void Write(string path, string content)
@@ -58,7 +59,7 @@ public class HdrViewModelTests : IDisposable
         File.WriteAllText(path, content);
     }
 
-    private void SeedCatalog(string? json = null) => File.WriteAllText(AppPaths.CatalogFile, json ?? HdrFixtures.Json());
+    private static void SeedCatalog(string? json = null) => File.WriteAllText(AppPaths.CatalogFile, json ?? HdrFixtures.Json());
 
     private GameInfo Game(Action<GameInfo>? tweak = null)
     {

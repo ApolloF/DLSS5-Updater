@@ -1,5 +1,6 @@
 using System.Collections.ObjectModel;
 using System.Diagnostics;
+using System.Diagnostics.CodeAnalysis;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using DLSSUpdater.Core;
@@ -58,6 +59,7 @@ public sealed partial class SettingsViewModel : ObservableObject
     public AddonLibraryViewModel Lecram { get; }
     public AddonLibraryViewModel Dfc { get; }
     public BuildCleanupViewModel Cleanup { get; }
+    [SuppressMessage("Performance", "CA1822", Justification = "bound from XAML through the view model instance; WPF bindings cannot target static members")]
     public IReadOnlyList<string> ProxyNames => AppSettings.ProxyNames;
     public ObservableCollection<IniOverride> Overrides { get; }
     public ObservableCollection<IniOverride> ReShadeOverrides { get; }
@@ -74,6 +76,7 @@ public sealed partial class SettingsViewModel : ObservableObject
     public IReadOnlyList<IniOptionViewModel> TonemapOptions { get; }
     public IReadOnlyList<IniOptionViewModel> HdrOptions { get; }
     public IEnumerable<IniOptionViewModel> AllOptions => ReShadeOptions.Concat(MfgOptions).Concat(RenoDxOptions).Concat(LecramOptions).Concat(UpliftOptions).Concat(DfcOptions).Concat(NrOptions).Concat(TonemapOptions).Concat(HdrOptions);
+    [SuppressMessage("Performance", "CA1822", Justification = "bound from XAML through the view model instance; WPF bindings cannot target static members")]
     public IReadOnlyList<OptionChoice> IniModes => SettingsOptions.IniModes;
 
     public OptionChoice IniMode
@@ -97,6 +100,7 @@ public sealed partial class SettingsViewModel : ObservableObject
 
     private ModChoice? _pickedMod;
 
+    [SuppressMessage("Performance", "CA1822", Justification = "bound from XAML through the view model instance; WPF bindings cannot target static members")]
     public IReadOnlyList<ModChoice> ModChoices => ModPicker.AvailableInSettings;
 
     /// <summary>The mod whose defaults the ReShade tab shows. Follows the default install route until the user picks one; not saved.</summary>
@@ -258,6 +262,7 @@ public sealed partial class SettingsViewModel : ObservableObject
         set { Settings.IncludePrereleases = value; Save(); }
     }
 
+    [SuppressMessage("Performance", "CA1822", Justification = "bound from XAML through the view model instance; WPF bindings cannot target static members")]
     public IReadOnlyList<OptiSource> OptiBuilds => OptiSources.All;
 
     public OptiSource OptiBuild
@@ -424,7 +429,7 @@ public sealed partial class SettingsViewModel : ObservableObject
     {
         NrChoices.Clear();
         var offers = _main.S.CatalogOffers(CatalogBuildKind.DlssNr).Select(o => o.ToEntry());
-        foreach (var c in BuildPickerList.Merge(_main.S.Store.DlssNrVersions.Select(v => v.ToPickerEntry()), offers)) NrChoices.Add(new DlssChoice(c.Tag, c.Label));
+        foreach (var c in BuildPickerList.Merge(ComponentStore.DlssNrVersions.Select(v => v.ToPickerEntry()), offers)) NrChoices.Add(new DlssChoice(c.Tag, c.Label));
     }
 
     /// <summary>The catalog arrived or changed: the "(download)" entries of the default pickers follow.</summary>
@@ -437,7 +442,7 @@ public sealed partial class SettingsViewModel : ObservableObject
     }
 
     /// <summary>Plain advice for the chosen NR build (known hashes only).</summary>
-    public string? SelectedNrHint => _main.S.Store.DlssNrVersions.FirstOrDefault(v => v.Id == Settings.DlssNrId)?.Hint;
+    public string? SelectedNrHint => ComponentStore.DlssNrVersions.FirstOrDefault(v => v.Id == Settings.DlssNrId)?.Hint;
 
     [RelayCommand]
     private void UndoNrDefault()
@@ -731,7 +736,7 @@ public sealed partial class SettingsViewModel : ObservableObject
         if (dlg.ShowDialog() != true) return;
         try
         {
-            var release = await Task.Run(() => _main.S.Store.ImportDlss(dlg.FileName));
+            var release = await Task.Run(() => ComponentStore.ImportDlss(dlg.FileName));
             Settings.DlssTag = release.Tag;
             Save();
             Reload();
@@ -785,6 +790,7 @@ public sealed partial class SettingsViewModel : ObservableObject
     }
 
     [RelayCommand]
+    [SuppressMessage("Performance", "CA1822", Justification = "bound from XAML as a command; the generated command needs an instance member")]
     private void OpenDataFolder() =>
         Process.Start(new ProcessStartInfo("explorer.exe", $"\"{AppPaths.Root}\"") { UseShellExecute = true });
 

@@ -66,6 +66,7 @@ public class HdrInstallTests : IDisposable
             Directory.Delete(_tmp, true);
         }
         catch (IOException) { }
+        GC.SuppressFinalize(this);
     }
 
     private static void Write(string path, string content)
@@ -88,11 +89,11 @@ public class HdrInstallTests : IDisposable
         return g;
     }
 
-    private HdrPicker Picker(string? json = null) => new(HdrFixtures.Renodx(json));
+    private static HdrPicker Picker(string? json = null) => new(HdrFixtures.Renodx(json));
 
-    private HdrChoice Choose(GameInfo g, bool? ue = null, string? json = null) => Picker(json).Pick(g, ue);
+    private static HdrChoice Choose(GameInfo g, bool? ue = null, string? json = null) => Picker(json).Pick(g, ue);
 
-    private string CatalogWith(string gameEntry) => HdrFixtures.Json().Replace("\"engineGames\": [", "\"engineGames\": [\n" + gameEntry + ",");
+    private static string CatalogWith(string gameEntry) => HdrFixtures.Json().Replace("\"engineGames\": [", "\"engineGames\": [\n" + gameEntry + ",");
 
     private const string IniGameEntry = """{ "engine": "ue-extended", "name": "Game", "compat": "working", "method": "ini" }""";
 
@@ -138,7 +139,7 @@ public class HdrInstallTests : IDisposable
         Assert.False(File.Exists(T("renodx-ue-extended.addon64")));
         Assert.Equal(".\\addons", IniFile.Load(ReShadeIni).Get("ADDON", "AddonPath"));
 
-        await _service.RemoveAsync(g, _target, default);
+        await HdrService.RemoveAsync(g, _target, default);
 
         Assert.False(File.Exists(T(@"addons\renodx-ue-extended.addon64")));
         Assert.Null(Record());
@@ -168,7 +169,7 @@ public class HdrInstallTests : IDisposable
         await Install(g, Choose(g, json: CatalogWith(IniGameEntry)));
         Assert.Equal(HdrFixtures.UeExtContent, File.ReadAllText(T("renodx-ue-extended.addon64")));
 
-        var undo = await _service.RemoveAsync(g, _target, default);
+        var undo = await HdrService.RemoveAsync(g, _target, default);
 
         Assert.True(undo.Clean);
         Assert.Equal("GAME-OWN-COPY", File.ReadAllText(T("renodx-ue-extended.addon64")));
@@ -235,7 +236,7 @@ public class HdrInstallTests : IDisposable
         Assert.Equal("1", ini.Get("renodx", "FxUpgradeRender"));
         Assert.Equal("", ini.Get("renodx", "Upgrade_R11G11B10_FLOAT"));
 
-        await _service.RemoveAsync(g, _target, default);
+        await HdrService.RemoveAsync(g, _target, default);
 
         var after = IniFile.Load(ReShadeIni);
         Assert.Equal("0", after.Get("renodx", "ForceBorderless"));
@@ -312,7 +313,7 @@ public class HdrInstallTests : IDisposable
 
         Assert.Equal("5", IniFile.Load(ReShadeIni).Get("renodx", "SettingsMode"));
         Assert.Null(Record()!.EditOf("|install|\\ReShade.ini", "renodx", "SettingsMode") ?? Record()!.ConfigEdits.FirstOrDefault(e => e.Key == "SettingsMode"));
-        await _service.RemoveAsync(g, _target, default);
+        await HdrService.RemoveAsync(g, _target, default);
         Assert.Equal("5", IniFile.Load(ReShadeIni).Get("renodx", "SettingsMode"));
     }
 
@@ -371,7 +372,7 @@ public class HdrInstallTests : IDisposable
         Assert.True(new FileInfo(EngineIni).IsReadOnly);
         Assert.NotEmpty(Record()!.Attributes);
 
-        var undo = await _service.RemoveAsync(g, _target, default);
+        var undo = await HdrService.RemoveAsync(g, _target, default);
 
         Assert.True(undo.Clean);
         Assert.Equal(original, File.ReadAllText(EngineIni));
@@ -393,7 +394,7 @@ public class HdrInstallTests : IDisposable
         Assert.Equal([0xEF, 0xBB, 0xBF], File.ReadAllBytes(EngineIni).Take(3));
         Assert.Equal("1", IniFile.Load(EngineIni).Get("SystemSettings", "r.AllowHDR"));
 
-        await _service.RemoveAsync(g, _target, default);
+        await HdrService.RemoveAsync(g, _target, default);
 
         Assert.Equal(bytes, File.ReadAllBytes(EngineIni));
         Assert.True(new FileInfo(EngineIni).IsReadOnly);
@@ -408,7 +409,7 @@ public class HdrInstallTests : IDisposable
 
         Assert.True(File.Exists(EngineIni));
 
-        await _service.RemoveAsync(g, _target, default);
+        await HdrService.RemoveAsync(g, _target, default);
 
         Assert.False(File.Exists(EngineIni));
     }

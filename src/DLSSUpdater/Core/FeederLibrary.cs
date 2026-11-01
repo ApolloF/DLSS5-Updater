@@ -74,7 +74,7 @@ public sealed partial class FeederLibrary(GitHubClient github)
         catch (Exception ex) when (!ct.IsCancellationRequested && ex is HttpRequestException or TaskCanceledException or JsonException or IOException)
         {
             Log.Info($"DLSS5-Feeder: GitHub unreachable ({ex.Message})");
-            return Pick(github.CachedReleases(Repo), includeBetas);
+            return Pick(GitHubClient.CachedReleases(Repo), includeBetas);
         }
     }
 
@@ -105,7 +105,7 @@ public sealed partial class FeederLibrary(GitHubClient github)
     public static LibraryBuild? Choose(string? pick)
     {
         var builds = Builds();
-        return (pick is null ? null : builds.FirstOrDefault(b => b.Id.Equals(pick, StringComparison.OrdinalIgnoreCase))) ?? builds.FirstOrDefault();
+        return (pick is null ? null : builds.FirstOrDefault(b => b.Id.Equals(pick, StringComparison.OrdinalIgnoreCase))) ?? (builds is [var first, ..] ? first : null);
     }
 
     public static string PackageOf(LibraryBuild build) => Path.Combine(build.Dir, PackageDir);

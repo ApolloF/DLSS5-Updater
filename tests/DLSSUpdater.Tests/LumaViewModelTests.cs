@@ -37,6 +37,7 @@ public class LumaViewModelTests : IDisposable
     {
         try { Directory.Delete(_tmp, true); }
         catch (IOException) { }
+        GC.SuppressFinalize(this);
     }
 
     private static void Write(string path, string content)

@@ -22,10 +22,10 @@ public sealed class UpliftTests : IDisposable
         AppPaths.Ensure();
         _root = Path.Combine(_tmp, "game");
         Directory.CreateDirectory(_root);
-        FakeVersionDll.Write(_store.ReShadePath, new Version(6, 8, 0, 0), ComponentStore.ReShadeFile);
+        FakeVersionDll.Write(ComponentStore.ReShadePath, new Version(6, 8, 0, 0), ComponentStore.ReShadeFile);
         var nr = Path.Combine(_tmp, "nr.dll");
         FakeVersionDll.Write(nr, new Version(310, 9, 16, 0), ComponentStore.DlssNrFile);
-        _nr = _store.ImportDlssNr(nr);
+        _nr = ComponentStore.ImportDlssNr(nr);
         var exe = G("game.exe");
         WriteExe(exe, Machine.Amd64);
         _game = new GameInfo { Id = _root, Root = _root, Name = "Uplift game", Exes = [exe], Dlss = [new DlssDll { Name = "nvngx_dlss.dll", Path = G("nvngx_dlss.dll") }] };
@@ -142,7 +142,7 @@ public sealed class UpliftTests : IDisposable
         off.Save(G("ReShade.ini"));
         await installer.InstallAsync(_game, _root, Options, null, default);
         Assert.Equal("0", Ini().Get("Uplift", "Enabled"));
-        await installer.UninstallAsync(_game, _root, default);
+        await Installer.UninstallAsync(_game, _root, default);
         Assert.False(Directory.Exists(G("GITC-Uplift")));
         Assert.Equal("0", Ini().Get("Uplift", "Enabled"));
         Assert.Null(Ini().Get("Uplift", "PassCount"));
@@ -161,7 +161,7 @@ public sealed class UpliftTests : IDisposable
         var other = Options with { Uplift = false, ReShade = true, Lecram = lecram, RenoDx = !lecram };
         var installer = new Installer(_store);
         // An earlier user runtime must stay backed up while Uplift runs, including after switching repeatedly.
-        File.Copy(_store.VerifiedDlssNrPath(_nr.Id), G(ComponentStore.DlssNrFile));
+        File.Copy(ComponentStore.VerifiedDlssNrPath(_nr.Id), G(ComponentStore.DlssNrFile));
         await installer.InstallAsync(_game, _root, other, null, default);
         await installer.InstallAsync(_game, _root, Options, null, default);
         Assert.False(File.Exists(G(file)));
@@ -178,7 +178,7 @@ public sealed class UpliftTests : IDisposable
         Assert.False(Manifest().Uplift);
         Assert.Equal(ComponentStore.DlssNrFile, Manifest().DlssNrFile);
         await installer.InstallAsync(_game, _root, Options, null, default);
-        await installer.UninstallAsync(_game, _root, default);
+        await Installer.UninstallAsync(_game, _root, default);
         Assert.True(File.Exists(G(ComponentStore.DlssNrFile)));
         Assert.False(Directory.Exists(G("GITC-Uplift")));
     }
@@ -191,7 +191,7 @@ public sealed class UpliftTests : IDisposable
         var installer = new Installer(_store);
         await installer.InstallAsync(_game, _root, Options, null, default);
         Assert.All(foreign, f => Assert.False(File.Exists(G(f))));
-        await installer.UninstallAsync(_game, _root, default);
+        await Installer.UninstallAsync(_game, _root, default);
         Assert.All(foreign, f => Assert.Equal("original-" + f, File.ReadAllText(G(f))));
         Assert.False(Directory.Exists(G("GITC-Uplift")));
         Assert.False(File.Exists(G("ReShade.ini")));
@@ -202,7 +202,7 @@ public sealed class UpliftTests : IDisposable
     {
         var src = Path.Combine(_tmp, "new-nr.dll");
         FakeVersionDll.Write(src, new Version(310, 10, 0, 0), ComponentStore.DlssNrFile);
-        var newer = _store.ImportDlssNr(src);
+        var newer = ComponentStore.ImportDlssNr(src);
         var installer = new Installer(_store);
         await installer.InstallAsync(_game, _root, Options, null, default);
         await installer.SwitchDlssNrAsync(_game, _root, newer.Id, default);
@@ -220,7 +220,7 @@ public sealed class UpliftTests : IDisposable
         Assert.True(vm.NeedsUpdate);
         Assert.True(vm.UpdateOptions(Manifest()).Uplift);
         Assert.Equal("v1.4.2", vm.UpdateOptions(Manifest()).KeepingInstalledVersions(Manifest()).UpliftTag);
-        await installer.UninstallAsync(_game, _root, default);
+        await Installer.UninstallAsync(_game, _root, default);
         Assert.Equal(["game.exe"], Directory.GetFiles(_root).Select(f => Path.GetFileName(f)!).ToArray());
         Assert.Empty(Directory.GetDirectories(_root));
     }
@@ -274,7 +274,7 @@ public sealed class UpliftTests : IDisposable
         var installer = new Installer(_store);
         await installer.InstallAsync(_game, _root, new InstallOptions { Opti = true, DlssNr = true, DlssNrId = _nr.Id }, null, default);
         Assert.All(ComponentStore.UpliftFiles, f => Assert.False(File.Exists(G(f))));
-        await installer.UninstallAsync(_game, _root, default);
+        await Installer.UninstallAsync(_game, _root, default);
         Assert.All(ComponentStore.UpliftFiles, f => Assert.Equal("manual", File.ReadAllText(G(f))));
         await installer.InstallAsync(_game, _root, Options, null, default);
         await installer.InstallAsync(_game, _root, new InstallOptions { Opti = true, DlssNr = true, DlssNrId = _nr.Id }, null, default);
@@ -282,7 +282,7 @@ public sealed class UpliftTests : IDisposable
         Assert.All(ComponentStore.UpliftFiles, f => Assert.False(File.Exists(G(f))));
         Assert.True(File.Exists(G(ComponentStore.DlssNrFile)));
         Assert.False(Directory.Exists(G("GITC-Uplift")));
-        await installer.UninstallAsync(_game, _root, default);
+        await Installer.UninstallAsync(_game, _root, default);
         Assert.All(ComponentStore.UpliftFiles, f => Assert.Equal("manual", File.ReadAllText(G(f))));
     }
 

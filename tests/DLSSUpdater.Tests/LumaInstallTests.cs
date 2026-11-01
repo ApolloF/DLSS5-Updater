@@ -56,6 +56,7 @@ public class LumaInstallTests : IDisposable
             Directory.Delete(_tmp, true);
         }
         catch (IOException) { }
+        GC.SuppressFinalize(this);
     }
 
     private static void Write(string path, string content)
@@ -136,7 +137,7 @@ public class LumaInstallTests : IDisposable
         Assert.False(File.Exists(T("Luma-Prey.addon64")));
         Assert.True(File.Exists(T(@"Luma\Shaders\main.hlsl")));
 
-        await _service.RemoveAsync(g, _target, default);
+        await LumaService.RemoveAsync(g, _target, default);
 
         Assert.False(File.Exists(T(@"addons\Luma-Prey.addon64")));
         Assert.Null(Record());
@@ -150,7 +151,7 @@ public class LumaInstallTests : IDisposable
         await Install(g, Choose(g));
         Assert.Equal("MZ compiler", File.ReadAllText(T(@"Luma\d3dcompiler_47.dll")));
 
-        var undo = await _service.RemoveAsync(g, _target, default);
+        var undo = await LumaService.RemoveAsync(g, _target, default);
 
         Assert.True(undo.Clean);
         Assert.Equal("GAME-OWN-COMPILER", File.ReadAllText(T(@"Luma\d3dcompiler_47.dll")));
@@ -204,7 +205,7 @@ public class LumaInstallTests : IDisposable
         Assert.Equal("0", IniFile.Load(ReShadeIni).Get("Luma", "EnableHDR"));
         Assert.Equal("0", IniFile.Load(ReShadeIni).Get("Luma", "DisplayMode"));
 
-        await _service.RemoveAsync(g, _target, default);
+        await LumaService.RemoveAsync(g, _target, default);
 
         Assert.Null(IniFile.Load(ReShadeIni).Get("Luma", "EnableHDR"));
         Assert.Contains("EffectSearchPaths", File.ReadAllText(ReShadeIni));
@@ -225,7 +226,7 @@ public class LumaInstallTests : IDisposable
         Assert.True(new FileInfo(EngineIni).Attributes.HasFlag(FileAttributes.ReadOnly));
         Assert.Equal("MZ luma unreal", File.ReadAllText(T("Luma-Unreal_Engine.addon64")));
 
-        await _service.RemoveAsync(g, _target, default);
+        await LumaService.RemoveAsync(g, _target, default);
 
         Assert.False(File.Exists(EngineIni));
     }

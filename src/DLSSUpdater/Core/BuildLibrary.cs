@@ -241,7 +241,7 @@ public sealed partial class ComponentStore
     /// components (a rename on the same drive, nothing is downloaded again). One that can't move stays and is logged;
     /// once the library has that build, the cleanup lists the copy left in the cache (see <see cref="StaleDownloads"/>).
     /// </summary>
-    public void MigrateReleaseLibraries()
+    public static void MigrateReleaseLibraries()
     {
         foreach (var c in new[] { Component.OptiScaler, Component.Uplift })
         {
@@ -510,7 +510,7 @@ public sealed partial class ComponentStore
                 if (!string.IsNullOrEmpty(tag)) keep.Add(SafeName(tag));
             }
             Add(Get(c)?.Tag);
-            Add(CachedReleases(c).FirstOrDefault()?.Tag);
+            Add(CachedReleases(c) is [var newest, ..] ? newest.Tag : null);
             switch (c)
             {
                 case Component.MfgUnlock:

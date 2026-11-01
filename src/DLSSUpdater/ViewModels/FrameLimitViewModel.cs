@@ -1,4 +1,5 @@
 using System.Collections.ObjectModel;
+using System.Diagnostics.CodeAnalysis;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using DLSSUpdater.Core;
@@ -75,6 +76,7 @@ public sealed partial class FrameLimitViewModel(GameViewModel game, Services ser
         }
     }
 
+    [SuppressMessage("Performance", "CA1822", Justification = "bound from XAML through the view model instance; WPF bindings cannot target static members")]
     public string FpsHint => $"{FrameLimitRules.MinFps} to {FrameLimitRules.MaxFps}";
 
     // ---------- ReLimiter options and the user's own ini lines ----------

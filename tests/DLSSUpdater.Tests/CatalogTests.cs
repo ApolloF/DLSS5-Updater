@@ -241,7 +241,7 @@ public sealed class CatalogTests : IDisposable
         await client.LoadAsync(default);
         var offline = new CatalogClient(new GitHubClient(new FakeApi(_ => throw new InvalidOperationException("no request expected"))));
 
-        var load = offline.LoadCached();
+        var load = CatalogClient.LoadCached();
 
         Assert.Equal(CatalogOrigin.Cached, load.Origin);
         Assert.Equal(6, load.Document!.Sections.Renodx!.Mods.Count);
@@ -252,11 +252,11 @@ public sealed class CatalogTests : IDisposable
     public void LoadCached_without_a_copy_or_with_a_damaged_one_is_none()
     {
         var client = new CatalogClient(new GitHubClient(new FakeApi(_ => throw new InvalidOperationException())));
-        Assert.Equal(CatalogOrigin.None, client.LoadCached().Origin);
+        Assert.Equal(CatalogOrigin.None, CatalogClient.LoadCached().Origin);
 
         File.WriteAllText(AppPaths.CatalogFile, "garbage");
 
-        Assert.Equal(CatalogOrigin.None, client.LoadCached().Origin);
+        Assert.Equal(CatalogOrigin.None, CatalogClient.LoadCached().Origin);
     }
 
     [Fact]

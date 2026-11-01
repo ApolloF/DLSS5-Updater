@@ -31,6 +31,8 @@ public sealed class RenoDxCatalogTests : IDisposable
     private readonly ComponentStore _store;
     private readonly AppSettings _settings = new();
     private readonly Dictionary<string, byte[]> _served = [];
+    private static readonly string[] ListedBuilds = new[] { "0.55", "26.0917.1145", "26.1003.2350", "26.0928.0205", "26.0927.2125", "26.0922.0041", "26.0919.2025", "26.0917.1904", "0.1" };
+    private static readonly string[] NewestListed = new[] { "26.1003.2350", "26.0928.0205", "26.0927.2125", "0.55" };
 
     public RenoDxCatalogTests()
     {
@@ -258,8 +260,7 @@ public sealed class RenoDxCatalogTests : IDisposable
         _store.ImportRenoDx(Addon(new Version(0, 2026, 922, 141), "2026-09-22T00:41:00"));
         var section = new CatalogRenodxDlss
         {
-            Builds = [.. new[] { "0.55", "26.0917.1145", "26.1003.2350", "26.0928.0205", "26.0927.2125", "26.0922.0041", "26.0919.2025", "26.0917.1904", "0.1" }
-                .Select(Listed)],
+            Builds = [.. ListedBuilds.Select(Listed)],
         };
 
         var offers = _store.OfferedBuilds(CatalogBuildKind.RenoDx, new CatalogSections { RenodxDlss = section }, false);
@@ -274,7 +275,7 @@ public sealed class RenoDxCatalogTests : IDisposable
         _store.ImportRenoDx(Addon(new Version(0, 2026, 1016, 1704), "2026-10-16T13:04:22"));
         _store.ImportRenoDx(Addon(new Version(0, 2026, 1003, 2333), "2026-10-03T23:50:12"));
         _store.ImportRenoDx(Addon(new Version(0, 2026, 928, 306), "2026-09-28T02:05:38"));
-        var section = new CatalogRenodxDlss { Builds = [.. new[] { "26.1003.2350", "26.0928.0205", "26.0927.2125", "0.55" }.Select(Listed)] };
+        var section = new CatalogRenodxDlss { Builds = [.. NewestListed.Select(Listed)] };
         var offers = _store.OfferedBuilds(CatalogBuildKind.RenoDx, new CatalogSections { RenodxDlss = section }, false);
 
         var list = BuildPickerList.Merge(_store.RenoDxBuilds.Select(b => b.ToPickerEntry()), offers.Select(o => o.ToEntry()));

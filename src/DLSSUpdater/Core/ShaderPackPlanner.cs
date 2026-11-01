@@ -65,6 +65,8 @@ public static class ShaderPackPlanner
         return plan;
     }
 
+    private static readonly JsonSerializerOptions MarkerJson = new() { WriteIndented = true };
+
     /// <summary>The marker file content: which packs the folder holds, written next to them so a later run knows the folder is ours.</summary>
     public static string MarkerText(IEnumerable<CatalogShaderPack> packs) =>
         JsonSerializer.Serialize(new Dictionary<string, object>
@@ -72,7 +74,7 @@ public static class ShaderPackPlanner
             ["app"] = "DLSS5 Updater",
             ["note"] = "This folder is managed by DLSS5 Updater. Put your own shaders in a folder of their own.",
             ["packs"] = packs.Select(p => new { p.Id, p.Version, p.Repo }).ToList(),
-        }, new JsonSerializerOptions { WriteIndented = true });
+        }, MarkerJson);
 
     private static bool Same(string a, string b) =>
         new FileInfo(a).Length == new FileInfo(b).Length && FileUtil.Sha256(a).Equals(FileUtil.Sha256(b), StringComparison.OrdinalIgnoreCase);

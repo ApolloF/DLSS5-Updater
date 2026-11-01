@@ -83,7 +83,7 @@ public sealed partial class ComponentStore
     public static string HdrPathOf(HdrBuild build) => Path.Combine(HdrRoot, build.Id, build.FileName);
 
     /// <summary>A build the game is pinned to: it is already in the library, so nothing is downloaded, but the file is checked against its hash before it is placed.</summary>
-    public HdrBuild VerifiedHdrBuild(HdrBuild build)
+    public static HdrBuild VerifiedHdrBuild(HdrBuild build)
     {
         var path = HdrPathOf(build);
         if (!File.Exists(path)) throw new FileNotFoundException($"The pinned build {build.Label} is no longer in the library. Pick another build or the default.", path);

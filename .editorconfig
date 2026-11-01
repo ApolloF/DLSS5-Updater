@@ -24,3 +24,5 @@ dotnet_style_qualification_for_event = false
 csharp_using_directive_placement = outside_namespace
 dotnet_sort_system_directives_first = true
 csharp_style_namespace_declarations = file_scoped:warning
+# returning the interface is on purpose; the gain is irrelevant here
+dotnet_diagnostic.CA1859.severity = none

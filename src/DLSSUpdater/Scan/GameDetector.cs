@@ -34,7 +34,7 @@ internal static class GameDetector
         GameSignals signals, Func<string, Version?> versionOf)
     {
         var tech = new GameTech { Upscalers = signals.Upscalers };
-        var main = rankedExes.FirstOrDefault();
+        var main = rankedExes is [var top, ..] ? top : null;
         try { DetectEngine(tech, root, main, allExes, signals, versionOf); }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
         {

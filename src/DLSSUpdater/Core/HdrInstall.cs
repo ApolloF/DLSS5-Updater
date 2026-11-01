@@ -164,7 +164,7 @@ public sealed class HdrService(ComponentStore store, Installer installer, Catalo
         if (!choice.IsOffered) throw new InvalidOperationException(choice.Reason);
 
         var build = choice.Pinned is { } pinned
-            ? store.VerifiedHdrBuild(pinned)
+            ? ComponentStore.VerifiedHdrBuild(pinned)
             : await store.EnsureHdrBuildAsync(choice.File!, choice.ModId ?? choice.Title, choice.Title, downloader, progress, ct);
         await EnsureReShadeAsync(game, targetDir, reshade ?? new HdrReShade(), progress, ct);
 
@@ -173,12 +173,12 @@ public sealed class HdrService(ComponentStore store, Installer installer, Catalo
         foreach (var w in plan.Warnings) Log.Warn($"{game.Name}: {w}");
         progress?.Report(new TransferProgress($"Installing {choice.Title} to {game.Name}", null));
         var component = plan.Plan with { Extras = LumaConflict.WithMark(plan.Plan.Extras, lumaClashConfirmed) };
-        var undo = await installer.InstallComponentAsync(game, targetDir, component, ct);
+        var undo = await Installer.InstallComponentAsync(game, targetDir, component, ct);
         return new HdrInstallResult(build, plan, undo);
     }
 
-    public Task<ComponentUndo> RemoveAsync(GameInfo game, string targetDir, CancellationToken ct) =>
-        installer.RemoveComponentAsync(game, targetDir, ComponentRegistry.RenoDxHdr, ct);
+    public static Task<ComponentUndo> RemoveAsync(GameInfo game, string targetDir, CancellationToken ct) =>
+        Installer.RemoveComponentAsync(game, targetDir, ComponentRegistry.RenoDxHdr, ct);
 
     private Task EnsureReShadeAsync(GameInfo game, string targetDir, HdrReShade setup, IProgress<TransferProgress>? progress, CancellationToken ct) =>
         host.EnsureAsync(game, targetDir, setup, new("the HDR mod", "The RenoDX HDR mod needs ReShade 6 or newer with add-on support."), progress, ct);

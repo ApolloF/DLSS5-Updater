@@ -1,4 +1,5 @@
 using System.Collections.ObjectModel;
+using System.Diagnostics.CodeAnalysis;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using DLSSUpdater.Core;
@@ -41,6 +42,7 @@ public sealed partial class AddonLibraryViewModel : ObservableObject
 
     /// <summary>Lecram's row has the automatic check switch in the private build (MediaFire); public builds import it, so there is nothing to switch.</summary>
     public bool HasAutoDownload => CanCheckUpdates;
+    [SuppressMessage("Performance", "CA1822", Justification = "bound from XAML through the view model instance; WPF bindings cannot target static members")]
     public string AutoDownloadLabel => "Check for new builds automatically";
 
     /// <summary>Deep Fried Chicken ships as a folder: its row also imports the extracted release folder.</summary>

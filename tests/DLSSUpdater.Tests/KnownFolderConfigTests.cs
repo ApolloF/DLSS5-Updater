@@ -8,7 +8,6 @@ public sealed class KnownFolderConfigTests : IDisposable
 {
     private readonly string _tmp = Path.Combine(Path.GetTempPath(), "dlssu-kf-" + Guid.NewGuid().ToString("N")[..8]);
     private readonly string _root, _target, _local, _docs;
-    private readonly Installer _installer;
 
     public KnownFolderConfigTests()
     {
@@ -22,7 +21,6 @@ public sealed class KnownFolderConfigTests : IDisposable
         Directory.CreateDirectory(_target);
         File.WriteAllText(Path.Combine(_target, "Game-Win64-Shipping.exe"), "EXE");
         File.WriteAllText(Path.Combine(_root, "Game.exe"), "BOOT");
-        _installer = new Installer(new ComponentStore(new GitHubClient(), () => true));
     }
 
     public void Dispose()
@@ -42,7 +40,7 @@ public sealed class KnownFolderConfigTests : IDisposable
 
     private string EngineIni => Path.Combine(_local, @"Game\Saved\Config\Windows\Engine.ini");
 
-    private Task Install(string ini) => _installer.InstallComponentAsync(Game(), _target,
+    private Task Install(string ini) => Installer.InstallComponentAsync(Game(), _target,
         new ComponentPlan(ComponentRegistry.UnrealFrameCap) { Version = "60", ConfigEdits = [(ini, "SystemSettings", "t.MaxFPS", "60")] }, default);
 
     [Fact]
@@ -53,7 +51,7 @@ public sealed class KnownFolderConfigTests : IDisposable
         await Install(EngineIni);
         Assert.Equal("60", IniFile.Load(EngineIni).Get("SystemSettings", "t.MaxFPS"));
 
-        await _installer.RemoveComponentAsync(Game(), _target, ComponentRegistry.UnrealFrameCap, default);
+        await Installer.RemoveComponentAsync(Game(), _target, ComponentRegistry.UnrealFrameCap, default);
 
         Assert.Equal("144", IniFile.Load(EngineIni).Get("SystemSettings", "t.MaxFPS"));
     }
@@ -70,7 +68,7 @@ public sealed class KnownFolderConfigTests : IDisposable
         m.Component(ComponentRegistry.UnrealFrameCap)!.ConfigEdits[0].File = "|localappdata|" + Path.DirectorySeparatorChar + @"OtherApp\settings.ini";
         m.Save(_target);
 
-        await _installer.RemoveComponentAsync(Game(), _target, ComponentRegistry.UnrealFrameCap, default);
+        await Installer.RemoveComponentAsync(Game(), _target, ComponentRegistry.UnrealFrameCap, default);
 
         var ini = IniFile.Load(other);
         Assert.Equal("60", ini.Get("SystemSettings", "t.MaxFPS"));

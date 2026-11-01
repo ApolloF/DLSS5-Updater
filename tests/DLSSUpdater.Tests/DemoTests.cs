@@ -24,6 +24,7 @@ public class DemoTests : IDisposable
         Demo.Active = false;
         AppPaths.Root = _appRoot;
         try { Directory.Delete(_tmp, true); } catch (IOException) { }
+        GC.SuppressFinalize(this);
     }
 
     private static string[] Files(string dir) =>
@@ -89,7 +90,7 @@ public class DemoTests : IDisposable
     [Fact]
     public void Placeholders_pose_as_components_without_being_binaries()
     {
-        Assert.Equal(2, _store.DlssNrVersions.Count);
+        Assert.Equal(2, ComponentStore.DlssNrVersions.Count);
         Assert.Single(_store.RenoDxBuilds);
         Assert.Equal(["v11.0.1", "v11.0.0-beta.48", "v11.0.0-beta.45", "v8.5.0-rc10-model-sdr1"], _store.LecramBuilds.Select(b => b.DetectedLabel));
         Assert.Equal(LecramGeneration.V11, _store.LecramBuilds[0].Generation);
@@ -123,7 +124,7 @@ public class DemoTests : IDisposable
         Assert.Equal(Demo.LatestOpti, Demo.ManifestAt(_game)?.OptiTag);
         Assert.Equal(before, Files(_game));
 
-        await installer.UninstallAsync(game, _game, CancellationToken.None);
+        await Installer.UninstallAsync(game, _game, CancellationToken.None);
 
         Assert.Equal(new Version(3, 7, 10, 0), game.Dlss[0].Version);
         Assert.Null(Demo.ManifestAt(_game));
@@ -142,7 +143,7 @@ public class DemoTests : IDisposable
         Assert.All(game.Dlss, d => Assert.Equal(new Version(310, 10, 0, 0), d.Version));
         Assert.Equal(Demo.LatestMfg, Demo.ManifestAt(dir)!.MfgTag);
 
-        await installer.RestoreDlssAsync(game, dir, CancellationToken.None);
+        await Installer.RestoreDlssAsync(game, dir, CancellationToken.None);
         Assert.All(game.Dlss, d => Assert.Equal(new Version(310, 2, 1, 0), d.Version));
         Assert.True(Demo.ManifestAt(dir)!.Opti);
     }

@@ -22,10 +22,10 @@ public sealed class RenoDxTests : IDisposable
         AppPaths.Ensure();
         _root = Path.Combine(_tmp, "game");
         Directory.CreateDirectory(_root);
-        FakeVersionDll.Write(_store.ReShadePath, new Version(6, 8, 0, 0), ComponentStore.ReShadeFile);
+        FakeVersionDll.Write(ComponentStore.ReShadePath, new Version(6, 8, 0, 0), ComponentStore.ReShadeFile);
         var nr = Path.Combine(_tmp, "nr.dll");
         FakeVersionDll.Write(nr, new Version(310, 9, 16, 0), ComponentStore.DlssNrFile);
-        _nr = _store.ImportDlssNr(nr);
+        _nr = ComponentStore.ImportDlssNr(nr);
         _game = new GameInfo { Id = _root, Root = _root, Name = "Reno game", Dlss = [new DlssDll { Name = "nvngx_dlss.dll" }] };
 
         var pkg = Path.Combine(ComponentStore.TagDir(Component.OptiScaler, "v9.9.9"), "pkg");
@@ -134,7 +134,7 @@ public sealed class RenoDxTests : IDisposable
         Assert.Equal(original, File.ReadAllText(Path.Combine(InstallManifest.BackupDirFor(_root), backup.Backup)));
         Assert.Null(Ini().Get(RenoDxIni.Section, "Junk"));
         Assert.DoesNotContain($"{RenoDxIni.Section}/Junk", m.ReShadeIni.Keys);
-        await installer.UninstallAsync(_game, _root, default);
+        await Installer.UninstallAsync(_game, _root, default);
         Assert.Equal(original, File.ReadAllText(G("ReShade.ini")));
     }
 
@@ -195,7 +195,7 @@ public sealed class RenoDxTests : IDisposable
         await installer.InstallAsync(_game, _root, Reno(), null, default);
         Assert.Equal("other.addon64," + ComponentStore.RenoDxFile, Ini().Get("ADDON", "LoadFromDllMain"));
 
-        await installer.UninstallAsync(_game, _root, default);
+        await Installer.UninstallAsync(_game, _root, default);
         Assert.Equal(before, File.ReadAllText(G("ReShade.ini")));
         Assert.False(File.Exists(G(ComponentStore.RenoDxFile)));
     }
@@ -244,7 +244,7 @@ public sealed class RenoDxTests : IDisposable
         Assert.Null(Ini().Get(RenoDxIni.PresetSection, "DirectNeuralRenderingPassCount"));
         Assert.Null(Ini().Get(RenoDxIni.Section, "DirectNeuralRenderingHookStage"));
 
-        await installer.UninstallAsync(_game, _root, default);
+        await Installer.UninstallAsync(_game, _root, default);
         Assert.Equal(before, File.ReadAllText(G("ReShade.ini")));
     }
 
@@ -378,7 +378,7 @@ public sealed class RenoDxTests : IDisposable
         Assert.False(File.Exists(G(Fix)));
         Assert.True(File.Exists(G(ComponentStore.RenoDxFile)));
 
-        await installer.UninstallAsync(_game, _root, default);
+        await Installer.UninstallAsync(_game, _root, default);
         Assert.Equal("FOREIGN-5", File.ReadAllText(G(Dlss5)));
         Assert.Equal("FOREIGN-FIX", File.ReadAllText(G(Fix)));
         Assert.False(File.Exists(G(ComponentStore.RenoDxFile)));
@@ -419,7 +419,7 @@ public sealed class RenoDxTests : IDisposable
         Assert.False(File.Exists(G(Dlss5)));
         Assert.True(File.Exists(G(ComponentStore.DlssNrFile)));
 
-        await installer.UninstallAsync(_game, _root, default);
+        await Installer.UninstallAsync(_game, _root, default);
         Assert.Equal("USERS-OWN", File.ReadAllText(G(ComponentStore.RenoDxFile)));
         Assert.Equal("USERS-DLSS5", File.ReadAllText(G(Dlss5)));
     }

@@ -16,7 +16,7 @@ public sealed class CatalogState(CatalogClient client)
     public event Action? Changed;
 
     /// <summary>The copy on disk, with no request (startup).</summary>
-    public void LoadCached() => Apply(client.LoadCached());
+    public void LoadCached() => Apply(CatalogClient.LoadCached());
 
     public async Task RefreshAsync(CancellationToken ct) => Apply(await client.LoadAsync(ct));
 

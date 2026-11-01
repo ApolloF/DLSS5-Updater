@@ -260,7 +260,7 @@ public sealed partial class ComponentStore
         var builds = AddonBuilds(kind);
         if (id is not null) return builds.FirstOrDefault(b => b.Id.Equals(id, StringComparison.OrdinalIgnoreCase));
         var chosen = DefaultAddonId(kind);
-        return builds.FirstOrDefault(b => chosen is not null && b.Id.Equals(chosen, StringComparison.OrdinalIgnoreCase)) ?? builds.FirstOrDefault();
+        return builds.FirstOrDefault(b => chosen is not null && b.Id.Equals(chosen, StringComparison.OrdinalIgnoreCase)) ?? (builds is [var first, ..] ? first : null);
     }
 
     public AddonBuild? RenoDxBuildFor(string? id) => AddonBuildFor(AddonKind.RenoDx, id);

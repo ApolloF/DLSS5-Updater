@@ -78,10 +78,10 @@ public class IntegrationTests
             new InstallOptions { Streamline = true }, null, default);
         var sl = FileUtil.ReadVersion(Path.Combine(target, "sl.interposer.dll"))!;
         Assert.Equal(store.Streamline!.Version!.Minor, sl.Minor);
-        await installer.RestoreDlssAsync(GameScanner.Inspect(new GameEntry("G", game, "Manual")), target, default);
+        await Installer.RestoreDlssAsync(GameScanner.Inspect(new GameEntry("G", game, "Manual")), target, default);
         File.Delete(Path.Combine(target, "sl.interposer.dll"));
 
-        await installer.UninstallAsync(GameScanner.Inspect(new GameEntry("G", game, "Manual")), target, default);
+        await Installer.UninstallAsync(GameScanner.Inspect(new GameEntry("G", game, "Manual")), target, default);
         Assert.Equal(["G-Win64-Shipping.exe"], Directory.EnumerateFileSystemEntries(target).Select(f => Path.GetFileName(f)!).ToArray());
     }
 }

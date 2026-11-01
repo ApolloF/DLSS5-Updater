@@ -183,7 +183,7 @@ public sealed class HdrPicker
         return list.DistinctBy(c => c.Id, StringComparer.OrdinalIgnoreCase).OrderBy(c => c.Name, StringComparer.OrdinalIgnoreCase).ToList();
     }
 
-    private HdrChoice Named(CatalogMod mod, string how, int bits)
+    private static HdrChoice Named(CatalogMod mod, string how, int bits)
     {
         var file = FileFor(mod.Files, bits);
         var notes = new List<string>();

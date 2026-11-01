@@ -103,7 +103,7 @@ public sealed partial class GameViewModel
         var defaultPick = _s.Settings.DefaultBuild(ComponentRegistry.Feeder);
         var builds = FeederLibrary.Builds();
         var pinned = builds.FirstOrDefault(b => b.Id.Equals(defaultPick, StringComparison.OrdinalIgnoreCase));
-        var follows = pinned ?? builds.FirstOrDefault();
+        var follows = pinned ?? (builds is [var first, ..] ? first : null);
         // An empty library still installs: the newest release downloads with the first install.
         var def = new PickerDefault(follows?.Id, follows?.Label ?? "", pinned is null, Download: follows is null);
         var installed = Manifest?.Component(ComponentRegistry.Feeder)?.BuildId;
@@ -133,7 +133,7 @@ public sealed partial class GameViewModel
         var target = SelectedTarget?.Dir ?? Root;
         var store = _s.Store;
         var imported = new HashSet<string>();
-        if (File.Exists(store.DlssNrFor(EffectiveNrId))) imported.Add(ComponentRegistry.DlssNr);
+        if (File.Exists(ComponentStore.DlssNrFor(EffectiveNrId))) imported.Add(ComponentRegistry.DlssNr);
         if (store.AddonBuilds(AddonKind.RenoDx).Count > 0) imported.Add(ComponentRegistry.RenoDx);
         if (store.AddonBuilds(AddonKind.Lecram).Count > 0) imported.Add(ComponentRegistry.Lecram);
         var dfc = store.DfcBuildFor(EffectiveDfcId);

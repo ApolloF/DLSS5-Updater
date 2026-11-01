@@ -1,4 +1,5 @@
 using System.Collections.ObjectModel;
+using System.Diagnostics.CodeAnalysis;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using DLSSUpdater.Core;
@@ -57,8 +58,10 @@ public sealed partial class FrameLimitSettingsViewModel : ObservableObject
         }
     }
 
+    [SuppressMessage("Performance", "CA1822", Justification = "bound from XAML through the view model instance; WPF bindings cannot target static members")]
     public string FpsHint => $"{FrameLimitRules.MinFps} to {FrameLimitRules.MaxFps}";
 
+    [SuppressMessage("Performance", "CA1822", Justification = "bound from XAML through the view model instance; WPF bindings cannot target static members")]
     public string Explanation =>
         "Used by every game that has no choice of its own on its page. Auto picks the NVIDIA driver limiter on NVIDIA cards (nothing is placed in the game). " +
         "Nothing changes in a game until you press Apply on its page.";

@@ -1,5 +1,6 @@
 using System.Collections.ObjectModel;
 using System.Diagnostics;
+using System.Diagnostics.CodeAnalysis;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using DLSSUpdater.Core;
@@ -200,9 +201,11 @@ public sealed partial class ReShadeSettingsViewModel : ObservableObject
 
     // ---------- template ----------
 
+    [SuppressMessage("Performance", "CA1822", Justification = "bound from XAML through the view model instance; WPF bindings cannot target static members")]
     public string TemplatePath => AppPaths.ReShadeTemplate;
 
     [RelayCommand]
+    [SuppressMessage("Performance", "CA1822", Justification = "bound from XAML as a command; the generated command needs an instance member")]
     private void EditTemplate()
     {
         try { Process.Start(new ProcessStartInfo(ReShadeIniTemplate.EnsureFile()) { UseShellExecute = true }); }
@@ -211,6 +214,7 @@ public sealed partial class ReShadeSettingsViewModel : ObservableObject
     }
 
     [RelayCommand]
+    [SuppressMessage("Performance", "CA1822", Justification = "bound from XAML as a command; the generated command needs an instance member")]
     private void ResetTemplate()
     {
         if (!Views.Dialog.Confirm("Reset template", "Put the shipped ReShade.ini template back? Your edits to it are lost; games keep their ReShade.ini.", "Reset", danger: true)) return;

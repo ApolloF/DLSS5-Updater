@@ -28,6 +28,7 @@ public class InstallRecordMigrationTests : IDisposable
         InstallManifest.KnownFolder = InstallManifest.DefaultKnownFolder;
         try { Directory.Delete(_tmp, true); }
         catch (IOException) { }
+        GC.SuppressFinalize(this);
     }
 
     // 05826e8 (1.0): no Mode, no ini records.

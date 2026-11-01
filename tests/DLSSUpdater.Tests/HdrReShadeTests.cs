@@ -64,6 +64,7 @@ public class HdrReShadeTests : IDisposable
             Directory.Delete(_tmp, true);
         }
         catch (IOException) { }
+        GC.SuppressFinalize(this);
     }
 
     private HdrService Service(VulkanLayerState layer = VulkanLayerState.NotInstalled) =>
@@ -188,10 +189,10 @@ public class HdrReShadeTests : IDisposable
     private async Task<(HdrBuild Old, HdrBuild New)> TwoBuilds(HdrService svc, GameInfo g)
     {
         var old = (await svc.InstallAsync(g, _target, Choose(g), null, null, null, null, default)).Build;
-        await svc.RemoveAsync(g, _target, default);
+        await HdrService.RemoveAsync(g, _target, default);
         _ueExtContent = "MZ ue-extended build 2";
         var newer = (await svc.InstallAsync(g, _target, Choose(g, HdrFixtures.Json(_ueExtContent, "2026-10-22-bbbbbbb")), null, null, null, null, default)).Build;
-        await svc.RemoveAsync(g, _target, default);
+        await HdrService.RemoveAsync(g, _target, default);
         return (old, newer);
     }
 

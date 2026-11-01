@@ -36,7 +36,7 @@ public sealed partial class ComponentStore
     private static string NrRoot => Path.Combine(AppPaths.Components, "dlssnr");
     private static string LegacyNr => Path.Combine(AppPaths.Components, DlssNrFile);
 
-    public IReadOnlyList<NrVersion> DlssNrVersions
+    public static IReadOnlyList<NrVersion> DlssNrVersions
     {
         get
         {
@@ -59,12 +59,12 @@ public sealed partial class ComponentStore
 
     private static bool ValidId(string? id) => id is { Length: 64 } && id.All(char.IsAsciiHexDigit);
 
-    public string DlssNrFor(string? id)
+    public static string DlssNrFor(string? id)
     {
         if (id is null)
         {
             if (File.Exists(LegacyNr)) return LegacyNr;
-            id = DlssNrVersions.FirstOrDefault()?.Id;
+            id = DlssNrVersions is [var newest, ..] ? newest.Id : null;
             if (id is null) return LegacyNr;
         }
         if (!ValidId(id)) throw new InvalidDataException("Invalid NR version choice. Import the file again.");
@@ -72,7 +72,7 @@ public sealed partial class ComponentStore
     }
 
     /// <summary>New imports must identify themselves through their version resource, not their renamed file.</summary>
-    public NrVersion ImportDlssNr(string source)
+    public static NrVersion ImportDlssNr(string source)
     {
         if (FileUtil.ReadVersion(source) is null || !IsDlssNr(source))
             throw new InvalidDataException("Choose nvngx_dlssnr.dll (NVIDIA DLSSNR) with a readable DLL version. Extract archives first.");
@@ -88,7 +88,7 @@ public sealed partial class ComponentStore
         || string.Equals(FileUtil.InternalName(path), "DLSSNR", StringComparison.OrdinalIgnoreCase);
 
     /// <summary>Also retains older installs without a version resource so upgrading never destroys a way back.</summary>
-    internal NrVersion RetainDlssNr(string source)
+    internal static NrVersion RetainDlssNr(string source)
     {
         var sha = HashCache.Get(source);
         var v = new NrVersion(sha, FileUtil.Format(FileUtil.ReadVersion(source)), sha);
@@ -103,7 +103,7 @@ public sealed partial class ComponentStore
     /// to an older one afterwards sticks: <see cref="AppSettings.NewestDlssNrSeen"/> remembers what was offered.
     /// Returns the version it selected, or null.
     /// </summary>
-    public NrVersion? AdoptNewerDlssNr(AppSettings s)
+    public static NrVersion? AdoptNewerDlssNr(AppSettings s)
     {
         var versions = DlssNrVersions;
         if (versions.Count == 0 || versions[0].Id == s.NewestDlssNrSeen) return null;
@@ -117,9 +117,9 @@ public sealed partial class ComponentStore
         return newest;
     }
 
-    public NrVersion? MigrateDlssNr() => File.Exists(LegacyNr) ? RetainDlssNr(LegacyNr) : null;
+    public static NrVersion? MigrateDlssNr() => File.Exists(LegacyNr) ? RetainDlssNr(LegacyNr) : null;
 
-    public string VerifiedDlssNrPath(string? id)
+    public static string VerifiedDlssNrPath(string? id)
     {
         var path = DlssNrFor(id);
         if (!File.Exists(path)) throw new FileNotFoundException("This NR version isn't in the library. It downloads at the next update check, or import it in Settings → Local components.", path);
@@ -128,7 +128,7 @@ public sealed partial class ComponentStore
         return path;
     }
 
-    public ReleaseInfo ImportDlss(string source)
+    public static ReleaseInfo ImportDlss(string source)
     {
         var original = FileUtil.OriginalFilename(source);
         var file = DlssFiles.FirstOrDefault(f => f.Equals(original, StringComparison.OrdinalIgnoreCase));

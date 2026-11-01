@@ -1,3 +1,4 @@
+using System.Diagnostics.CodeAnalysis;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using DLSSUpdater.Core;
@@ -112,6 +113,7 @@ public sealed partial class OnboardingViewModel : ObservableObject
         : "Lecram's DLSS5 add-on. Import only: you add the file yourself.";
 
     /// <summary>The automatic Lecram check only exists in the private build; the stored choice is left alone elsewhere.</summary>
+    [SuppressMessage("Performance", "CA1822", Justification = "bound from XAML through the view model instance; WPF bindings cannot target static members")]
     public bool ShowLecramChannel => BuildFlags.LecramChannel;
 
     [ObservableProperty] private OnboardingChoice<NrAddon?> _addon;

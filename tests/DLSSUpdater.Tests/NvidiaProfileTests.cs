@@ -81,7 +81,7 @@ internal sealed class FakeDrs : IDrsProvider
             return i + 2;
         }
 
-        private FakeProfile At(IntPtr h) => _handles[(int)h - 2];
+        private FakeProfile At(IntPtr h) => _handles[checked((int)h) - 2];
 
         public IntPtr BaseProfile() => BaseHandle;
 

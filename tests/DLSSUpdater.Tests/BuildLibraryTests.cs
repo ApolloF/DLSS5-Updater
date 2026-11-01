@@ -148,7 +148,7 @@ public sealed class BuildLibraryTests : IDisposable
         LegacyRelease(Component.Uplift, "v1.3.0");
         var unfinished = LegacyRelease(Component.OptiScaler, "v0.9.51", complete: false);
 
-        _store.MigrateReleaseLibraries();
+        ComponentStore.MigrateReleaseLibraries();
 
         Assert.Equal(["v0.9.49", "v0.1.32-f5"], _store.Library(LibraryKind.OptiScaler).Select(b => b.Id));
         Assert.Equal(["v1.3.0"], _store.Library(LibraryKind.Uplift).Select(b => b.Id));
@@ -161,7 +161,7 @@ public sealed class BuildLibraryTests : IDisposable
         var uplift = await _store.EnsureUpliftAsync("v1.3.0", null, default);
         Assert.StartsWith(AppPaths.Components, uplift);
 
-        _store.MigrateReleaseLibraries();
+        ComponentStore.MigrateReleaseLibraries();
         Assert.Equal(2, _store.Library(LibraryKind.OptiScaler).Count);
         Assert.Contains(_store.StaleDownloads(_settings, []), i => i.Path == unfinished);
     }
@@ -173,7 +173,7 @@ public sealed class BuildLibraryTests : IDisposable
         var leftover = LegacyRelease(Component.OptiScaler, "v0.9.49");
         var notYet = LegacyRelease(Component.Uplift, "v1.3.0");
 
-        _store.MigrateReleaseLibraries();
+        ComponentStore.MigrateReleaseLibraries();
 
         Assert.True(Directory.Exists(leftover));
         var stale = _store.StaleDownloads(_settings, []).Select(i => i.Path).ToList();
@@ -184,7 +184,7 @@ public sealed class BuildLibraryTests : IDisposable
         var blocked = Path.Combine(AppPaths.Cache, "uplift");
         FileUtil.DeleteDirectory(blocked);
         Write(blocked, "a file where the folder should be");
-        _store.MigrateReleaseLibraries();
+        ComponentStore.MigrateReleaseLibraries();
     }
 
     [Fact]
@@ -546,7 +546,7 @@ public sealed class BuildLibraryTests : IDisposable
 
     // ---------- installs the scan can't see ----------
 
-    private List<string> NrBuilds(int count)
+    private static List<string> NrBuilds(int count)
     {
         var ids = Enumerable.Range(0, count).Select(i => new string((char)('a' + i), 64)).ToList();
         for (var i = 0; i < count; i++)
@@ -780,7 +780,7 @@ public sealed class BuildLibraryTests : IDisposable
         var source = Path.Combine(_tmp, "old-nr", ComponentStore.DlssNrFile);
         Write(source, "an old NR without a version resource");
 
-        var imported = _store.RetainDlssNr(source);
+        var imported = ComponentStore.RetainDlssNr(source);
         Assert.Empty(_store.TakeAdded());
 
         // Every later automatic pass leaves the NR runtime alone; the confirmed manual cleanup may still remove old ones.

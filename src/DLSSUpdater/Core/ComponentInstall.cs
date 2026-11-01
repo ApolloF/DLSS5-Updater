@@ -12,7 +12,7 @@ public sealed partial class Installer
 {
     /// <summary>Brings one registered component in the game to <paramref name="plan"/>, from whatever the record says it has now.</summary>
     /// <returns>What a replaced build left behind because it changed since we placed it.</returns>
-    public Task<ComponentUndo> InstallComponentAsync(GameInfo game, string targetDir, ComponentPlan plan, CancellationToken ct) =>
+    public static Task<ComponentUndo> InstallComponentAsync(GameInfo game, string targetDir, ComponentPlan plan, CancellationToken ct) =>
         Demo.Active ? Task.FromResult(new ComponentUndo(plan.Id, [], [], [])) : Task.Run(() =>
         {
             targetDir = FileUtil.Normalize(targetDir);
@@ -43,7 +43,7 @@ public sealed partial class Installer
         }, ct);
 
     /// <summary>Takes one component out of the game and puts back what it replaced; the rest of the install stays.</summary>
-    public Task<ComponentUndo> RemoveComponentAsync(GameInfo game, string targetDir, string id, CancellationToken ct) =>
+    public static Task<ComponentUndo> RemoveComponentAsync(GameInfo game, string targetDir, string id, CancellationToken ct) =>
         Demo.Active ? Task.FromResult(new ComponentUndo(id, [], [], [])) : Task.Run(() =>
         {
             targetDir = FileUtil.Normalize(targetDir);

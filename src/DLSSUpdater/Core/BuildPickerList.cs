@@ -71,7 +71,7 @@ public static class GamePickerLabels
     /// <param name="newest">The newest build's tag when it isn't the first of <paramref name="builds"/> (OptiScaler: the newest release of the chosen source).</param>
     public static IReadOnlyList<PickerChoice> Compose(PickerDefault def, IReadOnlyList<PickerChoice> builds, string? installed = null, string? pin = null, string? newest = null)
     {
-        var newestTag = newest ?? builds.FirstOrDefault()?.Tag;
+        var newestTag = newest ?? (builds is [var first, ..] ? first.Tag : null);
         var defInList = def.Tag is not null && builds.Any(b => Same(b.Tag, def.Tag));
         // A default that follows the newest release and isn't downloaded yet is newer than anything in the library.
         var defIsNewest = def.Tag is not null && (Same(def.Tag, newestTag) || def.FollowsNewest && !defInList && newest is null);

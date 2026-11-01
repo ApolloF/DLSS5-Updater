@@ -99,7 +99,7 @@ public sealed class ReShadePresetTests : ExtrasTestBase
         var before = Snapshot(Target);
         await Extras.ApplyPresetAsync(Game(), Target, "My Look", default);
 
-        await Extras.RemoveAsync(Game(), Target, ComponentRegistry.ReShadePreset, default);
+        await ReShadeExtras.RemoveAsync(Game(), Target, ComponentRegistry.ReShadePreset, default);
 
         Assert.Equal(before, Snapshot(Target));
         Assert.Equal("", Ini("GENERAL", "PresetPath"));
