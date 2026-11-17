@@ -30,6 +30,8 @@ OptiScaler (row 19).
 Methods the app does not install yet (Luma, third-party upscaler mods, the DX11 bridge, the all-in-one add-on, the RenoDX HDR
 mod) are listed as **coming**, so the answer is complete without promising an install.
 
+HSF (Capt-Hunter's frame generation add-on, import only, see docs/addons/hsf.md) is advice only, like Luma and DXVK: once the user has imported a release it is listed as "HSF frame generation (preview)" for a game with no frame generation of its own, with its needs (a flow source for DirectX 9/11 and DirectX 12 games without DLSS, MFG Unlock on RTX 20/30, borderless or windowed mode) and the anti-cheat caution. It is installed from the HSF section of the game page and never picked for you.
+
 ## The panel
 
 Each method is a clickable card: a one-line plain summary (`MethodAdvisor.SummaryOf`), the availability badge, the warning and the

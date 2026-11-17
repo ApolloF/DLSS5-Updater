@@ -55,6 +55,7 @@ Settings for all games. Every option has a short explanation, and the help butto
 | [RenoDX DLSS add-on](https://github.com/clshortfuse/renodx) | ShortFuse's ReShade add-on for neural rendering. | Downloaded and installed automatically, or imported. |
 | Lecram DLSS5 add-on | A ReShade add-on for neural rendering by Lecram, up to v13.4 (Early Access builds included), for 64-bit Direct3D 11, Direct3D 12 and Vulkan games. | You import it yourself: the add-on file, the author's setup exe or his add-on zip. Get new builds from the author's page. |
 | Deep Fried Chicken | A neural rendering add-on. Its licence allows personal use only. | You import the extracted release folder (or a .zip) yourself. Every import is kept, and each game can use its own version. |
+| HSF (preview) | Capt-Hunter's frame generation add-on: a ReShade add-on that feeds NVIDIA DLSS frame generation into games without it. Private, invite-only licence. | You import the release .zip or its extracted folder yourself; the app never downloads or shares it. RTX 40 or newer (RTX 20/30 with MFG Unlock), a flow source for DirectX 9/11 games, borderless or windowed, never in games with anti-cheat. |
 | DLSS5-Feeder | An MIT ReShade add-on that makes the DLSS calls for games without DLSS, so Deep Fried Chicken can run in them. DLAA only. | Downloaded from its GitHub releases and checked against the SHA-256 GitHub publishes. Single-player games only. |
 | [RenoDX HDR mods](https://github.com/clshortfuse/renodx) | ShortFuse's and the community's per-game HDR mods, plus generic Unreal and Unity ones. ReShade add-ons. | From the catalog. |
 | [Luma](https://github.com/Filoppi/Luma-Framework) | Per-game HDR and graphics mods by Pumbo and others, plus a generic Unreal one. ReShade add-ons. | From the catalog, downloaded from Luma's GitHub releases. |
@@ -174,7 +175,7 @@ DLSS5 Updater installs the work of these projects and their authors. It download
 - [ReShade](https://reshade.me) by crosire.
 - [RenoDX](https://github.com/clshortfuse/renodx) and [openNR](https://github.com/clshortfuse/openNR) by ShortFuse.
 - [GITC Uplift](https://github.com/ghostinthecamera/GITC-Uplift) by ghostinthecamera.
-- The DLSS5 add-on by Lecram and Deep Fried Chicken by its author.
+- The DLSS5 add-on by Lecram, Deep Fried Chicken by its author and HSF by Capt-Hunter.
 - [Luma Framework](https://github.com/Filoppi/Luma-Framework) by Pumbo and its mod authors.
 - [DXVK](https://github.com/doitsujin/dxvk) by doitsujin and its [Lilium HDR fork](https://github.com/EndlesslyFlowering/dxvk) by EndlesslyFlowering.
 - ReLimiter by RankFTW and [Display Commander](https://github.com/pmnoxx/display-commander) by pmnoxx.

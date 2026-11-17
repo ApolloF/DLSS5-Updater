@@ -589,6 +589,13 @@ public static class HelpTopics
             "Some mods need dgVoodoo2 as well. It is freeware that isn't redistributable, so the app doesn't download it: the section lists the versions and setup lines from the wiki and links dgVoodoo2's own releases page. " +
             "Luma and a RenoDX HDR mod both rework the HDR output and don't stack: installing the second one asks for a confirmation, the warning stays on the game page, and Update all skips the pair until you confirmed it once. Games with anti-cheat get nothing. " +
             "You can pick another mod by hand (the search box shortens the list), or import a Luma zip of your own, which is installed as it is. Every download is checked against the SHA-256 in the catalog; the zips are the author's own files, not copies."),
+        // ---------- HSF ----------
+        new("hsf", "HSF (preview)", "HSF (preview)", "Capt-Hunter's frame generation add-on for games without it; import only, installed when you press Install.",
+            "HSF (Capt-Hunter's universal frame generation) is a ReShade add-on that feeds NVIDIA DLSS Frame Generation into games that have none, in DirectX 9, 11 and 12 games. This is a preview build. " +
+            "Its licence is private and invite-only: the app never downloads or shares it. Import the release you were given in Settings → Local components (Import… for the .zip, Folder… for the extracted folder); the app copies the files as they are and names the build by the version in the zip's or folder's name. " +
+            "Installing needs ReShade 6.8 with add-on support in the game (the app installs it first when the game has none, but not beside OptiScaler). It puts hsf.addon64 (64-bit game) or hsf.addon32 (32-bit game) with the other add-ons, the HSF_streamline folder beside the exe (32-bit games need it too) and the release's reshade-shaders folder (it adds HSF.fx). When the game's bitness isn't known the app places the 64-bit add-on only. No HSF.ini is needed. Everything placed is recorded, files it replaced are backed up, and Remove puts them back. " +
+            "What it needs: an RTX 40 or newer card (RTX 20 and 30 work through the MFG Unlock add-on, which you install); borderless or windowed mode, not exclusive fullscreen; and for DirectX 9/11 games and DirectX 12 games without DLSS a flow source you add yourself: GITC Uplift (the app installs it), iMMERSE LaunchPad or LumeniteFX Kernel. DirectX 12 games ask for one restart from HSF's menu. " +
+            "Never use HSF in online games or games with anti-cheat: the app refuses to install it there. The method advisor lists it for games without their own frame generation once a release is imported; it is never picked for you."),
         // ---------- RenoDX HDR ----------
         new("hdr-renodx", "HDR (RenoDX)", "HDR (RenoDX)", "ReShade add-ons that give a game real HDR output; the app picks one per game.",
             "RenoDX HDR mods are ReShade add-ons that give a game real HDR output. The app picks one per game from the catalog, and the section on the game's Install tab says which and why. " +
@@ -800,6 +807,7 @@ public static class HelpTopics
         ["nv-power"] = "Use global. Prefer max performance for a game that stutters when the GPU clocks down.",
         ["hdr-skip"] = "Off. On only if colours look wrong while another HDR mod is active.",
         ["detection-override"] = "Leave everything on Auto. Change a value only when the game page shows something clearly wrong, such as DX11 for a DX12 game.",
+        ["hsf"] = "Install it only in single-player games, in borderless or windowed mode, with a flow source (GITC Uplift) for DirectX 9/11 games and DirectX 12 games without DLSS.",
         ["luma"] = "Leave HDR output on Auto first. Do not run Luma and a RenoDX HDR mod in the same game. For Unreal games add the launch argument shown, or the mod will not load.",
         ["hdr-renodx"] = "Install what is picked. Switch Use Unreal Extended off only if the game misbehaves with it, then try the plain generic Unreal add-on. Tune the look in the ReShade overlay (Home).",
         ["hdr-peak"] = "Your display's real peak (the HDR Calibration app or rtings.com give it). Leave empty if you are not sure.",
