@@ -262,9 +262,14 @@ internal sealed partial class MediaFireClient
 
     /// <summary>
     /// Uses the EOCD to locate a ZIP with either file-relative or ZIP-relative offsets: a setup exe with its ZIP appended, or a plain
-    /// .zip. Never runs the PE. Only the root dlss5-nr.addon64 is taken (not the copy in the add-on zip's dlss5-nr-host folder).
+    /// .zip. Never runs the PE. Writes the root dlss5-nr.addon64 to <paramref name="dest"/> and, when the package has them (v12.9 and
+    /// newer), the 32-bit add-on and NR's host folder in the game layout (<see cref="ComponentStore.LecramHostFiles"/>). Only the known
+    /// entry names are read and each goes to a fixed name, so no entry path reaches the disk. The hand-install zip has the host folder
+    /// ready; the setup exe keeps its parts at its own paths (<c>nr-host64.exe</c> at the root, the author's ReShade in <c>reshade\</c>)
+    /// and its root add-on is the host's too (the zip's host copy is the same file). Returns true when the host set was written; a
+    /// package with only part of it is refused.
     /// </summary>
-    internal static void ExtractAddon(string package, string dest)
+    internal static bool ExtractPackage(string package, string dest)
     {
         if (new FileInfo(package).Length > MaxDownload) throw new InvalidDataException("Lecram package is too large.");
         var data = File.ReadAllBytes(package);
@@ -279,8 +284,57 @@ internal sealed partial class MediaFireClient
         if (start < 0 || start > end) throw new InvalidDataException("Invalid Lecram ZIP offsets.");
         using var stream = new MemoryStream(data, (int)start, data.Length - (int)start, false);
         using var zip = new ZipArchive(stream, ZipArchiveMode.Read);
-        var entries = zip.Entries.Where(e => e.FullName.Equals(ComponentStore.Lecram11File, StringComparison.OrdinalIgnoreCase)).ToArray();
-        if (entries.Length != 1 || entries[0].Length > 128 * 1024 * 1024) throw new InvalidDataException("Lecram ZIP must contain one root dlss5-nr.addon64.");
-        entries[0].ExtractToFile(dest);
+
+        ZipArchiveEntry? One(string name)
+        {
+            var found = zip.Entries.Where(e => e.FullName.Replace('\\', '/').Equals(name, StringComparison.OrdinalIgnoreCase)).ToArray();
+            if (found.Length > 1) throw new InvalidDataException($"Lecram ZIP holds {name} more than once.");
+            if (found.Length == 1 && found[0].Length > MaxEntry) throw new InvalidDataException($"{name} in the Lecram ZIP is too large.");
+            return found.FirstOrDefault();
+        }
+        var addon = One(ComponentStore.Lecram11File) ?? throw new InvalidDataException("Lecram ZIP must contain one root dlss5-nr.addon64.");
+        var host = ComponentStore.LecramHostDir + "/";
+        var addon32 = One(ComponentStore.Lecram32File);
+        var folder = zip.Entries.Any(e => e.FullName.Replace('\\', '/').StartsWith(host, StringComparison.OrdinalIgnoreCase));
+        var exe = folder ? One(host + ComponentStore.LecramHostExe) : One(ComponentStore.LecramHostExe);
+        var reshade = folder ? One(host + ComponentStore.ReShadeFile) : One("reshade/" + ComponentStore.ReShadeFile);
+        var hostAddon = folder ? One(host + ComponentStore.Lecram11File) : addon;
+
+        Directory.CreateDirectory(dest);
+        addon.ExtractToFile(Path.Combine(dest, ComponentStore.Lecram11File));
+        // An older setup ships the author's ReShade without a host; only the 32-bit add-on or the host exe say the package has one.
+        if (addon32 is null && exe is null && !folder) return false;
+        ZipArchiveEntry?[] set = [addon32, exe, reshade, hostAddon];
+        if (set.Any(e => e is null))
+        {
+            var missing = ComponentStore.LecramHostFiles.Where((_, i) => set[i] is null);
+            throw new InvalidDataException($"The package holds NR's host only in part ({string.Join(", ", missing)} missing). Import the author's whole setup exe or add-on zip.");
+        }
+        if (set.Sum(e => e!.Length) + addon.Length > MaxDownload) throw new InvalidDataException("Lecram package is too large.");
+        for (var i = 0; i < set.Length; i++)
+        {
+            var path = Path.Combine(dest, ComponentStore.LecramHostFiles[i]);
+            Directory.CreateDirectory(Path.GetDirectoryName(path)!);
+            set[i]!.ExtractToFile(path, overwrite: true);
+            CheckHostFile(path, ComponentStore.LecramHostFiles[i]);
+        }
+        return true;
+    }
+
+    private const int MaxEntry = 128 * 1024 * 1024;
+
+    /// <summary>Every file of the host set is a PE file whose version resource, when it has one, names it as that file (the real v13.4.0 set does).</summary>
+    private static void CheckHostFile(string path, string relative)
+    {
+        var name = Path.GetFileName(relative);
+        var head = new byte[2];
+        using (var f = File.OpenRead(path))
+            if (f.Read(head, 0, 2) != 2 || head[0] != 'M' || head[1] != 'Z') throw new InvalidDataException($"{relative} in the Lecram package is not a Windows binary.");
+        var original = FileUtil.OriginalFilename(path);
+        var named = string.IsNullOrEmpty(original) || original.Equals(name, StringComparison.OrdinalIgnoreCase)
+                    || (name.Equals(ComponentStore.ReShadeFile, StringComparison.OrdinalIgnoreCase) && original.StartsWith("ReShade", StringComparison.OrdinalIgnoreCase));
+        if (!named) throw new InvalidDataException($"{relative} in the Lecram package is {original}.");
+        if (name.Equals(ComponentStore.Lecram11File, StringComparison.OrdinalIgnoreCase) && !ComponentStore.LooksLikeLecramV11(path))
+            throw new InvalidDataException($"{relative} in the Lecram package is not Lecram's add-on.");
     }
 }

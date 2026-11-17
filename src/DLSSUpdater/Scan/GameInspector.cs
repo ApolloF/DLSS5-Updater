@@ -200,14 +200,14 @@ public static partial class GameInspector
 
     // ---------- exe ranking ----------
 
-    [GeneratedRegex(@"^(unins\d*|setup|dxsetup|dxwebsetup|vc_?redist.*|dotnet.*|.*crash.*|.*report.*|.*uninstall.*|.*updater?|.*installer.*|.*prereq.*|.*redist.*|unitycrashhandler\d*|.*cefsubprocess|.*webhelper|shadercompileworker|.*helper|touchup|cleanup|activation.*|quicksfv|7za?|.*benchmark.*|.*_be|.*_eac|.*server|.*dedicated.*)$",
+    [GeneratedRegex(@"^(unins\d*|setup|dxsetup|dxwebsetup|vc_?redist.*|dotnet.*|.*crash.*|.*report.*|.*uninstall.*|.*updater?|.*installer.*|.*prereq.*|.*redist.*|unitycrashhandler\d*|.*cefsubprocess|.*webhelper|shadercompileworker|.*helper|nr-host\d*|touchup|cleanup|activation.*|quicksfv|7za?|.*benchmark.*|.*_be|.*_eac|.*server|.*dedicated.*)$",
         RegexOptions.IgnoreCase)]
     private static partial Regex ExcludedExe();
 
     [GeneratedRegex(@"-(Win64|WinGDK)-Shipping$", RegexOptions.IgnoreCase)]
     private static partial Regex UnrealShipping();
 
-    /// <summary>Installers, crash reporters, servers and other exes that are never the game.</summary>
+    /// <summary>Installers, crash reporters, servers and other exes that are never the game (Lecram's nr-host64.exe is NR's host, placed by us).</summary>
     internal static bool IsHelperExe(string path) => ExcludedExe().IsMatch(Path.GetFileNameWithoutExtension(path));
 
     internal static List<string> RankExes(string root, IEnumerable<(string Path, long Size)> exes, string? gameName = null)

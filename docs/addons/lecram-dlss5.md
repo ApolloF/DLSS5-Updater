@@ -101,16 +101,17 @@ build) and notices (C). From README, release notes and strings (C/D):
   regular release in that game (C). Its `sources.json` also pins NVIDIA files for NR's frame generation and DLSS (`dlss_store` 310.9.16,
   `streamline` 2.12.0 with five `bin/x64` plugins, `dlssg` 310.7.0) and MFG Unlock 1.9.0 (C).
 - **`DLSS5 NR Add-on v13.4.0.zip`** (hand install, from the author's page): `dlss5-nr.addon64`, `dlss5-nr.addon32`, `INSTALL.txt`,
-  `RELEASE-NOTES.md`, `THIRD-PARTY-NOTICES.txt` at the root and `dlss5-nr-host\` with `dlss5-nr.addon64` (the same file as the root one),
-  `nr-host64.exe` and `ReShade64.dll` (the fixed 6.8.0.1 build). `INSTALL.txt`: copy everything into the game's ReShade folder, the host folder
+  `RELEASE-NOTES.md`, `THIRD-PARTY-NOTICES.txt` at the root and `dlss5-nr-host\` with `dlss5-nr.addon64` (the same file as the root one,
+  sha256 `f3ecd69e137c…` both), `nr-host64.exe` and `ReShade64.dll` (the fixed 6.8.0.1 build). `INSTALL.txt`: copy everything into the game's ReShade folder, the host folder
   as it is; ReShade loads the add-on that matches the game's bitness and leaves the other (C). v12.9.9's release notes name the same layout
   for `DLSS5 NR Add-on v12.9.9.zip` (D, not opened).
 - The release page (pasted by the owner, 2026-11-17) offers v12.9.9 as the regular release, v13.4.0 as Early Access through the dev setup,
   and v10.8 as the stable legacy build (D).
 
-### Host and 32-bit (not yet supported)
+### Host and 32-bit
 
-From v12.9 the add-on runs NR in a 64-bit host process for the games it can't serve in-process. Facts for the PR that adds it (C unless marked):
+From v12.9 the add-on runs NR in a 64-bit host process for the games it can't serve in-process. What the app does with it is under "App
+support"; the facts (C unless marked):
 
 - **Which games.** Direct3D 9, Direct3D 10, OpenGL and every 32-bit game (Direct3D 9, 10, 11, OpenGL), and 64-bit Direct3D 11 games with
   in-game MSAA, run NR through the host; D3D12, Vulkan and other D3D11 games run it in the game. Not supported by the author yet: 32-bit
@@ -120,17 +121,23 @@ From v12.9 the add-on runs NR in a 64-bit host process for the games it can't se
   for a 64-bit one, plus the folder `dlss5-nr-host` beside them with `nr-host64.exe` (internal name `nr-host`, "DLSS5 NR host for relayed
   games"), its own `dlss5-nr.addon64` and `ReShade64.dll`. The setup exe holds `nr-host64.exe` and `reshade\ReShade64.dll` at its own
   paths and no `dlss5-nr-host` folder; how it assembles the folder in a game was not checked. Only the hand-install zip has the folder ready.
+- **The same files in every package (2026-11-17, sha256).** v13.4.0: the zip's `dlss5-nr-host\dlss5-nr.addon64` is its root add-on
+  (`f3ecd69e137c…`), its `dlss5-nr-host\nr-host64.exe` is the dev setup's root `nr-host64.exe` (`3d4ef7c1b8b0…`) and its
+  `dlss5-nr-host\ReShade64.dll` is the setup's `reshade\ReShade64.dll` (`af3c41736f8d…`, the same in the v12.9.9 setup). v12.9.9's setup:
+  `nr-host64.exe` `e41a2205091b…`, `dlss5-nr.addon32` `f8e01ad43d5c…`; v13.4.0: `dlss5-nr.addon32` `acb8fc8ccc80…` (zip and setup alike).
+  A host folder assembled from a setup (its exe, `reshade\ReShade64.dll`, the root add-on) is therefore byte for byte the zip's. Every
+  file of the set has a version resource naming it (OriginalFilename `dlss5-nr.addon32`, `nr-host64.exe`, `ReShade64.dll`,
+  `dlss5-nr.addon64`; read with FileVersionInfo, nothing run).
+- **ReShade.** INSTALL.txt: "Needs ReShade 6.8 or newer with add-on support in the game". In a 32-bit game that is the 32-bit ReShade;
+  the host brings its own 64-bit one.
 - **Settings.** A game NR reaches through its host has a second ReShade.ini in `dlss5-nr-host`: NR's shortcuts go to the host's ini, the
   panel key to both (README). Which other `[RenoDX.DLSS5]` keys the host reads from its own ini has not been checked; the later PR has to
   find out before writing options there. Host keys seen in v12.9.9: `NRRelay`, `NRRelayFlipEx`, `NRRelayFullscreenMode`,
   `NRResumeTakeover`, and in v13.4.0 also `NRRelayTwins`, `NRRelayVelocity`; none has a catalog entry (undocumented). `NRFrameBuffering`
   acts on relayed games too.
 - **Logs.** The host writes its own `dlss5-nr-host\ReShade.log` (release page).
-- **What the app does now.** It installs only `dlss5-nr.addon64` for 64-bit D3D11, D3D12 and Vulkan games. The import of a setup exe or
-  the hand-install zip takes only the root `dlss5-nr.addon64`; `dlss5-nr.addon32`, `nr-host64.exe` and `dlss5-nr-host\` are left out. The
-  later PR needs: library builds that hold the whole set (addon32, host exe, host ReShade), placement of the host folder and the 32-bit add-on
-  per game bitness and API, the host's ini, uninstall of the folder, the ReShade build for the host (the author ships his fixed 6.8.0.1),
-  and the detection of the games that need the host (bitness, API, D3D11 MSAA).
+- **Not checked** (open): which `[RenoDX.DLSS5]` keys a relayed game takes from the game's ReShade.ini and which from the host's own;
+  how NR tells a 64-bit Direct3D 11 game with in-game MSAA; what the host keys above do.
 
 ## ReShade.ini
 
@@ -378,8 +385,8 @@ Since the builds went behind the author's Buy Me a Coffee, the public DLSS5 Upda
 - **Setup exe.** A Rust PE with a normal DEFLATE ZIP appended after the PE sections (central directory offsets count from the ZIP's
   start; the app also accepts offsets counted from the file start). Entries include `dlss5-nr.addon64` and `package.json`
   (schema 1, `version` `v11.0.0-beta.22`, `kind` `v11`). The app finds the end-of-central-directory record, reads the ZIP in
-  memory and extracts only the root `dlss5-nr.addon64`; the exe is deleted afterwards. The Early Access setup has the same layout (C), and
-  from v12.9.9 both also hold `dlss5-nr.addon32` and `nr-host64.exe`, which are not extracted.
+  memory and extracts the root `dlss5-nr.addon64` and, when the package has them (v12.9.9 and newer), `dlss5-nr.addon32` and NR's host
+  (see "App support", Import); the exe is deleted afterwards. The Early Access setup has the same layout (C).
 - **Live state (2026-10-18):** the folder lists `DLSS5-NR-Setup-v11.0.0-beta.24.exe` (8,981,402 bytes) and `licenses.txt`.
 - **Live state (2026-10-20):** the root lists `DLSS5-NR-Setup-v11.0.0-beta.48.exe` (9,116,821 bytes), `changelog-v11.0.0-beta.48.txt` and
   `licenses.txt`. Two subfolders appeared: `addon` (the raw beta.48 `dlss5-nr.addon64`) and `archive` (older setups beta.18..beta.45,
@@ -410,14 +417,29 @@ Per-game build picks are untouched.
 
 ## App support
 
-DLSS5 Updater downloads and installs the add-on automatically from the catalog mirror (`neural.lecram`; the file itself decides v10 or v11) or imports it (the private build can also fetch v11-generation builds, regular and Early Access, from the author's channel, see "Update source") and installs it per game in ReShade-only mode (64-bit Direct3D 11, Direct3D 12 and Vulkan games; see "Host and 32-bit"), with the same
-prerequisites as ShortFuse's add-on: ReShade 6+, a game with native DLSS and the NR runtime `nvngx_dlssnr.dll`. It excludes
-OptiScaler-NR and Deep Fried Chicken. It is not added to `[ADDON] LoadFromDllMain`, since nothing here shows it needs early load.
+DLSS5 Updater downloads and installs the add-on automatically from the catalog mirror (`neural.lecram`; the file itself decides v10 or v11) or imports it (the private build can also fetch v11-generation builds, regular and Early Access, from the author's channel, see "Update source") and installs it per game in ReShade-only mode: 64-bit Direct3D 11, Direct3D 12 and Vulkan games with any build, and
+Direct3D 9, Direct3D 10, OpenGL and 32-bit games with a build that carries NR's host (see Host below). Prerequisites: ReShade 6+ (6.8+
+with a host build, from INSTALL.txt), the NR runtime `nvngx_dlssnr.dll`, and up to v11.9 a game with native DLSS. v12.0.0 and newer also
+run in games without it (`LecramRoute.FirstWithoutDlssBuild`: v12.0.0's release notes say "with or without DLSS", and its README says
+NR then uses the game's motion vectors where it finds them, else optical flow). It excludes OptiScaler-NR and Deep Fried Chicken. It is not added to `[ADDON] LoadFromDllMain`, since nothing here shows it needs early load.
 
 - **Import.** The add-on file itself (`renodx-dlss5.addon64` or `dlss5-nr.addon64`), or one of the author's packages: a setup exe
-  (`DLSS5-NR-Setup-v*.exe`, `DLSS5-NR-Dev-Setup-v*.exe`) or the hand-install zip (`DLSS5 NR Add-on v*.zip`). From a package the app takes only
-  the root `dlss5-nr.addon64` (the same appended-ZIP reader as the channel; the exe is never run) and imports it like the file; the 32-bit
-  add-on and the `dlss5-nr-host` folder (with its own copy of the add-on) are left out, and a package without a root add-on is refused.
+  (`DLSS5-NR-Setup-v*.exe`, `DLSS5-NR-Dev-Setup-v*.exe`) or the hand-install zip (`DLSS5 NR Add-on v*.zip`). From a package the app takes
+  the root `dlss5-nr.addon64` (the same appended-ZIP reader as the channel, `MediaFireClient.ExtractPackage`; the exe is never run) and
+  imports it like the file. When the package has NR's host it also takes the host set: `dlss5-nr.addon32` and the `dlss5-nr-host` folder,
+  from the zip's folder, or assembled from a setup's own paths (`nr-host64.exe`, `reshade\ReShade64.dll` and the root add-on: the same
+  files byte for byte, see "Host and 32-bit"). Only these known entry names are read, each into a fixed name (no entry path reaches the
+  disk), each at most 128 MB. Every file of the set must be a PE file whose version resource, when it has one, names it as that file, and
+  the host's add-on must be the v11 generation. The 32-bit add-on or the host exe marks a package with a host; it then needs the whole
+  set, else it is refused ("only in part"). A setup that has only the author's ReShade and no host exe imports without a host. A package
+  without a root add-on is refused. The private build's channel downloads go the same way.
+- **Host set in the library.** A build that came from a package with the host keeps the set in its own folder, in the game layout
+  (`dlss5-nr.addon32`, `dlss5-nr-host\nr-host64.exe`, `dlss5-nr-host\ReShade64.dll`, `dlss5-nr-host\dlss5-nr.addon64`). The build id
+  stays the SHA-256 of the 64-bit add-on: it decides the generation, label and options, the set comes from the same release, and the same
+  build from the setup, the zip or the bare file is one build. A package import of a build already there replaces its set as a whole (as
+  Deep Fried Chicken's imports do); a bare add-on import keeps it. A folder with only part of the set refuses to install ("Import its setup
+  exe or add-on zip again"). Settings → Local components says per v11-generation build "with NR's host and 32-bit add-on" or "64-bit
+  add-on only (no NR host)".
 - **Library.** Every imported build is kept: `components\lecram-dlss5\<sha256>\<file name>` plus a `version.json` (id = SHA-256,
   file name, file version, generation V10/V11, detected build label, the user's own label, import date). Importing the same file
   again changes nothing, an import never deletes another build, and Remove deletes the selected one. The first run after the
@@ -432,6 +454,20 @@ OptiScaler-NR and Deep Fried Chicken. It is not added to `[ADDON] LoadFromDllMai
 - **Placement.** The chosen build's file is placed under its generation's name. The other generation's file is removed if the app
   placed it, or moved to the backup folder if it was already in the game (v11 goes inert next to `renodx-dlss5.addon64`). Other
   NR injectors (`renodx-dlssfix`, Deep Fried Chicken) are moved aside too. Uninstall restores everything. ShortFuse's add-on is left alone.
+- **Host.** With a build that carries the host, the app places the whole set beside the game's ReShade, as INSTALL.txt asks, whatever
+  the game: `dlss5-nr.addon64`, `dlss5-nr.addon32` and the `dlss5-nr-host` folder. ReShade loads only the add-on that matches the game's
+  bitness and NR starts its host only for the games it relays, so a 64-bit Direct3D 11 game with in-game MSAA (a game setting the app
+  can't see) is covered without detecting it. Every file is recorded as placed (record-level `Files`, shown under the Lecram component);
+  a `dlss5-nr-host` folder that wasn't there is recorded in `Dirs`, so it leaves whole, with the `ReShade.ini` and `ReShade.log` NR's host
+  writes in it. Files of a hand install already there are backed up and restored. Switching to a build without the host, a run without
+  Lecram, and Uninstall take the set out. A 32-bit game gets ReShade32 as its proxy (`d3d9.dll`, `opengl32.dll`, `dxgi.dll`), as for
+  every ReShade-only install. The install refuses, with the reason: a game that needs the host (32-bit, Direct3D 9, Direct3D 10, OpenGL)
+  with a build without it; 32-bit Vulkan and 32-bit Direct3D 12 (not supported by the author yet); a game without native DLSS with a build
+  older than v12.0.0 (`LecramRoute.Refusal`). The app writes nothing into the host's own ReShade.ini; NR's shortcuts, which go there, are
+  not app options. `nr-host64.exe` is never taken for the game's exe (`GameInspector`). The anti-cheat confirmation is the same as for
+  any install.
+- **Advisor.** In a game without DLSS, the method panel lists "Neural rendering with Lecram DLSS5 add-on" before Feeder when a Lecram
+  build is in the library (docs/advisor.md).
 - **Keys written.** Only the options set in Settings, only to `[RenoDX.DLSS5]`, only while the add-on is installed. Options that
   exist in one generation only are hidden for the other (v10 only: `NRAutoMask`; v11 only: `NeuralUplift`, `NRPreset`,
   `NRPass2Preset`..`NRPass4Preset`, `NRVramBuffering`, `NRGpuCrashWitness`, `NRPresentFgPath` and every v12.9.9 / v13.4.0 key below); `NRHookPoint`, `NRStyle`, `NRLocalStructure`, `NRSkinStructure` and `NRPresentGuides` offer
