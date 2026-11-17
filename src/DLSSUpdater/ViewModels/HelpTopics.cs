@@ -16,15 +16,15 @@ public static class HelpTopics
 {
     internal static string LecramSourceIntro(bool channelEnabled) => channelEnabled
         ? "Lecram's v11 and newer builds are fetched from the author's public MediaFire channel during update checks, regular and Early Access releases alike (the newest wins). In Local components, turn automatic checks on or off, use Check now and see the last result. Older builds can still be imported. "
-        : "Lecram's builds are import only: get new ones from the author's page and import them in Local components (dlss5-nr.addon64 or renodx-dlss5.addon64, or the author's DLSS5 NR setup exe or add-on zip, from which the app takes dlss5-nr.addon64); the file itself tells v10 from v11. ";
+        : "Lecram's builds are import only: get new ones from the author's page and import them in Local components (dlss5-nr.addon64 or renodx-dlss5.addon64, or the author's DLSS5 NR setup exe or add-on zip, from which the app takes dlss5-nr.addon64 and, from v12.9, the 32-bit add-on and NR's host); the file itself tells v10 from v11. ";
 
     internal static string LecramUpdates(bool channelEnabled) => channelEnabled
         ? "The public MediaFire folders are the same sources used by the author's DLSS5-NR-Setup installer and by his Early Access DLSS5-NR-Dev-Setup. " +
           "The newest upload across the regular and the Early Access folder wins; ties prefer the raw add-on, then ZIP, then setup EXE. Each download is checked against the listing's SHA-256. " +
-          "Only dlss5-nr.addon64 is extracted; downloaded installers are never run and are removed afterwards. Channel moves are followed once. " +
+          "Only dlss5-nr.addon64 is extracted, with the 32-bit add-on and NR's host when the package has them (v12.9 and newer); downloaded installers are never run and are removed afterwards. Channel moves are followed once. " +
           "Builds enter the existing library and only a newer build becomes its default. Games keep their installed build until you choose to change it. " +
           "Offline or failed checks keep the library. New builds can have options this app does not list; tune those in the ReShade overlay."
-        : "Lecram's builds are import only: the app does not download them. Get a new build from the author's page and import it in Local components (the add-on file, the author's setup exe or his add-on zip; from the last two only dlss5-nr.addon64 is taken). " +
+        : "Lecram's builds are import only: the app does not download them. Get a new build from the author's page and import it in Local components (the add-on file, the author's setup exe or his add-on zip; from the last two the app takes dlss5-nr.addon64 and, from v12.9, the 32-bit add-on and NR's host). " +
           "Builds enter the existing library and only a newer build becomes its default. Games keep their installed build until you choose to change it. " +
           "Builds already in the library keep working. New builds can have options this app does not list; tune those in the ReShade overlay.";
 
@@ -126,12 +126,14 @@ public static class HelpTopics
             LecramSourceIntro(BuildFlags.LecramChannel) +
             "There are two generations: v10 and older (renodx-dlss5.addon64, recognised by its version resource) and v11 and newer (dlss5-nr.addon64, recognised by strings in the file because it has no version resource). " +
             "Every import is kept as its own build, named by the catalog's version, else the highest vX.Y.Z string in the file (never the DLSS SDK's v310.x; a build with neither goes by its file version), or by you; a game only ever gets one file, because v11 goes inert when a renodx-dlss5.addon64 file sits next to it (from v11 beta.22 not when ReShade has that add-on disabled). Settings picks the default build and each game can pick its own, whose generation decides the options shown. " +
-            "It needs ReShade + add-ons mode, ReShade 6+ with add-on support, a game with native DLSS and the NR runtime nvngx_dlssnr.dll, and it replaces OptiScaler-NR and Deep Fried Chicken. " +
+            "It needs ReShade + add-ons mode, ReShade 6+ with add-on support (6.8+ for builds with NR's host) and the NR runtime nvngx_dlssnr.dll, and it replaces OptiScaler-NR and Deep Fried Chicken. Up to v11.9 it also needs a game with native DLSS; v12 and newer also run in games without it, on the game's motion vectors where NR finds them, else optical flow. " +
             "It can run next to ShortFuse's RenoDX add-on once you confirm the warning (NR then runs twice): for v11 builds the app then sets ForeignNr=observe; v12's default auto already runs beside it. The 0928 pair (ShortFuse 0.2026.0928 and Lecram v8.5.0-rc10) was tested working. Each exact pair of builds has a status (Works, Crashed or not tested together yet); only Crashed shows a warning. Mark the current build pair on the Install tab. " +
             "A copy of either Lecram file already in the game is moved to the backup folder and restored by Uninstall. Options that exist in only one generation are hidden for the other, following the build the game uses. " +
             "From v11 Patch 4 (beta.18) the author also ships its own installer (DLSS5 NR Setup). It finds the add-on in every game on every drive and its Update all replaces it there, games this app manages included, so manage a game with one of the two. " +
             "It keeps a shared nvngx_dlssnr.dll in %LOCALAPPDATA%\\DLSS5-NR\\runtime, which v11 also finds by itself. " +
-            "From v12.9 the author also ships a 32-bit add-on (dlss5-nr.addon32) and NR's host (the dlss5-nr-host folder) for Direct3D 9, Direct3D 10, OpenGL and 32-bit games. The app doesn't install either yet: it installs dlss5-nr.addon64 for 64-bit Direct3D 11, Direct3D 12 and Vulkan games."),
+            "From v12.9 the author also ships a 32-bit add-on (dlss5-nr.addon32) and NR's 64-bit host (the dlss5-nr-host folder): Direct3D 9, Direct3D 10, OpenGL and 32-bit games run NR through it, and so do 64-bit Direct3D 11 games with in-game MSAA. Import his setup exe or add-on zip to get them (a bare dlss5-nr.addon64 has no host); Local components says which builds carry the host. " +
+            "A build with the host gets the whole set beside the game's ReShade, as the author's INSTALL.txt asks: both add-ons and the dlss5-nr-host folder. ReShade loads only the add-on that matches the game, and NR starts its host only when it needs it. Uninstall, or switching to a build without the host, takes them out again; a host folder the app created goes whole, with the ReShade.ini and ReShade.log NR's host writes there. " +
+            "Not supported by the author yet: 32-bit Vulkan and 32-bit Direct3D 12 games. A game NR runs through its host also writes dlss5-nr-host\\ReShade.log; NR's shortcuts go to the host's ReShade.ini, which the app doesn't write."),
 
         new("lecram-updates", "General", "Lecram update source", "How the app gets Lecram builds and which build becomes the default.", LecramUpdates(BuildFlags.LecramChannel)),
 

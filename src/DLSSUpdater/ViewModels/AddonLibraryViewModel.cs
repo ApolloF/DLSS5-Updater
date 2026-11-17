@@ -182,9 +182,14 @@ public sealed partial class AddonLibraryViewModel : ObservableObject
             };
             var size = File.Exists(path) ? $"{new FileInfo(path).Length / 1048576.0:0.0} MB  ·  " : "";
             var count = _buildCount > 1 ? $"  ·  {_buildCount} builds in the library" : "";
-            return $"{generation}{size}SHA-256 {build.Id[..12]}…{count}";
+            return $"{generation}{LecramHostInfo(build)}{size}SHA-256 {build.Id[..12]}…{count}";
         }
     }
+
+    /// <summary>Whether a v11-generation Lecram build carries NR's host, which Direct3D 9, Direct3D 10, OpenGL and 32-bit games need.</summary>
+    internal static string LecramHostInfo(AddonBuild build) => build.Generation != LecramGeneration.V11 ? ""
+        : ComponentStore.LecramHasHost(build) ? "with NR's host and 32-bit add-on  ·  "
+        : "64-bit add-on only (no NR host)  ·  ";
 
     /// <summary>Rebuilds the list from the library and the selection from the settings.</summary>
     public void Reload()

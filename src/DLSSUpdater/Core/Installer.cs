@@ -182,12 +182,13 @@ public sealed partial class Installer(ComponentStore store)
             throw new InvalidOperationException("RenoDX needs a game with native DLSS.");
         if (o.Lecram && (!o.ReShade || !dlssNr))
             throw new InvalidOperationException("Lecram's DLSS5 add-on needs ReShade with add-on support and the NR runtime (downloaded automatically, or import it in Settings).");
-        if (o.Lecram && !nativeDlss)
-            throw new InvalidOperationException("Lecram's DLSS5 add-on needs a game with native DLSS.");
         if (o.Dfc && (!o.ReShade || !dlssNr))
             throw new InvalidOperationException("Deep Fried Chicken needs ReShade with add-on support and the NR runtime (downloaded automatically, or import it in Settings).");
         var renoDx = o.RenoDx ? store.RequireAddon(AddonKind.RenoDx, o.RenoDxId) : null;
         var lecram = o.Lecram ? store.RequireAddon(AddonKind.Lecram, o.LecramId) : null;
+        var lecramHost = lecram is not null ? ComponentStore.LecramHostOf(lecram.Build) : null;
+        if (lecram is not null && LecramRoute.Refusal(game.Effective, lecram.Build, lecramHost is not null, nativeDlss) is { } lecramRefusal)
+            throw new InvalidOperationException(lecramRefusal);
         var dfc = o.Dfc ? store.RequireAddon(AddonKind.Dfc, o.DfcId).Build : null;
         if (dfc is not null && !nativeDlss && !ComponentStore.DfcSupportsNonDlssGames(dfc))
             throw new InvalidOperationException(DfcNeedsNativeDlss(dfc.FileVersion));
@@ -220,6 +221,8 @@ public sealed partial class Installer(ComponentStore store)
             throw new InvalidOperationException("RenoDX needs ReShade 6 or newer with full add-on support.");
         if (o.Lecram && (reshade is null || FileUtil.ReadVersion(reshade) is not { Major: >= 6 }))
             throw new InvalidOperationException("Lecram's DLSS5 add-on needs ReShade 6 or newer with full add-on support.");
+        if (lecramHost is not null && FileUtil.ReadVersion(reshade!) < LecramRoute.HostReShade)
+            throw new InvalidOperationException($"Lecram's DLSS5 add-on {lecram!.Build.Name} needs ReShade {LecramRoute.HostReShade} or newer with full add-on support (its INSTALL.txt).");
         if (o.Dfc && (reshade is null || FileUtil.ReadVersion(reshade) is not { Major: >= 6 }))
             throw new InvalidOperationException("Deep Fried Chicken needs ReShade 6 or newer with full add-on support.");
         if (o.Uplift && (reshade is null || FileUtil.ReadVersion(reshade) is not { Major: >= 6 }))
@@ -234,6 +237,10 @@ public sealed partial class Installer(ComponentStore store)
         var m = InstallManifest.Read(targetDir) ?? new InstallManifest();
         m.Contain(targetDir, game.Root);
         var ctx = new Ctx(FileUtil.Normalize(game.Root), targetDir, m, KeptAddonFiles(o), game);
+        if (lecramHost is not null)
+            foreach (var full in ComponentStore.LecramHostFiles.Select(f => Path.Combine(targetDir, f)))
+                if (FileUtil.LinkBelow(targetDir, full) is { } link)
+                    throw new UnsafeManifestException(targetDir, $"{link} is a link");
         if (o.Uplift)
             foreach (var full in ComponentStore.UpliftFiles.Select(f => Path.Combine(targetDir, f)).Append(UpliftConfig.NrPath(targetDir)))
                 if (FileUtil.LinkBelow(FileUtil.IsUnder(full, ctx.Root) ? ctx.Root : ctx.Target, full) is { } link)
@@ -343,6 +350,8 @@ public sealed partial class Installer(ComponentStore store)
                     }
                     DisplaceForeignNrAddons(ctx, [.. ComponentStore.ForeignNrAddons.Where(n => !ComponentStore.LecramFiles.Contains(n, StringComparer.OrdinalIgnoreCase))]);
                     Place(ctx, lecram.Path, Path.Combine(targetDir, file));
+                    if (lecramHost is not null) PlaceLecramHost(ctx, lecramHost);
+                    else RemoveLecramHost(ctx);
                     m.Lecram = true;
                     m.LecramFile = file;
                     m.LecramTag = lecram.Build.Tag;
@@ -726,6 +735,7 @@ public sealed partial class Installer(ComponentStore store)
         var m = ctx.M;
         foreach (var name in ComponentStore.LecramFiles)
             RemoveOwned(ctx, Path.Combine(ctx.Target, name));
+        RemoveLecramHost(ctx);
         var path = Path.Combine(ctx.Target, "ReShade.ini");
         if (File.Exists(path))
         {
@@ -737,6 +747,41 @@ public sealed partial class Installer(ComponentStore store)
         m.LecramId = null;
         m.LecramFile = null;
         Log.Info("  Lecram's DLSS5 add-on removed");
+    }
+
+    /// <summary>
+    /// Places the 32-bit add-on and NR's host folder from the build's folder <paramref name="buildDir"/> beside the game's ReShade, as the
+    /// author's INSTALL.txt asks: the whole set, whatever the game. ReShade loads only the add-on that matches the game's bitness and NR
+    /// starts its host only for the games it relays, so a 64-bit Direct3D 11 game with in-game MSAA (which the app can't see) is covered
+    /// too. A host folder that wasn't there is ours as a whole, so the ReShade.ini and log NR's host writes in it leave with it; one that
+    /// was there (a hand install) is changed file by file and its originals come back on removal.
+    /// </summary>
+    private static void PlaceLecramHost(Ctx ctx, string buildDir)
+    {
+        var dir = Path.Combine(ctx.Target, ComponentStore.LecramHostDir);
+        var rel = ctx.Rel(dir);
+        if (!Directory.Exists(dir) && !ctx.M.Dirs.Contains(rel, StringComparer.OrdinalIgnoreCase))
+        {
+            ctx.M.AddDir(rel);
+            Persist(ctx);
+        }
+        foreach (var file in ComponentStore.LecramHostFiles) Place(ctx, Path.Combine(buildDir, file), Path.Combine(ctx.Target, file));
+        Log.Info($"  {ComponentStore.Lecram32File} and NR's host ({ComponentStore.LecramHostDir}) placed");
+    }
+
+    /// <summary>Takes out the 32-bit add-on and NR's host we placed (restoring what they replaced), and the host folder when it is ours.</summary>
+    private static void RemoveLecramHost(Ctx ctx)
+    {
+        var placed = ComponentStore.LecramHostFiles.Any(f => ctx.M.Owns(ctx.Rel(Path.Combine(ctx.Target, f))));
+        foreach (var file in ComponentStore.LecramHostFiles) RemoveOwned(ctx, Path.Combine(ctx.Target, file));
+        var dir = Path.Combine(ctx.Target, ComponentStore.LecramHostDir);
+        if (ctx.M.Dirs.FirstOrDefault(d => d.Equals(ctx.Rel(dir), StringComparison.OrdinalIgnoreCase)) is { } owned)
+        {
+            FileUtil.DeleteDirectory(dir);
+            ctx.M.Dirs.Remove(owned);
+            Persist(ctx);
+        }
+        if (placed) Log.Info($"  {ComponentStore.Lecram32File} and NR's host ({ComponentStore.LecramHostDir}) removed");
     }
 
     /// <summary>The install no longer has MFG Unlock: take the add-on out (restoring what it replaced).</summary>

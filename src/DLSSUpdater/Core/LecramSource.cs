@@ -41,13 +41,20 @@ public sealed partial class ComponentStore
                 Directory.CreateDirectory(temp);
                 var package = Path.Combine(temp, "package");
                 await client.DownloadAsync(latest, package, ct, progress);
-                var addon = Path.Combine(temp, Lecram11File);
-                if (latest.Rank == 2) File.Move(package, addon);
-                else MediaFireClient.ExtractAddon(package, addon);
+                var set = Path.Combine(temp, "set");
+                var addon = Path.Combine(set, Lecram11File);
+                var host = false;
+                if (latest.Rank == 2)
+                {
+                    Directory.CreateDirectory(set);
+                    File.Move(package, addon);
+                }
+                else host = MediaFireClient.ExtractPackage(package, set);
                 if (!LooksLikeLecramV11(addon)) throw new InvalidDataException("Downloaded add-on is not a recognised Lecram v11 build.");
                 var before = LecramBuilds.Select(b => b.Id).ToHashSet(StringComparer.OrdinalIgnoreCase);
                 var build = ImportLecram(addon, downloaded: true);
                 if (build.Generation != Generation.V11) throw new InvalidDataException("Downloaded add-on is not Lecram v11.");
+                if (host) StoreLecramHost(build, set);
                 if (!before.Contains(build.Id)) AdoptImportedAddon(settings, AddonKind.Lecram, build);
                 settings.LecramLastAssetHash = latest.Hash;
                 settings.LecramLastBuildId = build.Id;
@@ -89,7 +96,8 @@ public sealed partial class ComponentStore
     /// <summary>
     /// Imports renodx-dlss5.addon64 (v10 and older) or dlss5-nr.addon64 (v11+) into the library; the file itself decides the generation.
     /// ShortFuse's add-on and Deep Fried Chicken are named in the error instead. The author's setup exe (regular or Early Access) and his
-    /// add-on zip for a hand install are accepted too: only their root dlss5-nr.addon64 is taken.
+    /// add-on zip for a hand install are accepted too: their root dlss5-nr.addon64 is the build, and from v12.9 the 32-bit add-on and
+    /// NR's host folder come with it (<see cref="StoreLecramHost"/>).
     /// </summary>
     public AddonBuild ImportLecram(string source) =>
         IsLecramPackage(source) ? ImportLecramPackage(source) : ImportLecram(source, downloaded: false);
@@ -97,27 +105,76 @@ public sealed partial class ComponentStore
     private static bool IsLecramPackage(string source) =>
         Path.GetExtension(source).Equals(".exe", StringComparison.OrdinalIgnoreCase) || Path.GetExtension(source).Equals(".zip", StringComparison.OrdinalIgnoreCase);
 
-    /// <summary>
-    /// The 32-bit add-on (dlss5-nr.addon32) and NR's host folder (dlss5-nr-host, with its own dlss5-nr.addon64) are left out: the app
-    /// installs neither yet (docs/addons/lecram-dlss5.md, "Host and 32-bit"). The exe is never run.
-    /// </summary>
+    /// <summary>The package is read in memory and only its known entries are written (<see cref="MediaFireClient.ExtractPackage"/>); the exe is never run.</summary>
     private AddonBuild ImportLecramPackage(string source)
     {
         if (!File.Exists(source)) throw new FileNotFoundException("The file doesn't exist.", source);
         var temp = Path.Combine(AppPaths.Cache, "lecram-import-" + Guid.NewGuid().ToString("N"));
         try
         {
-            Directory.CreateDirectory(temp);
-            var addon = Path.Combine(temp, Lecram11File);
-            MediaFireClient.ExtractAddon(source, addon);
-            Log.Info($"Extracted {Lecram11File} from {source}");
-            return ImportLecram(addon, downloaded: false);
+            var host = MediaFireClient.ExtractPackage(source, temp);
+            Log.Info($"Extracted {Lecram11File}{(host ? $", {Lecram32File} and {LecramHostDir}" : "")} from {source}");
+            var build = ImportLecram(Path.Combine(temp, Lecram11File), downloaded: false);
+            if (host && build.Generation == Generation.V11) StoreLecramHost(build, temp);
+            return build;
         }
         finally
         {
             try { if (Directory.Exists(temp)) Directory.Delete(temp, true); }
             catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) { Log.Error("Could not remove the Lecram import folder", ex); }
         }
+    }
+
+    /// <summary>
+    /// Puts the host set extracted to <paramref name="set"/> (<see cref="LecramHostFiles"/>) into the build's folder beside its add-on. The
+    /// same add-on imported again from a package replaces its set as a whole, as Deep Fried Chicken's does; a bare add-on import keeps it.
+    /// A copy that fails part-way takes the set out again, so a build never holds half a host.
+    /// </summary>
+    private void StoreLecramHost(AddonBuild build, string set)
+    {
+        var dir = Path.Combine(AddonRoot(AddonKind.Lecram), build.Id);
+        try
+        {
+            foreach (var rel in LecramHostFiles) FileUtil.AtomicCopy(Path.Combine(set, rel), Path.Combine(dir, rel));
+        }
+        catch
+        {
+            RemoveLecramHostFiles(dir);
+            throw;
+        }
+        Log.Info($"Lecram {build.Label}: {Lecram32File} and NR's host ({LecramHostDir}) kept with the build");
+    }
+
+    private static void RemoveLecramHostFiles(string dir)
+    {
+        try
+        {
+            foreach (var rel in LecramHostFiles) FileUtil.DeleteFile(Path.Combine(dir, rel));
+            FileUtil.DeleteDirectory(Path.Combine(dir, LecramHostDir));
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) { Log.Error($"Could not remove the partial host set in {dir}", ex); }
+    }
+
+    /// <summary>
+    /// The library folder of <paramref name="build"/> when it holds the whole host set (<see cref="LecramHostFiles"/>), null when it holds
+    /// none (v10, a v11-generation build from before the host, or a bare dlss5-nr.addon64 import). Part of a set is an error: the library was
+    /// changed by hand.
+    /// </summary>
+    public static string? LecramHostOf(AddonBuild build)
+    {
+        if (build.Generation != Generation.V11) return null;
+        var dir = Path.Combine(AddonRoot(AddonKind.Lecram), build.Id);
+        var present = LecramHostFiles.Count(rel => File.Exists(Path.Combine(dir, rel)));
+        if (present == 0) return null;
+        return present == LecramHostFiles.Length ? dir
+            : throw new InvalidDataException($"The Lecram build {build.Name} has only part of NR's host in the library. Import its setup exe or add-on zip again.");
+    }
+
+    /// <summary>Whether <paramref name="build"/> carries the 32-bit add-on and NR's host; a partial set counts as none.</summary>
+    public static bool LecramHasHost(AddonBuild build)
+    {
+        try { return LecramHostOf(build) is not null; }
+        catch (InvalidDataException) { return false; }
     }
 
     /// <param name="downloaded">Fetched from Lecram's channel by the app, so the automatic cleanup may remove it later.</param>

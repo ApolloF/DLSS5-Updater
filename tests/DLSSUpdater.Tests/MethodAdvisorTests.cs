@@ -858,4 +858,114 @@ public sealed class MethodAdvisorTests
         Assert.Contains(ComponentRegistry.Lecram, imported.Components);
         Assert.Equal(InstallMode.ReShadeOnly, imported.Mode);
     }
+
+    // ---------- Lecram without DLSS: in the game (v12+) or through NR's host (v12.9+) ----------
+
+    private static readonly LecramBuildInfo LecramHost = new("v13.4.0", Host: true, RunsWithoutDlss: true);
+    private static readonly LecramBuildInfo LecramNoHost = new("v12.9.9", Host: false, RunsWithoutDlss: true);
+    private static readonly LecramBuildInfo LecramV11 = new("v11.9.0", Host: false, RunsWithoutDlss: false);
+
+    private static MethodAdvice AdviseLecram(GameInfo game, LecramBuildInfo? lecram, bool nr = true) => MethodAdvisor.Advise(Input(game) with
+    {
+        Lecram = lecram,
+        Imported = nr ? new HashSet<string> { ComponentRegistry.DlssNr, ComponentRegistry.Lecram } : new HashSet<string> { ComponentRegistry.Lecram },
+    });
+
+    [Theory]
+    [InlineData(GraphicsApis.Dx9, 32, 10)]
+    [InlineData(GraphicsApis.Dx9, 64, 10)]
+    [InlineData(GraphicsApis.Dx10, 64, 14)]
+    [InlineData(GraphicsApis.OpenGL, 64, 12)]
+    [InlineData(GraphicsApis.OpenGL, 32, 12)]
+    [InlineData(GraphicsApis.Dx11, 32, 11)]
+    public void Lecram_WithItsHost_IsOfferedFirst_ForOlderApisAnd32BitGames(GraphicsApis api, int bits, int row)
+    {
+        var a = AdviseLecram(Game(api, bits), LecramHost);
+
+        Assert.Equal([row], a.Rows);
+        var lecram = Option(a, Method.NeuralAddon);
+        Assert.Equal(Availability.Available, lecram.Availability);
+        Assert.Equal("Neural rendering with Lecram DLSS5 add-on", lecram.Title);
+        Assert.Equal([ComponentRegistry.ReShade, ComponentRegistry.DlssNr, ComponentRegistry.Lecram], lecram.Components);
+        Assert.Equal(InstallMode.ReShadeOnly, lecram.Mode);
+        Assert.Equal(NrAddon.Lecram, lecram.Route);
+        Assert.Contains("64-bit host", lecram.Reason);
+        Assert.Contains("no Feeder", lecram.Reason);
+        Assert.Equal(MethodAdvisor.LecramSummary, lecram.Summary);
+        Assert.Same(lecram, a.Top);
+        Assert.True(Order(a).ToList().IndexOf(Method.NeuralAddon) < Order(a).ToList().IndexOf(Method.Feeder));
+    }
+
+    [Theory]
+    [InlineData(GraphicsApis.Dx9, 32)]
+    [InlineData(GraphicsApis.Dx10, 64)]
+    [InlineData(GraphicsApis.OpenGL, 64)]
+    [InlineData(GraphicsApis.Dx11, 32)]
+    public void Lecram_WithoutItsHost_IsNotPossible_AndSaysWhatToImport(GraphicsApis api, int bits)
+    {
+        var lecram = Option(AdviseLecram(Game(api, bits), LecramNoHost), Method.NeuralAddon);
+
+        Assert.Equal(Availability.NotPossible, lecram.Availability);
+        Assert.False(lecram.Selectable);
+        Assert.Contains("has none", lecram.Reason);
+        Assert.Contains("setup exe or add-on zip of v12.9.9 or newer", lecram.Reason);
+    }
+
+    [Fact]
+    public void Lecram_In64BitDx11And12GamesWithoutDlss_NeedsV12_NotTheHost()
+    {
+        foreach (var api in new[] { GraphicsApis.Dx11, GraphicsApis.Dx12 })
+        {
+            var ok = Option(AdviseLecram(Game(api), LecramNoHost), Method.NeuralAddon);
+            Assert.Equal(Availability.Available, ok.Availability);
+            Assert.Contains("without its own DLSS", ok.Reason);
+
+            var old = Option(AdviseLecram(Game(api), LecramV11), Method.NeuralAddon);
+            Assert.Equal(Availability.NotPossible, old.Availability);
+            Assert.Contains("needs the game's own DLSS", old.Reason);
+        }
+    }
+
+    [Fact]
+    public void Lecram_NeedsTheNrRuntime_LikeTheOtherRoutes()
+    {
+        var lecram = Option(AdviseLecram(Game(GraphicsApis.Dx9, 32), LecramHost, nr: false), Method.NeuralAddon);
+
+        Assert.Equal(Availability.NeedsSetup, lecram.Availability);
+        Assert.Contains(lecram.Needs, n => n.Contains("nvngx_dlssnr.dll"));
+    }
+
+    [Fact]
+    public void Lecram_IsNotListed_ForVulkanOrDx8_OrWithoutABuild_AndNotPossibleFor32BitDx12()
+    {
+        Assert.DoesNotContain(Method.NeuralAddon, Order(AdviseLecram(Game(GraphicsApis.Vulkan), LecramHost)));
+        Assert.DoesNotContain(Method.NeuralAddon, Order(AdviseLecram(Game(GraphicsApis.Vulkan, 32), LecramHost)));
+        Assert.DoesNotContain(Method.NeuralAddon, Order(AdviseLecram(Game(GraphicsApis.Dx8, 32), LecramHost)));
+        Assert.DoesNotContain(Method.NeuralAddon, Order(AdviseLecram(Game(GraphicsApis.Dx9, 32), null)));
+
+        var dx12 = Option(AdviseLecram(Game(GraphicsApis.Dx12, 32), LecramHost), Method.NeuralAddon);
+        Assert.Equal(Availability.NotPossible, dx12.Availability);
+        Assert.Contains("32-bit Direct3D 12", dx12.Reason);
+    }
+
+    [Fact]
+    public void Lecram_InAGameWithDlss_StaysTheNeuralCardOfTheNativeRows()
+    {
+        var a = AdviseLecram(Game(dlss: true), LecramHost);
+
+        Assert.Single(a.Methods, m => m.Method == Method.NeuralAddon);
+        Assert.Equal(MethodAdvisor.SummaryOf(Method.NeuralAddon), Option(a, Method.NeuralAddon).Summary);
+    }
+
+    [Fact]
+    public void Lecram_InAnAntiCheatGame_KeepsTheWarning_AndIsNeverRecommended()
+    {
+        var a = AdviseLecram(Game(GraphicsApis.Dx9, 32, antiCheat: "BattlEye"), LecramHost);
+
+        var lecram = Option(a, Method.NeuralAddon);
+        Assert.Equal(Availability.Available, lecram.Availability);
+        Assert.Contains("BattlEye", lecram.Warning);
+        Assert.Contains(20, a.Rows);
+        Assert.Null(a.Top);
+    }
 }

@@ -193,31 +193,31 @@ public sealed class LecramUpdateTests : IDisposable
     [Theory]
     [InlineData(false)]
     [InlineData(true)]
-    public void ExtractAddon_ReadsTheAppendedZip_WhateverTheOffsetsCountFrom(bool absolute)
+    public void ExtractPackage_ReadsTheAppendedZip_WhateverTheOffsetsCountFrom(bool absolute)
     {
         var addon = AddonBytes("v11.0.0-beta.24");
         var exe = Path.Combine(_tmp, "setup.exe");
         File.WriteAllBytes(exe, SetupExe(Zip(("package.json", "{\"version\":\"v11.0.0-beta.24\"}"u8.ToArray()), ("dlss5-nr.addon64", addon),
             ("studio/renodx-dlss5.addon64", AddonBytes("v10.0.0"))), absolute));
-        var dest = Path.Combine(_tmp, "out", "dlss5-nr.addon64");
-        Directory.CreateDirectory(Path.GetDirectoryName(dest)!);
+        var dest = Path.Combine(_tmp, "out");
 
-        MediaFireClient.ExtractAddon(exe, dest);
+        Assert.False(MediaFireClient.ExtractPackage(exe, dest));
 
-        Assert.Equal(addon, File.ReadAllBytes(dest));
+        Assert.Equal(addon, File.ReadAllBytes(Path.Combine(dest, "dlss5-nr.addon64")));
+        Assert.Equal(["dlss5-nr.addon64"], Directory.EnumerateFileSystemEntries(dest).Select(Path.GetFileName));
     }
 
     [Fact]
-    public void ExtractAddon_RefusesAnExeWithoutZip_AndAZipWithoutTheAddon()
+    public void ExtractPackage_RefusesAnExeWithoutZip_AndAZipWithoutTheAddon()
     {
         var plain = Path.Combine(_tmp, "plain.exe");
         File.WriteAllBytes(plain, AddonBytes("v11.0.0"));
-        Assert.Throws<InvalidDataException>(() => MediaFireClient.ExtractAddon(plain, Path.Combine(_tmp, "o1")));
+        Assert.Throws<InvalidDataException>(() => MediaFireClient.ExtractPackage(plain, Path.Combine(_tmp, "o1")));
 
         var zip = Path.Combine(_tmp, "other.zip");
         File.WriteAllBytes(zip, Zip(("README.txt", "x"u8.ToArray())));
-        Assert.Throws<InvalidDataException>(() => MediaFireClient.ExtractAddon(zip, Path.Combine(_tmp, "o2")));
-        Assert.False(File.Exists(Path.Combine(_tmp, "o2")));
+        Assert.Throws<InvalidDataException>(() => MediaFireClient.ExtractPackage(zip, Path.Combine(_tmp, "o2")));
+        Assert.False(Directory.Exists(Path.Combine(_tmp, "o2")));
     }
 
     // ---------- listing, channel.json, download ----------
@@ -478,6 +478,7 @@ public sealed class LecramUpdateTests : IDisposable
         var build = Assert.Single(_store.LecramBuilds);
         Assert.Equal("v11.0.0-beta.24", build.DetectedLabel);
         Assert.Equal(LecramGeneration.V11, build.Generation);
+        Assert.Null(ComponentStore.LecramHostOf(build));
         Assert.Null(settings.LecramId);
         Assert.Equal(build.Id, _store.LecramBuildFor(null)!.Id);
         Assert.Equal(build.Id, settings.LecramLastBuildId);
@@ -513,8 +514,14 @@ public sealed class LecramUpdateTests : IDisposable
 
         var build = Assert.Single(_store.LecramBuilds);
         Assert.Equal(("v13.4.0", LecramGeneration.V11), (build.DetectedLabel, build.Generation));
-        // Only the root 64-bit add-on is taken from the setup, not the 32-bit one.
-        Assert.Equal(Hex(AddonBytesOf(folders[MediaFireClient.DevFolder][0], "dlss5-nr.addon64")), build.Id);
+        // The build is the root 64-bit add-on; the 32-bit one and NR's host (assembled from the setup's own paths) come with it.
+        var setup = folders[MediaFireClient.DevFolder][0];
+        Assert.Equal(Hex(AddonBytesOf(setup, "dlss5-nr.addon64")), build.Id);
+        var dir = ComponentStore.LecramHostOf(build)!;
+        Assert.Equal(AddonBytesOf(setup, "dlss5-nr.addon32"), File.ReadAllBytes(Path.Combine(dir, ComponentStore.Lecram32File)));
+        Assert.Equal(AddonBytesOf(setup, "nr-host64.exe"), File.ReadAllBytes(Path.Combine(dir, ComponentStore.LecramHostDir, ComponentStore.LecramHostExe)));
+        Assert.Equal(AddonBytesOf(setup, "reshade/ReShade64.dll"), File.ReadAllBytes(Path.Combine(dir, ComponentStore.LecramHostDir, ComponentStore.ReShadeFile)));
+        Assert.Equal(AddonBytesOf(setup, "dlss5-nr.addon64"), File.ReadAllBytes(Path.Combine(dir, ComponentStore.LecramHostDir, ComponentStore.Lecram11File)));
         Assert.Equal(("r1xp6x0i043wx", "v13.4.0"), (settings.LecramFolderKey, settings.LecramLastVersion));
         Assert.Empty(Directory.GetDirectories(AppPaths.Cache, "lecram-download-*"));
     }

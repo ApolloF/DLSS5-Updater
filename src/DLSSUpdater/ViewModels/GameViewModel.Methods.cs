@@ -153,6 +153,7 @@ public sealed partial class GameViewModel
             Luma = _s.Catalog?.LumaPicker?.Pick(Info),
             Imported = imported,
             DfcRunsWithoutDlss = dfc is null || ComponentStore.DfcSupportsNonDlssGames(dfc),
+            Lecram = store.LecramBuildFor(EffectiveLecramId) is { } lecram ? LecramBuildInfo.Of(lecram) : null,
             InstalledRoutes = NrAddons.PresentIn(target, Manifest),
             MotionProviderPresent = Directory.Exists(shaders) && Directory.EnumerateFiles(shaders, "lumenite_*.fx").Any(),
             AddonsOn = AddonsOn(),

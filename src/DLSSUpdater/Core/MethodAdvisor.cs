@@ -61,8 +61,8 @@ public sealed record MethodOption(Method Method, string Title, Availability Avai
     public string? Warning { get; init; }
     /// <summary>The neural route this method leaves in the game (null when it adds none); the advisor checks it against the routes already there.</summary>
     public NrAddon? Route { get; init; }
-    /// <summary>One plain line on what the method does for the player; the longer <see cref="Reason"/> is the detail.</summary>
-    public string Summary => MethodAdvisor.SummaryOf(Method);
+    /// <summary>One plain line on what the method does for the player (the method's own, unless a route says it better); the longer <see cref="Reason"/> is the detail.</summary>
+    public string Summary { get; init; } = MethodAdvisor.SummaryOf(Method);
     /// <summary>An add-on that goes on top of whichever method is picked (<see cref="MethodAdvisor.IsAddOn"/>), not a method of its own.</summary>
     public bool IsAddOn => MethodAdvisor.IsAddOn(Method);
     /// <summary>True when the game page can select this method's components.</summary>
@@ -111,6 +111,8 @@ public sealed record AdvisorInput(GameInfo Game, GpuInfo Gpu)
     public IReadOnlySet<string> Imported { get; init; } = new HashSet<string>();
     /// <summary>The newest Deep Fried Chicken build runs in games without their own DLSS (4.x or newer).</summary>
     public bool DfcRunsWithoutDlss { get; init; } = true;
+    /// <summary>The Lecram build the game would use (its own pick, else the default); null when the library has none.</summary>
+    public LecramBuildInfo? Lecram { get; init; }
     /// <summary>The neural routes already in the game (<see cref="NrAddons.PresentIn"/>).</summary>
     public IReadOnlyList<NrAddon> InstalledRoutes { get; init; } = [];
     /// <summary>A motion-vector provider shader for Feeder (LumeniteFX, ...) is already in the game's shader folder.</summary>
@@ -220,6 +222,7 @@ public static class MethodAdvisor
             var rows = new List<int>();
             var methods = new List<MethodOption>();
             Shape(ctx, rows, methods);
+            AddLecramWithoutDlss(ctx, methods);
             AddExtras(ctx, rows, methods);
             advice = new MethodAdvice(Rank(methods), rows, null);
         }
@@ -393,6 +396,44 @@ public static class MethodAdvisor
             null, unverified: !c.ApiKnown, unverifiedWhy: "the graphics API wasn't detected, DX11/12 is assumed"));
         list.Add(Opt(Method.AioAddon, Availability.Coming, "A standalone all-in-one add-on (kibblerz DLSS5-Reshade-AIO) does NR, SR and FG in one; young project, the app doesn't install it yet."));
         list.Add(SmoothMotion(c, "Frame generation only, no ReShade needed."));
+    }
+
+    public const string LecramSummary = "Runs neural rendering through ReShade without the game's own DLSS: Lecram's add-on, in its 64-bit host for older APIs and 32-bit games.";
+
+    /// <summary>
+    /// Rows 5 to 14 (a game without DLSS): where Feeder is offered, Lecram's add-on goes before it when a Lecram build is in the library.
+    /// Direct3D 9, Direct3D 10, OpenGL and 32-bit games need a build with NR's host (v12.9 and newer, from the author's setup or add-on
+    /// zip); 64-bit Direct3D 11 and 12 games need v12 or newer, which runs without DLSS. Not for Vulkan (ReShade's layer, as in row 3),
+    /// Direct3D 8 (not a route the author names) or 32-bit Direct3D 12 (not supported yet). It needs no Feeder and no motion shader: NR
+    /// finds the game's depth and motion itself, else uses optical flow.
+    /// </summary>
+    private static void AddLecramWithoutDlss(Ctx c, List<MethodOption> list)
+    {
+        var feeder = list.FindIndex(m => m.Method == Method.Feeder);
+        if (feeder < 0 || c.In.Lecram is not { } build || c.Api is GraphicsApis.Vulkan or GraphicsApis.Dx8) return;
+        var title = $"Neural rendering with {ComponentTable.NameOf(ComponentRegistry.Lecram)}";
+        MethodOption Not(string why) => Opt(Method.NeuralAddon, Availability.NotPossible, why) with { Title = title, Summary = LecramSummary };
+        var kind = LecramRoute.GameKind(c.Tech);
+        var host = LecramRoute.NeedsHost(c.Tech);
+        MethodOption option;
+        if (LecramRoute.Unsupported(c.Tech))
+            option = Not($"Lecram's README: {kind} games aren't supported yet (32-bit Vulkan and 32-bit Direct3D 12).");
+        else if (host && !build.Host)
+            option = Not($"{kind} games run NR through Lecram's 64-bit host, and the build in use ({build.Name}) has none. Import the author's DLSS5 NR setup exe or add-on zip of {LecramRoute.FirstHostBuild} or newer (a bare {ComponentStore.Lecram11File} brings no host).");
+        else if (!build.RunsWithoutDlss)
+            option = Not($"The Lecram build in use ({build.Name}) needs the game's own DLSS; {LecramRoute.FirstWithoutDlssBuild} and newer run without it.");
+        else
+        {
+            var reason = host
+                ? $"{kind} game: Lecram's add-on runs NR in its 64-bit host (dlss5-nr-host), which the app places with the 32-bit add-on beside the game's ReShade."
+                : "Lecram's add-on runs NR in the game without its own DLSS (v12 and newer).";
+            reason += $" NR finds the game's depth and motion itself, else uses optical flow: no Feeder or motion shader needed. {NrCost(c.Gpu)}";
+            var needs = NrRuntimeNeed(c) is { } nr ? new List<string> { nr } : [];
+            option = Opt(Method.NeuralAddon, needs.Count == 0 ? Availability.Available : Availability.NeedsSetup, reason.Trim(),
+                [ComponentRegistry.ReShade, ComponentRegistry.DlssNr, ComponentRegistry.Lecram], needs, InstallMode.ReShadeOnly)
+                with { Route = NrAddon.Lecram, Title = title, Summary = LecramSummary };
+        }
+        list.Insert(feeder, option);
     }
 
     /// <summary>Rows 1, 2, 3 (and 4 for frame generation): the game has DLSS.</summary>

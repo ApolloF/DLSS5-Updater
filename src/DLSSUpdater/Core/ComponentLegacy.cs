@@ -118,7 +118,7 @@ public static class LegacyComponents
         }
         if (m.Lecram)
         {
-            var lecram = Add(ComponentRegistry.Lecram, m.LecramId ?? m.LecramTag, m.LecramTag, f => Beside(f, ComponentStore.LecramFiles));
+            var lecram = Add(ComponentRegistry.Lecram, m.LecramId ?? m.LecramTag, m.LecramTag, f => Beside(f, [.. ComponentStore.LecramFiles, .. ComponentStore.LecramHostFiles]));
             Edits(lecram, m.ReShadeIni, "ReShade.ini", s => s.Equals(LecramIni.Section, StringComparison.OrdinalIgnoreCase));
             if (m.LecramFile is not null) lecram.Extras["File"] = m.LecramFile;
         }
