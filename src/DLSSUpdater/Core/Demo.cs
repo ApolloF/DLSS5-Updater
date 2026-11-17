@@ -27,8 +27,8 @@ public static class Demo
     private static bool OptiNr => Environment.GetEnvironmentVariable("DLSSU_DEMO_OPTI_NR") == "1";
     // DLSSU_DEMO_ONBOARDING=1 opens the first-run setup at start, which the demo otherwise leaves out.
     public static bool ShowOnboarding => Environment.GetEnvironmentVariable("DLSSU_DEMO_ONBOARDING") == "1";
-    public static string LatestOpti => OptiNr ? "v0.9.72" : "v0.1.32" + OptiSources.F5.TagSuffix;
-    private static string PreviousOpti => OptiNr ? "v0.9.51" : "v0.1.31" + OptiSources.F5.TagSuffix;
+    public static string LatestOpti => OptiNr ? "v0.9.72" : "v0.1.38" + OptiSources.F5.TagSuffix;
+    private static string PreviousOpti => OptiNr ? "v0.9.51" : "v0.1.37.2" + OptiSources.F5.TagSuffix;
     public const string LatestMfg = "v1.4.0";
     public const string LatestUplift = "v1.6.2";
     public const string LatestReShade = "6.6.2";
@@ -110,8 +110,8 @@ public static class Demo
         PlaceRelease(Component.OptiScaler, "v0.9.49", new DateTime(2026, 9, 30));
         PlaceRelease(Component.OptiScaler, "v0.9.47", new DateTime(2026, 9, 12));
         PlaceRelease(Component.OptiScaler, "v0.9.45", new DateTime(2026, 8, 20));
-        PlaceRelease(Component.OptiScaler, "v0.1.32" + OptiSources.F5.TagSuffix, new DateTime(2026, 10, 16));
-        PlaceRelease(Component.OptiScaler, "v0.1.30" + OptiSources.F5.TagSuffix, new DateTime(2026, 10, 2));
+        PlaceRelease(Component.OptiScaler, "v0.1.38" + OptiSources.F5.TagSuffix, new DateTime(2026, 10, 16));
+        PlaceRelease(Component.OptiScaler, "v0.1.37.2" + OptiSources.F5.TagSuffix, new DateTime(2026, 10, 2));
         PlaceRelease(Component.Uplift, LatestUplift, new DateTime(2026, 10, 8));
         PlaceRelease(Component.Uplift, "v1.3.0", new DateTime(2026, 9, 1));
         PlaceRelease(Component.Uplift, "v1.2.0", new DateTime(2026, 7, 14));

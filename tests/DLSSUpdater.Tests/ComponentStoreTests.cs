@@ -135,6 +135,13 @@ public class ComponentStoreTests
     [InlineData("OptiScaler-DLSSNR-F5-0.1.32.zip", true)]
     [InlineData("OptiScaler-DLSSNR-F5-0.1.33-with-dlss-fg.zip", true)]
     [InlineData("OptiScaler-DLSSNR-F5-v0.1.34-with-dlss-fg.zip", true)]
+    [InlineData("OptiScaler-DLSSNR-F5-v0.1.36-with-dlss-fg.zip", true)]
+    [InlineData("v0.1.37-Optiscaler-F5.zip", true)]
+    [InlineData("v0.1.37.2-Optiscaler-F5.zip", true)]
+    [InlineData("v0.1.38-Optiscaler-F5.zip", true)]
+    [InlineData("v0.1.38-optiscaler-f5.zip", true)]
+    [InlineData("Optional-F5Low-Update-1.1.0.184.zip", false)]
+    [InlineData("v0.1.38-Optiscaler-F5.zip.sha256", false)]
     [InlineData("Optional-Vendor-Neutral-DLSS5-Forwarder.zip", false)]
     [InlineData("OptiScaler-DLSSNR-Troubleshooting.md", false)]
     [InlineData("OptiScaler-DLSSNR-F5-v0.1.34-with-dlss-fg.zip.sha256", false)]
@@ -179,6 +186,78 @@ public class ComponentStoreTests
         Assert.Equal(!mfgUnlock, f5.Lacks("MFGUnlock", "RTX40", tag));
         Assert.False(f5.Lacks("HDR", "UseHDR10", tag));
         Assert.True(f5.Lacks("DlssNr", "DenoiseFirst", tag));
+    }
+
+    [Fact]
+    public async Task F5Source_PicksTheNewlyNamedZip_AndTheFourPartTag()
+    {
+        const string release =
+            """[{"tag_name":"v0.1.37.2","prerelease":false,"assets":[""" +
+            """{"name":"Optional-Vendor-Neutral-DLSS5-Forwarder.zip","browser_download_url":"https://example.invalid/fwd.zip"},""" +
+            """{"name":"Optional-F5Low-Update-1.1.0.184.zip","browser_download_url":"https://example.invalid/f5low.zip"},""" +
+            """{"name":"OptiScaler-DLSSNR-Troubleshooting.md","browser_download_url":"https://example.invalid/guide.md"},""" +
+            """{"name":"v0.1.37.2-Optiscaler-F5.zip","browser_download_url":"https://example.invalid/f5.zip"}]}]""";
+        var gh = new FakeGitHub(r =>
+        {
+            var url = r.RequestUri!.ToString();
+            if (url.Contains(OptiSources.F5.Repo + "/releases")) return Json(release);
+            if (url.StartsWith("https://api.github.com/")) return Json("[]");
+            return new HttpResponseMessage(HttpStatusCode.NotFound);
+        });
+        var store = new ComponentStore(new GitHubClient(gh), () => true) { OptiSourceRepo = () => OptiSources.F5.Repo };
+        await store.RefreshAsync(default);
+        Assert.Equal("v0.1.37.2-f5", store.Opti?.Tag);
+        Assert.Equal(new Version(0, 1, 37, 2), store.Opti!.Version);
+        Assert.Equal("v0.1.37.2-Optiscaler-F5.zip", Assert.Single(store.Opti.Files).Name);
+    }
+
+    [Theory]
+    [InlineData("v0.1.34-f5", false, false, false)]
+    [InlineData("v0.1.35.1-f5", true, false, false)]
+    [InlineData("v0.1.36-f5", true, true, false)]
+    [InlineData("v0.1.37-f5", true, true, true)]
+    [InlineData("v0.1.37.2-f5", true, true, true)]
+    [InlineData("v0.1.38-f5", true, true, true)]
+    [InlineData(null, true, true, true)]
+    public void F5NewKeys_AppearWithTheBuildThatAddedThem(string? tag, bool multiView, bool f5Low, bool depthFade)
+    {
+        var f5 = OptiSources.F5;
+        Assert.Equal(!multiView, f5.Lacks("DlssNr", "MultiViewScreens", tag));
+        Assert.Equal(!f5Low, f5.Lacks("F5Low", "FrameGenerator", tag));
+        Assert.Equal(!f5Low, f5.Lacks("f5low", "keepgamedlssg", tag));
+        Assert.Equal(!f5Low, f5.Lacks("DlssNr", "SecondaryFeatures", tag));
+        foreach (var key in new[] { "DepthFade", "DepthFadeFarStart", "DepthFadeFarEnd", "DepthFadeFarStrength", "DepthFadeNearStart", "DepthFadeNearEnd", "DepthFadeNearStrength", "DepthFadeSkyStrength" })
+            Assert.Equal(!depthFade, f5.Lacks("DlssNr", key, tag));
+    }
+
+    [Fact]
+    public void OptiScalerNr_HasNoneOfTheF5OnlyKeys()
+    {
+        var nr = OptiSources.Default;
+        foreach (var (section, key) in new[] { ("F5Low", "FrameGenerator"), ("F5Low", "KeepGameDlssg"), ("DlssNr", "SecondaryFeatures"), ("DlssNr", "MultiViewScreens"), ("DlssNr", "DepthFade"), ("DlssNr", "DepthFadeSkyStrength") })
+            Assert.True(nr.Lacks(section, key, "v0.9.72"), $"[{section}] {key}");
+    }
+
+    [Fact]
+    public void F5Options_ShowFromTheirBuild_AndNeverWriteFrameGenerationOutputKeys()
+    {
+        var options = DLSSUpdater.ViewModels.SettingsOptions.Nr([]);
+        DLSSUpdater.ViewModels.IniOptionViewModel Opt(string key) => options.Single(o => o.Key == key);
+
+        foreach (var o in options) o.ApplySource(OptiSources.F5, "v0.1.36-f5");
+        Assert.True(Opt("FrameGenerator").IsAvailable);
+        Assert.True(Opt("MultiViewScreens").IsAvailable);
+        Assert.False(Opt("DepthFade").IsAvailable);
+
+        foreach (var o in options) o.ApplySource(OptiSources.F5, "v0.1.38-f5");
+        Assert.True(Opt("DepthFadeSkyStrength").IsAvailable);
+
+        foreach (var o in options) o.ApplySource(OptiSources.Default, "v0.9.72");
+        Assert.All(new[] { "FrameGenerator", "KeepGameDlssg", "SecondaryFeatures", "MultiViewScreens", "DepthFade", "DepthFadeFarStart", "DepthFadeNearStrength" }, k => Assert.False(Opt(k).IsAvailable));
+
+        Assert.Equal(["xefg_tensor", "dlssg", "intel"], Opt("FrameGenerator").Choices.Select(c => c.Value).Where(v => v is not null));
+        Assert.Equal(["0", "1", "2"], Opt("SecondaryFeatures").Choices.Select(c => c.Value).Where(v => v is not null));
+        Assert.DoesNotContain(options, o => o.Key.Equals("FGOutput", StringComparison.OrdinalIgnoreCase) || o.Key.StartsWith("NativeBlend") || o.Key.StartsWith("NativeDepth"));
     }
 
     [Fact]
