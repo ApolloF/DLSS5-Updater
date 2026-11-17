@@ -15,16 +15,16 @@ public sealed record GuideEntry(HelpTopic Topic, IReadOnlyList<OptionChoice> Cho
 public static class HelpTopics
 {
     internal static string LecramSourceIntro(bool channelEnabled) => channelEnabled
-        ? "Lecram v11 builds are fetched from the author's public MediaFire channel during update checks. In Local components, turn automatic checks on or off, use Check now and see the last result. Older builds can still be imported. "
-        : "Lecram's builds are import only: get new ones from the author's page and import them in Local components (dlss5-nr.addon64 or renodx-dlss5.addon64); the file itself tells v10 from v11. ";
+        ? "Lecram's v11 and newer builds are fetched from the author's public MediaFire channel during update checks, regular and Early Access releases alike (the newest wins). In Local components, turn automatic checks on or off, use Check now and see the last result. Older builds can still be imported. "
+        : "Lecram's builds are import only: get new ones from the author's page and import them in Local components (dlss5-nr.addon64 or renodx-dlss5.addon64, or the author's DLSS5 NR setup exe or add-on zip, from which the app takes dlss5-nr.addon64 and, from v12.9, the 32-bit add-on and NR's host); the file itself tells v10 from v11. ";
 
     internal static string LecramUpdates(bool channelEnabled) => channelEnabled
-        ? "The public MediaFire folder is the same source used by the author's DLSS5-NR-Setup installer. " +
-          "The newest upload wins; ties prefer the raw add-on, then ZIP, then setup EXE. Each download is checked against the listing's SHA-256. " +
-          "Only dlss5-nr.addon64 is extracted; downloaded installers are never run and are removed afterwards. Channel moves are followed once. " +
+        ? "The public MediaFire folders are the same sources used by the author's DLSS5-NR-Setup installer and by his Early Access DLSS5-NR-Dev-Setup. " +
+          "The newest upload across the regular and the Early Access folder wins; ties prefer the raw add-on, then ZIP, then setup EXE. Each download is checked against the listing's SHA-256. " +
+          "Only dlss5-nr.addon64 is extracted, with the 32-bit add-on and NR's host when the package has them (v12.9 and newer); downloaded installers are never run and are removed afterwards. Channel moves are followed once. " +
           "Builds enter the existing library and only a newer build becomes its default. Games keep their installed build until you choose to change it. " +
           "Offline or failed checks keep the library. New builds can have options this app does not list; tune those in the ReShade overlay."
-        : "Lecram's builds are import only: the app does not download them. Get a new build from the author's page and import it in Local components (the add-on file itself; extract archives first). " +
+        : "Lecram's builds are import only: the app does not download them. Get a new build from the author's page and import it in Local components (the add-on file, the author's setup exe or his add-on zip; from the last two the app takes dlss5-nr.addon64 and, from v12.9, the 32-bit add-on and NR's host). " +
           "Builds enter the existing library and only a newer build becomes its default. Games keep their installed build until you choose to change it. " +
           "Builds already in the library keep working. New builds can have options this app does not list; tune those in the ReShade overlay.";
 
@@ -97,11 +97,14 @@ public static class HelpTopics
             LecramSourceIntro(BuildFlags.LecramChannel) +
             "There are two generations: v10 and older (renodx-dlss5.addon64, recognised by its version resource) and v11 and newer (dlss5-nr.addon64, recognised by strings in the file because it has no version resource). " +
             "Every import is kept as its own build, named by the catalog's version, else the highest vX.Y.Z string in the file (never the DLSS SDK's v310.x; a build with neither goes by its file version), or by you; a game only ever gets one file, because v11 goes inert when a renodx-dlss5.addon64 file sits next to it (from v11 beta.22 not when ReShade has that add-on disabled). Settings picks the default build and each game can pick its own, whose generation decides the options shown. " +
-            "It needs ReShade + add-ons mode, ReShade 6+ with add-on support, a game with native DLSS and the NR runtime nvngx_dlssnr.dll, and it replaces OptiScaler's own NR. " +
+            "It needs ReShade + add-ons mode, ReShade 6+ with add-on support (6.8+ for builds with NR's host) and the NR runtime nvngx_dlssnr.dll, and it replaces OptiScaler's own NR. Up to v11.9 it also needs a game with native DLSS; v12 and newer also run in games without it, on the game's motion vectors where NR finds them, else optical flow. " +
             "It can run next to ShortFuse's RenoDX add-on once you confirm the warning (NR then runs twice): for v11 builds the app then sets ForeignNr=observe; v12's default auto already runs beside it. The 0928 pair (ShortFuse 0.2026.0928 and Lecram v8.5.0-rc10) was tested working. Each exact pair of builds has a status (Works, Crashed or not tested together yet); only Crashed shows a warning. Mark the current build pair on the Install tab. " +
             "A copy of either Lecram file already in the game is moved to the backup folder and restored by Uninstall. Options that exist in only one generation are hidden for the other, following the build the game uses. " +
             "From v11 Patch 4 (beta.18) the author also ships its own installer (DLSS5 NR Setup). It finds the add-on in every game on every drive and its Update all replaces it there, games this app manages included, so manage a game with one of the two. " +
-            "It keeps a shared nvngx_dlssnr.dll in %LOCALAPPDATA%\\DLSS5-NR\\runtime, which v11 also finds by itself."),
+            "It keeps a shared nvngx_dlssnr.dll in %LOCALAPPDATA%\\DLSS5-NR\\runtime, which v11 also finds by itself. " +
+            "From v12.9 the author also ships a 32-bit add-on (dlss5-nr.addon32) and NR's 64-bit host (the dlss5-nr-host folder): Direct3D 9, Direct3D 10, OpenGL and 32-bit games run NR through it, and so do 64-bit Direct3D 11 games with in-game MSAA. Import his setup exe or add-on zip to get them (a bare dlss5-nr.addon64 has no host); Local components says which builds carry the host. " +
+            "A build with the host gets the whole set beside the game's ReShade, as the author's INSTALL.txt asks: both add-ons and the dlss5-nr-host folder. ReShade loads only the add-on that matches the game, and NR starts its host only when it needs it. Uninstall, or switching to a build without the host, takes them out again; a host folder the app created goes whole, with the ReShade.ini and ReShade.log NR's host writes there. " +
+            "Not supported by the author yet: 32-bit Vulkan and 32-bit Direct3D 12 games. A game NR runs through its host also writes dlss5-nr-host\\ReShade.log; NR's shortcuts go to the host's ReShade.ini, which the app doesn't write."),
 
         new("lecram-updates", "General", "Lecram update source", "How the app gets Lecram builds and which build becomes the default.", LecramUpdates(BuildFlags.LecramChannel)),
 
@@ -161,7 +164,7 @@ public static class HelpTopics
             "When a v11 build first loads a ReShade.ini written by v10 (ConfigVersion 10 or lower), it sets NRHookPoint once to its default (beta.18+ After upscaling, beta.6 Auto). The app applies v11's one-time migration itself when it installs a v11 build with a hook point chosen, so the chosen hook point is kept; without a chosen hook point v11's own migration sets its default."),
         new("lc-strengths", "Lecram DLSS5", "Model strengths", "How strongly the model changes the image; ranges differ between v10 and v11.",
             "Strength (NRIntensity) goes from 0 to 1 and defaults to 1; higher values clamp (the 0928 build allowed up to 2). Local tone goes from 0 to 2 (default 1). " +
-            "Structure goes from 0 to 2 in v10 and 0 to 1 in v11, where higher values clamp (default 1). Character / skin: in v10 it goes from -1 to 1 and -1 follows the stock value (default); in v11 it goes from 0 to 1 (default 0) and negative values read as 0. " +
+            "Structure goes from 0 to 2 in v10 and 0 to 1 in v11, where higher values clamp (default 1). Character / skin: in v10 it goes from -1 to 1 and -1 follows the stock value (default); in v11 it goes from 0 to 1 (0 protects faces, 1 is NVIDIA's stock face treatment). Its default is 0 up to v12.0 and 1 from v12.9.9; a negative value reads as the build's default. " +
             "The add-on does not document what a value looks like beyond these ranges."),
         new("lc-style", "Lecram DLSS5", "Style", "Model look 0, 1 or 2; the add-on doesn't say how they differ.",
             "NRStyle 0, 1 or 2 (default 0). v10 labels them Default, Natural and Cinematic; v11 labels them Model A, B and C. The add-on does not say how they differ."),
@@ -170,7 +173,7 @@ public static class HelpTopics
         new("lc-ui", "Lecram DLSS5", "UI correction", "Tries to protect the HUD from the model; off by default.",
             "NRUICorrection, off by default in both generations. The add-on does not document how it protects the HUD."),
         new("lc-passes", "Lecram DLSS5", "Passes", "How many times the model runs per frame (1 to 4).",
-            "NRPasses, 1 to 4 (default 1). v11 also has per-pass keys; the app offers the per-pass model (Pass 2 to 4 preset) and leaves the per-pass look (style, tone, structure, skin) to the add-on's overlay. The cost per pass is not documented."),
+            "NRPasses, 1 to 4 (default 1). v11 also has per-pass keys; the app offers the per-pass model (Pass 2 to 4 preset), and from v12.9.9 each pass's hook point and resolution, and leaves the per-pass look (style, tone, structure, skin) to the add-on's overlay. The cost per pass is not documented."),
         new("lc-scale", "Lecram DLSS5", "Resolution", "The fraction of the frame the model works at (0.33 to 1).",
             "NRResolutionScale, 0.33 to 1 (default 1): the fraction of the frame the model works at."),
         new("lc-preset", "Lecram DLSS5", "Preset", "Which model in the NR runtime is used; only matters when the DLL ships several.",
@@ -210,6 +213,34 @@ public static class HelpTopics
             "NRGpuCrashWitness, Direct3D 12 only. v11 beta.29 and newer watch the GPU by default: after a freeze or GPU reset they save dlss5-nr-crash-<time>.txt beside ReShade.log (where the GPU stopped relative to NR's work, GPU, driver, NR's last log lines), name it on the panel's Home page at the next launch and turn on Windows' DRED crash breadcrumbs for the next runs. " +
             "0 turns all of it off (the author's documented switch). A non-zero value turns DRED on from every launch. beta.22 reads the key too, with no watcher: there non-zero turns DRED on and the default is off. " +
             "The author asks for the crash file when reporting a freeze. DRED's cost is not documented."),
+        new("lc-pass-hook", "Lecram DLSS5", "Pass hook point", "Where each extra pass runs (v12.9.9 and newer).",
+            "NRPass2HookPoint, NRPass3HookPoint and NRPass4HookPoint, v12.9.9 and newer (the author's v12.9 \"hook point per pass\"), on Direct3D 12, Vulkan and Direct3D 11: 0 as the pass before, 1 Before upscaling, 2 After upscaling, 3 Present. " +
+            "The numbers differ from Where it runs (NRHookPoint: 0 After upscaling, 1 Before upscaling, 2 Present). Passes run in the frame's order: a point earlier than the pass before's runs at that pass's. " +
+            "So pass 1 can run After or Before upscaling and pass 2 at Present in the same frame. It only takes effect when Passes reaches that pass. The add-on's catalog doesn't name a default. Older builds ignore the keys, so the app hides them and does not write them there."),
+        new("lc-pass-scale", "Lecram DLSS5", "Pass resolution", "The fraction of the frame each extra pass works at (v12.9.9 and newer).",
+            "NRPass2ResolutionScale, NRPass3ResolutionScale and NRPass4ResolutionScale, v12.9.9 and newer (v12.9.5's \"a different resolution for each pass\"), on Direct3D 12, Direct3D 11 and Vulkan: 0 uses pass 1's resolution, else 0.33 to 1 of the output (a value under 0.33 reads as 0.33). " +
+            "A pass at Before upscaling stays at the game's own resolution. A change builds the pass anew at its size while the old one keeps running. The add-on's panel names Full, Quality, Balanced and Performance without numbers, so the app offers the fractions instead. Older builds ignore the keys."),
+        new("lc-buffering", "Lecram DLSS5", "Frame buffering", "Whether NR's picture comes with its own frame or one frame late (v12.9.9 and newer).",
+            "NRFrameBuffering, v12.9.9 and newer: 0 Automatic (default: NR's picture with its own frame while the game idles inside its Present long enough to cover NR's cost, one frame late otherwise, decided per swap chain), 1 One frame (NR works beside the game's next frame: the fastest, the picture one frame late), 2 Same frame (no added latency: the game's Present waits for NR). " +
+            "It acts on Direct3D 11 games at Present and on games NR runs through its host (Direct3D 9, Direct3D 10, OpenGL, 32-bit), which the app doesn't install yet. Applies at once. Older builds ignore the key."),
+        new("lc-upscaler", "Lecram DLSS5", "Upscaler and DLSS preset", "NR's own DLSS in place of the game's FSR 3.1 or XeSS, and its preset (v12.9.9 and newer).",
+            "NRUpscaler, v12.9.9 and newer, off by default: 0 the game's own upscaler, 1 NR's own NVIDIA DLSS Super Resolution (DLAA where the game renders at its output size) in place of the game's FSR 3.1 (FidelityFX API) or XeSS (Direct3D 12), fed the game's exact inputs. " +
+            "The game's upscaler runs until DLSS is ready and wherever DLSS can't take its inputs exactly (each case named in the log as NR-DLSS). Needs an NVIDIA RTX card and NVIDIA's DLSS from the driver store or the game's own nvngx_dlss.dll. Applies at the next frame. v13.4 also uses it as DLAA in games NR runs through its host. " +
+            "NRUpscalerPreset, the preset NR's DLSS is created with: 0 NVIDIA's default per mode (K for DLAA, Quality and Balanced, M for Performance, L for Ultra Performance), 1 J, 2 K, 3 L, 4 M. A change recreates DLSS while the old one serves. It only matters with Upscaler set to DLSS. Older builds ignore both keys."),
+        new("lc-halo", "Lecram DLSS5", "Halo removal", "Takes off NR's bright rims and spills along silhouettes (v12.9.9 and newer).",
+            "NRLookHaloRemoval, 0 to 1, default 0 (off), v12.9.9 and newer: takes off the brightening NR adds in a thin band along the game's edges above what NR gives the same surface beyond it. " +
+            "It acts with the add-on's Fine-tune off too. The add-on doesn't say what a value between 0 and 1 looks like. The rest of the Fine-tune set (Texture, Clarity, Dark halos and the others) only acts with Fine-tune on, so it stays in the add-on's overlay."),
+        new("lc-framegen", "Lecram DLSS5", "Frame generation", "NVIDIA DLSS Frame Generation hosted by NR, and its multiplier (v13.4 and newer).",
+            "NRFrameGen, v13.4 and newer (Early Access), off by default: 0 Off (NR hosts nothing and loads no NVIDIA file), 1 On (NVIDIA's DLSS Frame Generation hosted by NR through Streamline, after NR's pass: NR runs on every real frame and never on a generated one), 2 Dynamic (NVIDIA's dynamic multiplier where the GPU and driver support it, else On; v13.4's panel says it isn't available in this version and uses the fixed multiplier). " +
+            "Read when the game starts: turning it on later needs a restart. The game's own frame generation, another tool's and NVIDIA Smooth Motion keep NR's off. It needs an RTX 40 or newer card, NVIDIA's Streamline 2.12.0 plugins and nvngx_dlssg.dll 310.7.0 or newer in %LOCALAPPDATA%\\DLSS5-NR\\runtime\\streamline\\2.12.0 (the author's setup fetches them; this app doesn't), unless the game ships its own Streamline. " +
+            "NRFrameGenMultiplier: 0 to 4 for 2x to 6x, clamped to what the GPU supports (logged as multiplier_clamped); not used under Dynamic. The add-on's texts don't name its default. " +
+            "The author's known issues for v13.4: it can crash or stay black in a few games (Silent Hill Townfall: turn it off there). Older builds ignore the keys, so the app hides them and does not write them there."),
+        new("lc-fg-ui", "Lecram DLSS5", "UI in generated frames", "How NR's frame generation handles the game's HUD (v13.4 and newer).",
+            "NRFrameGenUi, v13.4 and newer: 0 Steady (NR hands DLSS-G its HUD-less image and UI alpha and DLSS-G puts the real UI back: it never warps and moves at the real frame rate), 1 Interpolated (the UI is generated with the picture: smooth, and it can warp). " +
+            "Read when the game starts. Only matters with Frame generation on. The add-on's texts don't name its default."),
+        new("lc-fg-hdr", "Lecram DLSS5", "Frame generation on HDR screens", "How NR's frame generation reaches a Windows HDR screen in an HDR10 game (v13.4 and newer).",
+            "NRHdrScreen, v13.4 and newer, for a game with an HDR10 swap chain while NR hosts frame generation: 0 HDR10 (NR's swap chain on the screen, as DLSS-G makes it), 1 scRGB (each frame turned into scRGB on an FP16 swap chain at its native Present). " +
+            "Read when the game starts. The add-on's texts don't name its default."),
 
         new("rdx-scale", "RenoDX DLSS", "Resolution scale", "Percentage of the DLSS size the model works at; lower is cheaper and softer.",
             "Percentage of the native DLSS input/output size the model works at; 0% uses the smallest size the model supports. Lower is cheaper and softer."),
@@ -496,6 +527,13 @@ public static class HelpTopics
             "Some mods need dgVoodoo2 as well. It is freeware that isn't redistributable, so the app doesn't download it: the section lists the versions and setup lines from the wiki and links dgVoodoo2's own releases page. " +
             "Luma and a RenoDX HDR mod both rework the HDR output and don't stack: installing the second one asks for a confirmation, the warning stays on the game page, and Update all skips the pair until you confirmed it once. Games with anti-cheat get nothing. " +
             "You can pick another mod by hand (the search box shortens the list), or import a Luma zip of your own, which is installed as it is. Every download is checked against the SHA-256 in the catalog; the zips are the author's own files, not copies."),
+        // ---------- HSF ----------
+        new("hsf", "HSF (preview)", "HSF (preview)", "Capt-Hunter's frame generation add-on for games without it; import only, installed when you press Install.",
+            "HSF (Capt-Hunter's universal frame generation) is a ReShade add-on that feeds NVIDIA DLSS Frame Generation into games that have none, in DirectX 9, 11 and 12 games. This is a preview build. " +
+            "Its licence is private and invite-only: the app never downloads or shares it. Import the release you were given in Settings → Local components (Import… for the .zip, Folder… for the extracted folder); the app copies the files as they are and names the build by the version in the zip's or folder's name. " +
+            "Installing needs ReShade 6.8 with add-on support in the game (the app installs it first when the game has none, but not beside OptiScaler). It puts hsf.addon64 (64-bit game) or hsf.addon32 (32-bit game) with the other add-ons, the HSF_streamline folder beside the exe (32-bit games need it too) and the release's reshade-shaders folder (it adds HSF.fx). When the game's bitness isn't known the app places the 64-bit add-on only. No HSF.ini is needed. Everything placed is recorded, files it replaced are backed up, and Remove puts them back. " +
+            "What it needs: an RTX 40 or newer card (RTX 20 and 30 work through the MFG Unlock add-on, which you install); borderless or windowed mode, not exclusive fullscreen; and for DirectX 9/11 games and DirectX 12 games without DLSS a flow source you add yourself: GITC Uplift (the app installs it), iMMERSE LaunchPad or LumeniteFX Kernel. DirectX 12 games ask for one restart from HSF's menu. " +
+            "Never use HSF in online games or games with anti-cheat: the app refuses to install it there. The method advisor lists it for games without their own frame generation once a release is imported; it is never picked for you."),
         // ---------- RenoDX HDR ----------
         new("hdr-renodx", "HDR (RenoDX)", "HDR (RenoDX)", "ReShade add-ons that give a game real HDR output; the app picks one per game.",
             "RenoDX HDR mods are ReShade add-ons that give a game real HDR output. The app picks one per game from the catalog, and the section on the game's Install tab says which and why. " +
@@ -629,6 +667,14 @@ public static class HelpTopics
         ["lc-foreign"] = "Add-on default alone; the app sets observe for you next to ShortFuse's add-on.",
         ["lc-hooks"] = "Add-on default. With a Streamline game and DLSS on set 1; if the game crashes at boot set 2.",
         ["lc-dx11"] = "Auto.",
+        ["lc-pass-hook"] = "Add-on default. With 2 passes, try Present on pass 2 to also process the HUD and screen effects.",
+        ["lc-pass-scale"] = "Add-on default. Lower an extra pass's resolution to save FPS.",
+        ["lc-buffering"] = "Add-on default. Same frame only if the added frame of latency bothers you and the FPS holds.",
+        ["lc-upscaler"] = "Add-on default. DLSS in a game that only offers FSR 3.1 or XeSS, on an RTX card; keep the preset at Default.",
+        ["lc-halo"] = "Add-on default. Raise it if bright rims appear around characters or objects.",
+        ["lc-framegen"] = "Add-on default (off). On at 2x on an RTX 40 or newer card in a game without its own frame generation; turn it off if the game crashes or stays black.",
+        ["lc-fg-ui"] = "Add-on default. Interpolated only if the HUD stutters and you accept it warping.",
+        ["lc-fg-hdr"] = "Add-on default. scRGB only if HDR looks wrong with NR's frame generation.",
         ["rdx-scale"] = "100% on fast cards; 75% or 50% to save FPS.",
         ["rdx-ui"] = "Add-on default; On if the HUD looks processed.",
         ["rdx-encoding"] = "Add-on default. In HDR games with wrong colours, try HDR10 or scRGB.",
@@ -682,6 +728,7 @@ public static class HelpTopics
         ["nv-power"] = "Use global. Prefer max performance for a game that stutters when the GPU clocks down.",
         ["hdr-skip"] = "Off. On only if colours look wrong while another HDR mod is active.",
         ["detection-override"] = "Leave everything on Auto. Change a value only when the game page shows something clearly wrong, such as DX11 for a DX12 game.",
+        ["hsf"] = "Install it only in single-player games, in borderless or windowed mode, with a flow source (GITC Uplift) for DirectX 9/11 games and DirectX 12 games without DLSS.",
         ["luma"] = "Leave HDR output on Auto first. Do not run Luma and a RenoDX HDR mod in the same game. For Unreal games add the launch argument shown, or the mod will not load.",
         ["hdr-renodx"] = "Install what is picked. Switch Use Unreal Extended off only if the game misbehaves with it, then try the plain generic Unreal add-on. Tune the look in the ReShade overlay (Home).",
         ["hdr-peak"] = "Your display's real peak (the HDR Calibration app or rtings.com give it). Leave empty if you are not sure.",

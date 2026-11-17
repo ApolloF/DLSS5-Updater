@@ -97,6 +97,7 @@ public sealed partial class GameViewModel
         if (File.Exists(store.DlssNrFor(EffectiveNrId))) imported.Add(ComponentRegistry.DlssNr);
         if (store.AddonBuilds(AddonKind.RenoDx).Count > 0) imported.Add(ComponentRegistry.RenoDx);
         if (store.AddonBuilds(AddonKind.Lecram).Count > 0) imported.Add(ComponentRegistry.Lecram);
+        if (HsfLibrary.Newest() is not null) imported.Add(ComponentRegistry.Hsf);
         var catalog = AdvisorCatalog.For(_s.Catalog?.Document);
         var protectedInstall = MethodAdvisor.IsProtectedStoreInstall(Info);
         return new AdvisorInput(Info, _s.Gpu)
@@ -109,6 +110,7 @@ public sealed partial class GameViewModel
             RenoDxMod = catalog.RenoDx?.Match(Info).Mod,
             Luma = _s.Catalog?.LumaPicker?.Pick(Info),
             Imported = imported,
+            Lecram = store.LecramBuildFor(EffectiveLecramId) is { } lecram ? LecramBuildInfo.Of(lecram) : null,
             InstalledRoutes = NrAddons.PresentIn(target, Manifest),
             AddonsOn = AddonsOn(),
         };

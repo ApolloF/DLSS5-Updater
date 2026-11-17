@@ -121,8 +121,8 @@ public sealed partial class AddonLibraryViewModel : ObservableObject
     public string ImportOnlyNote => "Import only: get new builds from the author's page.";
 
     internal static string NoLecramBuilds(bool channelEnabled) => channelEnabled
-        ? $"No builds yet. Use Check now to fetch the latest v11 build, or import your own copy ({ComponentStore.Lecram10File} for v10 and older, {ComponentStore.Lecram11File} for v11 and newer)."
-        : $"No builds yet. Import the add-on ({ComponentStore.Lecram10File} for v10 and older, {ComponentStore.Lecram11File} for v11 and newer).";
+        ? $"No builds yet. Use Check now to fetch the latest build, or import your own copy ({ComponentStore.Lecram10File} for v10 and older, {ComponentStore.Lecram11File} for v11 and newer, or the author's setup exe or add-on zip)."
+        : $"No builds yet. Import the add-on ({ComponentStore.Lecram10File} for v10 and older, {ComponentStore.Lecram11File} for v11 and newer, or the author's setup exe or add-on zip).";
 
     private AddonBuild? SelectedBuild => Store.AddonBuildFor(_kind, null);
 
@@ -152,9 +152,14 @@ public sealed partial class AddonLibraryViewModel : ObservableObject
             };
             var size = File.Exists(path) ? $"{new FileInfo(path).Length / 1048576.0:0.0} MB  ·  " : "";
             var count = _buildCount > 1 ? $"  ·  {_buildCount} builds in the library" : "";
-            return $"{generation}{size}SHA-256 {build.Id[..12]}…{count}";
+            return $"{generation}{LecramHostInfo(build)}{size}SHA-256 {build.Id[..12]}…{count}";
         }
     }
+
+    /// <summary>Whether a v11-generation Lecram build carries NR's host, which Direct3D 9, Direct3D 10, OpenGL and 32-bit games need.</summary>
+    internal static string LecramHostInfo(AddonBuild build) => build.Generation != LecramGeneration.V11 ? ""
+        : ComponentStore.LecramHasHost(build) ? "with NR's host and 32-bit add-on  ·  "
+        : "64-bit add-on only (no NR host)  ·  ";
 
     /// <summary>Rebuilds the list from the library and the selection from the settings.</summary>
     public void Reload()
@@ -182,7 +187,7 @@ public sealed partial class AddonLibraryViewModel : ObservableObject
     {
         var filter = _kind == AddonKind.RenoDx
             ? "RenoDX DLSS add-on|renodx-dlss.addon64;*.addon64"
-            : "Lecram DLSS5 add-on|renodx-dlss5.addon64;dlss5-nr.addon64;*.addon64";
+            : "Lecram DLSS5 add-on, setup or add-on zip|renodx-dlss5.addon64;dlss5-nr.addon64;*.addon64;DLSS5-NR-*.exe;*.zip";
         var dlg = new OpenFileDialog { Filter = filter, Title = $"Select {Title}" };
         if (dlg.ShowDialog() == true) await ImportFrom(dlg.FileName);
     }

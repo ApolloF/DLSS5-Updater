@@ -57,6 +57,16 @@ public sealed partial class ComponentStore
     public const string Lecram10File = "renodx-dlss5.addon64";
     public const string Lecram11File = "dlss5-nr.addon64";
     public static readonly string[] LecramFiles = [Lecram10File, Lecram11File];
+    /// <summary>
+    /// From v12.9: the 32-bit add-on and NR's 64-bit host folder (its exe, its own ReShade64.dll and dlss5-nr.addon64), which run NR for
+    /// Direct3D 9, Direct3D 10, OpenGL and 32-bit games and 64-bit Direct3D 11 games with in-game MSAA (INSTALL.txt).
+    /// </summary>
+    public const string Lecram32File = "dlss5-nr.addon32";
+    public const string LecramHostDir = "dlss5-nr-host";
+    public const string LecramHostExe = "nr-host64.exe";
+    /// <summary>The host set beside the game's ReShade, as paths relative to that folder (the same layout in a library build's folder).</summary>
+    public static readonly string[] LecramHostFiles =
+        [Lecram32File, LecramHostDir + @"\" + LecramHostExe, LecramHostDir + @"\" + ReShadeFile, LecramHostDir + @"\" + Lecram11File];
     public const string UpliftFile = "gitc-uplift.addon64";
     public const string UpliftHelper = "gitc-uplift-helper64.exe";
     public const string UpliftNrDir = "GITC-Uplift";

@@ -18,15 +18,21 @@ internal sealed record MediaFireFile(string Name, string Hash, DateTimeOffset Cr
 internal sealed record MediaFireListing(IReadOnlyList<MediaFireFile> Files, bool More);
 internal sealed record LecramChannel(string Key, MediaFireFile? Latest, bool Offline, string? Notice);
 
-/// <summary>The public update channel used by DLSS5-NR-Setup; requests within a check are sequential.</summary>
+/// <summary>The public update channel used by DLSS5-NR-Setup and DLSS5-NR-Dev-Setup; requests within a check are sequential.</summary>
 internal sealed partial class MediaFireClient
 {
     /// <summary>
     /// The author's update folders, newest generation first. Each major gets its own folder and no older folder points to it
     /// (v12's installer: "v12's own folder, so v11 setups never see v12"), so a new major is added here with a release.
     /// </summary>
-    internal static readonly string[] Folders = ["r1xp6x0i043wx" /* v12 */, "wrwi1qkpgy0qu" /* v11 */];
+    internal static readonly string[] Folders = ["r1xp6x0i043wx" /* v12 and later regular releases */, "wrwi1qkpgy0qu" /* v11 */];
     internal static readonly string DefaultFolder = Folders[0];
+
+    /// <summary>
+    /// The Early Access setups' own folder (<c>updates_dev</c> in v13.4.0's sources.json, <c>DLSS5-NR-Dev-Setup-v*.exe</c>). It is listed
+    /// on every check next to the regular folders and the newest upload across both wins. It is never remembered as the channel's key.
+    /// </summary>
+    internal const string DevFolder = "uh4x7j5f7fj2y";
     private const int MaxDownload = 256 * 1024 * 1024;
     private static readonly HttpClient SharedHttp = CreateHttp(new SocketsHttpHandler
     {
@@ -54,11 +60,17 @@ internal sealed partial class MediaFireClient
     [GeneratedRegex(@"^v(\d+)\.\d+\.\d+(?:-(?:alpha|beta|rc)\.\d+)?$", RegexOptions.IgnoreCase)]
     private static partial Regex VersionPattern();
 
+    /// <summary>Setup exes (regular and Early Access) and add-on zips or files (regular and Early Access), longest prefix first.</summary>
+    private static readonly string[] SetupPrefixes = ["DLSS5-NR-Dev-Setup-", "DLSS5-NR-Setup-"];
+    private static readonly string[] PackagePrefixes = ["DLSS5-NR-Dev-", "DLSS5-NR-"];
+
     internal static string? VersionOf(string name)
     {
-        var prefix = name.StartsWith("DLSS5-NR-Setup-", StringComparison.OrdinalIgnoreCase) && name.EndsWith(".exe", StringComparison.OrdinalIgnoreCase)
-            ? "DLSS5-NR-Setup-" : name.StartsWith("DLSS5-NR-", StringComparison.OrdinalIgnoreCase)
-                && (name.EndsWith(".zip", StringComparison.OrdinalIgnoreCase) || name.EndsWith(".addon64", StringComparison.OrdinalIgnoreCase)) ? "DLSS5-NR-" : null;
+        var extension = Path.GetExtension(name);
+        string[] prefixes = extension.Equals(".exe", StringComparison.OrdinalIgnoreCase) ? SetupPrefixes
+            : extension.Equals(".zip", StringComparison.OrdinalIgnoreCase) || extension.Equals(".addon64", StringComparison.OrdinalIgnoreCase) ? PackagePrefixes
+            : [];
+        var prefix = prefixes.FirstOrDefault(p => name.StartsWith(p, StringComparison.OrdinalIgnoreCase));
         if (prefix is null) return null;
         var version = name[prefix.Length..^Path.GetExtension(name).Length];
         var match = VersionPattern().Match(version);
@@ -93,10 +105,29 @@ internal sealed partial class MediaFireClient
         .OrderByDescending(f => f.Created).ThenByDescending(f => f.Rank).FirstOrDefault();
 
     /// <summary>
-    /// Checks the folders newest generation first and takes the first one with a build, so a late fix in an older generation's
-    /// folder never wins over a newer major. A key the settings remembered from a move (not one of <see cref="Folders"/>) goes first.
+    /// Checks the regular folders (<see cref="CheckRegularAsync"/>), then the Early Access folder (<see cref="DevFolder"/>): the newest
+    /// upload of the two wins, by the same rule as within a folder. The key stays the regular folder's. When either listing comes from
+    /// the cache (offline), the result is offline.
     /// </summary>
     internal async Task<LecramChannel> CheckFoldersAsync(string remembered, CancellationToken ct)
+    {
+        var regular = await CheckRegularAsync(remembered, ct);
+        if (regular.Offline) return regular;
+        var dev = await CheckAsync(DevFolder, ct);
+        var notices = new[] { regular.Notice, dev.Notice }.Where(n => !string.IsNullOrWhiteSpace(n)).ToArray();
+        return regular with
+        {
+            Latest = SelectLatest(new[] { regular.Latest, dev.Latest }.OfType<MediaFireFile>()),
+            Offline = dev.Offline,
+            Notice = notices.Length > 0 ? string.Join(" ", notices) : null,
+        };
+    }
+
+    /// <summary>
+    /// Checks the regular folders newest generation first and takes the first one with a build, so a late fix in an older generation's
+    /// folder never wins over a newer major. A key the settings remembered from a move (not one of <see cref="Folders"/>) goes first.
+    /// </summary>
+    private async Task<LecramChannel> CheckRegularAsync(string remembered, CancellationToken ct)
     {
         var keys = Folders.Contains(remembered, StringComparer.OrdinalIgnoreCase) ? Folders : [remembered, .. Folders];
         LecramChannel? first = null;
@@ -229,9 +260,18 @@ internal sealed partial class MediaFireClient
         }
     }
 
-    /// <summary>Uses the EOCD to locate a ZIP with either file-relative or ZIP-relative offsets; never runs the PE.</summary>
-    internal static void ExtractAddon(string package, string dest)
+    /// <summary>
+    /// Uses the EOCD to locate a ZIP with either file-relative or ZIP-relative offsets: a setup exe with its ZIP appended, or a plain
+    /// .zip. Never runs the PE. Writes the root dlss5-nr.addon64 to <paramref name="dest"/> and, when the package has them (v12.9 and
+    /// newer), the 32-bit add-on and NR's host folder in the game layout (<see cref="ComponentStore.LecramHostFiles"/>). Only the known
+    /// entry names are read and each goes to a fixed name, so no entry path reaches the disk. The hand-install zip has the host folder
+    /// ready; the setup exe keeps its parts at its own paths (<c>nr-host64.exe</c> at the root, the author's ReShade in <c>reshade\</c>)
+    /// and its root add-on is the host's too (the zip's host copy is the same file). Returns true when the host set was written; a
+    /// package with only part of it is refused.
+    /// </summary>
+    internal static bool ExtractPackage(string package, string dest)
     {
+        if (new FileInfo(package).Length > MaxDownload) throw new InvalidDataException("Lecram package is too large.");
         var data = File.ReadAllBytes(package);
         var end = -1;
         for (var i = data.Length - 22; i >= Math.Max(0, data.Length - 65557); i--)
@@ -244,8 +284,57 @@ internal sealed partial class MediaFireClient
         if (start < 0 || start > end) throw new InvalidDataException("Invalid Lecram ZIP offsets.");
         using var stream = new MemoryStream(data, (int)start, data.Length - (int)start, false);
         using var zip = new ZipArchive(stream, ZipArchiveMode.Read);
-        var entries = zip.Entries.Where(e => e.FullName.Equals(ComponentStore.Lecram11File, StringComparison.OrdinalIgnoreCase)).ToArray();
-        if (entries.Length != 1 || entries[0].Length > 128 * 1024 * 1024) throw new InvalidDataException("Lecram ZIP must contain one root dlss5-nr.addon64.");
-        entries[0].ExtractToFile(dest);
+
+        ZipArchiveEntry? One(string name)
+        {
+            var found = zip.Entries.Where(e => e.FullName.Replace('\\', '/').Equals(name, StringComparison.OrdinalIgnoreCase)).ToArray();
+            if (found.Length > 1) throw new InvalidDataException($"Lecram ZIP holds {name} more than once.");
+            if (found.Length == 1 && found[0].Length > MaxEntry) throw new InvalidDataException($"{name} in the Lecram ZIP is too large.");
+            return found.FirstOrDefault();
+        }
+        var addon = One(ComponentStore.Lecram11File) ?? throw new InvalidDataException("Lecram ZIP must contain one root dlss5-nr.addon64.");
+        var host = ComponentStore.LecramHostDir + "/";
+        var addon32 = One(ComponentStore.Lecram32File);
+        var folder = zip.Entries.Any(e => e.FullName.Replace('\\', '/').StartsWith(host, StringComparison.OrdinalIgnoreCase));
+        var exe = folder ? One(host + ComponentStore.LecramHostExe) : One(ComponentStore.LecramHostExe);
+        var reshade = folder ? One(host + ComponentStore.ReShadeFile) : One("reshade/" + ComponentStore.ReShadeFile);
+        var hostAddon = folder ? One(host + ComponentStore.Lecram11File) : addon;
+
+        Directory.CreateDirectory(dest);
+        addon.ExtractToFile(Path.Combine(dest, ComponentStore.Lecram11File));
+        // An older setup ships the author's ReShade without a host; only the 32-bit add-on or the host exe say the package has one.
+        if (addon32 is null && exe is null && !folder) return false;
+        ZipArchiveEntry?[] set = [addon32, exe, reshade, hostAddon];
+        if (set.Any(e => e is null))
+        {
+            var missing = ComponentStore.LecramHostFiles.Where((_, i) => set[i] is null);
+            throw new InvalidDataException($"The package holds NR's host only in part ({string.Join(", ", missing)} missing). Import the author's whole setup exe or add-on zip.");
+        }
+        if (set.Sum(e => e!.Length) + addon.Length > MaxDownload) throw new InvalidDataException("Lecram package is too large.");
+        for (var i = 0; i < set.Length; i++)
+        {
+            var path = Path.Combine(dest, ComponentStore.LecramHostFiles[i]);
+            Directory.CreateDirectory(Path.GetDirectoryName(path)!);
+            set[i]!.ExtractToFile(path, overwrite: true);
+            CheckHostFile(path, ComponentStore.LecramHostFiles[i]);
+        }
+        return true;
+    }
+
+    private const int MaxEntry = 128 * 1024 * 1024;
+
+    /// <summary>Every file of the host set is a PE file whose version resource, when it has one, names it as that file (the real v13.4.0 set does).</summary>
+    private static void CheckHostFile(string path, string relative)
+    {
+        var name = Path.GetFileName(relative);
+        var head = new byte[2];
+        using (var f = File.OpenRead(path))
+            if (f.Read(head, 0, 2) != 2 || head[0] != 'M' || head[1] != 'Z') throw new InvalidDataException($"{relative} in the Lecram package is not a Windows binary.");
+        var original = FileUtil.OriginalFilename(path);
+        var named = string.IsNullOrEmpty(original) || original.Equals(name, StringComparison.OrdinalIgnoreCase)
+                    || (name.Equals(ComponentStore.ReShadeFile, StringComparison.OrdinalIgnoreCase) && original.StartsWith("ReShade", StringComparison.OrdinalIgnoreCase));
+        if (!named) throw new InvalidDataException($"{relative} in the Lecram package is {original}.");
+        if (name.Equals(ComponentStore.Lecram11File, StringComparison.OrdinalIgnoreCase) && !ComponentStore.LooksLikeLecramV11(path))
+            throw new InvalidDataException($"{relative} in the Lecram package is not Lecram's add-on.");
     }
 }

@@ -160,6 +160,22 @@ public sealed class AddonLibraryTests : IDisposable
     }
 
     [Fact]
+    public void Label_ReadsTheV12_9AndV13_4Layouts()
+    {
+        // v12.9.9 carries its version seven times (glued to "NR on", in its build and patch log fields, in the panel and menu-key texts,
+        // bare); v13.4.0 twice (glued to "NR on" and bare). Neither has a higher vX.Y.Z; the version resources (12.9.9.3000, 13.4.0.3000)
+        // agree. The v13 description's "v13.4 (13.4.0)" has two parts and is no label.
+        Assert.Equal("v12.9.9", Label("v12.9.9NR onNR off\0build=v12.9.9 (12.9.9)\0 patch=\"v12.9.9\" observe_only=0\0" +
+                                      "v12.9.9 (12.9.9) (Comparison saved\0v12.9.9 (12.9.9): ReShade's menu key\0v12.9.9 (12.9.9)\0v12.9.9\0"));
+        Assert.Equal("v13.4.0", Label("v13.4 (13.4.0): ReShade's menu key\0v13.4.0NR onNR offNRRuntimePathNRNvidiaPath\0v13.4.0\0"));
+        var v1299 = LecramV11("v12.9.9NR on\0v12.9.9", frameworkNoise: false);
+        var v1340 = LecramV11("v13.4.0NR on\0v13.4.0", frameworkNoise: false);
+        Assert.Equal((LecramGeneration.V11, "v12.9.9"), (v1299.Generation, v1299.DetectedLabel));
+        Assert.Equal((LecramGeneration.V11, "v13.4.0"), (v1340.Generation, v1340.DetectedLabel));
+        Assert.Equal([v1340.Id, v1299.Id], _store.LecramBuilds.Select(b => b.Id));
+    }
+
+    [Fact]
     public void Label_IsNeverTheDlssSdkVersion()
     {
         // Older v10 builds hold no label of their own, only the DLSS SDK's v310.8.0.

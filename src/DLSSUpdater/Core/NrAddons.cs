@@ -68,7 +68,7 @@ public static class NrAddons
         bool Has(IEnumerable<string> names) => names.Any(n => File.Exists(Path.Combine(dir, n)));
         var found = new List<NrAddon>();
         if (record?.RenoDx == true || Has([ComponentStore.RenoDxFile, .. ComponentStore.LegacyRenoDxFiles])) found.Add(NrAddon.RenoDx);
-        if (record?.Lecram == true || Has(ComponentStore.LecramFiles)) found.Add(NrAddon.Lecram);
+        if (record?.Lecram == true || Has([.. ComponentStore.LecramFiles, ComponentStore.Lecram32File])) found.Add(NrAddon.Lecram);
         if (record?.Uplift == true || Has([ComponentStore.UpliftFile, .. ComponentStore.LegacyUpliftFiles])) found.Add(NrAddon.Uplift);
         if (Has(BridgeFiles)) found.Add(NrAddon.Bridge);
         if (record?.Opti == true || File.Exists(Path.Combine(dir, "OptiScaler.ini"))) found.Add(NrAddon.OptiScaler);

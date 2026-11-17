@@ -30,6 +30,8 @@ public enum Method
     RenoDxHdr,
     /// <summary>Advice only: DXVK (Direct3D 8 to 11 over Vulkan), with the Lilium HDR fork for an HDR output the game lacks. Installed from the DXVK section of the game page.</summary>
     Dxvk,
+    /// <summary>Advice only, offered once the user has imported HSF: Capt-Hunter's frame generation add-on for a game without its own DLSS-G. Installed from the HSF section of the game page.</summary>
+    Hsf,
 }
 
 public enum Availability
@@ -55,8 +57,8 @@ public sealed record MethodOption(Method Method, string Title, Availability Avai
     public string? Warning { get; init; }
     /// <summary>The neural route this method leaves in the game (null when it adds none); the advisor checks it against the routes already there.</summary>
     public NrAddon? Route { get; init; }
-    /// <summary>One plain line on what the method does for the player; the longer <see cref="Reason"/> is the detail.</summary>
-    public string Summary => MethodAdvisor.SummaryOf(Method);
+    /// <summary>One plain line on what the method does for the player (the method's own, unless a route says it better); the longer <see cref="Reason"/> is the detail.</summary>
+    public string Summary { get; init; } = MethodAdvisor.SummaryOf(Method);
     /// <summary>An add-on that goes on top of whichever method is picked (<see cref="MethodAdvisor.IsAddOn"/>), not a method of its own.</summary>
     public bool IsAddOn => MethodAdvisor.IsAddOn(Method);
     /// <summary>True when the game page can select this method's components.</summary>
@@ -103,6 +105,8 @@ public sealed record AdvisorInput(GameInfo Game, GpuInfo Gpu)
     public LumaChoice? Luma { get; init; }
     /// <summary>Component ids with a build in the app's library that the user imported: the NR runtime and the NR add-ons.</summary>
     public IReadOnlySet<string> Imported { get; init; } = new HashSet<string>();
+    /// <summary>The Lecram build the game would use (its own pick, else the default); null when the library has none.</summary>
+    public LecramBuildInfo? Lecram { get; init; }
     /// <summary>The neural routes already in the game (<see cref="NrAddons.PresentIn"/>).</summary>
     public IReadOnlyList<NrAddon> InstalledRoutes { get; init; } = [];
     /// <summary>The NR add-ons (component ids) switched on in the game page's table: the neural rendering card uses the one the table has on.</summary>
@@ -137,6 +141,7 @@ public static class MethodAdvisor
         Method.Luma => "Luma framework mod",
         Method.AioAddon => "All-in-one add-on",
         Method.Dxvk => "DXVK (Vulkan translation, Lilium HDR)",
+        Method.Hsf => "HSF frame generation (preview)",
         _ => "RenoDX HDR mod",
     };
 
@@ -153,6 +158,7 @@ public static class MethodAdvisor
         Method.Luma => "Installs this game's Luma mod, which changes its rendering and adds HDR and optional DLSS.",
         Method.AioAddon => "One add-on for neural rendering, upscaling and frame generation. Not in the app yet.",
         Method.Dxvk => "Runs an older Direct3D game on Vulkan, with optional HDR output.",
+        Method.Hsf => "Feeds NVIDIA DLSS frame generation into a game that has none, through a ReShade add-on you imported.",
         _ => "Installs this game's RenoDX mod, which adds HDR output.",
     };
 
@@ -205,6 +211,7 @@ public static class MethodAdvisor
             var rows = new List<int>();
             var methods = new List<MethodOption>();
             Shape(ctx, rows, methods);
+            AddLecramWithoutDlss(ctx, methods);
             AddExtras(ctx, rows, methods);
             advice = new MethodAdvice(Rank(methods), rows, null);
         }
@@ -375,10 +382,49 @@ public static class MethodAdvisor
         }
 
         rows.Add(5);
-        list.Add(NoDlssNeural(c, "No upscaler in the game: GITC Uplift adds NR. ShortFuse's and Lecram's add-ons need the game's own DLSS. " + NoDlssCaveat,
+        list.Add(NoDlssNeural(c, "No upscaler in the game: GITC Uplift adds NR. ShortFuse's add-on needs the game's own DLSS. " + NoDlssCaveat,
             unverifiedWhy: c.ApiKnown ? null : "the graphics API wasn't detected, DX11/12 is assumed"));
         list.Add(Opt(Method.AioAddon, Availability.Coming, "A standalone all-in-one add-on (kibblerz DLSS5-Reshade-AIO) does NR, SR and FG in one; young project, the app doesn't install it yet."));
         list.Add(SmoothMotion(c, "Frame generation only, no ReShade needed."));
+    }
+
+    public const string LecramSummary = "Runs neural rendering through ReShade without the game's own DLSS: Lecram's add-on, in its 64-bit host for older APIs and 32-bit games.";
+
+    /// <summary>
+    /// Rows 5 to 14 (a game without DLSS): where GITC Uplift is offered (<see cref="NoDlssNeural"/>), Lecram's add-on goes before it when a
+    /// Lecram build is in the library.
+    /// Direct3D 9, Direct3D 10, OpenGL and 32-bit games need a build with NR's host (v12.9 and newer, from the author's setup or add-on
+    /// zip); 64-bit Direct3D 11 and 12 games need v12 or newer, which runs without DLSS. Not for Vulkan (ReShade's layer, as in row 3),
+    /// Direct3D 8 (not a route the author names) or 32-bit Direct3D 12 (not supported yet). It needs no motion shader: NR finds the
+    /// game's depth and motion itself, else uses optical flow.
+    /// </summary>
+    private static void AddLecramWithoutDlss(Ctx c, List<MethodOption> list)
+    {
+        var uplift = list.FindIndex(m => m.Method == Method.NeuralAddon && m.Title == NoDlssTitle);
+        if (uplift < 0 || c.In.Lecram is not { } build || c.Api is GraphicsApis.Vulkan or GraphicsApis.Dx8) return;
+        var title = $"Neural rendering with {ComponentTable.NameOf(ComponentRegistry.Lecram)}";
+        MethodOption Not(string why) => Opt(Method.NeuralAddon, Availability.NotPossible, why) with { Title = title, Summary = LecramSummary };
+        var kind = LecramRoute.GameKind(c.Tech);
+        var host = LecramRoute.NeedsHost(c.Tech);
+        MethodOption option;
+        if (LecramRoute.Unsupported(c.Tech))
+            option = Not($"Lecram's README: {kind} games aren't supported yet (32-bit Vulkan and 32-bit Direct3D 12).");
+        else if (host && !build.Host)
+            option = Not($"{kind} games run NR through Lecram's 64-bit host, and the build in use ({build.Name}) has none. Import the author's DLSS5 NR setup exe or add-on zip of {LecramRoute.FirstHostBuild} or newer (a bare {ComponentStore.Lecram11File} brings no host).");
+        else if (!build.RunsWithoutDlss)
+            option = Not($"The Lecram build in use ({build.Name}) needs the game's own DLSS; {LecramRoute.FirstWithoutDlssBuild} and newer run without it.");
+        else
+        {
+            var reason = host
+                ? $"{kind} game: Lecram's add-on runs NR in its 64-bit host (dlss5-nr-host), which the app places with the 32-bit add-on beside the game's ReShade."
+                : "Lecram's add-on runs NR in the game without its own DLSS (v12 and newer).";
+            reason += $" NR finds the game's depth and motion itself, else uses optical flow: no motion shader needed. {NrCost(c.Gpu)}";
+            var needs = NrRuntimeNeed(c) is { } nr ? new List<string> { nr } : [];
+            option = Opt(Method.NeuralAddon, needs.Count == 0 ? Availability.Available : Availability.NeedsSetup, reason.Trim(),
+                [ComponentRegistry.ReShade, ComponentRegistry.DlssNr, ComponentRegistry.Lecram], needs, InstallMode.ReShadeOnly)
+                with { Route = NrAddon.Lecram, Title = title, Summary = LecramSummary };
+        }
+        list.Insert(uplift, option);
     }
 
     /// <summary>Rows 1, 2, 3 (and 4 for frame generation): the game has DLSS.</summary>
@@ -432,6 +478,14 @@ public static class MethodAdvisor
             var dxvk = Opt(Method.Dxvk, Availability.Available,
                 $"{GraphicsApiInfo.Label(c.In.Game.Effective.PrimaryApi)} game with no HDR mod of its own: DXVK runs it on Vulkan, and the Lilium HDR build can output scRGB HDR (start with the Safest preset). Install it from the DXVK section on this page; it is never picked for you.");
             list.Add(c.In.Game.AntiCheat is { } ac ? dxvk with { Warning = AntiCheatCaution(ac) } : dxvk);
+        }
+        // Not a table row: HSF (import only, private licence) for a game without its own frame generation, once the user has imported it. Advice only, never picked for you.
+        if (c.Has(ComponentRegistry.Hsf) && c.Gpu.MayRunNvidiaMethods && !c.HasFg)
+        {
+            var hsf = Opt(Method.Hsf, Availability.NeedsSetup,
+                "Preview: Capt-Hunter's HSF adds DLSS frame generation to a game that has none, as a ReShade add-on. Install it from the HSF section on this page. Never use it in online games with anti-cheat.",
+                needs: [.. HsfNeeds.For(HsfNeeds.NeedsFlowSource(c.Api, c.Native), c.Gpu)]);
+            list.Add(c.In.Game.AntiCheat is { } ac ? hsf with { Warning = AntiCheatCaution(ac) } : hsf);
         }
         // Row 16: a Luma mod the app can install, or a game OptiScaler's list shows running one that the Luma catalog has no download for.
         if (list.All(m => m.Method != Method.Luma))
@@ -568,20 +622,23 @@ public static class MethodAdvisor
     }
 
     /// <summary>
-    /// NR in a game without DLSS: GITC Uplift runs the model on the game's image (ShortFuse's and Lecram's add-ons need the game's own
-    /// DLSS here). The installer takes 64-bit x64 games only, so a 32-bit game gets a not-possible card.
+    /// NR in a game without DLSS: GITC Uplift runs the model on the game's image (ShortFuse's add-on needs the game's own DLSS; Lecram's
+    /// card is added beside this one by <see cref="AddLecramWithoutDlss"/>). The installer takes 64-bit x64 games only, so a 32-bit game
+    /// gets a not-possible card.
     /// </summary>
     private static MethodOption NoDlssNeural(Ctx c, string reason, string? routeNeed = null, string? unverifiedWhy = null)
     {
-        if (c.Is32) return Opt(Method.NeuralAddon, Availability.NotPossible, "GITC Uplift, the NR add-on for games without DLSS, installs in 64-bit games only.");
+        if (c.Is32) return Opt(Method.NeuralAddon, Availability.NotPossible, "GITC Uplift installs in 64-bit games only.") with { Title = NoDlssTitle };
         var needs = new List<string>();
         if (NrRuntimeNeed(c) is { } nr) needs.Add(nr);
         if (routeNeed is not null) needs.Add(routeNeed);
         if (unverifiedWhy is not null) reason += $" Unverified: {unverifiedWhy}.";
         return Opt(Method.NeuralAddon, needs.Count == 0 ? Availability.Available : Availability.NeedsSetup, $"{reason} {NrCost(c.Gpu)}".Trim(),
             [ComponentRegistry.ReShade, ComponentRegistry.DlssNr, ComponentRegistry.Uplift], needs, InstallMode.ReShadeOnly, unverifiedWhy is not null)
-            with { Route = NrAddon.Uplift, Title = $"Neural rendering with {ComponentTable.NameOf(ComponentRegistry.Uplift)}" };
+            with { Route = NrAddon.Uplift, Title = NoDlssTitle };
     }
+
+    private static readonly string NoDlssTitle = $"Neural rendering with {ComponentTable.NameOf(ComponentRegistry.Uplift)}";
 
     /// <summary>
     /// The order of the table: what can be used first (Available before NeedsSetup, ties in table order), then what the app doesn't
@@ -590,7 +647,7 @@ public static class MethodAdvisor
     private static List<MethodOption> Rank(List<MethodOption> methods) =>
         methods.Select((m, i) => (m, i))
             .OrderBy(x => x.m.Availability switch { Availability.NotPossible => 3, Availability.Coming => 2, _ => 0 })
-            .ThenBy(x => x.m.Method is Method.RenoDxHdr or Method.Dxvk ? 1 : 0)
+            .ThenBy(x => x.m.Method is Method.RenoDxHdr or Method.Dxvk or Method.Hsf ? 1 : 0)
             .ThenBy(x => x.m.Availability == Availability.NeedsSetup ? 1 : 0)
             .ThenBy(x => x.i).Select(x => x.m).ToList();
 }

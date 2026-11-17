@@ -260,6 +260,7 @@ public class ScanTests : IDisposable
             (FakeRoot + @"\StarfieldServer.exe", 90_000_000),
             (FakeRoot + @"\Engine\Binaries\Win64\CrashReportClient.exe", 30_000_000),
             (FakeRoot + @"\Engine\Binaries\Win64\Tool.exe", 30_000_000),
+            (FakeRoot + @"\dlss5-nr-host\nr-host64.exe", 450_000),
             (FakeRoot + @"\Starfield.exe", 80_000_000),
         ]);
         Assert.Equal([FakeRoot + @"\Starfield.exe"], ranked);

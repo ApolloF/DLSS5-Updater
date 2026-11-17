@@ -22,6 +22,7 @@ public sealed partial class SettingsViewModel : ObservableObject
         FrameLimit = new FrameLimitSettingsViewModel(main, AddonsChanged);
         Dxvk = new DxvkSettingsViewModel(main, AddonsChanged);
         Luma = new LumaSettingsViewModel(main, AddonsChanged);
+        Hsf = new HsfSettingsViewModel(AddonsChanged);
         Cleanup = new BuildCleanupViewModel(main);
         Overrides = new ObservableCollection<IniOverride>(Settings.IniOverrides);
         ReShadeOverrides = new ObservableCollection<IniOverride>(Settings.ReShadeOverrides);
@@ -50,6 +51,7 @@ public sealed partial class SettingsViewModel : ObservableObject
     public FrameLimitSettingsViewModel FrameLimit { get; }
     public DxvkSettingsViewModel Dxvk { get; }
     public LumaSettingsViewModel Luma { get; }
+    public HsfSettingsViewModel Hsf { get; }
     public AddonLibraryViewModel Lecram { get; }
     public BuildCleanupViewModel Cleanup { get; }
     public IReadOnlyList<string> ProxyNames => AppSettings.ProxyNames;
@@ -527,6 +529,7 @@ public sealed partial class SettingsViewModel : ObservableObject
         FrameLimit.Reload();
         Dxvk.Reload();
         Luma.Reload();
+        Hsf.Reload();
         ApplyLecramGeneration();
         RefreshAddonPairStatus();
     }

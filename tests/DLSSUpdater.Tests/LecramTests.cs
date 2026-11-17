@@ -1,4 +1,5 @@
 using System.Globalization;
+using System.IO.Compression;
 using System.Text;
 using DLSSUpdater.Core;
 using DLSSUpdater.Scan;
@@ -221,6 +222,106 @@ public sealed class LecramTests : IDisposable
         Assert.True(File.Exists(ComponentStore.AddonPathOf(AddonKind.Lecram, build)));
     }
 
+    /// <summary>
+    /// A v12.9.9 / v13.4.0 style dlss5-nr.addon64: a version resource naming the file (OriginalFilename) and the build's version
+    /// strings, glued to "NR on" and bare, after it.
+    /// </summary>
+    private byte[] FakeV12Resource(string label, Version version)
+    {
+        var path = Src(V11File);
+        // A system dll as the base: the test assembly carries vX.Y.Z strings of its own (test data) that would outrank the label.
+        FakeVersionDll.Write(path, version, V11File, internalName: "nr-addon", baseFile: Path.Combine(Environment.SystemDirectory, "version.dll"));
+        return [.. File.ReadAllBytes(path), .. Encoding.ASCII.GetBytes($"\0RenoDX.DLSS5\0NR-SETTINGS\0NR-COMPAT\0{label}NR onNR off\0{label}\0{Guid.NewGuid()}\0")];
+    }
+
+    private static string Hash(byte[] data) => Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(data)).ToLowerInvariant();
+
+    private static byte[] ZipOf(params (string Name, byte[] Data)[] entries)
+    {
+        using var ms = new MemoryStream();
+        using (var zip = new ZipArchive(ms, ZipArchiveMode.Create, true))
+            foreach (var (name, data) in entries)
+            {
+                using var s = zip.CreateEntry(name).Open();
+                s.Write(data);
+            }
+        return ms.ToArray();
+    }
+
+    /// <summary>The author's setup layout (DLSS5-NR-Setup-v12.9.9.exe, DLSS5-NR-Dev-Setup-v13.4.0.exe): a Rust PE with a ZIP appended.</summary>
+    private string FakeSetup(string name, string version, byte[] addon, bool dev)
+    {
+        var zip = ZipOf(
+            ("package.json", Encoding.UTF8.GetBytes($"{{\"schema\":1,\"version\":\"{version}\",\"kind\":\"v11\"{(dev ? ",\"channel\":\"dev\"" : "")}}}")),
+            ("sources.json", "{}"u8.ToArray()),
+            (V11File, addon),
+            ("dlss5-nr.addon32", "MZ x86"u8.ToArray()),
+            ("nr-host64.exe", "MZ host"u8.ToArray()),
+            ("reshade/ReShade64.dll", "MZ reshade"u8.ToArray()),
+            ("studio/" + V10File, "MZ studio"u8.ToArray()),
+            ("RELEASE-NOTES.md", "notes"u8.ToArray()));
+        var exe = new byte[0x800];
+        exe[0] = (byte)'M';
+        exe[1] = (byte)'Z';
+        var path = Src(name);
+        File.WriteAllBytes(path, [.. exe, .. zip]);
+        return path;
+    }
+
+    [Theory]
+    [InlineData("DLSS5-NR-Dev-Setup-v13.4.0.exe", "v13.4.0", true)]
+    [InlineData("DLSS5-NR-Setup-v12.9.9.exe", "v12.9.9", false)]
+    public void Import_TakesTheRootAddonOutOfTheAuthorsSetup_WithoutRunningIt(string name, string version, bool dev)
+    {
+        var parts = version.TrimStart('v').Split('.').Select(int.Parse).ToArray();
+        var addon = FakeV12Resource(version, new Version(parts[0], parts[1], parts[2], 3000));
+        var setup = FakeSetup(name, version, addon, dev);
+        var before = FileUtil.Sha256(setup);
+
+        var build = _store.ImportLecram(setup);
+
+        Assert.Equal((LecramGeneration.V11, version, V11File), (build.Generation, build.DetectedLabel, build.FileName));
+        Assert.Equal($"{parts[0]}.{parts[1]}.{parts[2]}.3000", build.FileVersion);
+        Assert.Equal(Hash(addon), build.Id);
+        Assert.Equal(addon, File.ReadAllBytes(ComponentStore.AddonPathOf(AddonKind.Lecram, build)));
+        Assert.False(build.Downloaded);
+        Assert.Equal(before, FileUtil.Sha256(setup));
+        Assert.Empty(Directory.GetDirectories(AppPaths.Cache, "lecram-import-*"));
+    }
+
+    [Fact]
+    public void Import_TakesTheRootAddonOfTheHandInstallZip_NotTheHostFoldersCopy()
+    {
+        // "DLSS5 NR Add-on v13.4.0.zip": both add-ons at the root and NR's host folder with its own copy of the 64-bit add-on.
+        var addon = FakeV12Resource("v13.4.0", new Version(13, 4, 0, 3000));
+        var zip = Src("DLSS5 NR Add-on v13.4.0.zip");
+        File.WriteAllBytes(zip, ZipOf(
+            ("dlss5-nr-host/" + V11File, FakeV12Resource("v13.4.0", new Version(13, 4, 0, 3000))),
+            ("dlss5-nr-host/nr-host64.exe", "MZ host"u8.ToArray()),
+            ("dlss5-nr-host/ReShade64.dll", "MZ reshade"u8.ToArray()),
+            (V11File, addon),
+            ("dlss5-nr.addon32", "MZ x86"u8.ToArray()),
+            ("INSTALL.txt", "install"u8.ToArray()),
+            ("RELEASE-NOTES.md", "notes"u8.ToArray())));
+
+        var build = _store.ImportLecram(zip);
+
+        Assert.Equal(Hash(addon), build.Id);
+        Assert.Equal("v13.4.0", build.DetectedLabel);
+        Assert.Single(_store.LecramBuilds);
+
+        // A zip with only the host folder's copy, or none, is refused and adds nothing.
+        var hostOnly = Src("host-only.zip");
+        File.WriteAllBytes(hostOnly, ZipOf(("dlss5-nr-host/" + V11File, addon)));
+        Assert.Throws<InvalidDataException>(() => _store.ImportLecram(hostOnly));
+        var plainExe = Src("DLSS5-NR-Setup-v12.9.9.exe");
+        File.WriteAllBytes(plainExe, File.ReadAllBytes(FakeV11("v12.9.9")));
+        Assert.Throws<InvalidDataException>(() => _store.ImportLecram(plainExe));
+        Assert.Single(_store.LecramBuilds);
+        Assert.Throws<FileNotFoundException>(() => _store.ImportLecram(Path.Combine(_tmp, "missing.exe")));
+        Assert.Empty(Directory.GetDirectories(AppPaths.Cache, "lecram-import-*"));
+    }
+
     [Fact]
     public void Import_KeepsBothGenerations_AndNeverDeletesTheOther()
     {
@@ -382,6 +483,53 @@ public sealed class LecramTests : IDisposable
         Assert.Equal("1", Value("NRPresentFgPath"));
         await installer.InstallAsync(_game, _root, Lec(lecramId: beta45.Id, overrides: overrides), null, default);
         Assert.Null(Value("NRPresentFgPath"));
+    }
+
+    private static readonly string[] V12_9Keys =
+    [
+        "NRPass2HookPoint", "NRPass3HookPoint", "NRPass4HookPoint", "NRPass2ResolutionScale", "NRPass3ResolutionScale", "NRPass4ResolutionScale",
+        "NRFrameBuffering", "NRUpscaler", "NRUpscalerPreset", "NRLookHaloRemoval",
+    ];
+    private static readonly string[] V13_4Keys = ["NRFrameGen", "NRFrameGenMultiplier", "NRFrameGenUi", "NRHdrScreen"];
+
+    [Theory]
+    [InlineData("v12.0.0", false, false)]
+    [InlineData("v12.9.9", true, false)]
+    [InlineData("v13.4.0", true, true)]
+    public async Task V12_9AndV13_4Keys_AreWrittenOnlyForBuildsThatReadThem(string label, bool v12_9, bool v13_4)
+    {
+        var build = _store.ImportLecram(FakeV11(label));
+        var installer = new Installer(_store);
+        IniOverride[] overrides =
+        [
+            Key("NRPasses", "2"), Key("NRPass2HookPoint", "3"), Key("NRPass2ResolutionScale", "0.500000"), Key("NRUpscaler", "1"),
+            Key("NRFrameGen", "1"), Key("NRFrameGenMultiplier", "0"),
+        ];
+
+        await installer.InstallAsync(_game, _root, Lec(lecramId: build.Id, overrides: overrides), null, default);
+
+        Assert.Equal("2", Value("NRPasses"));
+        Assert.Equal((v12_9 ? "3" : null, v12_9 ? "0.500000" : null, v12_9 ? "1" : null),
+            (Value("NRPass2HookPoint"), Value("NRPass2ResolutionScale"), Value("NRUpscaler")));
+        Assert.Equal((v13_4 ? "1" : null, v13_4 ? "0" : null), (Value("NRFrameGen"), Value("NRFrameGenMultiplier")));
+
+        await installer.UninstallAsync(_game, _root, default);
+        Assert.Null(Value("NRPass2HookPoint"));
+        Assert.Null(Value("NRFrameGen"));
+    }
+
+    [Fact]
+    public async Task SwitchingFromV13_4ToV12_9_DropsTheFrameGenerationKeysTheAppWrote()
+    {
+        var v1340 = _store.ImportLecram(FakeV11("v13.4.0"));
+        var v1299 = _store.ImportLecram(FakeV11("v12.9.9"));
+        var installer = new Installer(_store);
+        IniOverride[] overrides = [Key("NRFrameGen", "1"), Key("NRPass2HookPoint", "3")];
+
+        await installer.InstallAsync(_game, _root, Lec(lecramId: v1340.Id, overrides: overrides), null, default);
+        Assert.Equal(("1", "3"), (Value("NRFrameGen"), Value("NRPass2HookPoint")));
+        await installer.InstallAsync(_game, _root, Lec(lecramId: v1299.Id, overrides: overrides), null, default);
+        Assert.Equal((null, "3"), (Value("NRFrameGen"), Value("NRPass2HookPoint")));
     }
 
     [Fact]
@@ -732,7 +880,8 @@ public sealed class LecramTests : IDisposable
     public void Options_HideKeysTheImportedGenerationLacks_AndSwitchChoicesPerGeneration()
     {
         var options = SettingsOptions.Lecram([]);
-        string[] v11Only = ["NeuralUplift", "NRPreset", "NRPass2Preset", "NRPass3Preset", "NRPass4Preset", "NRVramBuffering", "NRGpuCrashWitness", "NRPresentFgPath"];
+        string[] v11Only = ["NeuralUplift", "NRPreset", "NRPass2Preset", "NRPass3Preset", "NRPass4Preset", "NRVramBuffering", "NRGpuCrashWitness", "NRPresentFgPath",
+            .. V12_9Keys, .. V13_4Keys];
         string[] values(string key) => Option(options, key).Choices.Select(c => c.Value ?? "").ToArray();
 
         foreach (var o in options) o.ApplyGeneration(null);
@@ -811,6 +960,24 @@ public sealed class LecramTests : IDisposable
         // v12's NROpticalFlow is unprobed and its schema 12 default would need ConfigVersion 12; not offered.
         Assert.DoesNotContain(options, o => o.Key == "NROpticalFlow");
         Assert.Equal(["auto", "native", "foreign", "off"], Option(options, "DX11Source").Choices.Where(c => c.Value is not null).Select(c => c.Value));
+        // v12.9.9 catalog: pass hook point 0 as the pass before / 1 Before / 2 After / 3 Present; pass resolution 0 as pass 1, else 0.33..1.
+        Assert.All(new[] { "NRPass2HookPoint", "NRPass3HookPoint", "NRPass4HookPoint" }, k => Assert.Equal([0.0, 1, 2, 3], Numbers(Option(options, k))));
+        Assert.All(new[] { "NRPass2ResolutionScale", "NRPass3ResolutionScale", "NRPass4ResolutionScale" },
+            k => Assert.All(Numbers(Option(options, k)), v => Assert.True(v == 0 || v is >= 0.33 and <= 1, $"{k}={v}")));
+        Assert.Equal([0.0, 1, 2], Numbers(Option(options, "NRFrameBuffering")));
+        Assert.Equal([0.0, 1], Numbers(Option(options, "NRUpscaler")));
+        Assert.Equal([0.0, 1, 2, 3, 4], Numbers(Option(options, "NRUpscalerPreset")));
+        Assert.All(Numbers(Option(options, "NRLookHaloRemoval")), v => Assert.InRange(v, 0, 1));
+        // v13.4.0 catalog: frame generation 0 Off / 1 On / 2 Dynamic, multiplier 0..4 = 2x..6x, UI 0 Steady / 1 Interpolated, HDR screen 0 HDR10 / 1 scRGB.
+        Assert.Equal([0.0, 1, 2], Numbers(Option(options, "NRFrameGen")));
+        Assert.Equal([0.0, 1, 2, 3, 4], Numbers(Option(options, "NRFrameGenMultiplier")));
+        Assert.Equal(["2x", "3x", "4x", "5x", "6x"], Option(options, "NRFrameGenMultiplier").Choices.Skip(1).Select(c => c.Label));
+        Assert.Equal([0.0, 1], Numbers(Option(options, "NRFrameGenUi")));
+        Assert.Equal([0.0, 1], Numbers(Option(options, "NRHdrScreen")));
+        // Internal, experimental or undocumented keys of v12.9.9 and v13.4.0 are not offered (docs/addons/lecram-dlss5.md).
+        Assert.DoesNotContain(options, o => o.Key is "NRFrameGenPreset" or "NRExperimental" or "NRExpCamera" or "NRExpTaaInputs" or "NRQueueHeal"
+            or "NRPresentCallGuides" or "NRPresentShoulder" or "NRInputCurve" or "NRGameBrightness" or "NRMotionSource" or "NRDepthSource"
+            or "NRReader" or "NRGridPad" or "NRLookTexture" or "NRLookClarity");
     }
 
     [Fact]
@@ -863,6 +1030,23 @@ public sealed class LecramTests : IDisposable
     [InlineData("NRGpuCrashWitness", "v11.0.0-beta.22", true)]
     [InlineData("NRGpuCrashWitness", "v11.0.0-beta.18", false)]
     [InlineData("NRPreset", "v11.0.0-beta.6", true)]
+    [InlineData("NRPass2HookPoint", "v12.9.9", true)]
+    [InlineData("NRPass3HookPoint", "v13.4.0", true)]
+    [InlineData("NRPass4HookPoint", "v12.0.0", false)]
+    [InlineData("NRPass2ResolutionScale", "v12.9.9", true)]
+    [InlineData("NRPass4ResolutionScale", "v12.9.8", false)]
+    [InlineData("NRFrameBuffering", "v12.9.9", true)]
+    [InlineData("NRUpscaler", "v12.6.1", false)]
+    [InlineData("NRUpscalerPreset", "v13.4.0", true)]
+    [InlineData("NRLookHaloRemoval", "v12.0.0", false)]
+    [InlineData("NRFrameGen", "v13.4.0", true)]
+    [InlineData("NRFrameGen", "v13.5.0", true)]
+    [InlineData("NRFrameGen", "v12.9.9", false)]
+    [InlineData("NRFrameGen", "v13.3.0", false)]
+    [InlineData("NRFrameGenMultiplier", "v13.0.0-rc.1", false)]
+    [InlineData("NRFrameGenUi", "v13.4.0", true)]
+    [InlineData("NRHdrScreen", "v12.9.9", false)]
+    [InlineData("NRFrameGen", null, true)]
     public void LecramIni_HidesV11KeysFromBuildsOlderThanTheFirstThatReadsThem(string key, string? build, bool available)
     {
         Assert.Equal(available, LecramIni.IsAvailable(key, LecramGeneration.V11, build));
@@ -892,6 +1076,12 @@ public sealed class LecramTests : IDisposable
         Assert.False(fgPath.ViewFor(LecramGeneration.V11, "v12.0.0").IsAvailable);
         Assert.True(passPreset.ViewFor(LecramGeneration.V11, "v12.0.0").IsAvailable);
         Assert.False(passPreset.ViewFor(LecramGeneration.V11, "v11.0.0-beta.22").IsAvailable);
+        // v12.9.9 keys from v12.9.9 on; frame generation only from v13.4.0, so a v12 build never gets it.
+        Assert.All(V12_9Keys, k => Assert.Equal((false, true, true),
+            (Option(options, k).ViewFor(LecramGeneration.V11, "v12.0.0").IsAvailable, Option(options, k).ViewFor(LecramGeneration.V11, "v12.9.9").IsAvailable,
+             Option(options, k).ViewFor(LecramGeneration.V11, "v13.4.0").IsAvailable)));
+        Assert.All(V13_4Keys, k => Assert.Equal((false, true),
+            (Option(options, k).ViewFor(LecramGeneration.V11, "v12.9.9").IsAvailable, Option(options, k).ViewFor(LecramGeneration.V11, "v13.4.0").IsAvailable)));
 
         fgPath.ApplyGeneration(LecramGeneration.V11);
         Assert.True(fgPath.IsAvailable);

@@ -54,6 +54,8 @@ public static class ComponentRegistry
     public const string RenoDxHdr = "renodx-hdr";
     /// <summary>DLSS5-Feeder, removed from the app: older versions recorded it the generic way, so those records still undo.</summary>
     public const string Feeder = "dlss5-feeder";
+    /// <summary>HSF (Capt-Hunter, private licence, import only): a ReShade add-on that feeds DLSS frame generation into games without it (<see cref="HsfLibrary"/>).</summary>
+    public const string Hsf = "hsf";
     /// <summary>DXVK (Direct3D 8-11 over Vulkan): stable, development and the Lilium HDR fork; recorded the generic way (<see cref="DxvkLibrary"/>).</summary>
     public const string Dxvk = "dxvk";
     /// <summary>Luma Framework mods (Filoppi/Luma-Framework): a ReShade add-on plus its Luma\ folder, per game or the generic Unreal one (<see cref="LumaLibrary"/>).</summary>
@@ -75,7 +77,7 @@ public static class ComponentRegistry
         Register(new(OptiScaler, "OptiScaler") { Library = LibraryKind.OptiScaler, Legacy = true, OwnedFiles = ["OptiScaler.ini", @"OptiScaler\*", @"Licenses\*"] });
         Register(new(ReShade, "ReShade") { Library = LibraryKind.ReShade, Legacy = true, OwnedFiles = [ComponentStore.ReShadeFile, "ReShade.ini"] });
         Register(new(RenoDx, "ShortFuse RenoDX DLSS") { Library = LibraryKind.RenoDx, Legacy = true, OwnedFiles = [ComponentStore.RenoDxFile, .. ComponentStore.LegacyRenoDxFiles] });
-        Register(new(Lecram, "Lecram DLSS5") { Library = LibraryKind.Lecram, Legacy = true, OwnedFiles = ComponentStore.LecramFiles });
+        Register(new(Lecram, "Lecram DLSS5") { Library = LibraryKind.Lecram, Legacy = true, OwnedFiles = [.. ComponentStore.LecramFiles, ComponentStore.Lecram32File, ComponentStore.LecramHostDir + @"\*"] });
         // Removed from the app; registered so the records of older versions still undo by id (no library: nothing new installs it).
         Register(new(Dfc, "Deep Fried Chicken") { Legacy = true, OwnedFiles = ComponentStore.DfcOwnedFiles });
         Register(new(Uplift, "GITC Uplift") { Library = LibraryKind.Uplift, Legacy = true, OwnedFiles = ComponentStore.UpliftFiles });
@@ -97,6 +99,7 @@ public static class ComponentRegistry
         Register(new(UnrealFrameCap, "Unreal frame cap") { Label = "UE frame cap" });
         Register(new(Dxvk, "DXVK") { Library = LibraryKind.Dxvk, Label = "DXVK", OwnedFiles = [.. DxvkDlls.All, DxvkConf.FileName] });
         Register(new(Luma, "Luma") { Library = LibraryKind.Luma, Label = "Luma", OwnedFiles = [LumaFiles.TreeDir + @"\*", "Luma-*.addon", "Luma-*.addon64", "Luma-*.addon32"] });
+        Register(new(Hsf, "HSF") { Library = LibraryKind.Hsf, Label = "HSF", OwnedFiles = HsfLibrary.OwnedFiles });
         // Removed from the app, like Deep Fried Chicken: its generic records still undo, and the label shows a game that still has it.
         Register(new(Feeder, "DLSS5-Feeder")
         {
