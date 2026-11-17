@@ -39,7 +39,7 @@ public sealed partial class ComponentStore
         using var archive = ZipFile.OpenRead(zip);
         foreach (var rel in UpliftFiles)
         {
-            var source = rel.StartsWith(DfcShaderDir, StringComparison.OrdinalIgnoreCase)
+            var source = rel.StartsWith(ShaderDir, StringComparison.OrdinalIgnoreCase)
                 ? "Shaders/" + Path.GetFileName(rel) : "Addons/" + rel;
             var entry = archive.Entries.FirstOrDefault(e => e.FullName.Replace('\\', '/').Equals(source, StringComparison.OrdinalIgnoreCase))
                 ?? throw new InvalidDataException($"GITC Uplift: {source} missing from the package.");

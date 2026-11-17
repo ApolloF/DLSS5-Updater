@@ -22,7 +22,6 @@ public sealed partial class GameOptionViewModel : ObservableObject
         public static readonly IReadOnlyList<IniOptionViewModel> RenoDx = SettingsOptions.RenoDx([]);
         public static readonly IReadOnlyList<IniOptionViewModel> Lecram = SettingsOptions.Lecram([]);
         public static readonly IReadOnlyList<IniOptionViewModel> Uplift = SettingsOptions.Uplift([]);
-        public static readonly IReadOnlyList<IniOptionViewModel> Dfc = SettingsOptions.Dfc([]);
         public static readonly IReadOnlyList<IniOptionViewModel> Nr = SettingsOptions.Nr([]);
         public static readonly IReadOnlyList<IniOptionViewModel> Tonemap = SettingsOptions.Tonemap([]);
         public static readonly IReadOnlyList<IniOptionViewModel> HdrOutput = SettingsOptions.HdrOutput([]);
@@ -33,18 +32,15 @@ public sealed partial class GameOptionViewModel : ObservableObject
     private readonly AppSettings _s;
     private readonly string _gameId;
     private readonly Func<AddonBuild?>? _lecram;
-    private readonly Func<string, bool>? _available;
     private readonly Func<(OptiSource Source, string? Tag)>? _opti;
     private OptionChoice _inherit = null!;
 
     /// <param name="lecram">For Lecram's options: the build this game uses, whose generation and label decide availability, hint and choices.</param>
-    /// <param name="available">Whether the build this game uses has the key (Deep Fried Chicken: its default cfg), instead of the Settings' default build.</param>
     /// <param name="opti">For OptiScaler's options: the build this game installs, which decides availability, hint and choices.</param>
     public GameOptionViewModel(IniOptionViewModel definition, bool reShade, AppSettings settings, string gameId, Func<AddonBuild?>? lecram = null,
-        Func<string, bool>? available = null, Func<(OptiSource Source, string? Tag)>? opti = null)
+        Func<(OptiSource Source, string? Tag)>? opti = null)
     {
         _lecram = lecram;
-        _available = available;
         _opti = opti;
         _def = definition;
         _reShade = reShade;
@@ -59,14 +55,14 @@ public sealed partial class GameOptionViewModel : ObservableObject
                 if (e.PropertyName is nameof(IniOptionViewModel.IsAvailable) or nameof(IniOptionViewModel.Hint) or nameof(IniOptionViewModel.Choices)) Refresh();
                 return;
             }
-            if (e.PropertyName == nameof(IniOptionViewModel.IsAvailable)) { if (_available is null) OnPropertyChanged(nameof(IsAvailable)); }
+            if (e.PropertyName == nameof(IniOptionViewModel.IsAvailable)) OnPropertyChanged(nameof(IsAvailable));
             else if (e.PropertyName == nameof(IniOptionViewModel.Hint)) OnPropertyChanged(nameof(Hint));
             else if (e.PropertyName == nameof(IniOptionViewModel.Choices)) Refresh();
         };
         Rebuild();
     }
 
-    public bool IsAvailable => _available is not null ? _available(_def.Key) : OwnView?.IsAvailable ?? _def.IsAvailable;
+    public bool IsAvailable => OwnView?.IsAvailable ?? _def.IsAvailable;
 
     public string Label => _def.Label;
     public string Hint => OwnView?.Hint ?? _def.Hint;

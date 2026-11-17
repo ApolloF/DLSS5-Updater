@@ -123,7 +123,7 @@ public static partial class ReleaseNotes
     /// <summary>Where the full notes of a release live.</summary>
     public static string Url(Component c, string tag) => c switch
     {
-        Component.OptiScaler => GitHubTag(OptiSources.OfTag(tag).Repo, OptiSources.RawTag(tag)),
+        Component.OptiScaler => GitHubTag(OptiSources.F5.Repo, OptiSources.RawTag(tag)),
         Component.Uplift => GitHubTag(ComponentStore.UpliftRepo, tag),
         Component.MfgUnlock => GitHubTag(ComponentStore.MfgRepo, tag),
         Component.Streamline => GitHubTag(ComponentStore.StreamlineRepo, tag),

@@ -20,7 +20,7 @@ public class InstallerTests : IDisposable
         _target = Path.Combine(_root, @"Game\Binaries\Win64");
         _store = new ComponentStore(new GitHubClient(), () => true);
 
-        SeedOpti("v9.9.9", "OPTI-1");
+        SeedOpti("v0.1.30-f5", "OPTI-1");
         SeedMfg("1.0", "MFG-1");
         SeedDlss("v310.9.1", "NEW");
         Write(Path.Combine(AppPaths.Components, ComponentStore.DlssNrFile), "NR");
@@ -60,6 +60,7 @@ public class InstallerTests : IDisposable
         var pkg = Path.Combine(ComponentStore.TagDir(Component.OptiScaler, tag), "pkg");
         Write(Path.Combine(pkg, "OptiScaler.dll"), content);
         Write(Path.Combine(pkg, "OptiScaler.ini"), ReleaseIni);
+        Write(Path.Combine(pkg, "nvngx.dll_dlssnr.dll"), "FORWARDER");
         Write(Path.Combine(pkg, @"OptiScaler\libxess.dll"), "XESS");
         Write(Path.Combine(pkg, @"OptiScaler\dlssnr\README.md"), "doc");
         Write(Path.Combine(pkg, @"Licenses\XeSS_LICENSE.txt"), "lic");
@@ -123,7 +124,7 @@ public class InstallerTests : IDisposable
         Assert.Equal("XESS", T(@"OptiScaler\libxess.dll"));
         Assert.False(File.Exists(Path.Combine(_target, @"OptiScaler\dlssnr\README.md")));
         Assert.False(File.Exists(Path.Combine(_target, "setup_windows.bat")));
-        Assert.False(File.Exists(Path.Combine(_target, "nvngx.dll_dlssnr.dll")));
+        Assert.Equal("FORWARDER", T("nvngx.dll_dlssnr.dll")); // F5's forwarder replaces the leftover of an older build
         Assert.Equal("NEW-nvngx_dlssg.dll", T("nvngx_dlssg.dll"));
         Assert.Equal("NEW-nvngx_dlss.dll", File.ReadAllText(Path.Combine(_root, @"Engine\Plugins\Runtime\Nvidia\DLSS\Binaries\ThirdParty\Win64\nvngx_dlss.dll")));
         Assert.False(File.Exists(Path.Combine(_target, "nvngx_dlss.dll"))); // game already ships SR
@@ -134,11 +135,11 @@ public class InstallerTests : IDisposable
         Assert.Equal("true", ini.Get("Hotfix", "ManualInputPolling"));
 
         var m = InstallManifest.Load(_target)!;
-        Assert.Equal("v9.9.9", m.OptiTag);
+        Assert.Equal("v0.1.30-f5", m.OptiTag);
         Assert.Equal("v310.9.1", m.DlssTag);
 
         // New releases arrive: reinstall must replace our files without clobbering the original backups.
-        SeedOpti("v10.0.0", "OPTI-2");
+        SeedOpti("v0.1.31-f5", "OPTI-2");
         SeedDlss("v310.10.0", "NEWER");
         await installer.InstallAsync(Game(), _target, Full, null, default);
         Assert.Equal("OPTI-2", T("dxgi.dll"));
@@ -193,7 +194,7 @@ public class InstallerTests : IDisposable
         // Settings changed in the OptiScaler overlay survive the next release.
         ini.Set("DlssNr", "Passes", "2");
         ini.Save(Path.Combine(_target, "OptiScaler.ini"));
-        SeedOpti("v10.0.0", "OPTI-2");
+        SeedOpti("v0.1.31-f5", "OPTI-2");
         await installer.InstallAsync(Game(), _target, Full, null, default);
         ini = IniFile.Load(Path.Combine(_target, "OptiScaler.ini"));
         Assert.Equal("2", ini.Get("DlssNr", "Passes"));
@@ -315,7 +316,7 @@ public class InstallerTests : IDisposable
     }
 
     [Fact]
-    public async Task F5Build_PlacesForwarder_AndSwitchingBackRemovesIt_AndUninstallRestores()
+    public async Task F5Build_PlacesForwarder_AndUninstallRestores()
     {
         var before = Snapshot();
         var installer = new Installer(_store);
@@ -328,11 +329,6 @@ public class InstallerTests : IDisposable
         Assert.Equal("FORWARDER", T("nvngx.dll_dlssnr.dll"));
         Assert.Equal("v0.1.32-f5", InstallManifest.Load(_target)!.OptiTag);
         Assert.True(InstallManifest.Load(_target)!.Owns(Path.GetRelativePath(_root, Path.Combine(_target, "nvngx.dll_dlssnr.dll"))));
-
-        SeedOpti("v9.9.9", "OPTI-1");
-        await installer.InstallAsync(Game(), _target, o, null, default);
-        Assert.Equal("OPTI-1", T("dxgi.dll"));
-        Assert.False(File.Exists(Path.Combine(_target, "nvngx.dll_dlssnr.dll")));
 
         await installer.UninstallAsync(Game(), _target, default);
         Assert.Equal(before, Snapshot());
@@ -844,18 +840,18 @@ public class InstallerTests : IDisposable
     {
         var installer = new Installer(_store);
         await installer.InstallAsync(Game(), _target, Full, null, default);
-        SeedOpti("v10.0.0", "OPTI-2");
+        SeedOpti("v0.1.31-f5", "OPTI-2");
         SeedMfg("2.0", "MFG-2");
 
         var m = InstallManifest.Read(_target)!;
         await installer.InstallAsync(Game(), _target, Full.KeepingInstalledVersions(m), null, default);
         Assert.Equal("OPTI-1", T("dxgi.dll"));
         Assert.Equal("MFG-1", T(ComponentStore.MfgFile));
-        Assert.Equal("v9.9.9", InstallManifest.Read(_target)!.OptiTag);
+        Assert.Equal("v0.1.30-f5", InstallManifest.Read(_target)!.OptiTag);
         Assert.Equal("1.0", InstallManifest.Read(_target)!.MfgTag);
 
         // The installed release left the cache: OptiScaler is left alone rather than upgraded.
-        Directory.Delete(ComponentStore.TagDir(Component.OptiScaler, "v9.9.9"), true);
+        Directory.Delete(ComponentStore.TagDir(Component.OptiScaler, "v0.1.30-f5"), true);
         var o = Full.KeepingInstalledVersions(InstallManifest.Read(_target)!);
         Assert.False(o.Opti);
         Assert.True(o.Mfg);
@@ -901,7 +897,7 @@ public class InstallerTests : IDisposable
         Assert.Equal("MFG-1", File.ReadAllText(Path.Combine(elsewhere, ComponentStore.MfgFile)));
         Assert.Equal("NEW-nvngx_dlssg.dll", T("nvngx_dlssg.dll"));
 
-        SeedOpti("v10.0.0", "OPTI-2");
+        SeedOpti("v0.1.31-f5", "OPTI-2");
         await installer.InstallAsync(Game(), elsewhere, Full, null, default);
         Assert.Equal("OPTI-2", File.ReadAllText(Path.Combine(elsewhere, "dxgi.dll")));
 
@@ -1018,7 +1014,7 @@ public class InstallerTests : IDisposable
         Assert.All(m.Files.Concat(m.Dirs).Concat(m.Backups.SelectMany(b => new[] { b.Original, b.Backup })),
             e => Assert.False(Path.IsPathRooted(e), e));
 
-        SeedOpti("v10.0.0", "OPTI-2");
+        SeedOpti("v0.1.31-f5", "OPTI-2");
         await installer.InstallAsync(Game(), via, Full, null, default);
         Assert.Equal("OPTI-2", File.ReadAllText(Path.Combine(elsewhere, "dxgi.dll")));
 

@@ -126,7 +126,7 @@ public sealed class OnboardingTests : IDisposable
 
         setup.SkipCommand.Execute(null);
 
-        Assert.Equal(new OnboardingResult(false, null), result);
+        Assert.Equal(new OnboardingResult(false), result);
         Assert.True(s.OnboardingDone);
         s.OnboardingDone = false;
         Assert.Equal(before, Json(s));
@@ -141,7 +141,7 @@ public sealed class OnboardingTests : IDisposable
         var setup = new OnboardingViewModel(s);
         setup.Closed += r => result = r;
         setup.Finish();
-        Assert.Equal(new OnboardingResult(true, null), result);
+        Assert.Equal(new OnboardingResult(true), result);
         s.OnboardingDone = false;
         Assert.Equal(before, Json(s));
     }
@@ -151,25 +151,12 @@ public sealed class OnboardingTests : IDisposable
     {
         var setup = new OnboardingViewModel(new AppSettings());
         Assert.Equal(InstallMode.OptiScaler, setup.Mode.Value);
-        Assert.Equal(OptiSources.F5, setup.OptiBuild.Value);
         Assert.Null(setup.Addon.Value);
         Assert.True(setup.CheckAppUpdates);
         Assert.False(setup.AutoInstallAppUpdates);
         Assert.True(setup.AutoDownloadReShade);
         Assert.True(setup.AutoDownloadLecram);
         Assert.False(setup.AutoCleanBuilds);
-    }
-
-    [Fact]
-    public void OptiScalerNrBuild_IsReturnedForSettingsToSwitch()
-    {
-        var s = new AppSettings();
-        OnboardingResult? result = null;
-        var setup = new OnboardingViewModel(s) { OptiBuild = OnboardingViewModel.Builds.First(b => b.Value == OptiSources.Default) };
-        setup.Closed += r => result = r;
-        setup.Finish();
-        Assert.Equal(InstallMode.OptiScaler, s.DefaultMode);
-        Assert.Equal(OptiSources.Default, result!.Build);
     }
 
     [Theory]
@@ -183,7 +170,6 @@ public sealed class OnboardingTests : IDisposable
         var setup = new OnboardingViewModel(s)
         {
             Mode = OnboardingViewModel.Modes.First(m => m.Value == InstallMode.ReShadeOnly),
-            OptiBuild = OnboardingViewModel.Builds.First(b => b.Value == OptiSources.Default),
         };
         setup.Addon = OnboardingViewModel.Addons.First(a => a.Value == addon);
         setup.Closed += r => result = r;
@@ -191,9 +177,7 @@ public sealed class OnboardingTests : IDisposable
 
         Assert.Equal(InstallMode.ReShadeOnly, s.DefaultMode);
         Assert.Equal([addon], NrAddons.Defaults(s));
-        // The build only counts in OptiScaler mode.
-        Assert.Null(result!.Build);
-        Assert.Equal(OptiSources.F5.Repo, s.OptiSource);
+        Assert.True(result!.Applied);
     }
 
     [Fact]

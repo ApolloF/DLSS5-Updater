@@ -100,7 +100,7 @@ download off) and also imports the add-on. A build it fetched is a library build
 the next check knows it is there), becomes the default when it is newer than the current default, and may go in the automatic
 cleanup, which never deletes imports. It installs it per game in
 ReShade-only mode with ReShade 6+, a game with native DLSS and the NR runtime `nvngx_dlssnr.dll`. It adds the add-on to
-`[ADDON] LoadFromDllMain`, replaces OptiScaler-NR and excludes Deep Fried Chicken; Lecram's add-on may stay next to it.
+`[ADDON] LoadFromDllMain`; Lecram's add-on may stay next to it.
 
 - **Library.** Every imported build is kept: `components\renodx-dlss\<sha256>\renodx-dlss.addon64` plus a `version.json` (id =
   SHA-256, file name, file version, detected label, the user's own label, import date). Only a file whose version resource names

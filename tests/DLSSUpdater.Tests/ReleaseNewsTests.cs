@@ -55,7 +55,7 @@ public class ReleaseNewsTests : IDisposable
         var releases = new GitHubClient().CachedReleases(ComponentStore.DlssRepo);
 
         Assert.Equal(DlssNotes, Assert.Single(releases).Body);
-        Assert.Empty(new GitHubClient().CachedReleases(ComponentStore.OptiRepo));
+        Assert.Empty(new GitHubClient().CachedReleases(OptiSources.F5.Repo));
     }
 
     [Fact]

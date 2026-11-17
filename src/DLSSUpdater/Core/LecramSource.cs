@@ -127,7 +127,7 @@ public sealed partial class ComponentStore
 
     /// <summary>
     /// Puts the host set extracted to <paramref name="set"/> (<see cref="LecramHostFiles"/>) into the build's folder beside its add-on. The
-    /// same add-on imported again from a package replaces its set as a whole, as Deep Fried Chicken's does; a bare add-on import keeps it.
+    /// same add-on imported again from a package replaces its set as a whole; a bare add-on import keeps it.
     /// A copy that fails part-way takes the set out again, so a build never holds half a host.
     /// </summary>
     private void StoreLecramHost(AddonBuild build, string set)
@@ -197,7 +197,7 @@ public sealed partial class ComponentStore
         {
             var which = original.Equals(RenoDxFile, StringComparison.OrdinalIgnoreCase) || LegacyRenoDxFiles.Contains(original, StringComparer.OrdinalIgnoreCase)
                 ? "ShortFuse's add-on; import it under the RenoDX DLSS add-on instead"
-                : original.Equals(DfcFile, StringComparison.OrdinalIgnoreCase) ? "Deep Fried Chicken; import it from its release folder instead"
+                : original.Equals(DfcFile, StringComparison.OrdinalIgnoreCase) ? "Deep Fried Chicken, which this app no longer installs"
                 : null;
             throw new InvalidDataException(
                 $"This file is {original}, {(which is null ? "not Lecram's add-on" : "which is " + which)}. Choose {Lecram10File} (v10 and older) or {Lecram11File} (v11 and newer).");

@@ -116,11 +116,6 @@
                             <TextBlock Text="What a new install puts into a game. Each game can still choose its own." Style="{StaticResource MutedText}" TextWrapping="Wrap" Margin="0,0,0,10" />
                             <ListBox Style="{StaticResource ChoiceList}" ItemsSource="{Binding Modes}" SelectedItem="{Binding Mode}"
                                      AutomationProperties.Name="Default install mode" />
-                            <StackPanel Visibility="{Binding IsOptiScalerMode, Converter={StaticResource BoolToVis}}" Margin="0,8,0,0">
-                                <TextBlock Text="OPTISCALER BUILD" Style="{StaticResource Caps}" Margin="0,0,0,8" />
-                                <ListBox Style="{StaticResource ChoiceList}" ItemsSource="{Binding Builds}" SelectedItem="{Binding OptiBuild}"
-                                         AutomationProperties.Name="OptiScaler build" />
-                            </StackPanel>
                             <StackPanel Visibility="{Binding IsReShadeMode, Converter={StaticResource BoolToVis}}" Margin="0,8,0,0">
                                 <TextBlock Text="NR ADD-ON" Style="{StaticResource Caps}" Margin="0,0,0,8" />
                                 <ListBox Style="{StaticResource ChoiceList}" ItemsSource="{Binding Addons}" SelectedItem="{Binding Addon}"

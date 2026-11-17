@@ -6,12 +6,12 @@ namespace DLSSUpdater.Core;
 /// Every library of kept builds: the downloaded OptiScaler and GITC Uplift releases, the imported add-ons and the NR runtime.
 /// Each keeps several builds side by side; settings choose a default and each game may choose its own.
 /// </summary>
-public enum LibraryKind { OptiScaler, Uplift, Lecram, RenoDx, Dfc, DlssNr, RenoDxHdr, ReShade, FrameLimiter, Feeder, Dxvk, Luma, Hsf }
+public enum LibraryKind { OptiScaler, Uplift, Lecram, RenoDx, DlssNr, RenoDxHdr, ReShade, FrameLimiter, Dxvk, Luma, Hsf }
 
 /// <summary>
 /// One kept build as the lists and the cleanup see it. <see cref="Id"/> is what settings, game picks and install records name
 /// it by: the SHA-256 for imports and the NR runtime, the app-internal tag for downloads. <see cref="Dir"/> holds the whole build.
-/// Builds of one <see cref="Group"/> (an OptiScaler source) compete for "newest". <see cref="Downloaded"/>: the app downloaded
+/// Builds of one <see cref="Group"/> (a DXVK channel) compete for "newest". <see cref="Downloaded"/>: the app downloaded
 /// it itself (OptiScaler, GITC Uplift, Lecram's channel); only those may go in an automatic cleanup, imports never do.
 /// </summary>
 public sealed record LibraryBuild(LibraryKind Kind, string Id, string Label, string Version, DateTime? Date, string Dir, string Group = "", bool Downloaded = false)
@@ -69,9 +69,9 @@ public sealed record KeptBuild(LibraryBuild Build, IReadOnlyList<string> Reasons
 
 /// <summary>
 /// Why a library holds more builds than its keep count, for the cleanup area of Settings: the protected builds beyond
-/// the newest ones, and for OptiScaler the count per source (each source keeps its own newest, so 3 builds can be all kept).
+/// the newest ones.
 /// </summary>
-public sealed record LibraryKeepNote(IReadOnlyList<KeptBuild> Kept, string? PerSource)
+public sealed record LibraryKeepNote(IReadOnlyList<KeptBuild> Kept)
 {
     private const int ShownReasons = 2;
 
@@ -87,7 +87,6 @@ public sealed record LibraryKeepNote(IReadOnlyList<KeptBuild> Kept, string? PerS
                 var more = reasons.Count > ShownReasons ? $" and {reasons.Count - ShownReasons} more" : "";
                 parts.Add($"{Kept.Count} kept: {string.Join(", ", reasons.Take(ShownReasons))}{more}");
             }
-            if (PerSource is not null) parts.Add($"per source: {PerSource}");
             return parts.Count == 0 ? null : string.Join("  ·  ", parts);
         }
     }
@@ -155,8 +154,7 @@ public sealed partial class ComponentStore
     public static LibraryKind KindOf(AddonKind kind) => kind switch
     {
         AddonKind.RenoDx => LibraryKind.RenoDx,
-        AddonKind.Lecram => LibraryKind.Lecram,
-        _ => LibraryKind.Dfc,
+        _ => LibraryKind.Lecram,
     };
 
     /// <summary>The add-on library behind <paramref name="kind"/>; null for the download libraries and the NR runtime.</summary>
@@ -164,7 +162,6 @@ public sealed partial class ComponentStore
     {
         LibraryKind.RenoDx => AddonKind.RenoDx,
         LibraryKind.Lecram => AddonKind.Lecram,
-        LibraryKind.Dfc => AddonKind.Dfc,
         _ => null,
     };
 
@@ -177,7 +174,6 @@ public sealed partial class ComponentStore
         LibraryKind.Luma => LumaLibraryBuilds(),
         LibraryKind.FrameLimiter => LimiterLibraryBuilds(),
         LibraryKind.ReShade => ReShadeBuilds.Select(b => new LibraryBuild(kind, b.Id, b.Label, b.Version, b.Added, ReShadeBuildDir(b), Downloaded: b.Downloaded)).ToList(),
-        LibraryKind.Feeder => FeederLibrary.Builds(),
         LibraryKind.Dxvk => DxvkLibrary.Builds(),
         LibraryKind.Hsf => HsfLibrary.Builds(),
         _ when AddonOf(kind) is { } addon => AddonBuilds(addon)
@@ -187,8 +183,8 @@ public sealed partial class ComponentStore
     };
 
     /// <summary>
-    /// The complete downloads of OptiScaler (both sources, the selected list grouped by source) or GITC Uplift, newest first.
-    /// Each folder's .complete record is the build's metadata; the list is read once per change.
+    /// The complete downloads of OptiScaler F5 or GITC Uplift, newest first. Each folder's .complete record is the build's
+    /// metadata; the list is read once per change. OptiScaler-NR builds older versions downloaded stay on disk, unlisted.
     /// </summary>
     public IReadOnlyList<LibraryBuild> ReleaseBuilds(Component c)
     {
@@ -207,31 +203,20 @@ public sealed partial class ComponentStore
     {
         var kind = c == Component.OptiScaler ? LibraryKind.OptiScaler : LibraryKind.Uplift;
         var found = new List<(LibraryBuild Build, string Raw)>();
+        // OptiScaler-NR's builds are not F5's: never listed, picked or cleaned up.
         foreach (var (dir, meta) in CompleteBuilds(c, root))
         {
             if (!Path.GetFileName(dir).Equals(SafeName(meta.Tag), StringComparison.OrdinalIgnoreCase)) continue;
             var pre = meta.Prerelease ? " pre" : "";
             if (c == Component.OptiScaler)
             {
-                var source = OptiSources.OfTag(meta.Tag);
+                if (!OptiSources.IsF5Tag(meta.Tag)) continue;
                 var raw = OptiSources.RawTag(meta.Tag);
-                found.Add((new LibraryBuild(kind, meta.Tag, $"{source.Name} {raw}{pre}", raw, meta.Published ?? meta.Fetched, dir, source.Repo, Downloaded: true), raw));
+                found.Add((new LibraryBuild(kind, meta.Tag, $"{OptiSources.F5.Name} {raw}{pre}", raw, meta.Published ?? meta.Fetched, dir, Downloaded: true), raw));
             }
             else found.Add((new LibraryBuild(kind, meta.Tag, meta.Tag + pre, meta.Tag, meta.Published ?? meta.Fetched, dir, Downloaded: true), meta.Tag));
         }
-        // OptiScaler's sources number their releases differently, so each source is its own newest-first run.
-        return found.GroupBy(f => f.Build.Group)
-            .OrderBy(g => OptiSourceIndex(g.Key))
-            .SelectMany(g => BuildOrder.NewestFirst(g, f => f.Raw, f => f.Build.Date, f => f.Build.Id))
-            .Select(f => f.Build)
-            .ToList();
-    }
-
-    private static int OptiSourceIndex(string repo)
-    {
-        for (var i = 0; i < OptiSources.All.Count; i++)
-            if (OptiSources.All[i].Repo.Equals(repo, StringComparison.OrdinalIgnoreCase)) return i;
-        return -1;
+        return BuildOrder.NewestFirst(found, f => f.Raw, f => f.Build.Date, f => f.Build.Id).Select(f => f.Build).ToList();
     }
 
     /// <summary>A download completed or a build was deleted: the next list read sees it.</summary>
@@ -341,21 +326,15 @@ public sealed partial class ComponentStore
                 break;
             case LibraryKind.RenoDx:
             case LibraryKind.Lecram:
-            case LibraryKind.Dfc:
                 var addon = AddonOf(kind)!.Value;
                 Add(s.AddonId(addon), Default);
                 // Without a chosen default the newest build is the default.
                 Add(AddonBuildFor(addon, null)?.Id, Default);
                 foreach (var (id, g) in s.Games)
-                    Add(addon switch { AddonKind.RenoDx => g.RenoDxId, AddonKind.Lecram => g.LecramId, _ => g.DfcId }, PickedFor(id));
+                    Add(addon == AddonKind.RenoDx ? g.RenoDxId : g.LecramId, PickedFor(id));
                 foreach (var m in installed)
                 {
-                    var (id, tag) = addon switch
-                    {
-                        AddonKind.RenoDx => (m.RenoDxId, m.RenoDxTag),
-                        AddonKind.Lecram => (m.LecramId, m.LecramTag),
-                        _ => (m.DfcId, m.DfcTag),
-                    };
+                    var (id, tag) = addon == AddonKind.RenoDx ? (m.RenoDxId, m.RenoDxTag) : (m.LecramId, m.LecramTag);
                     // Records from before the library only carry the tag.
                     foreach (var b in AddonBuilds(addon).Where(b => b.Matches(id, tag))) Add(b.Id, InstalledIn(m));
                 }
@@ -406,7 +385,7 @@ public sealed partial class ComponentStore
 
     /// <summary>
     /// Why <paramref name="kind"/> holds more builds than its keep count: the protected builds beyond the newest ones with
-    /// their reasons and, for OptiScaler with several sources, the count per source.
+    /// their reasons.
     /// </summary>
     public LibraryKeepNote KeepNote(LibraryKind kind, AppSettings s, IEnumerable<InstallManifest> manifests, IReadOnlyDictionary<string, string>? gameNames)
     {
@@ -415,10 +394,7 @@ public sealed partial class ComponentStore
         var reasons = ProtectionReasons(kind, s, manifests, gameNames).ToLookup(p => p.Id, p => p.Reason, StringComparer.OrdinalIgnoreCase);
         var kept = BuildCleanup.BeyondKeep(builds, keep).Where(b => reasons.Contains(b.Id))
             .Select(b => new KeptBuild(b, reasons[b.Id].ToList())).ToList();
-        string? perSource = null;
-        if (kind == LibraryKind.OptiScaler && builds.Count > keep && builds.Select(b => b.Group).Distinct(StringComparer.OrdinalIgnoreCase).Count() > 1)
-            perSource = string.Join(", ", builds.GroupBy(b => b.Group, StringComparer.OrdinalIgnoreCase).Select(g => $"{OptiSources.For(g.Key).Name} {g.Count()}"));
-        return new LibraryKeepNote(kept, perSource);
+        return new LibraryKeepNote(kept);
     }
 
     public Dictionary<LibraryKind, LibraryKeepNote> KeepNotes(AppSettings s, IEnumerable<InstallManifest> manifests, IReadOnlyDictionary<string, string>? gameNames)
@@ -462,7 +438,6 @@ public sealed partial class ComponentStore
         LibraryKind.Uplift => "GITC Uplift",
         LibraryKind.Lecram => "Lecram DLSS5",
         LibraryKind.RenoDx => "ShortFuse RenoDX DLSS",
-        LibraryKind.Dfc => "Deep Fried Chicken",
         LibraryKind.DlssNr => "NR runtime",
         LibraryKind.ReShade => "ReShade",
         LibraryKind.FrameLimiter => "Frame limiters",

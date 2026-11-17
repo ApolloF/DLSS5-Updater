@@ -53,16 +53,8 @@ public sealed partial class IniOptionViewModel : ObservableObject
 
     private readonly string _baseHint;
     private readonly OptionChoice[] _baseChoices;
-    private readonly Dictionary<OptiSource, (string? Hint, OptionChoice[]? Choices)> _variants = [];
 
-    /// <summary>The key means something else in <paramref name="source"/>: other values, defaults or advice.</summary>
-    public IniOptionViewModel In(OptiSource source, string? hint = null, params OptionChoice[] choices)
-    {
-        _variants[source] = (hint, choices.Length > 0 ? choices : null);
-        return this;
-    }
-
-    /// <summary>Switches hint and choices to the build's variant and hides the row when the build behind <paramref name="tag"/> lacks the key.</summary>
+    /// <summary>Hides the row when the build behind <paramref name="tag"/> lacks the key.</summary>
     public void ApplySource(OptiSource source, string? tag = null)
     {
         var view = ViewFor(source, tag);
@@ -71,11 +63,8 @@ public sealed partial class IniOptionViewModel : ObservableObject
     }
 
     /// <summary>What this option offers in the build behind <paramref name="tag"/>, without touching the shared state: a game uses its own build.</summary>
-    public (bool IsAvailable, string Hint, OptionChoice[] Choices) ViewFor(OptiSource source, string? tag)
-    {
-        var v = _variants.GetValueOrDefault(source);
-        return (!source.Lacks(Section, Key, tag), v.Hint ?? _baseHint, v.Choices ?? _baseChoices);
-    }
+    public (bool IsAvailable, string Hint, OptionChoice[] Choices) ViewFor(OptiSource source, string? tag) =>
+        (!source.Lacks(Section, Key, tag), _baseHint, _baseChoices);
 
     private readonly Dictionary<LecramGeneration, (string? Hint, OptionChoice[]? Choices)> _generationVariants = [];
 

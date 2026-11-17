@@ -969,12 +969,6 @@
                                 <ItemsControl ItemsSource="{Binding LecramRows}" ItemTemplate="{StaticResource GameOptionRow}" />
                             </Border>
                         </StackPanel>
-                        <StackPanel Visibility="{Binding ShowDfc, Converter={StaticResource BoolToVis}}">
-                            <TextBlock Text="DEEP FRIED CHICKEN" Style="{StaticResource SectionTitle}" />
-                            <Border Style="{StaticResource Card}" Padding="16,4">
-                                <ItemsControl ItemsSource="{Binding DfcRows}" ItemTemplate="{StaticResource GameOptionRow}" />
-                            </Border>
-                        </StackPanel>
                         <StackPanel Visibility="{Binding ShowOptiNr, Converter={StaticResource BoolToVis}}">
                             <StackPanel Visibility="{Binding ShowOptiBuild, Converter={StaticResource BoolToVis}}">
                                 <TextBlock Text="OPTISCALER BUILD" Style="{StaticResource SectionTitle}" />
@@ -1159,10 +1153,8 @@
                                                         <Style.Triggers>
                                                             <DataTrigger Binding="{Binding Key}" Value="renodx"><Setter Property="Visibility" Value="Collapsed" /></DataTrigger>
                                                             <DataTrigger Binding="{Binding Key}" Value="lecram"><Setter Property="Visibility" Value="Collapsed" /></DataTrigger>
-                                                            <DataTrigger Binding="{Binding Key}" Value="dfc"><Setter Property="Visibility" Value="Collapsed" /></DataTrigger>
                                                             <DataTrigger Binding="{Binding Key}" Value="opti"><Setter Property="Visibility" Value="Collapsed" /></DataTrigger>
                                                             <DataTrigger Binding="{Binding Key}" Value="uplift"><Setter Property="Visibility" Value="Collapsed" /></DataTrigger>
-                                                            <DataTrigger Binding="{Binding Key}" Value="feeder"><Setter Property="Visibility" Value="Collapsed" /></DataTrigger>
                                                             <DataTrigger Binding="{Binding Key}" Value="reshade"><Setter Property="Visibility" Value="Collapsed" /></DataTrigger>
                                                         </Style.Triggers>
                                                     </Style>
@@ -1195,21 +1187,6 @@
                                                       ItemsSource="{Binding DataContext.LecramChoices, RelativeSource={RelativeSource AncestorType=ItemsControl}}"
                                                       SelectedItem="{Binding DataContext.LecramChoice, RelativeSource={RelativeSource AncestorType=ItemsControl}}"
                                                       AutomationProperties.Name="Lecram DLSS5 version for this game" ToolTip="Which Lecram build this game installs; its generation decides which options apply" />
-                                            <ComboBox Grid.Column="3" Margin="0,0,8,0" MaxDropDownHeight="300"
-                                                      Visibility="{Binding Key, Converter={StaticResource EqualsToVis}, ConverterParameter=dfc}"
-                                                      ItemsSource="{Binding DataContext.DfcChoices, RelativeSource={RelativeSource AncestorType=ItemsControl}}"
-                                                      SelectedItem="{Binding DataContext.DfcChoice, RelativeSource={RelativeSource AncestorType=ItemsControl}}"
-                                                      AutomationProperties.Name="Deep Fried Chicken version for this game" ToolTip="Which imported Deep Fried Chicken build this game installs; it decides the files and default cfg" />
-                                            <DockPanel Grid.Column="3" Margin="0,0,8,0" Visibility="{Binding Key, Converter={StaticResource EqualsToVis}, ConverterParameter=feeder}">
-                                                <Button DockPanel.Dock="Right" Content="Reset to default" Style="{StaticResource BtnGhost}" Margin="6,0,0,0" Padding="8,0"
-                                                        Command="{Binding DataContext.ResetFeederToAutoCommand, RelativeSource={RelativeSource AncestorType=ItemsControl}}"
-                                                        Visibility="{Binding DataContext.FeederIsManual, RelativeSource={RelativeSource AncestorType=ItemsControl}, Converter={StaticResource BoolToVis}}"
-                                                        ToolTip="Follow the default again for this game" />
-                                                <ComboBox MaxDropDownHeight="300"
-                                                          ItemsSource="{Binding DataContext.FeederChoices, RelativeSource={RelativeSource AncestorType=ItemsControl}}"
-                                                          SelectedItem="{Binding DataContext.FeederChoice, RelativeSource={RelativeSource AncestorType=ItemsControl}}"
-                                                          AutomationProperties.Name="DLSS5-Feeder version for this game" ToolTip="The first entry follows Settings (the newest build unless a build is chosen there); pick a build to keep this game on it" />
-                                            </DockPanel>
                                             <CheckBox Grid.Column="4" IsChecked="{Binding Enabled}" IsEnabled="{Binding Editable}" HorizontalAlignment="Right" ToolTip="Include in install"
                                                       AutomationProperties.Name="{Binding Name, StringFormat='Install {0}'}" />
                                         </Grid>
@@ -1244,20 +1221,6 @@
                                 </WrapPanel>
                                 <TextBlock Text="{Binding SfLecramMessage}" Style="{StaticResource MutedText}" TextWrapping="Wrap" FontSize="12" Margin="18,8,0,0" Foreground="{StaticResource Warn}"
                                            Visibility="{Binding HasSfLecramMessage, Converter={StaticResource BoolToVis}}" />
-                            </StackPanel>
-                            <!-- Deep Fried Chicken in a game without its own DLSS: what changes, and the DLSS-G runtime for its frame generation. -->
-                            <TextBlock Text="{Binding DfcNoDlssWarning}" Foreground="{StaticResource Warn}" TextWrapping="Wrap" FontSize="12" Margin="34,4,16,12"
-                                       Visibility="{Binding HasDfcNoDlssWarning, Converter={StaticResource BoolToVis}}" />
-                            <StackPanel Margin="34,4,16,12" Visibility="{Binding ShowDfcNoDlssHint, Converter={StaticResource BoolToVis}}">
-                                <DockPanel>
-                                    <Button DockPanel.Dock="Right" Style="{StaticResource InfoBtn}" CommandParameter="dfc-no-dlss" VerticalAlignment="Top"
-                                            ToolTip="{Binding Source=dfc-no-dlss, Converter={StaticResource HelpTip}}" AutomationProperties.Name="About Deep Fried Chicken in games without DLSS" />
-                                    <TextBlock Text="{x:Static vm:GameViewModel.DfcNoDlssHint}" Style="{StaticResource MutedText}" TextWrapping="Wrap" FontSize="12" />
-                                </DockPanel>
-                                <CheckBox IsChecked="{Binding DfcFrameGen}" Margin="0,8,0,0" AutomationProperties.Name="Add NVIDIA's frame generation file (nvngx_dlssg.dll) for Deep Fried Chicken (RTX 40/50)"
-                                          ToolTip="NVIDIA's frame generation file from the DLSS release, placed beside the exe and removed with DFC">
-                                    <TextBlock Text="Add NVIDIA's frame generation file (nvngx_dlssg.dll) for Deep Fried Chicken (RTX 40/50)" TextWrapping="Wrap" />
-                                </CheckBox>
                             </StackPanel>
                         </StackPanel>
                     </Border>
@@ -1852,9 +1815,6 @@
                                                                             <Button Content="Rename…" Style="{StaticResource BtnGhost}" Command="{Binding ToggleRenameCommand}" Margin="12,0,0,0"
                                                                                     Visibility="{Binding HasBuilds, Converter={StaticResource BoolToVis}}"
                                                                                     ToolTip="Give the selected build your own name" />
-                                                                            <Button Content="Folder…" Style="{StaticResource BtnGhost}" Command="{Binding ImportFolderCommand}" Margin="12,0,0,0"
-                                                                                    Visibility="{Binding CanImportFolder, Converter={StaticResource BoolToVis}}"
-                                                                                    ToolTip="Add the extracted release folder or its 64-bit folder to the library" />
                                                                             <Button Content="Import…" Command="{Binding ImportCommand}" Margin="12,0,0,0"
                                                                                     ToolTip="Add a build to the library; builds already there are kept" />
                                                                         </StackPanel>
@@ -1929,8 +1889,6 @@
                                                     <ContentControl Content="{Binding Lecram}" ContentTemplate="{StaticResource AddonLibraryRow}" Margin="0,10" />
                                                     <TextBlock Text="{Binding LecramMessage}" Style="{StaticResource MutedText}" TextWrapping="Wrap" FontSize="12" Margin="0,0,0,10" Foreground="{StaticResource Warn}"
                                                                Visibility="{Binding HasLecramMessage, Converter={StaticResource BoolToVis}}" />
-                                                    <Border Style="{StaticResource Divider}" />
-                                                    <ContentControl Content="{Binding Dfc}" ContentTemplate="{StaticResource AddonLibraryRow}" Margin="0,10" />
                                                 </StackPanel>
                                             </Border>
                                             <TextBlock Text="The NR runtime is downloaded automatically; every build you import or download stays in your library. NVIDIA's original needs an RTX 50 card. For RTX 20/30/40 use a compat build (import it if it isn't in the library). ReShade has its own library under ReShade add-ons."
@@ -2035,23 +1993,6 @@
                                                         </StackPanel>
                                                         <ComboBox Grid.Column="1" Width="170" Margin="16,0,0,0" VerticalAlignment="Center" MaxDropDownHeight="360"
                                                                   ItemsSource="{Binding DlssChoices}" SelectedItem="{Binding SelectedDlss}" AutomationProperties.Name="Default DLSS version" />
-                                                    </Grid>
-                                                    <Grid Margin="0,8">
-                                                        <Grid.ColumnDefinitions>
-                                                            <ColumnDefinition Width="*" />
-                                                            <ColumnDefinition Width="Auto" />
-                                                        </Grid.ColumnDefinitions>
-                                                        <StackPanel>
-                                                            <StackPanel Orientation="Horizontal">
-                                                                <TextBlock Text="OptiScaler build" VerticalAlignment="Center" />
-                                                                <Button Style="{StaticResource InfoBtn}" CommandParameter="opti-build"
-                                                                ToolTip="{Binding Source=opti-build, Converter={StaticResource HelpTip}}" />
-                                                            </StackPanel>
-                                                            <TextBlock Text="F5 (janblade) is experimental and releases often. Games keep their build until updated." Style="{StaticResource MutedText}" FontSize="11.5" TextWrapping="Wrap" Margin="0,2,0,0" />
-                                                        </StackPanel>
-                                                        <ComboBox Grid.Column="1" Width="190" Margin="16,0,0,0" VerticalAlignment="Center"
-                                                                  ItemsSource="{Binding OptiBuilds}" DisplayMemberPath="Label" SelectedItem="{Binding OptiBuild}"
-                                                                  AutomationProperties.Name="OptiScaler build" />
                                                     </Grid>
                                                     <Grid Margin="0,8">
                                                         <Grid.ColumnDefinitions>
@@ -2439,37 +2380,6 @@
                                                 </StackPanel>
                                             </Border>
                                             <StackPanel Orientation="Horizontal">
-                                                <TextBlock Text="DLSS5-FEEDER BUILDS" Style="{StaticResource SectionTitle}" />
-                                                <Button Style="{StaticResource InfoBtn}" CommandParameter="feeder" Margin="4,18,0,0"
-                                                        ToolTip="{Binding Source=feeder, Converter={StaticResource HelpTip}}" AutomationProperties.Name="About DLSS5-Feeder" />
-                                            </StackPanel>
-                                            <Border Style="{StaticResource Card}" Padding="16">
-                                                <StackPanel DataContext="{Binding Feeder}">
-                                                    <TextBlock Text="Default build" Margin="0,0,0,6" />
-                                                    <DockPanel>
-                                                        <Button DockPanel.Dock="Right" Content="Reset to auto" Style="{StaticResource BtnGhost}" Margin="8,0,0,0" Command="{Binding ResetToAutoCommand}"
-                                                                Visibility="{Binding IsManual, Converter={StaticResource BoolToVis}}" ToolTip="Follow the newest build again" />
-                                                        <ComboBox ItemsSource="{Binding DefaultChoices}" SelectedItem="{Binding DefaultChoice}" MaxDropDownHeight="300"
-                                                                  AutomationProperties.Name="Default DLSS5-Feeder build" ToolTip="Games without their own pick install this: Auto is the newest build" />
-                                                    </DockPanel>
-                                                    <TextBlock Text="{Binding Info}" Style="{StaticResource MutedText}" TextWrapping="Wrap" FontSize="12" Margin="0,6,0,0" />
-                                                    <Border Style="{StaticResource Divider}" Margin="0,10" />
-                                                    <WrapPanel>
-                                                        <Button Content="Import…" Command="{Binding ImportCommand}" Margin="0,0,8,0" ToolTip="Add a DLSS5-Feeder release .zip or dlss5-feed.addon64 to the library" />
-                                                        <Button Content="Folder…" Style="{StaticResource BtnGhost}" Command="{Binding ImportFolderCommand}" Margin="0,0,8,0" ToolTip="Add the extracted DLSS5-Feeder release folder" />
-                                                        <Button Content="Download newest" Style="{StaticResource BtnGhost}" Command="{Binding DownloadCommand}" ToolTip="Download the newest release from GitHub now; its SHA-256 is checked against GitHub's" />
-                                                    </WrapPanel>
-                                                    <StackPanel Visibility="{Binding HasBuilds, Converter={StaticResource BoolToVis}}" Margin="0,10,0,0">
-                                                        <TextBlock Text="Library" Margin="0,0,0,6" />
-                                                        <DockPanel>
-                                                            <Button DockPanel.Dock="Right" Content="Remove" Style="{StaticResource BtnGhost}" Command="{Binding RemoveCommand}" Margin="8,0,0,0" ToolTip="Remove the selected build from the library" />
-                                                            <ComboBox ItemsSource="{Binding BuildChoices}" SelectedItem="{Binding SelectedBuildChoice}" MaxDropDownHeight="300" AutomationProperties.Name="DLSS5-Feeder build in the library" />
-                                                        </DockPanel>
-                                                    </StackPanel>
-                                                    <TextBlock Text="{Binding Status}" Style="{StaticResource MutedText}" TextWrapping="Wrap" FontSize="12" Margin="0,8,0,0" />
-                                                </StackPanel>
-                                            </Border>
-                                            <StackPanel Orientation="Horizontal">
                                                 <TextBlock Text="DXVK BUILDS" Style="{StaticResource SectionTitle}" />
                                                 <Button Style="{StaticResource InfoBtn}" CommandParameter="dxvk" Margin="4,18,0,0"
                                                         ToolTip="{Binding Source=dxvk, Converter={StaticResource HelpTip}}" AutomationProperties.Name="About DXVK" />
@@ -2608,20 +2518,11 @@
                                                     <ItemsControl ItemsSource="{Binding LecramOptions}" ItemTemplate="{StaticResource OptionRow}" />
                                                 </Border>
                                             </StackPanel>
-                                            <StackPanel Visibility="{Binding ShowDfc, Converter={StaticResource BoolToVis}}">
-                                                <TextBlock Text="DEEP FRIED CHICKEN" Style="{StaticResource SectionTitle}" />
-                                                <Border Style="{StaticResource Card}" Padding="16,4">
-                                                    <ItemsControl ItemsSource="{Binding DfcOptions}" ItemTemplate="{StaticResource OptionRow}" />
-                                                </Border>
-                                            </StackPanel>
-                                            <TextBlock Style="{StaticResource MutedText}" FontSize="11.5" TextWrapping="Wrap" Margin="0,8,0,0"
-                                                       Visibility="{Binding ShowDfc, Converter={StaticResource BoolToVis}}"
-                                                       Text="Deep Fried Chicken keys are written to deep-fried-chicken.cfg next to the game, only the ones you set; everything else in that file stays. Other settings are tuned in the ReShade overlay." />
                                             <TextBlock Style="{StaticResource MutedText}" FontSize="11.5" TextWrapping="Wrap" Margin="0,8,0,0"
                                                        Text="Written to ReShade.ini next to the game's .exe. The RenoDX and Lecram options only apply when that add-on is installed; Lecram options that the imported generation lacks are hidden. For Dynamic MFG also set the NVIDIA App's DLSS Frame Generation override to 'Use the 3D application setting', then fully close and restart the game." />
                                         </StackPanel>
 
-                                        <!-- ===== OptiScaler (name follows the selected build) ===== -->
+                                        <!-- ===== OptiScaler ===== -->
                                         <StackPanel Visibility="{Binding Tab, Converter={StaticResource EqualsToVis}, ConverterParameter=Nr}">
                                             <TextBlock Text="NEURAL RENDERING" Style="{StaticResource SectionTitle}" />
                                             <Border Style="{StaticResource Card}" Padding="16,4">
@@ -2819,8 +2720,8 @@
                                                     </Setter>
                                                 </Style>
                                             </ItemsControl.Resources>
-                                            <Button Tag="https://github.com/ShyVortex/OptiScaler-DLSSNR-PreSR-Multipass">
-                                                <x:Array Type="sys:String"><sys:String>OptiScaler-NR</sys:String><sys:String>ShyVortex · maintained DLSSNR fork of OptiScaler</sys:String></x:Array>
+                                            <Button Tag="https://github.com/janblade/OptiScaler-F5-DLSSNR-Multipass">
+                                                <x:Array Type="sys:String"><sys:String>OptiScaler F5</sys:String><sys:String>janblade · DLSSNR fork of OptiScaler</sys:String></x:Array>
                                             </Button>
                                             <Button Tag="https://github.com/optiscaler/OptiScaler">
                                                 <x:Array Type="sys:String"><sys:String>OptiScaler</sys:String><sys:String>Upstream project and wiki</sys:String></x:Array>

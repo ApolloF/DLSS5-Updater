@@ -52,7 +52,7 @@ public static class ComponentRegistry
     public const string ReShadePreset = "reshade-preset";
     /// <summary>RenoDX HDR mods per game (named, Unreal Extended, generic Unreal and Unity). Not the ShortFuse DLSS add-on, <see cref="RenoDx"/>.</summary>
     public const string RenoDxHdr = "renodx-hdr";
-    /// <summary>DLSS5-Feeder (MIT, downloaded): makes the DLSS calls for games without DLSS; recorded the generic way (<see cref="FeederLibrary"/>).</summary>
+    /// <summary>DLSS5-Feeder, removed from the app: older versions recorded it the generic way, so those records still undo.</summary>
     public const string Feeder = "dlss5-feeder";
     /// <summary>HSF (Capt-Hunter, private licence, import only): a ReShade add-on that feeds DLSS frame generation into games without it (<see cref="HsfLibrary"/>).</summary>
     public const string Hsf = "hsf";
@@ -78,12 +78,8 @@ public static class ComponentRegistry
         Register(new(ReShade, "ReShade") { Library = LibraryKind.ReShade, Legacy = true, OwnedFiles = [ComponentStore.ReShadeFile, "ReShade.ini"] });
         Register(new(RenoDx, "ShortFuse RenoDX DLSS") { Library = LibraryKind.RenoDx, Legacy = true, OwnedFiles = [ComponentStore.RenoDxFile, .. ComponentStore.LegacyRenoDxFiles] });
         Register(new(Lecram, "Lecram DLSS5") { Library = LibraryKind.Lecram, Legacy = true, OwnedFiles = [.. ComponentStore.LecramFiles, ComponentStore.Lecram32File, ComponentStore.LecramHostDir + @"\*"] });
-        Register(new(Dfc, "Deep Fried Chicken")
-        {
-            Library = LibraryKind.Dfc, Legacy = true,
-            OwnedFiles = [.. ComponentStore.DfcPackageFiles, ComponentStore.DfcConfigFile, ComponentStore.DfcNeuralDir + @"\*",
-                Path.Combine(ComponentStore.DfcShaderDir, ComponentStore.DfcShaderPrefix + "*")],
-        });
+        // Removed from the app; registered so the records of older versions still undo by id (no library: nothing new installs it).
+        Register(new(Dfc, "Deep Fried Chicken") { Legacy = true, OwnedFiles = ComponentStore.DfcOwnedFiles });
         Register(new(Uplift, "GITC Uplift") { Library = LibraryKind.Uplift, Legacy = true, OwnedFiles = ComponentStore.UpliftFiles });
         Register(new(ReShadeAddons, "ReShade add-ons") { OwnedFiles = ["*.addon", "*.addon32", "*.addon64"] });
         Register(new(ReShadeShaders, "ReShade shaders") { OwnedFiles = [ReShadeLayout.ShadersFolder + @"\*", ReShadeLayout.ManagedFolder + @"\*"] });
@@ -104,7 +100,11 @@ public static class ComponentRegistry
         Register(new(Dxvk, "DXVK") { Library = LibraryKind.Dxvk, Label = "DXVK", OwnedFiles = [.. DxvkDlls.All, DxvkConf.FileName] });
         Register(new(Luma, "Luma") { Library = LibraryKind.Luma, Label = "Luma", OwnedFiles = [LumaFiles.TreeDir + @"\*", "Luma-*.addon", "Luma-*.addon64", "Luma-*.addon32"] });
         Register(new(Hsf, "HSF") { Library = LibraryKind.Hsf, Label = "HSF", OwnedFiles = HsfLibrary.OwnedFiles });
-        Register(new(Feeder, "DLSS5-Feeder") { Library = LibraryKind.Feeder, Label = "Feeder", OwnedFiles = FeederLibrary.OwnedFiles });
+        // Removed from the app, like Deep Fried Chicken: its generic records still undo, and the label shows a game that still has it.
+        Register(new(Feeder, "DLSS5-Feeder")
+        {
+            Label = "Feeder", OwnedFiles = ["dlss5-feed.addon64", "dlss5-feed.addon32", @"host64\dlss5-feed-host64.exe", Path.Combine(ComponentStore.ShaderDir, "DLSS5_Feed.fx")],
+        });
     }
 
     /// <summary>

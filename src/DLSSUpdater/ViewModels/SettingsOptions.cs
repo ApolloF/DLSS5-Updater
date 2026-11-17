@@ -399,27 +399,15 @@ public static partial class SettingsOptions
             C("Automatic", null, "On when the NR runtime is installed with OptiScaler; upstream default (off) otherwise."),
             C("On", "true", "Always write Enabled=true."),
             C("Off", "false", "Keep NR off even with the runtime installed; toggle it in the OptiScaler menu when you want it.")).About("nr-enabled"),
-        new IniOptionViewModel("Run before upscaling", "Edit the low-res input before SR / RR instead of the upscaled output.", "DlssNr", "RunBeforeSR", o,
-                C("Default", null, "Upstream default (on)."),
-                C("On", "true", "Edit the low-res input before the upscaler."),
-                C("Off", "false", "Edit the upscaled output.")).About("nr-before-sr")
-            .In(OptiSources.F5, "Edit the low-res input before SR instead of the upscaled output. No effect while Ray Reconstruction is on.",
-                C("Default", null, "Upstream default (off)."),
-                C("On", "true", "Edit the low-res input before the upscaler."),
-                C("Off", "false", "Edit the upscaled output.")),
-        IniOptionViewModel.Toggle("Denoise first", "DX12 only. Denoise with RR first, then run the model. Overrides Run before upscaling.", "DlssNr", "DenoiseFirst", "true", o).About("nr-denoise-first"),
+        new IniOptionViewModel("Run before upscaling", "Edit the low-res input before SR instead of the upscaled output. No effect while Ray Reconstruction is on.", "DlssNr", "RunBeforeSR", o,
+            C("Default", null, "Upstream default (off)."),
+            C("On", "true", "Edit the low-res input before the upscaler."),
+            C("Off", "false", "Edit the upscaled output.")).About("nr-before-sr"),
         IniOptionViewModel.Toggle("Generate before, apply after upscaling", "Make the edit on the low-res input, apply it to the upscaled image.", "DlssNr", "DeferredDLSS", "true", o).About("nr-deferred"),
-        IniOptionViewModel.Toggle("Residual across RR", "With Ray Reconstruction and Run before upscaling: carry the model's change through the denoiser.", "DlssNr", "ResidualAcrossRR", "true", o).About("nr-residual"),
         new IniOptionViewModel("Character mask", "Handle people separately from the rest of the picture.", "DlssNr", "AutoMask", o,
             C("Default", null, "Upstream default (on)."),
             C("On", "true", "Always mask characters."),
             C("Off", "false", "No character mask.")).About("nr-automask"),
-        new IniOptionViewModel("Private upscaler", "Which upscaler the model uses internally.", "DlssNr", "PrivateUpscaler", o,
-            C("Default", null, "Upstream default (DLSS)."),
-            C("DLSS", "0", "NVIDIA DLSS."),
-            C("FSR 2.2 (built-in)", "1", "The FSR 2.2 copy built into OptiScaler."),
-            C("FSR (FidelityFX runtime)", "2", "FSR from the FidelityFX runtime."),
-            C("XeSS", "3", "Intel XeSS.")).About("nr-private-upscaler"),
         IniOptionViewModel.Toggle("Apply to finished picture", "Apply after the game's lighting and effects (DX12 only, can touch the HUD).", "DlssNr", "FinishedPicture", "true", o).About("nr-finished"),
         new IniOptionViewModel("Passes", "Model layers per frame.", "DlssNr", "Passes", o,
             C("Default · 1", null, "One model pass. Normal."),
@@ -461,7 +449,7 @@ public static partial class SettingsOptions
             C("Default · 1.0", null, "Model's colour fully."),
             C("0", F(0), "Keep the game's hues exactly; only brightness changes."),
             C("0.2", F(0.2), "Mostly the game's colour."), C("0.5", F(0.5), "Half and half."), C("1.0", F(1.0), "Model's colour fully.")).About("nr-colour"),
-        // OptiScaler F5 only (OptiSources.F5's VersionedKeys say from which build); OptiScaler-NR has none of these keys.
+        // From the F5 build OptiSources.F5's VersionedKeys name.
         new IniOptionViewModel("Frame generator", "What makes the generated frames (F5Low output); applies after a game restart.", "F5Low", "FrameGenerator", o,
             C("Default · auto", null, "XeFG on the NVIDIA tensor cores (xefg_tensor)."),
             C("XeFG (tensor cores)", "xefg_tensor", "F5's own XeFG frame generation on the NVIDIA tensor cores (f5low.dll)."),
@@ -515,29 +503,17 @@ public static partial class SettingsOptions
             C("Soft knee", "0", "Simple highlight roll-off. Cheapest, can dull very bright HDR highlights."),
             C("Neutwo composed", "1", "Neutral 'Neutwo' curve; the model's answer is blended back against the original luminance."),
             C("Neutwo replace", "2", "Neutral curve; the model's picture replaces the frame. Stronger, highlights can shift."),
-            C("Hybrid composed", "3", "Mix of soft knee and Neutwo, blended back. Balanced choice for HDR."),
-            C("Hybrid replace", "4", "Mix of both curves; model picture replaces the frame.")).About("tm-mode")
-            .In(OptiSources.F5, null,
-                C("Default · soft knee", null, "Soft knee, composed."),
-                C("Soft knee", "0", "Simple highlight roll-off. Cheapest, can dull very bright HDR highlights."),
-                C("Neutwo composed", "1", "Neutral 'Neutwo' curve; the model's answer is blended back against the original luminance."),
-                C("Neutwo replace", "2", "Neutral curve; the model's picture replaces the frame. Stronger, highlights can shift."),
-                C("Balanced composed", "3", "Mix of soft knee and Neutwo, blended back. Balanced choice for HDR."),
-                C("Balanced replace", "4", "Mix of both curves; model picture replaces the frame."),
-                C("HLG composed", "5", "Hybrid log-gamma curve, blended back."),
-                C("PQ composed", "6", "PQ (SMPTE ST 2084) curve, white at the BT.2408 reference, blended back."),
-                C("Linear composed", "7", "Each channel's light as it is, clipped at white; what game integrations hand the model. Best with Game exposure. Can band in 8/10-bit buffers.")),
+            C("Balanced composed", "3", "Mix of soft knee and Neutwo, blended back. Balanced choice for HDR."),
+            C("Balanced replace", "4", "Mix of both curves; model picture replaces the frame."),
+            C("HLG composed", "5", "Hybrid log-gamma curve, blended back."),
+            C("PQ composed", "6", "PQ (SMPTE ST 2084) curve, white at the BT.2408 reference, blended back."),
+            C("Linear composed", "7", "Each channel's light as it is, clipped at white; what game integrations hand the model. Best with Game exposure. Can band in 8/10-bit buffers.")).About("tm-mode"),
         new IniOptionViewModel("White point source", "What decides display white for the encode.", "DlssNr", "WhitePointSource", o,
-            C("Default · manual", null, "Measured from the frame, scaled by Paper white."),
+            C("Default · auto", null, "Game exposure when the game supplies one, else automatic HDR exposure."),
             C("Manual", "0", "Measured from the frame, scaled by Paper white."),
             C("Game exposure", "1", "Use the exposure value the game hands to the upscaler."),
-            C("Auto HDR exposure", "3", "Measure HDR exposure automatically each frame. Best for HDR games without usable exposure.")).About("tm-white")
-            .In(OptiSources.F5, null,
-                C("Default · auto", null, "Game exposure when the game supplies one, else automatic HDR exposure."),
-                C("Manual", "0", "Measured from the frame, scaled by Paper white."),
-                C("Game exposure", "1", "Use the exposure value the game hands to the upscaler."),
-                C("Scanned exposure", "2", "Experimental: exposure scanned from the frame."),
-                C("Auto HDR exposure", "3", "Meter HDR exposure automatically each frame; needs nothing from the game.")),
+            C("Scanned exposure", "2", "Experimental: exposure scanned from the frame."),
+            C("Auto HDR exposure", "3", "Meter HDR exposure automatically each frame; needs nothing from the game.")).About("tm-white"),
         new IniOptionViewModel("Paper white", "Multiplier on the white point: brighter or darker model input.", "DlssNr", "WhitePointScale", o,
             C("Default · 1.0", null, "No change."),
             C("0.5", F(0.5), "Treat the frame as twice as bright: protects highlights, darker midtones for the model."),
@@ -545,10 +521,6 @@ public static partial class SettingsOptions
             C("1.0", F(1.0), "No change."),
             C("1.5", F(1.5), "Lift midtones for the model; highlights clip sooner."),
             C("2.0", F(2.0), "Strong lift; for very dark games.")).About("tm-paper"),
-        new IniOptionViewModel("Highlight protection", "Automatic exposure: how much to protect bright areas.", "DlssNr", "AutoExposureHighlightProtection", o,
-            C("Default · 0", null, "No extra protection."),
-            C("0", "0", "No extra protection."), C("25", "25", "Light."), C("50", "50", "Medium."),
-            C("75", "75", "Strong."), C("100", "100", "Maximum: bright lights stay untouched, darker overall.")).About("tm-highlight"),
         new IniOptionViewModel("Max brightening", "Cap on how much a pixel may brighten.", "DlssNr", "MaxRatio", o,
             C("Default · 2x", null, "A pixel can at most double."),
             C("1.5x", F(1.5), "Tighter cap: fewer bright artifacts, less punch."),
@@ -561,77 +533,11 @@ public static partial class SettingsOptions
             C("0.75", F(0.75), "Mostly the model."),
             C("1.0", F(1.0), "The model's picture."),
             C("1.25", F(1.25), "Past the model: exaggerated.")).About("tm-transfer"),
-        IniOptionViewModel.Toggle("HDR brightness transfer", "Experimental: measured HDR transfer for before-SR + finished picture.", "DlssNr", "HdrTransfer", "true", o).About("tm-hdrtransfer"),
-    ];
-
-    private static string F3(double v) => v.ToString("0.000", CultureInfo.InvariantCulture);
-
-    /// <summary>
-    /// Deep Fried Chicken's deep-fried-chicken.cfg (section-less key=value), stored under the pseudo-section "DFC".
-    /// Sources: the package README / release notes, DFC's installer README, the DLSS5-Feeder README and, for 4.0.6 preview,
-    /// INSTALL.txt and the comments in the shipped cfg; DFC has no manual (see docs/addons/deep-fried-chicken.md).
-    /// Not exposed because their values are undocumented (tune them in the ReShade overlay, Home, Deep Fried Chicken tab):
-    /// hook_mode, neural_placement_mode, neural_correction_domain, neural_work_divisor, early_load_policy, safe_neutral_start,
-    /// ui_correction_mode, hotkeys; multipass_balance_mode, auto_balance_profile, balance_*; frame_generation_coexistence,
-    /// creative_lut, motion_stability_*, adaptive_*, scene_paper_white_scale, hdr_transfer_strength,
-    /// detail_color_coupling, stack_tone_policy, depth_bridge_*, residual_*, glow_suppression, preserve_native_tone_color_strength,
-    /// clean_fry_* strengths and every layer_N_* key (per-pass model, preset and intensity, chosen in the overlay).
-    /// New in 4.x and also left to the overlay: nr_interpolation_enabled, experimental_fg2x_enabled, universal_sr_enabled
-    /// (INSTALL.txt says DFC's own SR was removed), motion_full_resolution_flow, fog_awareness_*, internal_motion_architecture,
-    /// internal_guide_quality, the output_* strengths and output_hud_rect0-3, grade_*, reactive_protection_*,
-    /// flow_slope_aware_depth and the output_compare_* view. texture_boost* is gone in 4.x.
-    /// Frame generation (games without their own DLSS, INSTALL.txt 4.0.6) is switched on and set to DLSS-G or FSR 3.1 in
-    /// the overlay's Rendering card; no cfg comment documents a key for it, so frame_generation_coexistence,
-    /// experimental_fg2x_enabled and nr_interpolation_enabled stay unset. The per-game "Add nvngx_dlssg.dll" toggle only
-    /// places NVIDIA's runtime that DLSS-G needs.
-    /// The shipped cfg already has enabled=1 and arm=1, so "Default" writes nothing.
-    /// </summary>
-    public static IniOptionViewModel[] Dfc(ObservableCollection<IniOverride> rs) =>
-    [
-        new IniOptionViewModel("Deep Fried Chicken", "Master switch; takes effect after a game restart.", DfcConfig.Section, "arm", rs,
-            C("Default · on", null, "Leave the value in the game's deep-fried-chicken.cfg."),
-            C("On", "1", "Armed."),
-            C("Off", "0", "Disarmed: hooks stay out until re-armed; restart the game.")).About("dfc-arm"),
-        new IniOptionViewModel("Neural rendering", "Live on/off; hooks stay loaded.", DfcConfig.Section, "enabled", rs,
-            C("Default · on", null, "Leave the value in the game's deep-fried-chicken.cfg."),
-            C("On", "1", "Neural rendering on."),
-            C("Off", "0", "Neural rendering off; the hooks stay loaded.")).About("dfc-enabled"),
-        new IniOptionViewModel("Passes", "Model passes per frame.", DfcConfig.Section, "passes", rs,
-            C("Default · 1", null, "Leave the value in the game's deep-fried-chicken.cfg."),
-            C("1.0", "1.0", "One pass. Cheapest."),
-            C("1.5", "1.5", "Two passes; the last one counts half. It still costs a full evaluation."),
-            C("2.0", "2.0", "Two passes, about twice the cost."),
-            C("3.0", "3.0", "Three passes."),
-            C("4.0", "4.0", "Four passes. Expensive.")).About("dfc-passes"),
-        new IniOptionViewModel("Work scale", "Resolution the model works at; needs a game restart.", DfcConfig.Section, "neural_work_percent", rs,
-            C("Default · 100%", null, "Leave the value in the game's deep-fried-chicken.cfg."),
-            C("50%", "50", "Experimental native-anchor matched residual mode; much cheaper, softer."),
-            C("75%", "75", "Experimental; about 30% more FPS, softer."),
-            C("100%", "100", "Exact full-size processing."),
-            C("125%", "125", "Supersampling. Very expensive."),
-            C("150%", "150", "Strongest supersampling. Very expensive.")).About("dfc-scale"),
-        IniOptionViewModel.Toggle("Native Vulkan DLSS", "Only for Vulkan DLSS games; fully restart the game. DirectX and the external feeder don't need it.",
-            DfcConfig.Section, "native_vulkan_enabled", "1", rs).About("dfc-vulkan"),
-        IniOptionViewModel.Toggle("Native look", "Keep the game's own tone and colour; weakens the neural effect.",
-            DfcConfig.Section, "preserve_native_tone_color", "1", rs).About("dfc-native-look"),
-        IniOptionViewModel.Toggle("Multipass cleanup", "Cleans colour cast that builds up over several passes; can remove some detail.",
-            DfcConfig.Section, "clean_fry_enabled", "1", rs).About("dfc-cleanup"),
-        new IniOptionViewModel("Colour strength", "How much of the model's colour is kept (capped at 1.0).", DfcConfig.Section, "color_strength", rs,
-            C("Default · 1.0", null, "Leave the value in the game's deep-fried-chicken.cfg."),
-            C("0.5", F3(0.5), "Half of the model's colour."),
-            C("0.75", F3(0.75), "Most of the model's colour."),
-            C("1.0", F3(1.0), "All of the model's colour.")).About("dfc-colour"),
-        IniOptionViewModel.Toggle("HUD protection", "4.x: output protection for the screen regions set in the cfg (shipped: a small box in the centre).",
-            DfcConfig.Section, "output_hud_enabled", "1", rs).About("dfc-output"),
-        IniOptionViewModel.Toggle("Highlight protection", "4.x: output protection for highlights; its strength is not set here.",
-            DfcConfig.Section, "output_highlights_enabled", "1", rs).About("dfc-output"),
-        IniOptionViewModel.Toggle("Output deband", "4.x: debanding of DFC's output; strength and threshold are not set here.",
-            DfcConfig.Section, "output_deband_enabled", "1", rs).About("dfc-output"),
     ];
 
     public static IniOptionViewModel[] HdrOutput(ObservableCollection<IniOverride> o) =>
     [
-        // OptiScaler-NR and F5 before 0.1.33; F5 0.1.33 replaced these two with HDR output for SDR games (OptiSources.F5).
+        // F5 before 0.1.33; F5 0.1.33 replaced these two with HDR output for SDR games (OptiSources.F5).
         IniOptionViewModel.Toggle("Force HDR colour space", "Make the swapchain HDR even if the game doesn't ask.", "HDR", "ForceHDR", "true", o).About("hdr-force"),
         IniOptionViewModel.Toggle("Skip colour space", "Don't set the HDR colour space (for games that set it themselves).", "HDR", "SkipColorSpace", "true", o).About("hdr-skip"),
         IniOptionViewModel.Toggle("HDR output", "Show an SDR game in HDR: DirectX 11/12, not with DLSS-G. Needs Windows HDR on.", "HDR", "Enabled", "true", o).About("hdr-output"),
@@ -657,6 +563,6 @@ public static partial class SettingsOptions
     [
         C("Keep game settings", "keep", "Values a game's OptiScaler.ini / ReShade.ini already has, or you changed in-game, stay. Values this app wrote follow your settings."),
         C("Apply app settings", "apply", "Your settings here overwrite the same keys in every game. Other keys in the game's config stay."),
-        C("Fresh config", "fresh", "Each mod's config is rebuilt from its defaults plus your settings: OptiScaler.ini from the release, add-on sections in ReShade.ini, deep-fried-chicken.cfg from the import. ReShade's own settings stay. Old files are backed up first."),
+        C("Fresh config", "fresh", "Each mod's config is rebuilt from its defaults plus your settings: OptiScaler.ini from the release, add-on sections in ReShade.ini. ReShade's own settings stay. Old files are backed up first."),
     ];
 }

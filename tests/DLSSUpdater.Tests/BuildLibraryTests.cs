@@ -19,11 +19,9 @@ public sealed class BuildLibraryTests : IDisposable
     {
         AppPaths.Root = Path.Combine(_tmp, "data");
         AppPaths.Ensure();
-        _store.OptiSourceRepo = () => _settings.OptiSource;
         _store.SelectedDlssNr = () => _settings.DlssNrId;
         _store.SelectedRenoDx = () => _settings.RenoDxId;
         _store.SelectedLecram = () => _settings.LecramId;
-        _store.SelectedDfc = () => _settings.DfcId;
     }
 
     public void Dispose()
@@ -105,37 +103,36 @@ public sealed class BuildLibraryTests : IDisposable
     }
 
     [Fact]
-    public void Opti_library_lists_each_source_newest_first_and_uplift_newest_first()
+    public void Opti_library_lists_f5_builds_newest_first_skips_legacy_nr_builds_and_uplift_newest_first()
     {
         Release(Component.OptiScaler, "v0.9.47", "A");
         Release(Component.OptiScaler, "v0.1.30-f5", "B");
-        Release(Component.OptiScaler, "v0.9.51", "C");
-        Release(Component.OptiScaler, "v0.9.9", "D");
+        Release(Component.OptiScaler, "v0.1.9-f5", "D");
         Release(Component.OptiScaler, "v0.1.32-f5", "E");
         Release(Component.Uplift, "v1.2.0", "U1");
         Release(Component.Uplift, "v1.10.0", "U2");
 
-        Assert.Equal(["v0.9.51", "v0.9.47", "v0.9.9", "v0.1.32-f5", "v0.1.30-f5"], _store.Library(LibraryKind.OptiScaler).Select(b => b.Id));
-        Assert.Equal("OptiScaler F5 v0.1.32", _store.Library(LibraryKind.OptiScaler)[3].Label);
+        Assert.Equal(["v0.1.32-f5", "v0.1.30-f5", "v0.1.9-f5"], _store.Library(LibraryKind.OptiScaler).Select(b => b.Id));
+        Assert.Equal("OptiScaler F5 v0.1.32", _store.Library(LibraryKind.OptiScaler)[0].Label);
         Assert.Equal(["v1.10.0", "v1.2.0"], _store.Library(LibraryKind.Uplift).Select(b => b.Id));
     }
 
     [Fact]
     public void Game_dropdowns_list_default_first_then_builds_newest_first()
     {
-        Release(Component.OptiScaler, "v0.9.47", "A");
-        _store.Opti = Release(Component.OptiScaler, "v0.9.51", "B");
+        Release(Component.OptiScaler, "v0.1.36-f5", "A");
+        _store.Opti = Release(Component.OptiScaler, "v0.1.38-f5", "B");
         Release(Component.Uplift, "v1.3.0", "U1");
         _store.Uplift = Release(Component.Uplift, "v1.4.2", "U2");
         var vm = NewGame();
 
-        Assert.Equal(["Newest · OptiScaler-NR v0.9.51", "OptiScaler-NR v0.9.47"], vm.OptiChoices.Select(c => c.Label));
+        Assert.Equal(["Newest · OptiScaler F5 v0.1.38", "OptiScaler F5 v0.1.36"], vm.OptiChoices.Select(c => c.Label));
         Assert.Equal(["Newest · v1.4.2", "v1.3.0"], vm.UpliftChoices.Select(c => c.Label));
         Assert.Null(vm.OptiChoice?.Tag);
 
-        _settings.OptiTag = "v0.9.47";
+        _settings.OptiTag = "v0.1.36-f5";
         vm.RebuildAddonChoices();
-        Assert.Equal(["Default · OptiScaler-NR v0.9.47", "OptiScaler-NR v0.9.51 · newest"], vm.OptiChoices.Select(c => c.Label));
+        Assert.Equal(["Default · OptiScaler F5 v0.1.36", "OptiScaler F5 v0.1.38 · newest"], vm.OptiChoices.Select(c => c.Label));
     }
 
     // ---------- migration ----------
@@ -143,20 +140,20 @@ public sealed class BuildLibraryTests : IDisposable
     [Fact]
     public async Task Migration_moves_downloaded_builds_into_the_library_without_downloading()
     {
-        var nr = LegacyRelease(Component.OptiScaler, "v0.9.49");
+        var nr = LegacyRelease(Component.OptiScaler, "v0.1.30-f5");
         LegacyRelease(Component.OptiScaler, "v0.1.32-f5");
         LegacyRelease(Component.Uplift, "v1.3.0");
-        var unfinished = LegacyRelease(Component.OptiScaler, "v0.9.51", complete: false);
+        var unfinished = LegacyRelease(Component.OptiScaler, "v0.1.38-f5", complete: false);
 
         _store.MigrateReleaseLibraries();
 
-        Assert.Equal(["v0.9.49", "v0.1.32-f5"], _store.Library(LibraryKind.OptiScaler).Select(b => b.Id));
+        Assert.Equal(["v0.1.32-f5", "v0.1.30-f5"], _store.Library(LibraryKind.OptiScaler).Select(b => b.Id));
         Assert.Equal(["v1.3.0"], _store.Library(LibraryKind.Uplift).Select(b => b.Id));
         Assert.False(Directory.Exists(nr));
         Assert.True(Directory.Exists(unfinished));
         // GitHub is never asked: the library build installs as it is.
-        var pkg = await _store.EnsureOptiAsync("v0.9.49", null, default);
-        Assert.Equal("OptiScaler v0.9.49", File.ReadAllText(Path.Combine(pkg, "OptiScaler.dll")));
+        var pkg = await _store.EnsureOptiAsync("v0.1.30-f5", null, default);
+        Assert.Equal("OptiScaler v0.1.30-f5", File.ReadAllText(Path.Combine(pkg, "OptiScaler.dll")));
         Assert.StartsWith(AppPaths.Components, pkg);
         var uplift = await _store.EnsureUpliftAsync("v1.3.0", null, default);
         Assert.StartsWith(AppPaths.Components, uplift);
@@ -169,8 +166,8 @@ public sealed class BuildLibraryTests : IDisposable
     [Fact]
     public void Migration_leftover_of_a_build_the_library_has_is_stale_and_an_unreadable_cache_is_logged()
     {
-        Release(Component.OptiScaler, "v0.9.49", "library copy");
-        var leftover = LegacyRelease(Component.OptiScaler, "v0.9.49");
+        Release(Component.OptiScaler, "v0.1.30-f5", "library copy");
+        var leftover = LegacyRelease(Component.OptiScaler, "v0.1.30-f5");
         var notYet = LegacyRelease(Component.Uplift, "v1.3.0");
 
         _store.MigrateReleaseLibraries();
@@ -210,7 +207,7 @@ public sealed class BuildLibraryTests : IDisposable
     [Fact]
     public async Task Per_game_opti_build_reaches_the_installer_with_its_source_extras()
     {
-        _store.Opti = Release(Component.OptiScaler, "v0.9.51", "OPTI-NEW");
+        _store.Opti = Release(Component.OptiScaler, "v0.1.38-f5", "OPTI-NEW");
         Release(Component.OptiScaler, "v0.1.32-f5", "OPTI-F5");
         Write(Path.Combine(ComponentStore.TagDir(Component.OptiScaler, "v0.1.32-f5"), "pkg", "nvngx.dll_dlssnr.dll"), "FORWARDER");
         var root = Path.Combine(_tmp, "Game");
@@ -229,17 +226,16 @@ public sealed class BuildLibraryTests : IDisposable
         Assert.Equal("FORWARDER", File.ReadAllText(Path.Combine(root, "nvngx.dll_dlssnr.dll")));
         Assert.Equal("v0.1.32-f5", InstallManifest.Load(root)!.OptiTag);
 
-        // Back to Default: the newest release of the selected source.
+        // Back to Default: the newest release.
         vm.OptiChoice = vm.OptiChoices[0];
         Assert.Null(vm.BuildOptions(false, false).OptiTag);
-        _settings.OptiTag = "v0.9.51";
-        Assert.Equal("v0.9.51", vm.BuildOptions(false, false).OptiTag);
+        _settings.OptiTag = "v0.1.38-f5";
+        Assert.Equal("v0.1.38-f5", vm.BuildOptions(false, false).OptiTag);
     }
 
     [Fact]
     public void Per_game_opti_rows_follow_the_games_pick_not_the_default_build()
     {
-        _settings.OptiSource = OptiSources.F5.Repo;
         _store.Opti = Release(Component.OptiScaler, "v0.1.34-f5", "F5-34");
         Release(Component.OptiScaler, "v0.1.32-f5", "F5-32");
         var root = Path.Combine(_tmp, "Game");
@@ -313,18 +309,15 @@ public sealed class BuildLibraryTests : IDisposable
     [Fact]
     public void Cleanup_never_plans_protected_builds()
     {
-        _store.Opti = Release(Component.OptiScaler, "v0.9.51", "A");
-        foreach (var t in new[] { "v0.9.49", "v0.9.47", "v0.9.45", "v0.9.43", "v0.9.41" }) Release(Component.OptiScaler, t, t);
-        Release(Component.OptiScaler, "v0.1.32-f5", "F");
-        Release(Component.OptiScaler, "v0.1.30-f5", "F");
-        Release(Component.OptiScaler, "v0.1.28-f5", "F");
-        _settings.OptiTag = "v0.9.41";
-        _settings.For("game-a").OptiTag = "v0.9.43";
-        InstallManifest[] records = [new() { Opti = true, OptiTag = "v0.9.45" }];
+        _store.Opti = Release(Component.OptiScaler, "v0.1.38-f5", "A");
+        foreach (var t in new[] { "v0.1.37-f5", "v0.1.36-f5", "v0.1.35-f5", "v0.1.34-f5", "v0.1.33-f5", "v0.1.32-f5" }) Release(Component.OptiScaler, t, t);
+        _settings.OptiTag = "v0.1.32-f5";
+        _settings.For("game-a").OptiTag = "v0.1.34-f5";
+        InstallManifest[] records = [new() { Opti = true, OptiTag = "v0.1.35-f5" }];
 
         var planned = _store.PlanCleanup(_settings, records).Select(i => Path.GetFileName(i.Path)).ToList();
 
-        Assert.Equal(["v0.9.47", "v0.1.28-f5"], planned);
+        Assert.Equal(["v0.1.36-f5", "v0.1.33-f5"], planned);
     }
 
     [Fact]
@@ -374,50 +367,48 @@ public sealed class BuildLibraryTests : IDisposable
     [Fact]
     public void Keep_note_names_the_game_for_picks_and_installs_and_the_default()
     {
-        foreach (var t in new[] { "v0.9.51", "v0.9.49", "v0.9.47", "v0.9.45", "v0.9.43" }) Release(Component.OptiScaler, t, t);
-        _settings.OptiTag = "v0.9.43";
-        _settings.For(@"c:\games\hollow tide").OptiTag = "v0.9.45";
+        foreach (var t in new[] { "v0.1.38-f5", "v0.1.37-f5", "v0.1.36-f5", "v0.1.35-f5", "v0.1.34-f5" }) Release(Component.OptiScaler, t, t);
+        _settings.OptiTag = "v0.1.34-f5";
+        _settings.For(@"c:\games\hollow tide").OptiTag = "v0.1.35-f5";
         InstallManifest[] records =
         [
-            new() { Opti = true, OptiTag = "v0.9.47", Dir = @"C:\Games\Cyberpunk\bin" },
-            new() { Opti = true, OptiTag = "v0.9.47", Dir = @"D:\Gone\Elsewhere\bin", RootRel = ".." },
+            new() { Opti = true, OptiTag = "v0.1.36-f5", Dir = @"C:\Games\Cyberpunk\bin" },
+            new() { Opti = true, OptiTag = "v0.1.36-f5", Dir = @"D:\Gone\Elsewhere\bin", RootRel = ".." },
         ];
         var names = Names((@"c:\games\hollow tide", "Hollow Tide"), (@"C:\Games\Cyberpunk\bin", "Cyberpunk 2077"));
 
         var note = _store.KeepNote(LibraryKind.OptiScaler, _settings, records, names);
 
-        Assert.Equal(["v0.9.47", "v0.9.45", "v0.9.43"], note.Kept.Select(k => k.Build.Id));
-        Assert.Equal(["installed in Cyberpunk 2077", "installed in Elsewhere"], ReasonsOf(note, "v0.9.47"));
-        Assert.Equal(["picked for Hollow Tide"], ReasonsOf(note, "v0.9.45"));
-        Assert.Equal(["default"], ReasonsOf(note, "v0.9.43"));
+        Assert.Equal(["v0.1.36-f5", "v0.1.35-f5", "v0.1.34-f5"], note.Kept.Select(k => k.Build.Id));
+        Assert.Equal(["installed in Cyberpunk 2077", "installed in Elsewhere"], ReasonsOf(note, "v0.1.36-f5"));
+        Assert.Equal(["picked for Hollow Tide"], ReasonsOf(note, "v0.1.35-f5"));
+        Assert.Equal(["default"], ReasonsOf(note, "v0.1.34-f5"));
         Assert.Equal("3 kept: installed in Cyberpunk 2077, installed in Elsewhere and 2 more", note.Line);
-        Assert.Contains("OptiScaler-NR v0.9.45: picked for Hollow Tide", note.Details);
+        Assert.Contains("OptiScaler F5 v0.1.35: picked for Hollow Tide", note.Details);
         Assert.Equal(_store.ProtectedBuilds(LibraryKind.OptiScaler, _settings, records), note.Kept.Select(k => k.Build.Id).ToHashSet());
     }
 
     [Fact]
     public void Keep_note_shows_the_default_with_its_version_and_a_game_without_a_listing_by_its_folder()
     {
-        foreach (var t in new[] { "v0.9.51", "v0.9.49", "v0.9.47" }) Release(Component.OptiScaler, t, t);
-        _settings.OptiTag = "v0.9.47";
-        _settings.For(@"c:\games\hollow tide").OptiTag = "v0.9.47";
+        foreach (var t in new[] { "v0.1.38-f5", "v0.1.37-f5", "v0.1.36-f5" }) Release(Component.OptiScaler, t, t);
+        _settings.OptiTag = "v0.1.36-f5";
+        _settings.For(@"c:\games\hollow tide").OptiTag = "v0.1.36-f5";
 
         var note = _store.KeepNote(LibraryKind.OptiScaler, _settings, [], null);
 
-        Assert.Equal("1 kept: default (v0.9.47), picked for hollow tide", note.Line);
+        Assert.Equal("1 kept: default (v0.1.36), picked for hollow tide", note.Line);
     }
 
     [Fact]
-    public void Keep_note_counts_optiscaler_builds_per_source_and_stays_quiet_inside_the_keep_count()
+    public void Keep_note_stays_quiet_inside_the_keep_count()
     {
-        foreach (var t in new[] { "v0.9.51", "v0.9.49" }) Release(Component.OptiScaler, t, t);
-        Release(Component.OptiScaler, "v0.1.32-f5", "F");
+        foreach (var t in new[] { "v0.1.38-f5", "v0.1.37-f5" }) Release(Component.OptiScaler, t, t);
 
         var note = _store.KeepNote(LibraryKind.OptiScaler, _settings, [], null);
 
         Assert.Empty(note.Kept);
-        Assert.Equal("OptiScaler-NR 2, OptiScaler F5 1", note.PerSource);
-        Assert.Equal("per source: OptiScaler-NR 2, OptiScaler F5 1", note.Line);
+        Assert.Null(note.Line);
         Assert.Null(note.Details);
 
         _settings.KeepBuilds[nameof(LibraryKind.OptiScaler)] = 3;
@@ -468,56 +459,11 @@ public sealed class BuildLibraryTests : IDisposable
         Assert.Contains(_store.ProtectionReasons(LibraryKind.Lecram, _settings, [], null), p => p.Id == ids[0] && p.Reason == "default");
     }
 
-    /// <summary>Deep Fried Chicken imports 5.0.9, 5.0.8, … newest first, each with the add-on and the bridge.</summary>
-    private static string[] DfcBuilds(int count)
-    {
-        var ids = Enumerable.Range(0, count).Select(i => new string((char)('1' + i), 64)).ToArray();
-        for (var i = 0; i < count; i++)
-        {
-            var version = $"5.0.{9 - i}";
-            var build = new AddonBuild(ids[i], ComponentStore.DfcFile, version, null, version, null, DateTime.UtcNow);
-            Write(Path.Combine(ComponentStore.DfcDir, ids[i], ComponentStore.DfcFile), ids[i]);
-            Write(Path.Combine(ComponentStore.DfcDir, ids[i], ComponentStore.DfcBridgeFile), "BRIDGE");
-            Write(Path.Combine(ComponentStore.DfcDir, ids[i], "version.json"), JsonSerializer.Serialize(build, JsonCtx.Default.AddonBuild));
-        }
-        return ids;
-    }
-
-    [Fact]
-    public void Dfc_cleanup_says_why_builds_stay_and_only_the_manual_one_deletes_an_import()
-    {
-        var ids = DfcBuilds(5);
-        _settings.DfcId = ids[2];
-        _settings.For(@"c:\games\hollow tide").DfcId = ids[3];
-        // A record from before the library: only the tag names the build.
-        InstallManifest[] records = [new() { Dfc = true, DfcTag = $"5.0.5-{ids[4][..12]}", Dir = @"C:\Games\Cyberpunk\bin" }];
-        var names = Names((@"c:\games\hollow tide", "Hollow Tide"), (@"C:\Games\Cyberpunk\bin", "Cyberpunk 2077"));
-
-        var note = _store.KeepNote(LibraryKind.Dfc, _settings, records, names);
-
-        Assert.Equal("Deep Fried Chicken", ComponentStore.LibraryTitle(LibraryKind.Dfc));
-        Assert.Equal([ids[2], ids[3], ids[4]], note.Kept.Select(k => k.Build.Id));
-        Assert.Equal(["default"], ReasonsOf(note, ids[2]));
-        Assert.Equal(["picked for Hollow Tide"], ReasonsOf(note, ids[3]));
-        Assert.Equal(["installed in Cyberpunk 2077"], ReasonsOf(note, ids[4]));
-        Assert.Equal("3 kept: default (5.0.7), picked for Hollow Tide and 1 more", note.Line);
-
-        _settings.KeepBuilds[nameof(LibraryKind.Dfc)] = 1;
-        Assert.Equal([ids[1]], _store.CleanupCandidates(LibraryKind.Dfc, _settings, records).Select(b => b.Id));
-        Assert.Empty(_store.CleanupCandidates(LibraryKind.Dfc, _settings, records, downloadsOnly: true));
-        Assert.DoesNotContain(_store.PlanCleanup(_settings, records, downloadsOnly: true), i => FileUtil.IsUnder(i.Path, ComponentStore.DfcDir));
-        Assert.Contains(_store.PlanCleanup(_settings, records), i => i.Path == Path.Combine(ComponentStore.DfcDir, ids[1]));
-
-        // Without a pinned default the newest build is the default.
-        _settings.DfcId = null;
-        Assert.Contains(_store.ProtectionReasons(LibraryKind.Dfc, _settings, records, null), p => p.Id == ids[0] && p.Reason == "default");
-    }
-
     [Fact]
     public void Nothing_to_clean_up_says_why_only_when_protected_builds_are_kept()
     {
-        var none = new LibraryKeepNote([], null);
-        var kept = new LibraryKeepNote([new KeptBuild(Build("x"), ["default"])], null);
+        var none = new LibraryKeepNote([]);
+        var kept = new LibraryKeepNote([new KeptBuild(Build("x"), ["default"])]);
 
         Assert.Equal("Nothing to clean up.", BuildCleanup.NothingToCleanText([none, none]));
         Assert.Equal("Nothing to clean up: the rest are defaults or used by games.", BuildCleanup.NothingToCleanText([none, kept]));
@@ -808,9 +754,9 @@ public sealed class BuildLibraryTests : IDisposable
         Assert.DoesNotContain("Downloaded", File.ReadAllText(Path.Combine(AppPaths.Components, "lecram-dlss5", ids[3], "version.json")));
         _settings.LecramId = ids[0];
         _settings.KeepBuilds[nameof(LibraryKind.Lecram)] = 1;
-        Release(Component.OptiScaler, "v0.7.9", "new");
-        Release(Component.OptiScaler, "v0.7.8", "mid");
-        Release(Component.OptiScaler, "v0.7.7", "old");
+        Release(Component.OptiScaler, "v0.1.9-f5", "new");
+        Release(Component.OptiScaler, "v0.1.8-f5", "mid");
+        Release(Component.OptiScaler, "v0.1.7-f5", "old");
         _settings.KeepBuilds[nameof(LibraryKind.OptiScaler)] = 1;
 
         Assert.Equal([ids[1], ids[2], ids[3]], _store.CleanupCandidates(LibraryKind.Lecram, _settings, []).Select(b => b.Id));
@@ -818,16 +764,16 @@ public sealed class BuildLibraryTests : IDisposable
         Assert.All(_store.Library(LibraryKind.OptiScaler), b => Assert.True(b.Downloaded));
         Assert.Equal(2, _store.CleanupCandidates(LibraryKind.OptiScaler, _settings, [], downloadsOnly: true).Count);
         // A download that just arrived stays through the pass that follows it.
-        var auto = _store.PlanCleanup(_settings, [], new HashSet<string>(["v0.7.8"]), downloadsOnly: true).Select(i => Path.GetFileName(i.Path)).ToList();
-        Assert.Contains("v0.7.7", auto);
-        Assert.DoesNotContain("v0.7.8", auto);
+        var auto = _store.PlanCleanup(_settings, [], new HashSet<string>(["v0.1.8-f5"]), downloadsOnly: true).Select(i => Path.GetFileName(i.Path)).ToList();
+        Assert.Contains("v0.1.7-f5", auto);
+        Assert.DoesNotContain("v0.1.8-f5", auto);
     }
 
     [Fact]
     public void Run_deletes_for_good_logs_freed_bytes_and_skips_what_is_locked_or_outside()
     {
-        var old = Release(Component.OptiScaler, "v0.9.1", "0123456789");
-        var locked = Release(Component.OptiScaler, "v0.9.2", "locked");
+        var old = Release(Component.OptiScaler, "v0.1.1-f5", "0123456789");
+        var locked = Release(Component.OptiScaler, "v0.1.2-f5", "locked");
         var outside = Path.Combine(_tmp, "elsewhere");
         Write(Path.Combine(outside, "keep.txt"), "x");
         var lockedFile = Path.Combine(ComponentStore.TagDir(Component.OptiScaler, locked.Tag), "pkg", "OptiScaler.dll");
@@ -847,7 +793,7 @@ public sealed class BuildLibraryTests : IDisposable
         Assert.False(Directory.Exists(plan[0].Path));
         Assert.True(File.Exists(lockedFile));
         Assert.True(File.Exists(Path.Combine(outside, "keep.txt")));
-        Assert.Equal(["v0.9.2"], _store.Library(LibraryKind.OptiScaler).Select(b => b.Id));
+        Assert.Equal(["v0.1.2-f5"], _store.Library(LibraryKind.OptiScaler).Select(b => b.Id));
     }
 
     private GameViewModel NewGame()

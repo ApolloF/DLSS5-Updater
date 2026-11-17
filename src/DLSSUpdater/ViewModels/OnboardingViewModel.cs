@@ -12,11 +12,8 @@ public sealed record OnboardingChoice<T>(T Value, string Label, string Descripti
     public override string ToString() => Label;
 }
 
-/// <summary>
-/// What finishing the setup changed that other parts of the app have to follow. <paramref name="Build"/> is a newly
-/// picked OptiScaler build: it is switched through Settings like any other build change, so it isn't written here.
-/// </summary>
-public sealed record OnboardingResult(bool Applied, OptiSource? Build);
+/// <summary>What finishing the setup changed that other parts of the app have to follow.</summary>
+public sealed record OnboardingResult(bool Applied);
 
 /// <summary>
 /// The short first-run setup. Its choices start at the current settings and are written only by Finish; Skip (or Esc)
@@ -32,7 +29,6 @@ public sealed partial class OnboardingViewModel : ObservableObject
     {
         _settings = settings;
         _mode = Modes.First(m => m.Value == settings.DefaultMode);
-        _optiBuild = Builds.First(b => b.Value == OptiSources.For(settings.OptiSource));
         var addons = NrAddons.Defaults(settings).ToList();
         _initialAddon = NrAddons.Priority.Where(addons.Contains).Select(a => (NrAddon?)a).FirstOrDefault();
         _addon = Addons.First(a => a.Value == _initialAddon);
@@ -80,24 +76,15 @@ public sealed partial class OnboardingViewModel : ObservableObject
 
     public static IReadOnlyList<OnboardingChoice<InstallMode>> Modes { get; } =
     [
-        new(InstallMode.OptiScaler, "OptiScaler", "OptiScaler loads into the game and brings ReShade, MFG Unlock and NR with it."),
-        new(InstallMode.ReShadeOnly, "ReShade + add-ons (DLSS5 mod)", ModeChoice.For(OptiSources.F5).First(m => m.Mode == InstallMode.ReShadeOnly).Description),
+        new(InstallMode.OptiScaler, OptiSources.F5.Name, ModeChoice.All.First(m => m.Mode == InstallMode.OptiScaler).Description),
+        new(InstallMode.ReShadeOnly, "ReShade + add-ons (DLSS5 mod)", ModeChoice.All.First(m => m.Mode == InstallMode.ReShadeOnly).Description),
     ];
 
     [ObservableProperty]
-    [NotifyPropertyChangedFor(nameof(IsReShadeMode), nameof(IsOptiScalerMode))]
+    [NotifyPropertyChangedFor(nameof(IsReShadeMode))]
     private OnboardingChoice<InstallMode> _mode;
 
     public bool IsReShadeMode => Mode.Value == InstallMode.ReShadeOnly;
-    public bool IsOptiScalerMode => !IsReShadeMode;
-
-    public static IReadOnlyList<OnboardingChoice<OptiSource>> Builds { get; } =
-    [
-        new(OptiSources.F5, OptiSources.F5.Label, "The default. Experimental and released often; it installs its own open-source NGX forwarder next to OptiScaler."),
-        new(OptiSources.Default, OptiSources.Default.Label, "The fork this app was first built around. Pick it if F5 gives you trouble in a game."),
-    ];
-
-    [ObservableProperty] private OnboardingChoice<OptiSource> _optiBuild;
 
     public static IReadOnlyList<OnboardingChoice<NrAddon?>> Addons { get; } =
     [
@@ -142,18 +129,17 @@ public sealed partial class OnboardingViewModel : ObservableObject
     private void Back() => Step = Steps[StepNumber - 2];
 
     [RelayCommand]
-    private void Skip() => Close(new OnboardingResult(false, null));
+    private void Skip() => Close(new OnboardingResult(false));
 
     /// <summary>Writes the choices to the settings and saves them with the done flag.</summary>
     public void Finish() => Close(Apply());
 
-    /// <summary>The choices as settings. Only the mode's own sub-choice counts: the build for OptiScaler, the add-on for ReShade + add-ons.</summary>
+    /// <summary>The choices as settings. The add-on counts only for ReShade + add-ons.</summary>
     private OnboardingResult Apply()
     {
         var s = _settings;
         s.DefaultMode = Mode.Value;
         if (IsReShadeMode) ApplyAddon(s);
-        var build = !IsReShadeMode && OptiBuild.Value != OptiSources.For(s.OptiSource) ? OptiBuild.Value : null;
         s.CheckAppUpdates = CheckAppUpdates;
         s.AutoInstallAppUpdates = AutoInstallAppUpdates;
         s.AutoDownloadReShade = AutoDownloadReShade;
@@ -161,7 +147,7 @@ public sealed partial class OnboardingViewModel : ObservableObject
         s.AutoCleanBuilds = AutoCleanBuilds;
         if (KeepBuilds != _initialKeep)
             foreach (var kind in Enum.GetValues<LibraryKind>()) s.KeepBuilds[kind.ToString()] = KeepBuilds;
-        return new OnboardingResult(true, build);
+        return new OnboardingResult(true);
     }
 
     /// <summary>An unchanged pick leaves the add-ons alone (a kept ShortFuse + Lecram pair stays); a new one replaces them (the page offers a single pick).</summary>

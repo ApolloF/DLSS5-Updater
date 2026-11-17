@@ -38,7 +38,6 @@ public sealed class StartupTests : IDisposable
         Assert.Empty(preset.Opti);
         Assert.Equal("keep", s.IniMode);
         Assert.Equal("dxgi.dll", s.DefaultProxy);
-        Assert.Equal(OptiSources.F5.Repo, s.OptiSource);
         s.For("C:\\Games\\X").Mode = InstallMode.ReShadeOnly;
         Assert.NotNull(s.For("c:\\games\\x").Mode);
         Assert.False(File.Exists(AppSettings.BadSettingsFile));

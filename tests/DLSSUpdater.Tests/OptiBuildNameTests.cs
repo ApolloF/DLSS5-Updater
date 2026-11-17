@@ -29,35 +29,28 @@ public sealed class OptiBuildNameTests : IDisposable
     private static string OptiRowName(GameViewModel vm) => vm.Components.First(c => c.Key == "opti").Name;
 
     [Fact]
-    public void EachBuildHasItsOwnProductName()
+    public void ProductNames_FollowTheTag_AndALegacyNrTagKeepsItsOldName()
     {
-        Assert.Equal("OptiScaler-NR", OptiSources.Default.Name);
         Assert.Equal("OptiScaler F5", OptiSources.F5.Name);
-        Assert.Equal(OptiSources.F5.Name, OptiSources.OfTag("v0.1.32-f5").Name);
-        Assert.Equal(OptiSources.Default.Name, OptiSources.OfTag("v0.9.51").Name);
-        Assert.Equal(OptiSources.Default.Name, OptiSources.For("unknown/repo").Name);
+        Assert.Equal(OptiSources.F5.Name, OptiSources.NameOf("v0.1.32-f5"));
+        Assert.Equal(OptiSources.F5.Name, OptiSources.NameOf(null));
+        Assert.Equal("OptiScaler-NR", OptiSources.NameOf("v0.9.51"));
     }
 
     [Fact]
-    public void ModeChoices_NameTheSelectedBuild_AndKeepTheModeValues()
+    public void ModeChoices_NameF5_AndKeepTheModeValues()
     {
-        var f5 = ModeChoice.For(OptiSources.F5);
-        Assert.Equal(InstallMode.OptiScaler, f5[0].Mode);
-        Assert.Equal("OptiScaler F5", f5[0].Label);
-        Assert.StartsWith("OptiScaler F5 loads", f5[0].Description);
-        Assert.Equal("OptiScaler-NR", ModeChoice.For(OptiSources.Default)[0].Label);
-        Assert.Equal(InstallMode.ReShadeOnly, f5[1].Mode);
+        var choices = ModeChoice.All;
+        Assert.Equal(InstallMode.OptiScaler, choices[0].Mode);
+        Assert.Equal("OptiScaler F5", choices[0].Label);
+        Assert.StartsWith("OptiScaler F5 loads", choices[0].Description);
+        Assert.Equal(InstallMode.ReShadeOnly, choices[1].Mode);
     }
 
     [Fact]
-    public void GameViewModel_RenamesLabelsWhenTheBuildIsSwitched()
+    public void GameViewModel_NamesTheOptiScalerRowAndModeAfterF5()
     {
-        var settings = new AppSettings { OptiSource = ComponentStore.OptiRepo };
-        var vm = NewGame(settings);
-        Assert.Equal("OptiScaler-NR", OptiRowName(vm));
-
-        settings.OptiSource = OptiSources.F5.Repo;
-        vm.RefreshBuildName();
+        var vm = NewGame(new AppSettings());
 
         Assert.Equal("OptiScaler F5", OptiRowName(vm));
         Assert.Equal("OptiScaler F5", vm.ModChoices.First(c => c.Mod == Mod.OptiScalerNr).Label);
@@ -65,15 +58,14 @@ public sealed class OptiBuildNameTests : IDisposable
     }
 
     [Fact]
-    public void ComponentRow_NamesTheBuildActuallyInstalled_NotTheSelectedOne()
+    public void ComponentRow_NamesTheBuildActuallyInstalled_ALegacyNrOneStaysNr()
     {
-        var settings = new AppSettings { OptiSource = OptiSources.F5.Repo };
-        var vm = NewGame(settings, root =>
+        var nrGame = NewGame(new AppSettings(), root =>
         {
             var m = new InstallManifest { Opti = true, OptiTag = "v0.9.51", Mode = InstallMode.OptiScaler };
             m.Save(root);
         });
-        Assert.Equal("OptiScaler-NR", OptiRowName(vm));
+        Assert.Equal("OptiScaler-NR", OptiRowName(nrGame));
 
         var f5Game = NewGame(new AppSettings(), root =>
         {
@@ -88,6 +80,6 @@ public sealed class OptiBuildNameTests : IDisposable
     {
         var f5 = new CompatReport("v0.1.32-f5", [], false, "v0.1.32") { Name = OptiSources.F5.Name };
         Assert.Equal("OptiScaler F5 v0.1.32-f5: config compatible.", f5.Summary);
-        Assert.StartsWith("OptiScaler-NR v0.9.51:", new CompatReport("v0.9.51", [], false, "v0.9.51").Summary);
+        Assert.StartsWith("OptiScaler F5 v0.1.32:", new CompatReport("v0.1.32", [], false, "v0.1.32").Summary);
     }
 }

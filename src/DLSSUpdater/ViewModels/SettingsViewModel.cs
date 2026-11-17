@@ -17,11 +17,9 @@ public sealed partial class SettingsViewModel : ObservableObject
         _main = main;
         RenoDx = new AddonLibraryViewModel(main, AddonKind.RenoDx, AddonsChanged);
         Lecram = new AddonLibraryViewModel(main, AddonKind.Lecram, AddonsChanged);
-        Dfc = new AddonLibraryViewModel(main, AddonKind.Dfc, AddonsChanged);
         ReShade = new ReShadeSettingsViewModel(main, AddonsChanged);
         Extras = new ReShadeExtrasSettingsViewModel(main.S);
         FrameLimit = new FrameLimitSettingsViewModel(main, AddonsChanged);
-        Feeder = new FeederSettingsViewModel(main, AddonsChanged);
         Dxvk = new DxvkSettingsViewModel(main, AddonsChanged);
         Luma = new LumaSettingsViewModel(main, AddonsChanged);
         Hsf = new HsfSettingsViewModel(AddonsChanged);
@@ -38,14 +36,12 @@ public sealed partial class SettingsViewModel : ObservableObject
         RenoDxOptions = SettingsOptions.RenoDx(ReShadeOverrides);
         LecramOptions = SettingsOptions.Lecram(ReShadeOverrides);
         UpliftOptions = SettingsOptions.Uplift(ReShadeOverrides);
-        DfcOptions = SettingsOptions.Dfc(ReShadeOverrides);
         NrOptions = SettingsOptions.Nr(Overrides);
         TonemapOptions = SettingsOptions.Tonemap(Overrides);
         HdrOptions = SettingsOptions.HdrOutput(Overrides);
 
         Reload();
         ApplyOptiSource();
-        ApplyDfcCompat();
         ApplyLecramGeneration();
     }
 
@@ -53,12 +49,10 @@ public sealed partial class SettingsViewModel : ObservableObject
     public ReShadeSettingsViewModel ReShade { get; }
     public ReShadeExtrasSettingsViewModel Extras { get; }
     public FrameLimitSettingsViewModel FrameLimit { get; }
-    public FeederSettingsViewModel Feeder { get; }
     public DxvkSettingsViewModel Dxvk { get; }
     public LumaSettingsViewModel Luma { get; }
     public HsfSettingsViewModel Hsf { get; }
     public AddonLibraryViewModel Lecram { get; }
-    public AddonLibraryViewModel Dfc { get; }
     public BuildCleanupViewModel Cleanup { get; }
     public IReadOnlyList<string> ProxyNames => AppSettings.ProxyNames;
     public ObservableCollection<IniOverride> Overrides { get; }
@@ -71,11 +65,10 @@ public sealed partial class SettingsViewModel : ObservableObject
     public IReadOnlyList<IniOptionViewModel> RenoDxOptions { get; }
     public IReadOnlyList<IniOptionViewModel> LecramOptions { get; }
     public IReadOnlyList<IniOptionViewModel> UpliftOptions { get; }
-    public IReadOnlyList<IniOptionViewModel> DfcOptions { get; }
     public IReadOnlyList<IniOptionViewModel> NrOptions { get; }
     public IReadOnlyList<IniOptionViewModel> TonemapOptions { get; }
     public IReadOnlyList<IniOptionViewModel> HdrOptions { get; }
-    public IEnumerable<IniOptionViewModel> AllOptions => ReShadeOptions.Concat(MfgOptions).Concat(RenoDxOptions).Concat(LecramOptions).Concat(UpliftOptions).Concat(DfcOptions).Concat(NrOptions).Concat(TonemapOptions).Concat(HdrOptions);
+    public IEnumerable<IniOptionViewModel> AllOptions => ReShadeOptions.Concat(MfgOptions).Concat(RenoDxOptions).Concat(LecramOptions).Concat(UpliftOptions).Concat(NrOptions).Concat(TonemapOptions).Concat(HdrOptions);
     public IReadOnlyList<OptionChoice> IniModes => SettingsOptions.IniModes;
 
     public OptionChoice IniMode
@@ -113,13 +106,12 @@ public sealed partial class SettingsViewModel : ObservableObject
         }
     }
 
-        private Mod DefaultMod => ModPicker.DefaultInSettings(Settings.DefaultMode == InstallMode.ReShadeOnly, Settings.InstallUplift, false, Settings.InstallLecram, Settings.InstallRenoDx);
+        private Mod DefaultMod => ModPicker.DefaultInSettings(Settings.DefaultMode == InstallMode.ReShadeOnly, Settings.InstallUplift, Settings.InstallLecram, Settings.InstallRenoDx);
 
     public bool ShowReShade => ModPicker.Shows(ModSelection.Mod, Mod.ReShade);
     public bool ShowMfg => ModPicker.Shows(ModSelection.Mod, Mod.Mfg);
     public bool ShowRenoDx => ModPicker.Shows(ModSelection.Mod, Mod.RenoDx);
     public bool ShowLecram => ModPicker.Shows(ModSelection.Mod, Mod.Lecram);
-    public bool ShowDfc => ModPicker.Shows(ModSelection.Mod, Mod.Dfc);
     public bool ShowUplift => ModPicker.Shows(ModSelection.Mod, Mod.Uplift);
 
     private void NotifyModShown()
@@ -129,7 +121,6 @@ public sealed partial class SettingsViewModel : ObservableObject
         OnPropertyChanged(nameof(ShowMfg));
         OnPropertyChanged(nameof(ShowRenoDx));
         OnPropertyChanged(nameof(ShowLecram));
-        OnPropertyChanged(nameof(ShowDfc));
         OnPropertyChanged(nameof(ShowUplift));
     }
 
@@ -224,18 +215,10 @@ public sealed partial class SettingsViewModel : ObservableObject
 
     // ---------- general ----------
 
-    public IReadOnlyList<ModeChoice> Modes => ModeChoice.For(OptiBuild);
+    public IReadOnlyList<ModeChoice> Modes => ModeChoice.All;
 
-    /// <summary>Name of the selected OptiScaler build; the Settings tab with its options carries it.</summary>
-    public string OptiName => OptiBuild.Name;
-
-    /// <summary>The selected build changed: rename the tab and the default-mode entry.</summary>
-    public void RefreshBuildName()
-    {
-        OnPropertyChanged(nameof(OptiName));
-        OnPropertyChanged(nameof(Modes));
-        OnPropertyChanged(nameof(DefaultMode));
-    }
+    /// <summary>Name of the OptiScaler build; the Settings tab with its options carries it.</summary>
+    public string OptiName => OptiSources.F5.Name;
 
     public ModeChoice DefaultMode
     {
@@ -260,31 +243,13 @@ public sealed partial class SettingsViewModel : ObservableObject
         set { Settings.IncludePrereleases = value; Save(); }
     }
 
-    public IReadOnlyList<OptiSource> OptiBuilds => OptiSources.All;
-
-    public OptiSource OptiBuild
-    {
-        get => OptiSources.For(Settings.OptiSource);
-        set
-        {
-            if (value is null || value.Repo == Settings.OptiSource) return;
-            Settings.OptiSource = value.Repo;
-            // A default build of the other source would install that source; the new one follows its newest release.
-            if (Settings.OptiTag is { } tag && OptiSources.OfTag(tag) != value) Settings.OptiTag = null;
-            Save();
-            ReloadReleaseChoices();
-            OnPropertyChanged();
-            _main.OptiSourceChanged();
-        }
-    }
-
     // ---------- default OptiScaler and GITC Uplift builds ----------
 
     public ObservableCollection<DlssChoice> OptiVersionChoices { get; } = [];
     public ObservableCollection<DlssChoice> UpliftVersionChoices { get; } = [];
     private bool _reloadingReleases;
 
-    /// <summary>The default OptiScaler build: the newest release of the selected source, or a kept build of either source.</summary>
+    /// <summary>The default OptiScaler build: the newest release, or a kept build.</summary>
     public DlssChoice? SelectedOptiVersion
     {
         get => OptiVersionChoices.FirstOrDefault(c => c.Tag == Settings.OptiTag) ?? OptiVersionChoices.FirstOrDefault();
@@ -292,14 +257,7 @@ public sealed partial class SettingsViewModel : ObservableObject
         {
             if (_reloadingReleases || value is null || value.Tag == Settings.OptiTag) return;
             Settings.OptiTag = value.Tag;
-            // A build of the other source makes that source the selected one, so names, options and checks follow it.
-            if (value.Tag is { } tag && OptiSources.OfTag(tag) is var source && source != OptiBuild)
-            {
-                Settings.OptiSource = source.Repo;
-                OnPropertyChanged(nameof(OptiBuild));
-                _main.OptiSourceChanged();
-            }
-            else ApplyOptiSource();
+            ApplyOptiSource();
             Save();
             _ = _main.RefreshLocalComponentsAsync();
         }
@@ -338,12 +296,12 @@ public sealed partial class SettingsViewModel : ObservableObject
         }
     }
 
-    /// <summary>Hides the options the default OptiScaler build doesn't have and switches the rest to its values.</summary>
+    /// <summary>Hides the options the default OptiScaler build doesn't have.</summary>
     public void ApplyOptiSource()
     {
-        var source = OptiBuild;
-        // Newest follows the latest release of the source; unknown before the first check, which means the tested build.
-        var tag = Settings.OptiTag ?? (_main.S.Store.Opti is { } latest && OptiSources.OfTag(latest.Tag) == source ? latest.Tag : null);
+        var source = OptiSources.F5;
+        // Newest follows the latest release; unknown before the first check, which means the tested build.
+        var tag = Settings.OptiTag ?? _main.S.Store.Opti?.Tag;
         var shared = GameOptionViewModel.Definitions.Nr.Concat(GameOptionViewModel.Definitions.Tonemap).Concat(GameOptionViewModel.Definitions.HdrOutput);
         foreach (var o in NrOptions.Concat(TonemapOptions).Concat(HdrOptions).Concat(shared))
             o.ApplySource(source, tag);
@@ -567,24 +525,13 @@ public sealed partial class SettingsViewModel : ObservableObject
     {
         RenoDx.Reload();
         Lecram.Reload();
-        Dfc.Reload();
         ReShade.Reload();
         FrameLimit.Reload();
-        Feeder.Reload();
         Dxvk.Reload();
         Luma.Reload();
         Hsf.Reload();
         ApplyLecramGeneration();
-        ApplyDfcCompat();
         RefreshAddonPairStatus();
-    }
-
-    /// <summary>Hides the DFC options the default build's cfg doesn't have (a different config schema); a game uses its own build.</summary>
-    public void ApplyDfcCompat()
-    {
-        var missing = _main.S.Store.DfcCompat(DfcOptions.Select(o => o.Key))?.MissingKeys ?? [];
-        foreach (var o in DfcOptions)
-            o.IsAvailable = !missing.Contains(o.Key, StringComparer.OrdinalIgnoreCase);
     }
 
     private static string Describe(string path, string? sha, bool known)
@@ -623,7 +570,6 @@ public sealed partial class SettingsViewModel : ObservableObject
     {
         Onboarding = null;
         if (!result.Applied) return;
-        if (result.Build is { } build) OptiBuild = build;
         OnPropertyChanged(nameof(DefaultMode));
         NotifyNrAddons();
         NotifyModShown();
@@ -696,7 +642,7 @@ public sealed partial class SettingsViewModel : ObservableObject
     private void ResetAll()
     {
         if (!Views.Dialog.Confirm("Reset mod settings",
-                "Reset all OptiScaler.ini and ReShade.ini settings, keybinds and options to the upstream defaults (what OptiScaler-NR, ReShade and MFG Unlock ship with)? " +
+                "Reset all OptiScaler.ini and ReShade.ini settings, keybinds and options to the upstream defaults (what OptiScaler F5, ReShade and MFG Unlock ship with)? " +
                 "Saved presets are kept.", "Reset", danger: true))
             return;
         ResetOverrides();

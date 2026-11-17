@@ -120,9 +120,10 @@ Paths: files go into the game or the install folder. Config keys and attributes 
 %LocalAppData% or Documents (`InstallManifest.KnownFolderTags`), for example UE's Engine.ini; nothing else outside.
 
 **Record versions.** Schema 1 is every record up to 2.2.x; schema 2 adds `Components`. The components that existed
-before 3.0 (OptiScaler, ReShade, MFG Unlock, NR runtime, DLSS, Streamline, ShortFuse, Lecram, DFC, GITC Uplift) still
+before 3.0 (OptiScaler, ReShade, MFG Unlock, NR runtime, DLSS, Streamline, ShortFuse, Lecram, GITC Uplift) still
 store their per-component fields, and `LegacyComponents` reads them into the same `InstalledComponent` view, so code
-that works by id sees them too. Downgrading to 2.2.x: it reads a schema-2 record, ignores `Components` and drops it on
+that works by id sees them too. OptiScaler-NR, DFC and DLSS5-Feeder were removed from the app; their records are still
+read and undone, so uninstall and update work for games that have them. Downgrading to 2.2.x: it reads a schema-2 record, ignores `Components` and drops it on
 its next save, but still deletes the placed files and restores the backups (both are also in the record-level lists).
 It does not undo config keys or attribute changes of generic components. Fields a newer version wrote are kept
 (`JsonExtensionData`), so a record never loses data this version doesn't know.
@@ -132,7 +133,7 @@ It does not undo config keys or attribute changes of generic components. Fields 
 Measured against this guideline on main (after #63, #66 and #67). Each is fixed when its component is next touched, or in its own PR.
 
 - **Defaults pin themselves**: RenoDX via `EnsureAddonDefaults`/`AdoptImportedAddon`; the NR runtime has its own
-  legacy-first adoption rule (`NrLibrary`). Lecram and DFC follow "Newest" and keep a pinned default.
+  legacy-first adoption rule (`NrLibrary`). Lecram follows "Newest" and keeps a pinned default.
 - **Older mirrored builds**: ShortFuse's offers are told apart from the library by the catalog hash stamped on a build (`CatalogSha`), so a
   copy imported by hand, or downloaded before the stamp existed, is offered once more (downloading stamps it, no new file). The Settings
   picker of an add-on is hidden while its library is empty; the game page picker is not.
@@ -144,10 +145,10 @@ Measured against this guideline on main (after #63, #66 and #67). Each is fixed 
 - **Verification differs**: GitHub digests, Uplift's `SHA256SUMS.txt` (skipped when absent), the MediaFire listing hash.
   Target: one verifier per source kind, and no install without a digest.
 - **Per-component install fields**: the components from before 3.0 still keep their own fields in the install record
-  (`Opti`/`OptiTag`, `DfcFiles`, `DfcCfg`, `LecramFile`, ...) and their own install and removal code in `Installer`;
+  (`Opti`/`OptiTag`, `LecramFile`, ...; `DfcFiles`/`DfcCfg` are only read, for old installs) and their own install and removal code in `Installer`;
   `LegacyComponents` only reads them. Each moves to `InstalledComponent` when it is next reworked; the per-component
   fields keep being written for one major version so 2.2.x can still read the record.
-- **Compat checks differ** per component (`OptiCompat`, `UpliftConfig`, `DfcConfig`, `LecramIni`, ...). Target: one
+- **Compat checks differ** per component (`OptiCompat`, `UpliftConfig`, `LecramIni`, ...). Target: one
   `ComponentCompat` shape (tested version, schema, missing keys, summary) that each config class fills.
 - **OptiScaler F5 vendor-neutral forwarder**: since 0.1.33 F5 releases carry `Optional-Vendor-Neutral-DLSS5-Forwarder.zip`, an
   `nvngx.dll_dlssnr.dll` that runs the NR model itself so AMD and Intel GPUs can use DLSS-NR (DirectML, DirectX 12, 310.9

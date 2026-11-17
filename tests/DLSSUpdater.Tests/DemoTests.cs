@@ -71,7 +71,6 @@ public class DemoTests : IDisposable
         Assert.Contains(manifests.Values, m => m is { Mode: InstallMode.OptiScaler, Opti: true });
         Assert.Contains(manifests.Values, m => m is { Mode: InstallMode.ReShadeOnly, ReShade: true, Opti: false });
         Assert.Contains(manifests.Values, m => m is { RenoDx: true, Lecram: true });
-        Assert.Contains(manifests.Values, m => m is { Dfc: true });
         Assert.Contains(manifests.Values, m => m is { Uplift: true });
         Assert.Contains(manifests.Values, m => m is { Mfg: true });
         Assert.Contains(manifests.Values, m => m is { Dlss: true, Opti: false, ReShade: false });
@@ -93,10 +92,6 @@ public class DemoTests : IDisposable
         Assert.Single(_store.RenoDxBuilds);
         Assert.Equal(["v11.0.1", "v11.0.0-beta.48", "v11.0.0-beta.45", "v8.5.0-rc10-model-sdr1"], _store.LecramBuilds.Select(b => b.DetectedLabel));
         Assert.Equal(LecramGeneration.V11, _store.LecramBuilds[0].Generation);
-        // Deep Fried Chicken is a library of two builds, so the game page shows its picker; the newest is the default.
-        Assert.Equal(["5.0.0", "4.0.0"], _store.DfcBuilds.Select(b => b.Name));
-        var dfc = Demo.ManifestAt(Demo.Games.First(g => g.Name == "Hollow Tide").Installs[0])!;
-        Assert.Equal((_store.DfcBuildFor(null)!.Id, _store.DfcBuildFor(null)!.Tag), (dfc.DfcId, dfc.DfcTag));
         Assert.All(Directory.EnumerateFiles(AppPaths.Components, "*", SearchOption.AllDirectories).Where(f => Path.GetExtension(f) is not (".json" or ".cfg")), f => Assert.True(new FileInfo(f).Length < 200));
     }
 

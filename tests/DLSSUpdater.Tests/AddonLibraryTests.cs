@@ -769,11 +769,9 @@ public sealed class AddonLibraryTests : IDisposable
         Turn(vm, "lecram", true);
         Assert.True(On(vm, "renodx") && On(vm, "lecram"));
         Assert.Contains("NR runs twice", vm.NrAddonWarning);
-        Turn(vm, "dfc", true);
-        Assert.True(On(vm, "renodx") && On(vm, "lecram") && On(vm, "dfc"));
         Turn(vm, "uplift", true);
         Assert.True(On(vm, "uplift") && On(vm, "renodx"));
-        Turn(vm, "dfc", false);
+        Turn(vm, "renodx", false);
         Turn(vm, "uplift", false);
         Turn(vm, "lecram", false);
         Assert.Null(vm.NrAddonWarning);

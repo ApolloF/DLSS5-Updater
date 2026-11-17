@@ -421,7 +421,7 @@ DLSS5 Updater downloads and installs the add-on automatically from the catalog m
 Direct3D 9, Direct3D 10, OpenGL and 32-bit games with a build that carries NR's host (see Host below). Prerequisites: ReShade 6+ (6.8+
 with a host build, from INSTALL.txt), the NR runtime `nvngx_dlssnr.dll`, and up to v11.9 a game with native DLSS. v12.0.0 and newer also
 run in games without it (`LecramRoute.FirstWithoutDlssBuild`: v12.0.0's release notes say "with or without DLSS", and its README says
-NR then uses the game's motion vectors where it finds them, else optical flow). It excludes OptiScaler-NR and Deep Fried Chicken. It is not added to `[ADDON] LoadFromDllMain`, since nothing here shows it needs early load.
+NR then uses the game's motion vectors where it finds them, else optical flow). It is not added to `[ADDON] LoadFromDllMain`, since nothing here shows it needs early load.
 
 - **Import.** The add-on file itself (`renodx-dlss5.addon64` or `dlss5-nr.addon64`), or one of the author's packages: a setup exe
   (`DLSS5-NR-Setup-v*.exe`, `DLSS5-NR-Dev-Setup-v*.exe`) or the hand-install zip (`DLSS5 NR Add-on v*.zip`). From a package the app takes
@@ -453,7 +453,7 @@ NR then uses the game's motion vectors where it finds them, else optical flow). 
   `{label}-{sha256[..12]}`.
 - **Placement.** The chosen build's file is placed under its generation's name. The other generation's file is removed if the app
   placed it, or moved to the backup folder if it was already in the game (v11 goes inert next to `renodx-dlss5.addon64`). Other
-  NR injectors (`renodx-dlssfix`, Deep Fried Chicken) are moved aside too. Uninstall restores everything. ShortFuse's add-on is left alone.
+  NR injectors (`renodx-dlssfix`, Deep Fried Chicken from an older version) are moved aside too. Uninstall restores everything. ShortFuse's add-on is left alone.
 - **Host.** With a build that carries the host, the app places the whole set beside the game's ReShade, as INSTALL.txt asks, whatever
   the game: `dlss5-nr.addon64`, `dlss5-nr.addon32` and the `dlss5-nr-host` folder. ReShade loads only the add-on that matches the game's
   bitness and NR starts its host only for the games it relays, so a 64-bit Direct3D 11 game with in-game MSAA (a game setting the app
@@ -466,8 +466,8 @@ NR then uses the game's motion vectors where it finds them, else optical flow). 
   older than v12.0.0 (`LecramRoute.Refusal`). The app writes nothing into the host's own ReShade.ini; NR's shortcuts, which go there, are
   not app options. `nr-host64.exe` is never taken for the game's exe (`GameInspector`). The anti-cheat confirmation is the same as for
   any install.
-- **Advisor.** In a game without DLSS, the method panel lists "Neural rendering with Lecram DLSS5 add-on" before Feeder when a Lecram
-  build is in the library (docs/advisor.md).
+- **Advisor.** In a game without DLSS, the method panel lists "Neural rendering with Lecram DLSS5 add-on" before the GITC Uplift card when
+  a Lecram build is in the library (docs/advisor.md).
 - **Keys written.** Only the options set in Settings, only to `[RenoDX.DLSS5]`, only while the add-on is installed. Options that
   exist in one generation only are hidden for the other (v10 only: `NRAutoMask`; v11 only: `NeuralUplift`, `NRPreset`,
   `NRPass2Preset`..`NRPass4Preset`, `NRVramBuffering`, `NRGpuCrashWitness`, `NRPresentFgPath` and every v12.9.9 / v13.4.0 key below); `NRHookPoint`, `NRStyle`, `NRLocalStructure`, `NRSkinStructure` and `NRPresentGuides` offer

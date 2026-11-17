@@ -15,11 +15,8 @@ public sealed class NrConsumerTests : IDisposable
     }
 
     [Theory]
-    [InlineData(NrAddon.Dfc, NrAddon.RenoDx, "Deep Fried Chicken does nothing")]
-    [InlineData(NrAddon.RenoDx, NrAddon.Dfc, "Deep Fried Chicken does nothing")]
-    [InlineData(NrAddon.Dfc, NrAddon.Bridge, "Deep Fried Chicken does nothing")]
     [InlineData(NrAddon.Lecram, NrAddon.OptiScaler, "OptiScaler takes over")]
-    [InlineData(NrAddon.OptiScaler, NrAddon.Dfc, "Deep Fried Chicken does nothing")]
+    [InlineData(NrAddon.OptiScaler, NrAddon.RenoDx, "OptiScaler takes over")]
     [InlineData(NrAddon.Uplift, NrAddon.Bridge, "the bridge is for games with their own DLSS")]
     [InlineData(NrAddon.RenoDx, NrAddon.Uplift, "only one neural route")]
     public void TwoConsumers_Conflict_WithOneLineSayingWhy(NrAddon adding, NrAddon present, string why)
@@ -44,41 +41,17 @@ public sealed class NrConsumerTests : IDisposable
     [Fact]
     public void ARouteNeverConflictsWithItself_OrAgainstNothing()
     {
-        Assert.Null(NrAddons.Conflict(NrAddon.Dfc, []));
-        Assert.Null(NrAddons.Conflict(NrAddon.Dfc, [NrAddon.Dfc]));
-    }
-
-    [Fact]
-    public void Feeder_WorksWithDfcAlone()
-    {
-        Assert.Null(NrAddons.FeederConflict([NrAddon.Dfc]));
-    }
-
-    [Theory]
-    [InlineData(NrAddon.OptiScaler, "stock OptiScaler")]
-    [InlineData(NrAddon.Bridge, "DX11 bridge")]
-    [InlineData(NrAddon.RenoDx, "replaces Feeder")]
-    [InlineData(NrAddon.Lecram, "only pairs Feeder with Deep Fried Chicken")]
-    [InlineData(NrAddon.Uplift, "only pairs Feeder with Deep Fried Chicken")]
-    public void Feeder_ConflictsNextToAnyOtherConsumer_EvenBesideDfc(NrAddon other, string why)
-    {
-        Assert.Contains(why, NrAddons.FeederConflict([other]));
-        Assert.Contains(why, NrAddons.FeederConflict([NrAddon.Dfc, other]));
-    }
-
-    [Fact]
-    public void Feeder_WithoutAnyConsumer_SaysToTurnOnDfc()
-    {
-        Assert.Equal("DLSS5-Feeder needs one neural consumer in the game: turn on Deep Fried Chicken.", NrAddons.FeederConflict([]));
+        Assert.Null(NrAddons.Conflict(NrAddon.Uplift, []));
+        Assert.Null(NrAddons.Conflict(NrAddon.Uplift, [NrAddon.Uplift]));
     }
 
     [Fact]
     public void PresentIn_ReadsTheFilesAndTheRecord()
     {
-        foreach (var f in new[] { "renodx-dlssfix.addon64", "dlss5-nr.addon64", "deep-fried-chicken.addon64", "dlss5-dx11-bridge.addon64", "OptiScaler.ini" })
+        foreach (var f in new[] { "renodx-dlssfix.addon64", "dlss5-nr.addon64", "dlss5-dx11-bridge.addon64", "OptiScaler.ini" })
             File.WriteAllText(Path.Combine(_dir, f), "x");
 
-        Assert.Equal([NrAddon.RenoDx, NrAddon.Lecram, NrAddon.Dfc, NrAddon.Bridge, NrAddon.OptiScaler], NrAddons.PresentIn(_dir, null));
+        Assert.Equal([NrAddon.RenoDx, NrAddon.Lecram, NrAddon.Bridge, NrAddon.OptiScaler], NrAddons.PresentIn(_dir, null));
         Assert.Equal([NrAddon.Uplift], NrAddons.PresentIn(Path.Combine(_dir, "empty"), new InstallManifest { Uplift = true }));
         Assert.Empty(NrAddons.PresentIn(Path.Combine(_dir, "empty"), null));
     }
@@ -86,10 +59,10 @@ public sealed class NrConsumerTests : IDisposable
     [Fact]
     public void RoutesOf_ListsWhatTheRunLeavesInTheGame()
     {
-        Assert.Equal([NrAddon.Dfc], Installer.RoutesOf(new InstallOptions { Mode = InstallMode.ReShadeOnly, Dfc = true }, _dir));
+        Assert.Equal([NrAddon.Uplift], Installer.RoutesOf(new InstallOptions { Mode = InstallMode.ReShadeOnly, Uplift = true }, _dir));
         Assert.Equal([NrAddon.OptiScaler], Installer.RoutesOf(new InstallOptions { Mode = InstallMode.OptiScaler, Opti = true }, _dir));
         Assert.Equal([NrAddon.RenoDx], Installer.RoutesOf(new InstallOptions { Mode = InstallMode.ReShadeOnly, RenoDx = true }, _dir));
-        Assert.Equal([NrAddon.OptiScaler, NrAddon.RenoDx, NrAddon.Dfc], Installer.RoutesOf(new InstallOptions { Mode = InstallMode.OptiScaler, Opti = true, RenoDx = true, Dfc = true }, _dir));
+        Assert.Equal([NrAddon.OptiScaler, NrAddon.RenoDx, NrAddon.Uplift], Installer.RoutesOf(new InstallOptions { Mode = InstallMode.OptiScaler, Opti = true, RenoDx = true, Uplift = true }, _dir));
         Assert.Empty(Installer.RoutesOf(new InstallOptions { Mode = InstallMode.ReShadeOnly }, _dir));
     }
 
@@ -98,23 +71,21 @@ public sealed class NrConsumerTests : IDisposable
     {
         File.WriteAllText(Path.Combine(_dir, "dlss5-bridge.addon64"), "x");
 
-        Assert.Equal([NrAddon.Dfc, NrAddon.Bridge], Installer.RoutesOf(new InstallOptions { Mode = InstallMode.ReShadeOnly, Dfc = true }, _dir));
+        Assert.Equal([NrAddon.Uplift, NrAddon.Bridge], Installer.RoutesOf(new InstallOptions { Mode = InstallMode.ReShadeOnly, Uplift = true }, _dir));
     }
 
     [Fact]
-    public void Planner_ReturnsABridgeAndFeederClash_InsteadOfThrowing_AndOnlyTheModeStaysAHardStop()
+    public void Planner_ReturnsABridgeClash_InsteadOfThrowing_AndOnlyTheModeStaysAHardStop()
     {
         File.WriteAllText(Path.Combine(_dir, "dlss5-bridge.addon64"), "x");
-        var withBridge = Installer.Conflicts(_dir, new InstallOptions { Mode = InstallMode.ReShadeOnly, Dfc = true });
+        var withBridge = Installer.Conflicts(_dir, new InstallOptions { Mode = InstallMode.ReShadeOnly, Uplift = true });
         Assert.Contains("bridge", Assert.Single(withBridge));
 
         var plain = Path.Combine(_dir, "plain");
         Directory.CreateDirectory(plain);
-        Assert.Contains("turn on Deep Fried Chicken", Assert.Single(Installer.Conflicts(plain, new InstallOptions { Mode = InstallMode.ReShadeOnly, Feeder = true })));
-        Assert.Empty(Installer.Conflicts(plain, new InstallOptions { Mode = InstallMode.ReShadeOnly, Dfc = true, Feeder = true }));
         Assert.Empty(Installer.Conflicts(plain, new InstallOptions { Mode = InstallMode.OptiScaler, Opti = true }));
-        var both = Installer.Conflicts(plain, new InstallOptions { Mode = InstallMode.OptiScaler, Opti = true, Dfc = true });
-        Assert.Contains("Deep Fried Chicken does nothing", Assert.Single(both));
+        var both = Installer.Conflicts(plain, new InstallOptions { Mode = InstallMode.OptiScaler, Opti = true, Uplift = true });
+        Assert.Contains("OptiScaler takes over", Assert.Single(both));
     }
 
     [Fact]
