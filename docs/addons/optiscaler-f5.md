@@ -39,7 +39,7 @@ streamline folder (the zip ships them) and applies after a game restart.
 | `[DlssNr] SecondaryFeatures` | v0.1.36 | Other DLSS features |
 | `[DlssNr] DepthFade`, `DepthFadeFarStart/FarEnd/FarStrength`, `DepthFadeNearStart/NearEnd/NearStrength`, `DepthFadeSkyStrength` | v0.1.37 | Depth fade and its seven values |
 
-None of these exist in OptiScaler-NR, so they are in the default source's `UnsupportedKeys` and hidden there. Defaults and
+There is one OptiScaler source now; F5's `VersionedKeys` say from which build each key exists. Defaults and
 ranges come from the 0.1.38 ini: `MultiViewScreens` 0 (a sum: 1, 2, 4, 8, ... per screen, 256 the combined view, +512 all screens
 as one picture), `SecondaryFeatures` 0 (stand aside; 1 own model; 2 share the main model), `DepthFade` false, far 0.5 / 0.85 /
 0.5, near 0.0 / 0.1 / 1.0, sky 1.0, all distances and strengths 0 to 1.
@@ -53,5 +53,5 @@ as one picture), `SecondaryFeatures` 0 (stand aside; 1 own model; 2 share the ma
 
 ## Compat check
 
-`OptiCompat` warns "newer than tested" for a new major or minor version, and in a 0.x series (F5, OptiScaler-NR) also for a
+`OptiCompat` warns "newer than tested" for a new major or minor version, and in a 0.x series (F5) also for a
 higher patch number or fourth part, because those are real releases there.

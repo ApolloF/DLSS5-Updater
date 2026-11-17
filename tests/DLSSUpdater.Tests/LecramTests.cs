@@ -31,11 +31,11 @@ public sealed class LecramTests : IDisposable
         _nr = _store.ImportDlssNr(nr);
         _game = new GameInfo { Id = _root, Root = _root, Name = "Lecram game", Dlss = [new DlssDll { Name = "nvngx_dlss.dll" }] };
 
-        var pkg = Path.Combine(ComponentStore.TagDir(Component.OptiScaler, "v9.9.9"), "pkg");
+        var pkg = Path.Combine(ComponentStore.TagDir(Component.OptiScaler, "v0.1.30-f5"), "pkg");
         Directory.CreateDirectory(pkg);
         File.WriteAllText(Path.Combine(pkg, "OptiScaler.dll"), "OPTI");
         File.WriteAllText(Path.Combine(pkg, "OptiScaler.ini"), "[DlssNr]\nEnabled=auto\n");
-        var release = new ReleaseInfo { Tag = "v9.9.9" };
+        var release = new ReleaseInfo { Tag = "v0.1.30-f5" };
         ComponentStore.MarkComplete(Component.OptiScaler, release);
         _store.Opti = release;
     }
@@ -618,7 +618,7 @@ public sealed class LecramTests : IDisposable
     }
 
     [Fact]
-    public async Task Lecram_InOptiScalerMode_OrWithDfc_NeedsConfirmationFirst()
+    public async Task Lecram_InOptiScalerMode_NeedsConfirmationFirst()
     {
         _store.ImportLecram(FakeV10());
         var before = Snapshot();
@@ -627,9 +627,6 @@ public sealed class LecramTests : IDisposable
         var opti = await Assert.ThrowsAsync<InvalidOperationException>(() =>
             installer.InstallAsync(_game, _root, Lec() with { Mode = InstallMode.OptiScaler, Opti = true }, null, default));
         Assert.Contains("OptiScaler takes over", opti.Message);
-        var dfc = await Assert.ThrowsAsync<InvalidOperationException>(() =>
-            installer.InstallAsync(_game, _root, Lec() with { Dfc = true }, null, default));
-        Assert.Contains("Lecram", dfc.Message);
         Assert.Equal(before, Snapshot());
     }
 

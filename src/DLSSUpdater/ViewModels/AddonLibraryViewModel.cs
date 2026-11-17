@@ -7,7 +7,7 @@ using Microsoft.Win32;
 namespace DLSSUpdater.ViewModels;
 
 /// <summary>
-/// The Settings row of one import-only add-on (ShortFuse's, Lecram's or Deep Fried Chicken): the library of imported builds,
+/// The Settings row of one add-on library (ShortFuse's or Lecram's): the library of imported and downloaded builds,
 /// the default build, a name the user gives the selected build, and import / remove.
 /// </summary>
 public sealed partial class AddonLibraryViewModel : ObservableObject
@@ -33,7 +33,6 @@ public sealed partial class AddonLibraryViewModel : ObservableObject
 
     private AppSettings Settings => _main.S.Settings;
     private ComponentStore Store => _main.S.Store;
-    private bool IsDfc => _kind == AddonKind.Dfc;
     public bool CanCheckUpdates => CanCheck(_kind, BuildFlags.LecramChannel);
 
     /// <summary>Only Lecram has a channel, and only the private build is allowed to use it.</summary>
@@ -42,9 +41,6 @@ public sealed partial class AddonLibraryViewModel : ObservableObject
     /// <summary>Lecram's row has the automatic check switch in the private build (MediaFire); public builds import it, so there is nothing to switch.</summary>
     public bool HasAutoDownload => CanCheckUpdates;
     public string AutoDownloadLabel => "Check for new builds automatically";
-
-    /// <summary>Deep Fried Chicken ships as a folder: its row also imports the extracted release folder.</summary>
-    public bool CanImportFolder => IsDfc;
 
     public bool AutoDownload
     {
@@ -73,8 +69,7 @@ public sealed partial class AddonLibraryViewModel : ObservableObject
     public string FileNames => _kind switch
     {
         AddonKind.RenoDx => ComponentStore.RenoDxFile,
-        AddonKind.Lecram => $"{ComponentStore.Lecram10File} (v10 and older) · {ComponentStore.Lecram11File} (v11 and newer)",
-        _ => $"{ComponentStore.DfcFile} with its 64-bit folder",
+        _ => $"{ComponentStore.Lecram10File} (v10 and older) · {ComponentStore.Lecram11File} (v11 and newer)",
     };
     public string AutomationName => $"Default {Title} version";
 
@@ -83,7 +78,7 @@ public sealed partial class AddonLibraryViewModel : ObservableObject
     private int _buildCount;
     public bool HasBuilds => _buildCount > 0;
 
-    /// <summary>Lecram's and Deep Fried Chicken's first choice: no pinned build, the default follows the newest one in the library.</summary>
+    /// <summary>Lecram's first choice: no pinned build, the default follows the newest one in the library.</summary>
     private bool HasNewestChoice => ComponentStore.FollowsNewest(_kind);
 
     /// <summary>The default build; games without their own pick install it.</summary>
@@ -107,8 +102,8 @@ public sealed partial class AddonLibraryViewModel : ObservableObject
         ? "Default build: games without their own pick install it"
         : "Default build: games without their own pick install it. Builds marked download are fetched when picked.";
 
-    /// <summary>The older catalog builds of this add-on; Deep Fried Chicken has none, and Lecram none while its catalog downloads are off (BuildFlags.LecramCatalogOff).</summary>
-    private CatalogBuildKind? CatalogKind => _kind switch { AddonKind.RenoDx => CatalogBuildKind.RenoDx, AddonKind.Lecram => CatalogBuildKind.Lecram, _ => null };
+    /// <summary>The older catalog builds of this add-on; Lecram has none while its catalog downloads are off (BuildFlags.LecramCatalogOff).</summary>
+    private CatalogBuildKind? CatalogKind => _kind == AddonKind.RenoDx ? CatalogBuildKind.RenoDx : CatalogBuildKind.Lecram;
 
     /// <summary>A "· download" entry picked as the default: the build comes first, then it becomes the default. If it doesn't come the list goes back to the current default.</summary>
     private async Task DownloadAsync(string offerTag)
@@ -121,34 +116,13 @@ public sealed partial class AddonLibraryViewModel : ObservableObject
     /// <summary>"Newest · 5.0.0 (2026-10-20)"; the build's own label may already end in a parenthesis, so no second pair.</summary>
     internal static string NewestLabel(string newestBuild) => $"Newest · {newestBuild}";
 
-    /// <summary>
-    /// Deep Fried Chicken's licence forbids downloads, and the public build imports Lecram's add-on, so new builds only come in by import.
-    /// No author URL is known to the app, so there is no link.
-    /// </summary>
-    public bool IsImportOnly => IsDfc || (_kind == AddonKind.Lecram && !CanCheckUpdates);
-    public string ImportOnlyNote => IsDfc
-        ? "Import only: its licence doesn't allow downloads. Get new builds from the author's page."
-        : "Import only: get new builds from the author's page.";
+    /// <summary>The public build imports Lecram's add-on, so new builds only come in by import. No author URL is known to the app, so there is no link.</summary>
+    public bool IsImportOnly => _kind == AddonKind.Lecram && !CanCheckUpdates;
+    public string ImportOnlyNote => "Import only: get new builds from the author's page.";
 
     internal static string NoLecramBuilds(bool channelEnabled) => channelEnabled
         ? $"No builds yet. Use Check now to fetch the latest v11 build, or import your own copy ({ComponentStore.Lecram10File} for v10 and older, {ComponentStore.Lecram11File} for v11 and newer)."
         : $"No builds yet. Import the add-on ({ComponentStore.Lecram10File} for v10 and older, {ComponentStore.Lecram11File} for v11 and newer).";
-
-    private const string NoDfcBuilds =
-        "Not imported. Its licence is personal use only, so import your own copy: extract the release and choose its folder (Folder…), " +
-        "or choose deep-fried-chicken.addon64 or a .zip of the release (Import…). The whole 64-bit folder is imported. 32-bit games are not supported.";
-
-    /// <summary>The keys the app writes into deep-fried-chicken.cfg, which a build's default cfg is checked against.</summary>
-    private static IEnumerable<string> DfcKeys => GameOptionViewModel.Definitions.Dfc.Select(o => o.Key);
-
-    /// <summary>The default Deep Fried Chicken build, and whether it differs from the tested release (details in the log).</summary>
-    private static string DfcInfo(AddonBuild build, DfcCompatReport? compat, int buildCount)
-    {
-        var warning = compat is { HasIssues: true }
-            ? $"  ·  not the tested version ({DfcConfig.TestedVersion}, config schema {DfcConfig.TestedSchema}); see the log" : "";
-        var count = buildCount > 1 ? $"  ·  {buildCount} builds in the library" : "";
-        return $"Default {build.Name}  ·  SHA-256 {build.Id[..12]}…{warning}{count}";
-    }
 
     private AddonBuild? SelectedBuild => Store.AddonBuildFor(_kind, null);
 
@@ -166,13 +140,9 @@ public sealed partial class AddonLibraryViewModel : ObservableObject
         get
         {
             if (SelectedBuild is not { } build)
-                return _kind switch
-                {
-                    AddonKind.RenoDx => $"Not in the library yet. ShortFuse's {ComponentStore.RenoDxFile} is downloaded and installed automatically at the next update check, or import it here.",
-                    AddonKind.Lecram => NoLecramBuilds(BuildFlags.LecramChannel),
-                    _ => NoDfcBuilds,
-                };
-            if (IsDfc) return DfcInfo(build, Store.DfcCompat(DfcKeys, build.Id), _buildCount);
+                return _kind == AddonKind.RenoDx
+                    ? $"Not in the library yet. ShortFuse's {ComponentStore.RenoDxFile} is downloaded and installed automatically at the next update check, or import it here."
+                    : NoLecramBuilds(BuildFlags.LecramChannel);
             var path = ComponentStore.AddonPathOf(_kind, build);
             var generation = build.Generation switch
             {
@@ -210,38 +180,21 @@ public sealed partial class AddonLibraryViewModel : ObservableObject
     [RelayCommand]
     private async Task Import()
     {
-        var filter = _kind switch
-        {
-            AddonKind.RenoDx => "RenoDX DLSS add-on|renodx-dlss.addon64;*.addon64",
-            AddonKind.Lecram => "Lecram DLSS5 add-on|renodx-dlss5.addon64;dlss5-nr.addon64;*.addon64",
-            _ => "Deep Fried Chicken|deep-fried-chicken.addon64;*.addon64;*.zip",
-        };
-        var dlg = new OpenFileDialog { Filter = filter, Title = IsDfc ? "Select deep-fried-chicken.addon64 or a .zip of the release" : $"Select {Title}" };
+        var filter = _kind == AddonKind.RenoDx
+            ? "RenoDX DLSS add-on|renodx-dlss.addon64;*.addon64"
+            : "Lecram DLSS5 add-on|renodx-dlss5.addon64;dlss5-nr.addon64;*.addon64";
+        var dlg = new OpenFileDialog { Filter = filter, Title = $"Select {Title}" };
         if (dlg.ShowDialog() == true) await ImportFrom(dlg.FileName);
-    }
-
-    [RelayCommand]
-    private async Task ImportFolder()
-    {
-        var dlg = new OpenFolderDialog { Title = "Select the extracted Deep Fried Chicken folder (or its 64-bit folder)" };
-        if (dlg.ShowDialog() == true) await ImportFrom(dlg.FolderName);
     }
 
     private async Task ImportFrom(string source)
     {
         try
         {
-            var build = await Task.Run(() => _kind switch
-            {
-                AddonKind.RenoDx => Store.ImportRenoDx(source),
-                AddonKind.Lecram => Store.ImportLecram(source),
-                _ => Store.ImportDfc(source),
-            });
+            var build = await Task.Run(() => _kind == AddonKind.RenoDx ? Store.ImportRenoDx(source) : Store.ImportLecram(source));
             if (Store.AdoptImportedAddon(Settings, _kind, build)) Settings.Save();
             else if (SelectedBuild is { } current && current.Id != build.Id) Log.Info($"Imported {Title} {build.Name}; the default stays on the newer {current.Name}");
             await _changed();
-            if (IsDfc && Store.DfcCompat(DfcKeys, build.Id) is { HasIssues: true } compat)
-                Views.Dialog.Show("Deep Fried Chicken config check", compat.Summary + Environment.NewLine + Environment.NewLine + "Settings that still exist are applied normally.");
             await _main.AutoCleanUpAfterImportAsync();
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or InvalidDataException)

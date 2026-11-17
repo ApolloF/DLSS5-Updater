@@ -47,17 +47,16 @@ public sealed class MethodAdvisorTests
     }
 
     [Fact]
-    public void Row2_DlssOnDx11_ListsTheBridgeAsComing_AndFlagsTheBridgeRequirementUnverified()
+    public void Row2_DlssOnDx11_FlagsTheAddonBuildRequirementUnverified_AndOffersNoBridgeCard()
     {
         var a = Advise(Game(GraphicsApis.Dx11, dlss: true));
 
         Assert.Equal([2], a.Rows);
         Assert.Equal(Method.DlssUpdate, a.Top!.Method);
-        Assert.Equal(Availability.Coming, Option(a, Method.Dx11Bridge).Availability);
+        Assert.DoesNotContain(a.Methods, m => m.Availability == Availability.Coming);
         var nr = Option(a, Method.NeuralAddon);
         Assert.True(nr.Unverified);
         Assert.Contains("Unverified", nr.Reason);
-        Assert.Contains("never combine it with Feeder", Option(a, Method.Dx11Bridge).Reason);
     }
 
     [Fact]
@@ -70,7 +69,6 @@ public sealed class MethodAdvisorTests
         Assert.Equal(Availability.NotPossible, addon.Availability);
         Assert.Contains("registered layer", addon.Reason);
         Assert.Equal([Method.DlssUpdate, Method.OptiScalerNr], Order(a).Take(2));
-        Assert.DoesNotContain(a.Methods, m => m.Method == Method.Feeder);
     }
 
     [Fact]
@@ -154,52 +152,35 @@ public sealed class MethodAdvisorTests
     // ---------- row 5-6: no DLSS on DX11/12 ----------
 
     [Fact]
-    public void Row5_NoUpscaler64BitDx12_FeederWithDfc_AioComing_SmoothMotion()
+    public void Row5_NoUpscaler64BitDx12_UpliftNeuralCard_AioComing_SmoothMotion()
     {
         var a = Advise(Game());
 
         Assert.Equal([5], a.Rows);
-        Assert.Equal(Method.Feeder, a.Top!.Method);
-        Assert.Equal([Method.SmoothMotion, Method.Feeder, Method.AioAddon], Order(a));
-        var feeder = Option(a, Method.Feeder);
-        Assert.Equal(Availability.NeedsSetup, feeder.Availability);
-        Assert.Equal([ComponentRegistry.ReShade, ComponentRegistry.DlssNr, ComponentRegistry.Dfc, ComponentRegistry.Feeder], feeder.Components);
-        Assert.Equal(InstallMode.ReShadeOnly, feeder.Mode);
-        Assert.Contains("DLAA only", feeder.Reason);
-        Assert.Contains(feeder.Needs, n => n.Contains("nvngx_dlssnr.dll"));
-        Assert.Contains(feeder.Needs, n => n.Contains("Deep Fried Chicken"));
-        Assert.Contains(feeder.Needs, n => n.Contains("motion-vector"));
+        Assert.Equal(Method.NeuralAddon, a.Top!.Method);
+        Assert.Equal([Method.SmoothMotion, Method.NeuralAddon, Method.AioAddon], Order(a));
+        var neural = Option(a, Method.NeuralAddon);
+        Assert.Equal(Availability.NeedsSetup, neural.Availability);
+        Assert.Equal([ComponentRegistry.ReShade, ComponentRegistry.DlssNr, ComponentRegistry.Uplift], neural.Components);
+        Assert.Equal(InstallMode.ReShadeOnly, neural.Mode);
+        Assert.Equal(NrAddon.Uplift, neural.Route);
+        Assert.Equal("Neural rendering with GITC Uplift", neural.Title);
+        Assert.False(neural.Unverified);
+        Assert.Contains(MethodAdvisor.NoDlssCaveat, neural.Reason);
+        Assert.Contains(neural.Needs, n => n.Contains("nvngx_dlssnr.dll"));
+        Assert.Single(neural.Needs);
     }
 
     [Fact]
-    public void Row5_WithEverythingImported_FeederIsAvailable()
+    public void Row5_WithTheNrRuntimeImported_TheUpliftCardIsAvailable()
     {
-        var input = Input(Game()) with
-        {
-            Imported = new HashSet<string> { ComponentRegistry.DlssNr, ComponentRegistry.Dfc },
-            MotionProviderPresent = true,
-        };
+        var input = Input(Game()) with { Imported = new HashSet<string> { ComponentRegistry.DlssNr } };
 
-        var feeder = Option(MethodAdvisor.Advise(input), Method.Feeder);
+        var neural = Option(MethodAdvisor.Advise(input), Method.NeuralAddon);
 
-        Assert.Equal(Availability.Available, feeder.Availability);
-        Assert.Empty(feeder.Needs);
-    }
-
-    [Fact]
-    public void Row5_DfcTwoPointX_StillNeedsAnImport()
-    {
-        var input = Input(Game()) with
-        {
-            Imported = new HashSet<string> { ComponentRegistry.DlssNr, ComponentRegistry.Dfc },
-            MotionProviderPresent = true,
-            DfcRunsWithoutDlss = false,
-        };
-
-        var feeder = Option(MethodAdvisor.Advise(input), Method.Feeder);
-
-        Assert.Equal(Availability.NeedsSetup, feeder.Availability);
-        Assert.Contains(feeder.Needs, n => n.Contains("2.x needs the game's own DLSS"));
+        Assert.Equal(Availability.Available, neural.Availability);
+        Assert.Empty(neural.Needs);
+        Assert.Equal(NrAddon.Uplift, neural.Route);
     }
 
     [Fact]
@@ -208,19 +189,19 @@ public sealed class MethodAdvisorTests
         var a = Advise(Game(GraphicsApis.None));
 
         Assert.Equal([5], a.Rows);
-        Assert.True(Option(a, Method.Feeder).Unverified);
-        Assert.Contains("wasn't detected", Option(a, Method.Feeder).Reason);
+        Assert.True(Option(a, Method.NeuralAddon).Unverified);
+        Assert.Contains("wasn't detected", Option(a, Method.NeuralAddon).Reason);
     }
 
     [Fact]
-    public void Row6_OptiScalerListShowsInputs_OptiScalerFirst_FeederOnlyAsAnExtra()
+    public void Row6_OptiScalerListShowsInputs_OptiScalerFirst_NeuralOnlyAsAnExtra()
     {
         var input = Input(Game()) with { OptiCompat = new CatalogOptiGame { Name = "Test Game", Inputs = ["FSR3", "XeSS"], Notes = "Use -dx12" } };
 
         var a = MethodAdvisor.Advise(input);
 
         Assert.Equal([6], a.Rows);
-        Assert.Equal([Method.OptiScaler, Method.Feeder], Order(a));
+        Assert.Equal([Method.OptiScaler, Method.NeuralAddon], Order(a));
         Assert.Equal(Method.OptiScaler, a.Top!.Method);
         Assert.Contains("FSR3, XeSS", Option(a, Method.OptiScaler).Reason);
         Assert.Contains("Wiki note: Use -dx12", Option(a, Method.OptiScaler).Reason);
@@ -244,7 +225,7 @@ public sealed class MethodAdvisorTests
         var a = MethodAdvisor.Advise(input);
 
         Assert.DoesNotContain(a.Rows, r => r == 6);
-        Assert.Equal(Method.Feeder, a.Top!.Method);
+        Assert.Equal(Method.NeuralAddon, a.Top!.Method);
     }
 
     // ---------- row 7: Unreal ----------
@@ -271,7 +252,7 @@ public sealed class MethodAdvisorTests
     }
 
     [Fact]
-    public void Row7_UnrealDx11OnTheLumaList_LumaFirst_ThenOptiScaler_ThenFeeder()
+    public void Row7_UnrealDx11OnTheLumaList_LumaNotPossible_OptiScalerFirst_ThenNeural()
     {
         var input = Input(Game(GraphicsApis.Dx11, engine: GameEngine.Unreal)) with { OptiCompat = new CatalogOptiGame { Name = "Test Game", List = "lumaUe", Inputs = ["DLSS"] } };
 
@@ -281,7 +262,7 @@ public sealed class MethodAdvisorTests
         Assert.Equal(Availability.NotPossible, Option(a, Method.Luma).Availability);
         Assert.Contains("no download", Option(a, Method.Luma).Reason);
         Assert.Equal(Method.OptiScaler, Order(a)[0]);
-        Assert.Contains(Method.Feeder, Order(a));
+        Assert.Contains(Method.NeuralAddon, Order(a));
     }
 
     [Fact]
@@ -303,12 +284,13 @@ public sealed class MethodAdvisorTests
     }
 
     [Fact]
-    public void Row7_UnrealWithoutAnyUpscaler_Feeder()
+    public void Row7_UnrealWithoutAnyUpscaler_UpliftNeural()
     {
         var a = Advise(Game(engine: GameEngine.Unreal));
 
         Assert.Equal([7], a.Rows);
-        Assert.Equal(Method.Feeder, a.Top!.Method);
+        Assert.Equal(Method.NeuralAddon, a.Top!.Method);
+        Assert.Equal(NrAddon.Uplift, a.Top.Route);
     }
 
     // ---------- row 8: RE Engine ----------
@@ -337,27 +319,38 @@ public sealed class MethodAdvisorTests
     // ---------- row 9-14: no DLSS, other shapes ----------
 
     [Fact]
-    public void Row9_UnityDx11_FeederAndSmoothMotion()
+    public void Row9_UnityDx11_UpliftNeuralAndSmoothMotion()
     {
         var a = Advise(Game(GraphicsApis.Dx11, engine: GameEngine.Unity));
 
         Assert.Equal([9], a.Rows);
-        Assert.Equal([Method.SmoothMotion, Method.Feeder, Method.Dxvk], Order(a));
-        Assert.Contains("Fell & Sell", Option(a, Method.Feeder).Reason);
+        Assert.Equal([Method.SmoothMotion, Method.NeuralAddon, Method.Dxvk], Order(a));
+        Assert.Contains("Unity game without DLSS", Option(a, Method.NeuralAddon).Reason);
     }
 
     [Theory]
-    [InlineData(32, true)]
-    [InlineData(64, false)]
-    public void Row10_Dx9_FeederThroughDgVoodoo_NoLumaOptionWithoutAMod(int bits, bool beta)
+    [InlineData(32, Availability.NotPossible)]
+    [InlineData(64, Availability.NeedsSetup)]
+    public void Row10_Dx9_UpliftNeuralOnlyIn64BitGames_NoLumaOptionWithoutAMod(int bits, Availability expected)
     {
         var a = Advise(Game(GraphicsApis.Dx9, bits));
 
         Assert.Equal([10], a.Rows);
-        var feeder = Option(a, Method.Feeder);
-        Assert.Contains(feeder.Needs, n => n.Contains("dgVoodoo2"));
-        Assert.Equal(beta, feeder.Reason.Contains("beta"));
+        var neural = Option(a, Method.NeuralAddon);
+        Assert.Equal(expected, neural.Availability);
+        Assert.Equal(bits == 64, neural.Selectable);
         Assert.DoesNotContain(Method.Luma, Order(a));
+    }
+
+    [Fact]
+    public void Row10_Dx8_IsUnverified()
+    {
+        var neural = Option(Advise(Game(GraphicsApis.Dx8)), Method.NeuralAddon);
+
+        Assert.True(neural.Unverified);
+        Assert.Contains("Direct3D 8", neural.Reason);
+        Assert.Contains("Unverified", neural.Reason);
+        Assert.False(Option(Advise(Game(GraphicsApis.Dx9)), Method.NeuralAddon).Unverified);
     }
 
     [Fact]
@@ -373,46 +366,49 @@ public sealed class MethodAdvisorTests
     }
 
     [Fact]
-    public void Row11_32BitDx11_FeederWithHost64()
+    public void Row11_32BitDx11_UpliftIsNotPossible()
     {
         var a = Advise(Game(GraphicsApis.Dx11, bits: 32));
 
         Assert.Equal([11], a.Rows);
-        var feeder = Option(a, Method.Feeder);
-        Assert.Contains("host64", feeder.Reason);
-        Assert.Contains(feeder.Needs, n => n.Contains("host64") && n.Contains("64-bit ReShade"));
+        var neural = Option(a, Method.NeuralAddon);
+        Assert.Equal(Availability.NotPossible, neural.Availability);
+        Assert.Contains("64-bit games only", neural.Reason);
+        Assert.False(neural.Selectable);
+        Assert.Null(a.Top);
     }
 
     [Fact]
-    public void Row12_OpenGl_Feeder()
+    public void Row12_OpenGl_UpliftNeedsTheNvidiaGpu()
     {
         var a = Advise(Game(GraphicsApis.OpenGL));
 
         Assert.Equal([12], a.Rows);
-        Assert.Contains("NVIDIA GPU", Option(a, Method.Feeder).Reason);
+        Assert.Contains("NVIDIA GPU", Option(a, Method.NeuralAddon).Reason);
     }
 
     [Fact]
-    public void Row13_VulkanWithoutDlss_FeederNeedsTheLayer_SmoothMotionOffAdvice()
+    public void Row13_VulkanWithoutDlss_UpliftNeedsTheLayer()
     {
         var a = Advise(Game(GraphicsApis.Vulkan));
 
         Assert.Equal([13], a.Rows);
-        var feeder = Option(a, Method.Feeder);
-        Assert.Contains(feeder.Needs, n => n.Contains("Vulkan layer"));
-        Assert.Contains("Smooth Motion off", feeder.Reason);
+        var neural = Option(a, Method.NeuralAddon);
+        Assert.Equal(Availability.NeedsSetup, neural.Availability);
+        Assert.Contains("ReShade's Vulkan layer installed (Settings → ReShade → Vulkan layer; one administrator prompt)", neural.Needs);
+        Assert.Contains("nvngx_dlssnr.dll", string.Join(" ", neural.Needs));
     }
 
     [Fact]
-    public void Row14_Dx10_FeederIsLowConfidenceAndUnverified()
+    public void Row14_Dx10_UpliftIsUnverified()
     {
         var a = Advise(Game(GraphicsApis.Dx10));
 
         Assert.Equal([14], a.Rows);
-        var feeder = Option(a, Method.Feeder);
-        Assert.True(feeder.Unverified);
-        Assert.Contains("Unverified", feeder.Reason);
-        Assert.Contains("low confidence", feeder.Reason);
+        var neural = Option(a, Method.NeuralAddon);
+        Assert.True(neural.Unverified);
+        Assert.Contains("Unverified", neural.Reason);
+        Assert.Contains("Direct3D 10", neural.Reason);
     }
 
     // ---------- row 15-18: additive rules ----------
@@ -506,14 +502,14 @@ public sealed class MethodAdvisorTests
     }
 
     [Fact]
-    public void Row18_FeederNextToABridge_IsWarned()
+    public void Row18_UpliftNeuralCardNextToABridge_IsWarned()
     {
         var input = Input(Game()) with { InstalledRoutes = [NrAddon.Bridge] };
 
-        var feeder = Option(MethodAdvisor.Advise(input), Method.Feeder);
+        var neural = Option(MethodAdvisor.Advise(input), Method.NeuralAddon);
 
-        Assert.NotNull(feeder.Warning);
-        Assert.DoesNotContain("remove the bridge files first", feeder.Reason);
+        Assert.NotNull(neural.Warning);
+        Assert.DoesNotContain("remove the bridge files first", neural.Reason);
     }
 
     [Fact]
@@ -547,7 +543,7 @@ public sealed class MethodAdvisorTests
     }
 
     [Fact]
-    public void Row18_OuterWilds_UpliftInstalled_FeederNeedsSetup_ButTheInstallReplacesUplift_SoNoWarning()
+    public void Row18_OuterWilds_UpliftInstalled_NeuralNeedsSetup_ButTheInstallReplacesUplift_SoNoWarning()
     {
         var game = Game(GraphicsApis.Dx11, engine: GameEngine.Unity, name: "Outer Wilds");
         var input = Input(game) with { InstalledRoutes = [NrAddon.Uplift] };
@@ -556,10 +552,10 @@ public sealed class MethodAdvisorTests
 
         Assert.Contains(9, a.Rows);
         Assert.Contains(18, a.Rows);
-        var feeder = Option(a, Method.Feeder);
-        Assert.Equal(Availability.NeedsSetup, feeder.Availability);
-        Assert.Contains(feeder.Needs, n => n.Contains("motion-vector"));
-        Assert.Null(feeder.Warning);
+        var neural = Option(a, Method.NeuralAddon);
+        Assert.Equal(Availability.NeedsSetup, neural.Availability);
+        Assert.Contains(neural.Needs, n => n.Contains("nvngx_dlssnr.dll"));
+        Assert.Null(neural.Warning);
     }
 
     [Fact]
@@ -621,7 +617,7 @@ public sealed class MethodAdvisorTests
         Assert.Equal(Method.OptiScaler, a.Top!.Method);
         Assert.Equal([Method.OptiScaler], a.Possible.Select(m => m.Method));
         Assert.Contains("spoofing", Option(a, Method.OptiScaler).Reason);
-        foreach (var m in new[] { Method.DlssUpdate, Method.NeuralAddon, Method.OptiScalerNr, Method.Feeder, Method.MfgUnlock, Method.SmoothMotion })
+        foreach (var m in new[] { Method.DlssUpdate, Method.NeuralAddon, Method.OptiScalerNr, Method.MfgUnlock, Method.SmoothMotion })
         {
             Assert.Equal(Availability.NotPossible, Option(a, m).Availability);
             Assert.Contains("NVIDIA RTX", Option(a, m).Reason);
@@ -634,7 +630,8 @@ public sealed class MethodAdvisorTests
         var a = Advise(Game(), new GpuInfo(GpuVendor.Nvidia, RtxTier.None, "GeForce GTX 1660"));
 
         Assert.Equal([19], a.Rows);
-        Assert.Contains("no RTX tensor cores", Option(a, Method.Feeder).Reason);
+        Assert.Contains("no RTX tensor cores", Option(a, Method.NeuralAddon).Reason);
+        Assert.DoesNotContain(a.Methods, m => m.Method == Method.NeuralAddon && m.Availability != Availability.NotPossible);
     }
 
     [Fact]
@@ -643,7 +640,7 @@ public sealed class MethodAdvisorTests
         var a = Advise(Game(), GpuInfo.Unknown);
 
         Assert.Equal([5], a.Rows);
-        Assert.Equal(Method.Feeder, a.Top!.Method);
+        Assert.Equal(Method.NeuralAddon, a.Top!.Method);
         Assert.Equal(Availability.Available, Option(a, Method.SmoothMotion).Availability);
     }
 
@@ -839,7 +836,7 @@ public sealed class MethodAdvisorTests
     {
         var a = Advise(Game());
 
-        Assert.True(Option(a, Method.Feeder).Selectable);
+        Assert.True(Option(a, Method.NeuralAddon).Selectable);
         Assert.False(Option(a, Method.AioAddon).Selectable);
     }
 

@@ -6,7 +6,7 @@ using DLSSUpdater.Scan;
 
 namespace DLSSUpdater.Core;
 
-/// <summary>OptiScaler-NR loads ReShade (default), or ReShade alone is the proxy and loads the add-ons.</summary>
+/// <summary>OptiScaler loads ReShade (default), or ReShade alone is the proxy and loads the add-ons.</summary>
 [JsonConverter(typeof(JsonStringEnumConverter<InstallMode>))]
 public enum InstallMode { OptiScaler, ReShadeOnly }
 
@@ -22,29 +22,16 @@ public sealed record InstallOptions
     public bool RenoDx { get; init; }
     /// <summary>ShortFuse add-on build from the library; null = the default build.</summary>
     public string? RenoDxId { get; init; }
-    /// <summary>Lecram's DLSS5 add-on (imported); excludes <see cref="Dfc"/> and OptiScaler-NR, but may run next to <see cref="RenoDx"/>.</summary>
+    /// <summary>Lecram's DLSS5 add-on (imported); may run next to <see cref="RenoDx"/>.</summary>
     public bool Lecram { get; init; }
     /// <summary>Lecram add-on build from the library (it decides v10 or v11 placement); null = the default build.</summary>
     public string? LecramId { get; init; }
     /// <summary>GITC Uplift, a downloaded ReShade add-on; excludes every other NR route.</summary>
     public bool Uplift { get; init; }
     public string? UpliftTag { get; init; }
-    /// <summary>Deep Fried Chicken, an imported ReShade add-on; excludes <see cref="RenoDx"/> (two NR injectors).</summary>
-    public bool Dfc { get; init; }
-    /// <summary>Deep Fried Chicken build from the library (it decides the set, the default cfg and non-DLSS support); null = the default build.</summary>
-    public string? DfcId { get; init; }
-    /// <summary>DLSS5-Feeder for a game without DLSS (needs <see cref="Dfc"/>, see <see cref="NrAddons.FeederRefusal"/>); recorded as a generic component.</summary>
-    public bool Feeder { get; init; }
-    /// <summary>Feeder build from the library; null = the newest.</summary>
-    public string? FeederId { get; init; }
     public bool Dlss { get; init; }
     /// <summary>Put nvngx_dlss.dll next to OptiScaler when the game has none (independent of <see cref="Dlss"/>).</summary>
     public bool AddMissingDlss { get; init; }
-    /// <summary>
-    /// With <see cref="Dfc"/> in a game without its own DLSS: also put NVIDIA's nvngx_dlssg.dll beside the exe for DFC's
-    /// DLSS-G frame generation (INSTALL.txt 4.0.6). Ignored in games with native DLSS.
-    /// </summary>
-    public bool DfcFrameGen { get; init; }
     /// <summary>DLSS release to install; null = latest (never downgrades a newer game DLL).</summary>
     public string? DlssTag { get; init; }
     public bool Streamline { get; init; }
@@ -64,7 +51,7 @@ public sealed record InstallOptions
     public bool AntiCheatConfirmed { get; init; }
     /// <summary>The clashes the user accepted for this selection (<see cref="Installer.ConflictKey"/>); an install with other clashes needs a new confirmation.</summary>
     public string? ConfirmedConflict { get; init; }
-    /// <summary>OptiScaler-NR release to install from the cache; null = the newest.</summary>
+    /// <summary>OptiScaler F5 release to install from the cache; null = the newest.</summary>
     public string? OptiTag { get; init; }
     /// <summary>MFG Unlock release to install from the cache ("local" = the imported file); null = the newest.</summary>
     public string? MfgTag { get; init; }
@@ -72,14 +59,14 @@ public sealed record InstallOptions
     public bool KeepMfg { get; init; }
 
     /// <summary>
-    /// The same install with OptiScaler-NR and MFG Unlock held at the versions the game already has, for automatic
+    /// The same install with OptiScaler and MFG Unlock held at the versions the game already has, for automatic
     /// reinstalls that must not pull in a release nobody chose. A component whose installed
-    /// version is no longer cached is left as it is.
+    /// version is no longer cached is left as it is. OptiScaler-NR is never put back: it moves to the newest F5.
     /// </summary>
     public InstallOptions KeepingInstalledVersions(InstallManifest m) => this with
     {
-        Opti = Opti && m.OptiTag is { } ot && ComponentStore.IsCached(Component.OptiScaler, ot),
-        OptiTag = m.OptiTag,
+        Opti = Opti && m.OptiTag is { } ot && (!OptiSources.IsF5Tag(ot) || ComponentStore.IsCached(Component.OptiScaler, ot)),
+        OptiTag = OptiSources.IsF5Tag(m.OptiTag) ? m.OptiTag : null,
         Mfg = Mfg && m.MfgTag is { } mt && ComponentStore.HasMfg(mt),
         KeepMfg = Mfg && !(m.MfgTag is { } kt && ComponentStore.HasMfg(kt)),
         MfgTag = m.MfgTag,
@@ -87,8 +74,6 @@ public sealed record InstallOptions
         DlssNrId = m.DlssNrId,
         RenoDxId = m.RenoDxId ?? RenoDxId,
         LecramId = m.LecramId ?? LecramId,
-        DfcId = m.DfcId ?? DfcId,
-        FeederId = m.Component(ComponentRegistry.Feeder)?.BuildId ?? FeederId,
     };
 }
 
@@ -177,28 +162,19 @@ public sealed partial class Installer(ComponentStore store)
         if (o.RenoDx && (!o.ReShade || !dlssNr))
             throw new InvalidOperationException("RenoDX needs ReShade with add-on support and the NR runtime (downloaded automatically, or import it in Settings).");
         // DLSS files an earlier install of ours added (for DFC or OptiScaler) don't make the game a DLSS game.
-        var nativeDlss = (o.RenoDx || o.Lecram || o.Dfc) && HasNativeDlss(game, InstallManifest.Read(targetDir), targetDir);
+        var nativeDlss = (o.RenoDx || o.Lecram) && HasNativeDlss(game, InstallManifest.Read(targetDir), targetDir);
         if (o.RenoDx && !nativeDlss)
             throw new InvalidOperationException("RenoDX needs a game with native DLSS.");
         if (o.Lecram && (!o.ReShade || !dlssNr))
             throw new InvalidOperationException("Lecram's DLSS5 add-on needs ReShade with add-on support and the NR runtime (downloaded automatically, or import it in Settings).");
         if (o.Lecram && !nativeDlss)
             throw new InvalidOperationException("Lecram's DLSS5 add-on needs a game with native DLSS.");
-        if (o.Dfc && (!o.ReShade || !dlssNr))
-            throw new InvalidOperationException("Deep Fried Chicken needs ReShade with add-on support and the NR runtime (downloaded automatically, or import it in Settings).");
         var renoDx = o.RenoDx ? store.RequireAddon(AddonKind.RenoDx, o.RenoDxId) : null;
         var lecram = o.Lecram ? store.RequireAddon(AddonKind.Lecram, o.LecramId) : null;
-        var dfc = o.Dfc ? store.RequireAddon(AddonKind.Dfc, o.DfcId).Build : null;
-        if (dfc is not null && !nativeDlss && !ComponentStore.DfcSupportsNonDlssGames(dfc))
-            throw new InvalidOperationException(DfcNeedsNativeDlss(dfc.FileVersion));
-        // INSTALL.txt: add your own nvngx_dlss.dll beside the game exe; DFC does not ship it. The game has none of its own here.
-        var dfcRuntimes = dfc is not null && !nativeDlss;
-        var feeder = o.Feeder ? await store.EnsureFeederAsync(o.FeederId, progress, ct) : null;
-        if (feeder is not null && nativeDlss) Log.Warn($"{game.Name}: the game has its own DLSS, so Deep Fried Chicken works on it directly and DLSS5-Feeder isn't needed");
         var uplift = o.Uplift ? await store.EnsureUpliftAsync(o.UpliftTag, progress, ct) : null;
         if (o.Uplift && UpliftConfig.Warning(o.UpliftTag ?? store.Uplift?.Tag) is { } upliftWarning) Log.Warn($"{game.Name}: {upliftWarning}");
         var addMissing = o.AddMissingDlss && o.Opti;
-        var dlss = o.Dlss || addMissing || dfcRuntimes ? await store.EnsureDlssAsync(o.DlssTag, progress, ct) : null;
+        var dlss = o.Dlss || addMissing ? await store.EnsureDlssAsync(o.DlssTag, progress, ct) : null;
         var mfgPlan = o.Mfg ? PlanMfg(game, o, dlss, FileUtil.ParseTag(store.Streamline?.Tag)) : null;
         if (mfgPlan?.Skip is { } skip) Log.Info($"{game.Name}: MFG Unlock skipped. {skip}");
         foreach (var w in mfgPlan?.Warnings ?? []) Log.Warn($"{game.Name}: {w}");
@@ -220,8 +196,6 @@ public sealed partial class Installer(ComponentStore store)
             throw new InvalidOperationException("RenoDX needs ReShade 6 or newer with full add-on support.");
         if (o.Lecram && (reshade is null || FileUtil.ReadVersion(reshade) is not { Major: >= 6 }))
             throw new InvalidOperationException("Lecram's DLSS5 add-on needs ReShade 6 or newer with full add-on support.");
-        if (o.Dfc && (reshade is null || FileUtil.ReadVersion(reshade) is not { Major: >= 6 }))
-            throw new InvalidOperationException("Deep Fried Chicken needs ReShade 6 or newer with full add-on support.");
         if (o.Uplift && (reshade is null || FileUtil.ReadVersion(reshade) is not { Major: >= 6 }))
             throw new InvalidOperationException("GITC Uplift needs ReShade 6 or newer with full add-on support (6.8+ for Vulkan/OpenGL).");
         if (o.Uplift && o.Proxy is "opengl32.dll" && FileUtil.ReadVersion(reshade!) < new Version(6, 8))
@@ -267,9 +241,10 @@ public sealed partial class Installer(ComponentStore store)
                 // Only a run that sets up the injectors drops the add-on; a DLSS-only update keeps it.
                 if (!o.RenoDx && m.RenoDx && (o.ReShade || pkg is not null)) RemoveRenoDx(ctx);
                 if (!o.Lecram && m.Lecram && (o.ReShade || pkg is not null)) RemoveLecram(ctx);
-                // Feeder goes before the consumer it feeds; a run that doesn't ask for it takes it out.
-                if (!o.Feeder && m.Component(ComponentRegistry.Feeder) is { } oldFeeder && (o.ReShade || pkg is not null)) UndoComponent(ctx, oldFeeder);
-                if (!o.Dfc && m.Dfc && (o.ReShade || pkg is not null)) RemoveDfc(ctx);
+                // DLSS5-Feeder and Deep Fried Chicken left the app: a run that sets up the injectors takes out what an older version
+                // installed, Feeder before the consumer it fed.
+                if (m.Component(ComponentRegistry.Feeder) is { } oldFeeder && (o.ReShade || pkg is not null)) UndoComponent(ctx, oldFeeder);
+                if ((m.Dfc || m.DfcFiles.Count > 0 || m.DfcRuntimes.Count > 0) && (o.ReShade || pkg is not null)) RemoveDfc(ctx);
                 if (!o.Uplift && m.Uplift && (o.ReShade || pkg is not null)) RemoveUplift(ctx);
                 if (!o.Mfg && !o.KeepMfg && m.Mfg && (o.ReShade || pkg is not null)) RemoveMfg(ctx);
                 if (!o.ReShade && m.ReShade && !o.ReShadeOnly && pkg is not null) RemoveReShade(ctx);
@@ -284,8 +259,7 @@ public sealed partial class Installer(ComponentStore store)
                 }
                 if (reshade is not null)
                 {
-                    WriteReShadeIni(ctx, o, addonEffects: uplift is not null || (dfc is not null && ComponentStore.DfcInstallFiles(dfc).Any(f => f.StartsWith(ComponentStore.DfcShaderDir + "\\", StringComparison.OrdinalIgnoreCase))),
-                        lecram: lecram?.Build);
+                    WriteReShadeIni(ctx, o, addonEffects: uplift is not null, lecram: lecram?.Build);
                     if (o.ReShadeVulkan)
                     {
                         // The layer in ProgramData carries ReShade; the game only gets the ReShade.ini that switches it on.
@@ -348,17 +322,6 @@ public sealed partial class Installer(ComponentStore store)
                     m.LecramTag = lecram.Build.Tag;
                     m.LecramId = lecram.Build.Id;
                 }
-                if (dfc is not null)
-                {
-                    DisplaceForeignNrAddons(ctx, [.. ComponentStore.RenoDxFamily, .. ComponentStore.DfcForeignFiles, .. ComponentStore.UpliftFiles, .. ComponentStore.LegacyUpliftFiles]);
-                    PlaceDfc(ctx, dfc);
-                    PlaceDfcRuntimes(ctx, dfcRuntimes ? dlss : null, o.DfcFrameGen);
-                    WriteDfcConfig(ctx, o, dfc);
-                    m.Dfc = true;
-                    m.DfcTag = dfc.Tag;
-                    m.DfcId = dfc.Id;
-                }
-                if (feeder is not null) ApplyPlan(ctx, FeederLibrary.Plan(feeder, game, targetDir));
                 if (uplift is not null)
                 {
                     DisplaceForeignNrAddons(ctx, [ComponentStore.RenoDxFile, .. ComponentStore.ForeignNrAddons.Where(f => !ComponentStore.UpliftFiles.Contains(f))]);
@@ -406,7 +369,6 @@ public sealed partial class Installer(ComponentStore store)
         if (o.Opti && !o.ReShadeOnly) routes.Add(NrAddon.OptiScaler);
         if (o.RenoDx) routes.Add(NrAddon.RenoDx);
         if (o.Lecram) routes.Add(NrAddon.Lecram);
-        if (o.Dfc) routes.Add(NrAddon.Dfc);
         if (o.Uplift) routes.Add(NrAddon.Uplift);
         if (NrAddons.PresentIn(targetDir, null).Contains(NrAddon.Bridge)) routes.Add(NrAddon.Bridge);
         return routes;
@@ -415,22 +377,21 @@ public sealed partial class Installer(ComponentStore store)
     /// <summary>
     /// Why this selection is a poor mix, one line each; empty when it is fine. Never blocks by itself: the user confirms the
     /// lines (<see cref="InstallOptions.ConfirmedConflict"/>), the install goes ahead and the warning stays on the game.
-    /// Covers the one-neural-consumer rule (docs/advisor.md, decision table row 18), DLSS5-Feeder's partner and
-    /// OptiScaler's built-in MFG unlock next to the MFG Unlock add-on.
+    /// Covers the one-neural-consumer rule (docs/advisor.md, decision table row 18) and OptiScaler's built-in MFG unlock next to
+    /// the MFG Unlock add-on.
     /// </summary>
     /// <param name="latestOptiTag">The newest OptiScaler release, which a run without a pinned build installs.</param>
     public static IReadOnlyList<string> Conflicts(string targetDir, InstallOptions o, string? latestOptiTag = null)
     {
         var routes = RoutesOf(o, targetDir);
         var found = new List<string>(NrAddons.Conflicts(routes));
-        if (o.Feeder && NrAddons.FeederConflict(routes) is { } feeder) found.Add(feeder);
         var optiTag = o.OptiTag ?? latestOptiTag;
         if (MfgUnlockConflict(targetDir, WithMfgDefaults(targetDir, o, optiTag), optiTag) is { } mfg) found.Add(mfg);
         if (InjectsFiles(o) && IsStorePath(targetDir)) found.Add(MethodAdvisor.StoreCaution);
         return found;
     }
 
-    private static bool InjectsFiles(InstallOptions o) => o.Opti || o.ReShade || o.Mfg || o.DlssNr || o.RenoDx || o.Lecram || o.Dfc || o.Uplift || o.Feeder;
+    private static bool InjectsFiles(InstallOptions o) => o.Opti || o.ReShade || o.Mfg || o.DlssNr || o.RenoDx || o.Lecram || o.Uplift;
 
     private static bool IsStorePath(string dir) => dir.Contains(@"\WindowsApps\", StringComparison.OrdinalIgnoreCase);
 
@@ -439,7 +400,6 @@ public sealed partial class Installer(ComponentStore store)
 
     private static string? EnsureConflictsConfirmed(string targetDir, InstallOptions o, string? latestOptiTag)
     {
-        if (o.Feeder && !o.ReShadeOnly) throw new InvalidOperationException("DLSS5-Feeder is a ReShade add-on: it needs ReShade + add-ons mode.");
         var conflicts = Conflicts(targetDir, o, latestOptiTag);
         if (conflicts.Count == 0) return null;
         var key = ConflictKey(conflicts);
@@ -453,7 +413,6 @@ public sealed partial class Installer(ComponentStore store)
         var keep = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         if (o.RenoDx) keep.Add(ComponentStore.RenoDxFile);
         if (o.Lecram) keep.UnionWith(ComponentStore.LecramFiles);
-        if (o.Dfc) keep.UnionWith(ComponentStore.DfcPackageFiles);
         if (o.Uplift) keep.UnionWith(ComponentStore.UpliftFiles);
         return keep;
     }
@@ -461,7 +420,7 @@ public sealed partial class Installer(ComponentStore store)
     private static void InstallOpti(Ctx ctx, string pkg, InstallOptions o, string? tag)
     {
         var m = ctx.M;
-        var source = OptiSources.OfTag(tag);
+        var source = OptiSources.F5;
 
         // Other proxies that are OptiScaler, plus files the fork no longer uses.
         foreach (var name in AppSettings.ProxyNames.Where(n => !n.Equals(o.Proxy, StringComparison.OrdinalIgnoreCase)))
@@ -575,8 +534,7 @@ public sealed partial class Installer(ComponentStore store)
         var profile = ConfigProfile.Layer(o.ReShadeVulkan ? [.. o.ReShadeTemplate, .. ReShadeIniTemplate.VulkanExtras] : o.ReShadeTemplate, o.ReShadeOverrides)
             .Where(x => o.RenoDx || !RenoDxIni.IsRenoDx(x))
             .Where(x => !LecramIni.IsLecram(x) || o.Lecram && LecramIni.IsAvailable(x.Key.Trim(), lecramGen, lecram?.DetectedLabel))
-            .Where(x => o.Uplift || !UpliftConfig.IsUplift(x))
-            .Where(x => !DfcConfig.IsDfc(x)).ToList();
+            .Where(x => o.Uplift || !UpliftConfig.IsUplift(x)).ToList();
         // Without a version marker, NeuralUplift makes v11 treat even a fresh profile as v10 and reset its hook point.
         if (!o.CarryOverIni && o.Lecram && lecramGen == LecramGeneration.V11 &&
             profile.Any(x => LecramIni.IsLecram(x) && x.Key.Trim().Equals("NRHookPoint", StringComparison.OrdinalIgnoreCase)) &&
@@ -635,7 +593,7 @@ public sealed partial class Installer(ComponentStore store)
         if (o.CarryOverIni && o.Lecram && lecramGen == LecramGeneration.V11 &&
             profile.Any(x => LecramIni.IsLecram(x) && x.Key.Trim().Equals("NRHookPoint", StringComparison.OrdinalIgnoreCase)))
             hadStale |= LecramIni.MigrateToV11(cleaned);
-        var needsEffectPath = addonEffects && DfcConfig.EffectSearchPathsFor(cleaned.Get("GENERAL", "EffectSearchPaths"), ctx.Target) is not null;
+        var needsEffectPath = addonEffects && UpliftConfig.EffectSearchPathsFor(cleaned.Get("GENERAL", "EffectSearchPaths"), ctx.Target) is not null;
         if (profile.Count == 0 && ctx.M.ReShadeIni.Count == 0 && !hadStale && !needsEffectPath) return;
 
         var current = hadStale ? cleaned.ToString() : original;
@@ -649,9 +607,9 @@ public sealed partial class Installer(ComponentStore store)
             merged.Applied[early.Id] = early.Value;
             merged = merged with { Text = ini.ToString() };
         }
-        // Not recorded as a profile value: the folder is ReShade's standard one and stays covered when DFC goes.
+        // Not recorded as a profile value: the folder is ReShade's standard one and stays covered when Uplift goes.
         if (addonEffects && IniFile.Parse(merged.Text) is var withPaths
-            && DfcConfig.EffectSearchPathsFor(withPaths.Get("GENERAL", "EffectSearchPaths"), ctx.Target) is { } paths)
+            && UpliftConfig.EffectSearchPathsFor(withPaths.Get("GENERAL", "EffectSearchPaths"), ctx.Target) is { } paths)
         {
             withPaths.Set("GENERAL", "EffectSearchPaths", paths);
             merged = merged with { Text = withPaths.ToString() };
@@ -770,38 +728,6 @@ public sealed partial class Installer(ComponentStore store)
         ctx.M.UpliftTag = null;
     }
 
-    /// <summary>
-    /// deep-fried-chicken.cfg: fresh mode starts from the default cfg of <paramref name="build"/>, otherwise the game's cfg is kept.
-    /// The app's DFC options are merged in, preserving overlay edits unless overwrite is selected.
-    /// A cfg that was already there is backed up once, before the first change.
-    /// </summary>
-    private static void WriteDfcConfig(Ctx ctx, InstallOptions o, AddonBuild build)
-    {
-        var m = ctx.M;
-        var path = Path.Combine(ctx.Target, ComponentStore.DfcConfigFile);
-        var rel = ctx.Rel(path);
-        var exists = File.Exists(path);
-        var profile = o.ReShadeOverrides.Where(DfcConfig.IsDfc).ToList();
-        var defaultsPath = ComponentStore.DfcConfigOf(build);
-        var defaults = File.Exists(defaultsPath) ? File.ReadAllText(defaultsPath) : null;
-        if (!exists && profile.Count == 0 && m.DfcCfg.Count == 0)
-        {
-            if (defaults is not null) Place(ctx, defaultsPath, path);
-            return;
-        }
-        if (o.CarryOverIni && exists && profile.Count == 0 && m.DfcCfg.Count == 0) return;
-
-        var original = exists ? File.ReadAllText(path) : null;
-        var current = o.CarryOverIni ? original : null;
-        var merged = DfcConfig.Merge(current ?? defaults ?? "", current, defaults, profile, m.DfcCfg, o.OverwriteIni || !o.CarryOverIni);
-        m.DfcCfg = merged.Applied;
-        if (original == merged.Text) return;
-        if (exists && !m.Owns(rel) && m.BackupOf(rel) is null) Backup(ctx, path, "file", copy: true);
-        else if (exists && !o.CarryOverIni) KeepPrevious(ctx, path);
-        if (!exists) RecordNew(ctx, rel);
-        FileUtil.AtomicWriteText(path, merged.Text);
-    }
-
     /// <summary>A file we are about to create is recorded (and saved) first, so a run stopped part-way never leaves it unrecorded.</summary>
     private static void RecordNew(Ctx ctx, string rel)
     {
@@ -825,28 +751,6 @@ public sealed partial class Installer(ComponentStore store)
     }
 
     private const string PreviousDir = "previous";
-
-    /// <summary>
-    /// Copies the 64-bit set of <paramref name="build"/> into the game with the package's layout (the whole 64-bit folder but
-    /// the cfg, file by file), then takes out files an earlier set of ours had and this one lacks (another build, or the same
-    /// build imported again). Each file is recorded as DFC's before it is placed, so a run that stops part-way still knows it.
-    /// </summary>
-    private static void PlaceDfc(Ctx ctx, AddonBuild build)
-    {
-        var files = ComponentStore.DfcInstallFiles(build);
-        foreach (var rel in files)
-        {
-            var dest = Path.Combine(ctx.Target, rel);
-            if (!ctx.M.DfcFiles.Contains(ctx.Rel(dest), StringComparer.OrdinalIgnoreCase)) ctx.M.DfcFiles.Add(ctx.Rel(dest));
-            Place(ctx, Path.Combine(ComponentStore.DfcBuildDir(build), rel), dest);
-        }
-        foreach (var full in OwnedDfcFiles(ctx).Where(f => !files.Contains(Path.GetRelativePath(ctx.Target, f), StringComparer.OrdinalIgnoreCase)))
-        {
-            RemoveOwned(ctx, full);
-            Log.Info($"  removed {ctx.Rel(full)} (not in the Deep Fried Chicken {build.Name} set)");
-        }
-        ctx.M.DfcFiles.RemoveAll(e => !ctx.M.Owns(e));
-    }
 
     /// <summary>Files of the DFC set (not the cfg) this install placed, as full paths; records older than DfcFiles by name.</summary>
     private static List<string> OwnedDfcFiles(Ctx ctx) =>
@@ -875,46 +779,6 @@ public sealed partial class Installer(ComponentStore store)
         Log.Info($"  {ComponentStore.DfcFile} removed");
     }
 
-    /// <summary>
-    /// DFC in a game without its own DLSS: INSTALL.txt (4.0.6) asks for nvngx_dlss.dll beside the game exe, and for
-    /// nvngx_dlssg.dll there too when its DLSS-G frame generation is used; DFC ships neither. Both come from NVIDIA's DLSS
-    /// release (<paramref name="dlss"/>) and are kept current with it. Null <paramref name="dlss"/> (a game with native
-    /// DLSS) wants none. Runtimes placed earlier that are no longer wanted go; a copy we don't own is never touched.
-    /// </summary>
-    private static void PlaceDfcRuntimes(Ctx ctx, IReadOnlyDictionary<string, string>? dlss, bool frameGen)
-    {
-        string[] wanted = dlss is null ? [] : frameGen ? DfcRuntimeFiles : DfcRuntimeFiles[..1];
-        var placed = new List<string>();
-        foreach (var name in wanted)
-        {
-            var dest = Path.Combine(ctx.Target, name);
-            var rel = ctx.Rel(dest);
-            if (!dlss!.TryGetValue(name, out var src))
-            {
-                Log.Warn($"  {name}: not in the DLSS release, so Deep Fried Chicken can't get it here");
-                continue;
-            }
-            if (File.Exists(dest) && !ctx.M.Owns(rel))
-            {
-                Log.Info($"  {rel}: already there and not ours, left as is for Deep Fried Chicken");
-                continue;
-            }
-            if (!File.Exists(dest) || !FileUtil.SameFile(src, dest))
-            {
-                var had = File.Exists(dest);
-                Place(ctx, src, dest);
-                Log.Info($"  {(had ? "updated" : "added")} {rel} for Deep Fried Chicken ({FileUtil.Format(FileUtil.ReadVersion(src))})");
-            }
-            placed.Add(rel);
-        }
-        RemoveDfcRuntimes(ctx, keep: placed);
-        foreach (var rel in placed)
-            if (!ctx.M.DfcRuntimes.Contains(rel, StringComparer.OrdinalIgnoreCase)) ctx.M.DfcRuntimes.Add(rel);
-    }
-
-    /// <summary>nvngx_dlss.dll first: it is always wanted; nvngx_dlssg.dll only for frame generation.</summary>
-    private static readonly string[] DfcRuntimeFiles = ["nvngx_dlss.dll", "nvngx_dlssg.dll"];
-
     /// <summary>Takes out the runtimes placed for DFC except <paramref name="keep"/>, restoring what they replaced.</summary>
     private static void RemoveDfcRuntimes(Ctx ctx, IReadOnlyCollection<string> keep)
     {
@@ -925,10 +789,6 @@ public sealed partial class Installer(ComponentStore store)
             ctx.M.DfcRuntimes.Remove(rel);
         }
     }
-
-    /// <summary>The refusal for a DFC build older than 4.x in a game without its own DLSS.</summary>
-    internal static string DfcNeedsNativeDlss(string? version) =>
-        $"Deep Fried Chicken {version} needs a game with native DLSS. Import Deep Fried Chicken {ComponentStore.DfcNonDlssMajor}.x, which also supports games without their own DLSS.";
 
     /// <summary>
     /// Whether the game ships DLSS Super Resolution itself (nvngx_dlss.dll or Streamline's sl.dlss.dll), not counting the
@@ -983,7 +843,7 @@ public sealed partial class Installer(ComponentStore store)
 
     /// <summary>The unlock keys the build behind <paramref name="optiTag"/> has; all of them when the build is unknown.</summary>
     private static IEnumerable<(string Section, string Key)> MfgKeysOf(string? optiTag) =>
-        optiTag is null ? MfgConflictKeys : MfgConflictKeys.Where(k => !OptiSources.OfTag(optiTag).Lacks(k.Section, k.Key, optiTag));
+        optiTag is null ? MfgConflictKeys : MfgConflictKeys.Where(k => !OptiSources.F5.Lacks(k.Section, k.Key, optiTag));
 
     /// <summary>
     /// [DLSSG] keys are true/false (1 counts as on). [MFGUnlock] keys follow F5's MfgUnlock::ParseMode: true/on and detect run the
@@ -1230,9 +1090,9 @@ public sealed partial class Installer(ComponentStore store)
         }
         foreach (var name in new[] { "OptiScaler.ini", ComponentStore.ReShadeFile, ComponentStore.DlssNrFile })
             if (!keepNr || name != ComponentStore.DlssNrFile) RemoveOwned(ctx, Path.Combine(ctx.Target, name));
-        foreach (var name in OptiSources.All.SelectMany(s => s.ExtraFiles).Distinct(StringComparer.OrdinalIgnoreCase))
+        foreach (var name in OptiSources.F5.ExtraFiles)
             RemoveOwned(ctx, Path.Combine(ctx.Target, name));
-        if (m.Opti || m.DlssNr) Log.Info($"  {OptiSources.OfTag(m.OptiTag).Name} removed (ReShade + add-ons mode)");
+        if (m.Opti || m.DlssNr) Log.Info($"  {OptiSources.NameOf(m.OptiTag)} removed (ReShade + add-ons mode)");
         m.Opti = false;
         m.OptiTag = null;
         m.OptiIni.Clear();

@@ -23,12 +23,10 @@ public static class Demo
 
     public const string LatestDlss = "v310.10.0";
     public const string LatestStreamline = "v2.14.1";
-    // DLSSU_DEMO_OPTI_NR=1 pretends OptiScaler-NR (ShyVortex) is selected instead of the default F5 build, to check its labels.
-    private static bool OptiNr => Environment.GetEnvironmentVariable("DLSSU_DEMO_OPTI_NR") == "1";
     // DLSSU_DEMO_ONBOARDING=1 opens the first-run setup at start, which the demo otherwise leaves out.
     public static bool ShowOnboarding => Environment.GetEnvironmentVariable("DLSSU_DEMO_ONBOARDING") == "1";
-    public static string LatestOpti => OptiNr ? "v0.9.72" : "v0.1.38" + OptiSources.F5.TagSuffix;
-    private static string PreviousOpti => OptiNr ? "v0.9.51" : "v0.1.37.2" + OptiSources.F5.TagSuffix;
+    public static string LatestOpti => "v0.1.38" + OptiSources.F5.TagSuffix;
+    private static string PreviousOpti => "v0.1.37.2" + OptiSources.F5.TagSuffix;
     public const string LatestMfg = "v1.4.0";
     public const string LatestUplift = "v2.0.0";
     public const string LatestReShade = "6.6.2";
@@ -37,8 +35,6 @@ public static class Demo
     private const string NrOriginalId = "2bc19bc09a7b89dd44f73e2ac0108fcc586e2154bdd0830f242f4f040e28789f";
     private static readonly Version NrCompatVersion = new(310, 9, 16, 0);
     private static readonly Version NrOriginalVersion = new(310, 8, 0, 0);
-    private const string DfcInstalled = "5.0.0";
-    private const string DfcSeed = "dfc-5.0.0";
 
     private static readonly Dictionary<string, InstallManifest> Manifests = new(StringComparer.OrdinalIgnoreCase);
     private static readonly Dictionary<DlssDll, Version?> Originals = [];
@@ -106,19 +102,12 @@ public static class Demo
         PlaceAddon("lecram-dlss5", "lecram-dlss5-beta45", ComponentStore.Lecram11File, "", "v11.0.0-beta.45", LecramGeneration.V11);
         PlaceAddon("lecram-dlss5", "lecram-dlss5-v10", ComponentStore.Lecram10File, "8.5.0.0", "v8.5.0-rc10-model-sdr1", LecramGeneration.V10);
         // Downloaded builds in the OptiScaler and GITC Uplift libraries; one more than the cleanup keeps.
-        PlaceRelease(Component.OptiScaler, LatestOpti, new DateTime(2026, 10, 18));
-        PlaceRelease(Component.OptiScaler, "v0.9.49", new DateTime(2026, 9, 30));
-        PlaceRelease(Component.OptiScaler, "v0.9.47", new DateTime(2026, 9, 12));
-        PlaceRelease(Component.OptiScaler, "v0.9.45", new DateTime(2026, 8, 20));
-        PlaceRelease(Component.OptiScaler, "v0.1.38" + OptiSources.F5.TagSuffix, new DateTime(2026, 10, 16));
-        PlaceRelease(Component.OptiScaler, "v0.1.37.2" + OptiSources.F5.TagSuffix, new DateTime(2026, 10, 2));
+        PlaceRelease(Component.OptiScaler, LatestOpti, new DateTime(2026, 10, 16));
+        PlaceRelease(Component.OptiScaler, PreviousOpti, new DateTime(2026, 10, 2));
+        PlaceRelease(Component.OptiScaler, "v0.1.37" + OptiSources.F5.TagSuffix, new DateTime(2026, 9, 24));
         PlaceRelease(Component.Uplift, LatestUplift, new DateTime(2026, 10, 8));
         PlaceRelease(Component.Uplift, "v1.3.0", new DateTime(2026, 9, 1));
         PlaceRelease(Component.Uplift, "v1.2.0", new DateTime(2026, 7, 14));
-
-        // Deep Fried Chicken: 5.0.0 (the newest, so the default) and the 4.0.6 preview, each a whole set.
-        PlaceDfc(DfcSeed, DfcInstalled);
-        PlaceDfc("dfc-4.0.6-preview", "4.0.0");
 
         void PlaceNr(string id, Version version)
         {
@@ -144,14 +133,6 @@ public static class Demo
             var build = new AddonBuild(id, file, fileVersion, generation, label, null, new DateTime(2026, 9, 28, 0, 0, 0, DateTimeKind.Utc));
             FileUtil.AtomicWriteText(Path.Combine(folder, "version.json"), JsonSerializer.Serialize(build, JsonCtx.Default.AddonBuild));
         }
-
-        void PlaceDfc(string seed, string version)
-        {
-            PlaceAddon("dfc", seed, ComponentStore.DfcFile, version, version, null);
-            var folder = Path.Combine(ComponentStore.DfcDir, Sha(seed));
-            FileUtil.AtomicWriteText(Path.Combine(folder, ComponentStore.DfcBridgeFile), Placeholder(seed + " bridge"));
-            FileUtil.AtomicWriteText(Path.Combine(folder, ComponentStore.DfcConfigFile), $"config_schema={DfcConfig.TestedSchema}\n");
-        }
     }
 
     private static string Placeholder(string what) => $"DLSS5 Updater demo placeholder ({what}); not a real file.\n";
@@ -169,7 +150,6 @@ public static class Demo
         store.Dlss = Release(LatestDlss, today.AddDays(-4), "## Neural texture compression\n- DLSS Super Resolution 310.10 improves stability of the preset A transformer model.\n- Frame Generation fixes for dynamic multi frame generation.\n- Smaller memory footprint on RTX 40 and 50 GPUs.");
         store.DlssReleases = [store.Dlss, Release("v310.9.1", today.AddDays(-45)), Release("v310.4.0", today.AddDays(-150)), Release("v310.2.1", today.AddDays(-230)), Release("v3.7.10", today.AddDays(-400))];
         store.Streamline = Release(LatestStreamline, today.AddDays(-20));
-        if (OptiNr) settings.OptiSource = ComponentStore.OptiRepo;
         store.Opti = Release(LatestOpti, today.AddDays(-2), "## Faster NR pass\n- DLSSNR runs about 15% faster with the small model.\n- New tonemap and HDR output options.\n- Fixes the flicker in games that resize their swap chain.");
         store.Mfg = Release(LatestMfg, today.AddDays(-30), "## MFG Unlock\n- Works with Streamline 2.14.\n- Fixes a crash on startup in some Unreal Engine 5 games.");
         store.Uplift = Release(LatestUplift, today.AddDays(-12), "## GITC Uplift\n- New mask editor.\n- Lower VRAM use with the performance preset.");
@@ -209,12 +189,11 @@ public static class Demo
         new("Frostline", "Steam", "bin", "Frostline.exe", "3.7.10", null, "3.7.10"),
         // Plain DLSS swap that is up to date.
         new("Grimwald", "GOG", "", "Grimwald.exe", "310.10.0", Installed: m => { m.Dlss = true; m.DlssTag = LatestDlss; }),
-        // ReShade with Deep Fried Chicken.
+        // OptiScaler-NR from an older version of the app: its next update moves it to F5.
         new("Hollow Tide", "Epic", @"HollowTide\Binaries\Win64", "HollowTide-Win64-Shipping.exe", "3.5.10", Installed: m =>
         {
-            m.Mode = InstallMode.ReShadeOnly;
-            m.ReShade = m.DlssNr = m.Dfc = true;
-            m.DfcId = DfcId; m.DfcTag = DfcTag; m.DlssNrId = NrCompatId; m.Proxy = "dxgi.dll";
+            m.Opti = m.ReShade = m.DlssNr = true;
+            m.OptiTag = "v0.9.72"; m.DlssNrId = NrCompatId; m.Proxy = "dxgi.dll";
         }),
         // Anti-cheat game with an old DLSS-only swap.
         new("Iron Veil", "Steam", "x64", "IronVeil.exe", "310.9.1", "310.9.1", "310.9.1", "2.7.30", AntiCheat: "EasyAntiCheat", Installed: m => { m.Dlss = true; m.DlssTag = "v310.9.1"; }),
@@ -257,9 +236,6 @@ public static class Demo
         // DLSS swap one release behind.
         new("Wicker & Ash", "Steam", @"bin\win64", "WickerAndAsh.exe", "310.9.1", null, "310.9.1", Installed: m => { m.Dlss = true; m.DlssTag = "v310.9.1"; }),
     ];
-
-    private static string DfcId => Sha(DfcSeed);
-    private static string DfcTag => $"{DfcInstalled}-{DfcId[..12]}";
 
     /// <summary>Rebuilds the made-up library; games live on a drive the demo never writes to.</summary>
     public static void Reset()
@@ -319,7 +295,7 @@ public static class Demo
 
         var m = ManifestAt(targetDir) ?? new InstallManifest { RootRel = Path.GetRelativePath(targetDir, game.Root) };
         // A DLSS-only update keeps what else is installed; any other install sets the whole component list.
-        var full = o.Opti || o.ReShade || o.Mfg || o.DlssNr || o.RenoDx || o.Lecram || o.Uplift || o.Dfc;
+        var full = o.Opti || o.ReShade || o.Mfg || o.DlssNr || o.RenoDx || o.Lecram || o.Uplift;
         if (full)
         {
             m.Mode = o.Mode;
@@ -332,13 +308,13 @@ public static class Demo
             m.RenoDx = o.RenoDx;
             m.Lecram = o.Lecram;
             m.Uplift = o.Uplift;
-            m.Dfc = o.Dfc;
+            m.Dfc = false;
             m.AntiCheatConfirmed = o.AntiCheatConfirmed;
             m.ConfirmedConflict = o.ConfirmedConflict;
             m.OptiTag = o.Opti ? o.OptiTag ?? store.Opti?.Tag : null;
             m.MfgTag = o.Mfg ? o.MfgTag ?? store.Mfg?.Tag : null;
             m.UpliftTag = o.Uplift ? o.UpliftTag ?? store.Uplift?.Tag : null;
-            (m.DfcId, m.DfcTag) = o.Dfc && store.DfcBuildFor(o.DfcId) is { } dfc ? (dfc.Id, dfc.Tag) : (null, null);
+            (m.DfcId, m.DfcTag) = (null, null);
             (m.RenoDxId, m.RenoDxTag) = o.RenoDx && store.RenoDxBuildFor(o.RenoDxId) is { } sf ? (sf.Id, sf.Tag) : (null, null);
             (m.LecramId, m.LecramTag, m.LecramFile) = o.Lecram && store.LecramBuildFor(o.LecramId) is { } lc ? (lc.Id, lc.Tag, lc.FileName) : (null, null, null);
         }

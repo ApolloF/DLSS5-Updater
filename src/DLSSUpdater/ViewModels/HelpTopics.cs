@@ -32,7 +32,7 @@ public static class HelpTopics
     [
         new("uplift", "GITC Uplift", "GITC Uplift", "Open-source ReShade add-on that runs DLSS neural rendering on the game image; single-player only.",
             "GITC Uplift is an open-source ReShade add-on (MIT licence) that runs DLSS-NR on the game image. Single-player only: injection can trigger anti-cheat. " +
-            "Use it instead of ShortFuse, Lecram, Deep Fried Chicken or OptiScaler-NR; these NR routes cannot coexist. " +
+            "Use it instead of ShortFuse, Lecram or OptiScaler's own NR; these NR routes cannot coexist. It also runs in games without DLSS of their own (no upscaling there, so no FPS gain). " +
             "This app installs the 64-bit add-on, its helper and Uplift effects. ReShade with full add-on support is required; Vulkan and OpenGL need ReShade 6.8+. " +
             "It uses the NR runtime from your library (downloaded automatically; you can import another). It goes in GITC-Uplift beside the add-on because Uplift blocks a runtime mapped from the game folder (NVIDIA DLSS can load that copy first on RTX 50). " +
             "The app writes Enabled=1. From 2.0.0 Uplift still starts each game session with NR off unless Start enabled is on: in the game press Home, open the GITC Uplift tab and tick Enable (or use the hotkey). Tested with 2.0.0; newer tags warn in the log. " +
@@ -40,8 +40,8 @@ public static class HelpTopics
             "Cross-queue passes (64-bit DX12 only, experimental, off by default) let a DLSS-stage pass and a later Present pass use different GPU queues, at a possible FPS and latency cost. NGX hooks Off is safe mode, Present only. Use D3D9Ex changes exclusive fullscreen to borderless. Mask blend values are undocumented."),
         // ---------- General ----------
         new("install-mode", "General", "Install mode", "Whether OptiScaler or ReShade is the proxy the game loads; set per game.",
-            "OptiScaler (default; the build chosen under OptiScaler build) is the main use: OptiScaler is the proxy, loads ReShade and its add-ons, and runs the NR runtime. " +
-            "ReShade + add-ons installs ReShade itself as the proxy (dxgi.dll by default) with MFG Unlock, the DLSS and Streamline updates, and one NR route instead of OptiScaler's: the ShortFuse RenoDX DLSS add-on, the Lecram DLSS5 add-on, Deep Fried Chicken or GITC Uplift. One NR route per game is the rule: turning on a second one shows a warning, and Install asks you to confirm it. Each needs the NR runtime. " +
+            "OptiScaler (default; OptiScaler F5) is the main use: OptiScaler is the proxy, loads ReShade and its add-ons, and runs the NR runtime. " +
+            "ReShade + add-ons installs ReShade itself as the proxy (dxgi.dll by default) with MFG Unlock, the DLSS and Streamline updates, and one NR route instead of OptiScaler's: the ShortFuse RenoDX DLSS add-on, the Lecram DLSS5 add-on or GITC Uplift. One NR route per game is the rule: turning on a second one shows a warning, and Install asks you to confirm it. Each needs the NR runtime. " +
             "On a game page the OptiScaler row sets it: ticked installs OptiScaler, unticked installs ReShade + add-ons. The method cards tick or untick it for you. " +
             "Switching a game between the two removes the other mode's files and puts back what they replaced. Each game can use its own mode."),
         new("proxy", "General", "Proxy DLL name", "The dll name the game loads the mod as; dxgi.dll works for most DX12 games.",
@@ -52,17 +52,18 @@ public static class HelpTopics
             "Latest only ever upgrades: a game DLL that is already newer is left alone. " +
             "A pinned version is installed exactly, also downgrading, useful when a newer DLSS preset looks worse in a game. " +
             "Older SDKs lack files (before 310.4 no FG, 3.x only SR); missing ones are skipped. A game can pin its own version above its DLSS file list."),
-        new("opti-build", "General", "OptiScaler build", "Which OptiScaler fork gets installed: F5 (default) or OptiScaler-NR.",
-            "Which fork of OptiScaler is installed. OptiScaler F5 (janblade) is the default for new installs; OptiScaler-NR (ShyVortex) is the fork this app was first built around. " +
-            "F5 is experimental and releases often; it needs its own open-source NGX forwarder (nvngx.dll_dlssnr.dll), which is installed next to OptiScaler and removed again when you switch back. " +
-            "A few DLSSNR options it does not have are hidden, and so are options only some F5 versions have. Games keep the build they have until you update them. " +
+        new("opti-build", "General", "OptiScaler build", "The app installs OptiScaler F5 (janblade), its DLSSNR fork of OptiScaler.",
+            "The app installs OptiScaler F5 (janblade), a fork of OptiScaler with DLSS neural rendering. " +
+            "Earlier versions also offered OptiScaler-NR (ShyVortex); settings that chose it now follow F5, and a game that still has OptiScaler-NR gets F5 at its next update (uninstall still restores the game). " +
+            "F5 is experimental and releases often; it needs its own open-source NGX forwarder (nvngx.dll_dlssnr.dll), which is installed next to OptiScaler and removed with it. " +
+            "Options only some F5 versions have are hidden for the others. Games keep the build they have until you update them. " +
             "Each game can pick its own build, in the OptiScaler row on the Install tab or at the top of Game config; both show the same pick. Untick the row to install ReShade + add-ons without OptiScaler. " +
             "From 0.1.33 the F5 zip ships NVIDIA's DLSS frame generation and Streamline files in OptiScaler\\streamline; they are installed with it, only used when DLSS-G is the frame generator, and never counted as the game's own DLSS or Streamline files. " +
             "From 0.1.36 OptiScaler's frame generation output is F5Low by default (FGOutput=f5low, which this app never writes), made by OptiScaler\\plugins\\f5low.dll; the Frame generator option picks what it runs: XeFG on the tensor cores, DLSS-G or Intel's XeFG. " +
             "RTX 30: F5's troubleshooting guide reports games hanging the GPU (\"device hung\") seconds after start when the game's own DLSS frame generation is on and an nvngx_dlssg.dll is in the OptiScaler folder. " +
             "Its fix: remove that file from the OptiScaler folder or turn DLSS Frame Generation off in the game, and use OptiScaler's own frame generation with the default F5Low output (not DLSS-G) instead."),
-        new("prereleases", "General", "Include prereleases", "Include prerelease builds in update checks; the OptiScaler-NR fork only publishes prereleases.",
-            "The OptiScaler-NR fork only publishes prereleases, so turning this off usually means no OptiScaler updates. Applies to every source."),
+        new("prereleases", "General", "Include prereleases", "Include prerelease builds in update checks.",
+            "Include releases their authors mark as prereleases in the update checks. Applies to every source that publishes them on GitHub."),
         new("streamline", "General", "Replace Streamline files", "Replaces the game's sl.*.dll files with one signed Streamline release; needed for Dynamic MFG.",
             "Streamline (sl.*.dll) is NVIDIA's layer between the game and DLSS Frame Generation. " +
             "Dynamic MFG only works with FG 310.9.1 plus the complete Streamline 2.14.1 set, or FG 310.9.16 plus 2.14.16. This replaces every sl.*.dll the game already ships " +
@@ -80,7 +81,7 @@ public static class HelpTopics
             "[DlssNr] Enabled=true when the NR runtime is installed. '" + Core.ConfigProfile.DefaultName + "' is the only built-in preset: exactly these upstream defaults. " +
             "Load it here to start over, or assign it to single games; save your own variations as presets."),
         new("nr-library", "General", "NR versions and sources", "Where the NR runtime and the NR add-ons come from, and how to choose or switch versions.",
-            "OptiScaler-NR updates come from ShyVortex/OptiScaler-DLSSNR-PreSR-Multipass. Existing cached releases still work. " +
+            "OptiScaler F5 updates come from janblade/OptiScaler-F5-DLSSNR-Multipass. " +
             "The RenoDX DLSS add-on (ShortFuse's renodx-dlss.addon64) is downloaded and installed automatically from the app's catalog (or imported by you). It needs ReShade + add-ons mode, ReShade 6+ with full add-on support, a game with native DLSS and the NR runtime. " +
             "The runtime nvngx_dlssnr.dll is downloaded automatically too. " +
             "ShortFuse openNR describes compatible FP16 builds, including compat-fp16-310.9.16-cuda13.4.3 for RTX 20/30/40. " +
@@ -90,43 +91,13 @@ public static class HelpTopics
             "nvngx_dlssnr.dll (DLSS 5 neural rendering model) is downloaded automatically into your library, and you can import your own. ShortFuse compat-fp16-310.9.16-cuda13.4.3 targets RTX 20/30/40. Each imported version is kept in your library " +
             "and copied into each game. ReShade has its own library under Settings → ReShade add-ons. " +
             "ShortFuse's renodx-dlss.addon64 is imported the same way and only accepted when the file identifies itself as renodx-dlss.addon64; every import stays in a library of builds, with a default here, an optional pick per game and your own name per build. " +
-            "Deep Fried Chicken is imported from its extracted release folder or its 64-bit folder (Folder…), from deep-fried-chicken.addon64 in that folder or from a .zip of the release (Import…); the NGX bridge deep-fried-chicken-nvngx.dll must be beside the add-on. From 4.x the whole 64-bit folder is taken, as the package's README asks. A .7z can't be read: extract it first. " +
-            "Each import is kept as a build of its own, so several DFC versions sit side by side; importing the same add-on again replaces that build's files. The default is Newest unless you pick a build. " +
             "Lecram's DLSS5 add-on is imported (the app does not download it) as renodx-dlss5.addon64 (v10 and older) or dlss5-nr.addon64 (v11 and newer); all builds are kept side by side and each game picks its own."),
-        new("dfc", "General", "Deep Fried Chicken", "Closed-source ReShade add-on for DLSS neural rendering; you import your own copy.",
-            "Deep Fried Chicken (DFC) is a closed-source ReShade add-on that runs NVIDIA DLSS neural rendering. 2.x needs a game with native DLSS; 4.x and newer also run in games without their own DLSS (see Deep Fried Chicken without DLSS). " +
-            "Its licence is personal use only, so this app never downloads or redistributes it: you import your own copy (add-on, NGX bridge and default config) in Local components, and the files are copied into games unchanged. " +
-            "Every import stays in a library of builds. The default in Settings is Newest (the highest version, follows new imports) until you pick a build; a game can pick its own build on its page, and that build decides the files, the default cfg and whether games without DLSS work. " +
-            "Switching a game to another build replaces the whole set; its deep-fried-chicken.cfg stays. Builds stay until you remove them: the automatic cleanup never deletes an import. " +
-            "From 4.x the whole 64-bit folder goes beside the game exe, as the package asks: in 4.0.6 and 5.0 that is the add-on, the bridge, deep-fried-chicken-present-support.dll, the deep-fried-chicken-neural folder and reshade-shaders\\Shaders\\DFC_OutputState.addonfx. " +
-            "Logs, NVIDIA's nvngx_*.dll and ReShade's own files in that folder are left out (the app places those itself), and ReShade.ini's EffectSearchPaths gets .\\reshade-shaders\\Shaders\\** when it doesn't cover that folder yet. " +
-            "DFC's 32-bit route (addon32 plus a 64-bit companion host) is not supported by this app. " +
-            "It needs ReShade + add-ons mode, ReShade 6+ with add-on support and the NR runtime nvngx_dlssnr.dll (placed beside the exe), and it replaces the RenoDX DLSS add-on and OptiScaler-NR (a game gets only one of them). " +
-            "The default deep-fried-chicken.cfg is placed when the game has none. The few options in Settings are merged into it like into ReShade.ini: only keys you set are written, and values you tuned in the overlay survive updates. " +
-            "Everything else (hook mode, placement, Auto Balance, motion stability, glow suppression, per-pass model, preset and intensity, the 4.x Refine tab, pass controls, frame generation, 5.0's Texture Boost and NR preset (Game, Preset A or Preset B) and so on) is tuned in the ReShade overlay (Home, Deep Fried Chicken tab); the cfg numbers for those are undocumented."),
-        new("feeder", "General", "DLSS5-Feeder", "ReShade add-on that gives games without DLSS a DLAA frame so Deep Fried Chicken can run on them.",
-            "DLSS5-Feeder (MIT, by Jean-Laurent Rouzies, github.com/jlrouzies-fr/DLSS5-Feeder) is a ReShade add-on that makes the DLSS calls a game without DLSS never makes: it takes the frame, ReShade's depth and estimated motion vectors and hands them to NVIDIA's DLSS as a DLAA frame, so Deep Fried Chicken has something to run neural rendering on. " +
-            "It is DLAA only: no upscaling, no performance gain, a few milliseconds per frame at 4K. Single-player games only; anti-cheat games are skipped. " +
-            "The app downloads it from that one repository's releases and checks the zip against the SHA-256 GitHub publishes for it; a release without one is not installed. It places dlss5-feed.addon64 beside the exe and DLSS5_Feed.fx in reshade-shaders\\Shaders. For a 32-bit game it places dlss5-feed.addon32 and the 64-bit helper host64\\dlss5-feed-host64.exe instead." +
-            "Turning it on turns Deep Fried Chicken on (4.x or newer, imported): a game gets one neural consumer, and the app only pairs Feeder with that one. It can't run next to OptiScaler, the DLSS5 DX11 bridge or the RenoDX add-ons. " +
-            "What the app can't do for you: a motion-vector shader in reshade-shaders\\Shaders (LumeniteFX Kernel is recommended; its licence stops the app from shipping it) and choosing the right depth buffer in ReShade's Generic Depth; after that, enable the shader and set DLSS5_MV_PROVIDER in the overlay. " +
-            "Direct3D 9 games need dgVoodoo2 (freeware that the app can't redistribute), Vulkan games need ReShade's Vulkan layer (one administrator prompt), and a 32-bit game's host64 folder needs a 64-bit ReShade and Deep Fried Chicken's 64-bit set placed by hand. " +
-            "Feeder's settings (dlss5-feed.cfg) are created by the add-on itself; the app writes none. Releases are tagged by the author, betas included; the app follows the newest stable one unless you pick a build."),
-        new("dfc-no-dlss", "Deep Fried Chicken", "Deep Fried Chicken without DLSS", "Deep Fried Chicken 4.x also runs in games without their own DLSS, but without upscaling.",
-            "From 4.x (INSTALL.txt of 4.0.6 preview) DFC also runs in games without their own DLSS. There it runs NR with its own motion vectors (the package's motion model, dfc-neural-motion.onnx, is in the deep-fried-chicken-neural folder, which goes beside the exe whole), " +
-            "or with the vectors of an external ReShade motion provider when one is running (Lumenite Kernel or QuantMotion, VORT, Launchpad, or a texMotionVectors effect such as DRME, qUINT or dh_uber_motion; DX10, DX11, DX12, Vulkan and OpenGL, not DX9). " +
-            "NR works on top of the game's own anti-aliasing; lower Resolution under Pass controls in the overlay for speed. There is no DLSS upscaling in these games: 4.x removed DFC's own upscaler (SR), scene jitter and the virtual display. " +
-            "INSTALL.txt asks for nvngx_dlss.dll and nvngx_dlssnr.dll beside the game exe; DFC ships neither. The app places the NR runtime from your library and adds nvngx_dlss.dll from NVIDIA's DLSS release (the version picked for DLSS files), and takes both out again when DFC goes. " +
-            "In games with native DLSS nothing is added: DFC uses the game's own DLSS. A 2.x import is refused in games without DLSS. " +
-            "Frame generation for these games is switched on in the overlay (Rendering card); it needs borderless or windowed mode and pauses while the ReShade menu is open. DLSS-G needs an RTX 40/50 GPU and NVIDIA's nvngx_dlssg.dll beside the exe: tick Add NVIDIA's frame generation file (nvngx_dlssg.dll) on the game's Install tab and the app places it from the DLSS release. " +
-            "FSR 3.1 frame generation needs AMD's amd_fidelityfx_*_dx12.dll, which this app does not provide. " +
-            "The cfg has frame_generation_coexistence, experimental_fg2x_enabled and nr_interpolation_enabled, but no comment or note says what they do or which value picks DLSS-G or FSR 3.1, so the app does not set them."),
 
         new("lecram", "General", "Lecram DLSS5 add-on", "Lecram's ReShade add-on that runs DLSS neural rendering; builds are kept side by side.",
             LecramSourceIntro(BuildFlags.LecramChannel) +
             "There are two generations: v10 and older (renodx-dlss5.addon64, recognised by its version resource) and v11 and newer (dlss5-nr.addon64, recognised by strings in the file because it has no version resource). " +
             "Every import is kept as its own build, named by the catalog's version, else the highest vX.Y.Z string in the file (never the DLSS SDK's v310.x; a build with neither goes by its file version), or by you; a game only ever gets one file, because v11 goes inert when a renodx-dlss5.addon64 file sits next to it (from v11 beta.22 not when ReShade has that add-on disabled). Settings picks the default build and each game can pick its own, whose generation decides the options shown. " +
-            "It needs ReShade + add-ons mode, ReShade 6+ with add-on support, a game with native DLSS and the NR runtime nvngx_dlssnr.dll, and it replaces OptiScaler-NR and Deep Fried Chicken. " +
+            "It needs ReShade + add-ons mode, ReShade 6+ with add-on support, a game with native DLSS and the NR runtime nvngx_dlssnr.dll, and it replaces OptiScaler's own NR. " +
             "It can run next to ShortFuse's RenoDX add-on once you confirm the warning (NR then runs twice): for v11 builds the app then sets ForeignNr=observe; v12's default auto already runs beside it. The 0928 pair (ShortFuse 0.2026.0928 and Lecram v8.5.0-rc10) was tested working. Each exact pair of builds has a status (Works, Crashed or not tested together yet); only Crashed shows a warning. Mark the current build pair on the Install tab. " +
             "A copy of either Lecram file already in the game is moved to the backup folder and restored by Uninstall. Options that exist in only one generation are hidden for the other, following the build the game uses. " +
             "From v11 Patch 4 (beta.18) the author also ships its own installer (DLSS5 NR Setup). It finds the add-on in every game on every drive and its Update all replaces it there, games this app manages included, so manage a game with one of the two. " +
@@ -240,30 +211,6 @@ public static class HelpTopics
             "0 turns all of it off (the author's documented switch). A non-zero value turns DRED on from every launch. beta.22 reads the key too, with no watcher: there non-zero turns DRED on and the default is off. " +
             "The author asks for the crash file when reporting a freeze. DRED's cost is not documented."),
 
-        // ---------- Deep Fried Chicken ----------
-        new("dfc-arm", "Deep Fried Chicken", "Deep Fried Chicken (master switch)", "Master switch for Deep Fried Chicken's hooks; restart the game after changing it.",
-            "arm in deep-fried-chicken.cfg. Off disarms DFC: its hooks stay out until it is armed again. Restart the game after changing it. Default writes nothing (shipped: on)."),
-        new("dfc-enabled", "Deep Fried Chicken", "Neural rendering", "Switches neural rendering on or off while the hooks stay loaded.",
-            "enabled in deep-fried-chicken.cfg: live on/off while the hooks stay loaded. Default writes nothing (shipped: on)."),
-        new("dfc-passes", "Deep Fried Chicken", "Passes", "How many model passes run per frame (1.0 to 30.0); each costs about one more evaluation.",
-            "DFC takes a continuous value from 1.0 to 30.0. Each pass is about one more full model evaluation. The decimal part scales the last pass's contribution, " +
-            "but that pass still costs a full evaluation. High counts are a stress test, as the author puts it."),
-        new("dfc-scale", "Deep Fried Chicken", "Work scale", "The resolution the model works at, in percent; 100% is full-size processing.",
-            "neural_work_percent: the resolution the model works at, as a percentage; the installer accepts 10 to 150. 100% is exact full-size processing, 125% and 150% are supersampling and very expensive. " +
-            "Below 100% is DFC's experimental native-anchor matched residual mode (on an RTX 5080 at 4K 75% went from about 44 to 57-60 FPS, with a softer image). " +
-            "Native Vulkan only supports 100%. Restart the game after changing it."),
-        new("dfc-vulkan", "Deep Fried Chicken", "Native Vulkan DLSS", "Lets Deep Fried Chicken hook DLSS in native Vulkan games; off by default.",
-            "native_vulkan_enabled: lets DFC hook DLSS in native Vulkan games. Off by default since 2.0 Hotfix 6. DirectX games and the external DLSS feeder do not need it. Restart the game fully after changing it."),
-        new("dfc-native-look", "Deep Fried Chicken", "Native look", "Keeps the game's own tone and colour instead of the model's, weakening the effect.",
-            "preserve_native_tone_color: keeps the game's own tone and colour instead of the model's. This weakens the neural effect. Its strength is left to the overlay."),
-        new("dfc-cleanup", "Deep Fried Chicken", "Multipass cleanup", "Cleans the colour cast that builds up over several passes; may remove some detail.",
-            "clean_fry_enabled: cleans the colour cast that builds up over several passes. It can remove some detail. Its strengths are left to the overlay."),
-        new("dfc-output", "Deep Fried Chicken", "Output protection and deband", "Optional protection for the HUD and highlights, and debanding; off by default.",
-            "New in 4.x. The shipped cfg calls output_hud_enabled, output_highlights_enabled and output_deband_enabled \"optional output protection; disabled by default\" and says the regions use normalized screen coordinates. " +
-            "HUD protection uses the regions output_hud_rect0 to rect3 (four numbers from 0 to 1, by their values x, y, width and height; the order is not documented); the shipped rect0 is a 10% box in the centre of the screen, the others are empty. " +
-            "Highlight protection and deband have their own strength (and a deband threshold). What each one does beyond that is not documented, so this app leaves the regions and strengths as they are in the game's cfg. Default writes nothing (shipped: off)."),
-        new("dfc-colour", "Deep Fried Chicken", "Colour strength", "How much of the model's colour is kept, up to 1.0.",
-            "color_strength: how much of the model's colour is kept. It is a bounded final-composition control and DFC caps it at 1.0. HDR needs no setting: DFC detects SDR, Linear BT.709, scRGB, PQ and scRGB-nl itself."),
         new("rdx-scale", "RenoDX DLSS", "Resolution scale", "Percentage of the DLSS size the model works at; lower is cheaper and softer.",
             "Percentage of the native DLSS input/output size the model works at; 0% uses the smallest size the model supports. Lower is cheaper and softer."),
         new("rdx-ui", "RenoDX DLSS", "UI correction", "Protects the HUD from the model.",
@@ -306,16 +253,10 @@ public static class HelpTopics
         new("nr-finished", "DLSSNR", "Apply to finished picture", "Applies the model after the game's post-processing; it can also change the HUD.",
             "Applies NR after the game's post-processing (bloom, grading) instead of at the upscaler. DX12 and the D3D11 bridge only. " +
             "Can also alter the HUD and menus. With Run before upscaling on, the edit is made early and carried to the final image."),
-        new("nr-denoise-first", "DLSSNR", "Denoise first", "Runs Ray Reconstruction's denoiser first, then the model (DX12 only).",
-            "DX12 only. Runs Ray Reconstruction's denoiser first and the model after it, so the model sees a clean image. Takes priority over Run before upscaling."),
         new("nr-deferred", "DLSSNR", "Generate before, apply after upscaling", "Generates the model's edit at low resolution and applies it to the upscaled image.",
             "The model's edit is generated from the low-resolution input and applied to the upscaled image. Cheaper than running the model at output resolution."),
-        new("nr-residual", "DLSSNR", "Residual across RR", "With Ray Reconstruction, carries the model's change through the denoiser.",
-            "Only matters with Ray Reconstruction and Run before upscaling: the model's change is carried through the denoiser instead of being cleaned away by it."),
         new("nr-automask", "DLSSNR", "Character mask", "Finds people in the picture and treats them separately.",
             "Finds people in the picture and treats them separately. On upstream by default; turn it off if faces get odd edges."),
-        new("nr-private-upscaler", "DLSSNR", "Private upscaler", "The upscaler the model uses for its own work; leave on DLSS.",
-            "The upscaler the model uses for its own work: DLSS (default), the built-in FSR 2.2, the FSR FidelityFX runtime or XeSS. Leave on default unless a guide says otherwise."),
         new("nr-passes", "DLSSNR", "Passes", "How many model layers run per frame; each costs about one more model run.",
             "Number of model layers per frame, each feeding the next. Costs roughly 1x / 2x / 3x the model time. The result is composed once, " +
             "so colours don't compound, but 2 and 3 are deliberately over-processed looks. Multipass is D3D12 only."),
@@ -350,26 +291,21 @@ public static class HelpTopics
         new("tm-paper", "Tone mapping", "Paper white", "Scales the white point before the model sees the frame; this changes the result.",
             "Multiplies the white point before the model sees the frame. Below 1 treats the scene as brighter (more highlight headroom, darker midtones for the model); " +
             "above 1 lifts dark scenes. Changes the result, not only what the model sees."),
-        new("tm-highlight", "Tone mapping", "Highlight protection", "How much bright areas are protected from being pushed toward white (0 to 100).",
-            "For automatic HDR exposure: 0–100 how much bright areas are protected from being pushed toward white. Higher keeps lamps and sky intact but darkens overall."),
         new("tm-maxratio", "Tone mapping", "Max brightening", "The most any pixel may be brightened, as a multiple.",
             "The most the pass may brighten any pixel, as a multiple. Darkening is never capped. Guards against bright lights turning into coloured blocks."),
         new("tm-transfer", "Tone mapping", "Transfer strength", "How far the frame moves toward the model's picture: 0 is the upscaler's image, 1 the model's.",
             "How far the frame moves toward the model's picture: 0 is exactly the upscaler's image, 1 the model's, above 1 exaggerates."),
-        new("tm-hdrtransfer", "Tone mapping", "HDR brightness transfer", "Experimental HDR brightness measurement for edits generated before SR.",
-            "Experimental. Measures the HDR brightness transfer when the edit is generated before SR and applied to the finished picture. " +
-            "HDR10 / scRGB with scene-linear input only; adds a clean-frame copy and a small analysis pass."),
 
         // ---------- HDR output ----------
         new("hdr-force", "HDR output", "Force HDR colour space", "Makes the game's swapchain HDR even if the game only outputs SDR.",
             "OptiScaler makes the game's swapchain HDR even if the game only outputs SDR. Useful with RenoDX-style HDR mods; otherwise leave off. " +
-            "OptiScaler-NR and OptiScaler F5 before 0.1.33 only; F5 0.1.33 replaced it with HDR output and reads an old ForceHDR=true as HDR output on."),
+            "OptiScaler F5 before 0.1.33 only; F5 0.1.33 replaced it with HDR output and reads an old ForceHDR=true as HDR output on."),
         new("hdr-10", "HDR output", "Use HDR10", "Uses 10-bit HDR10 instead of 16-bit scRGB for the HDR swapchain.",
             "Use the 10-bit HDR10 (PQ) format instead of 16-bit float scRGB for the HDR swapchain: with Force HDR colour space, or with HDR output in OptiScaler F5 0.1.33 and newer. " +
             "Less bandwidth; scRGB keeps more precision."),
         new("hdr-skip", "HDR output", "Skip colour space", "Doesn't set the HDR colour space, for games or mods that set it themselves.",
             "Don't set the HDR colour space; for games or mods that set it themselves and get wrong colours when OptiScaler does too. " +
-            "OptiScaler-NR and OptiScaler F5 before 0.1.33 only."),
+            "OptiScaler F5 before 0.1.33 only."),
         new("hdr-output", "HDR output", "HDR output", "OptiScaler F5 0.1.33+: shows an SDR game correctly inside an HDR signal. Off by default.",
             "OptiScaler F5 0.1.33 and newer. The swapchain is made HDR (scRGB, or HDR10 with Use HDR10) and one pass converts the game's SDR picture when it is shown; the game never sees the HDR format. " +
             "It gives the right brightness and gamma, not brighter highlights the game never had. DirectX 11 and 12 only (no Vulkan); works with XeFG and FSR frame generation, not with DLSS-G. " +
@@ -503,7 +439,7 @@ public static class HelpTopics
             "Windows asks for administrator rights for this one step; the app is never elevated as a whole. ReShade then starts only in games that have a ReShade.ini next to their exe, which the install writes. A layer installed by ReShade's own setup is left alone."),
         new("reshade-template", "ReShade", "ReShade.ini template", "A small ini whose keys are merged into each game's ReShade.ini at install or update.",
             "A small ini you can edit (Edit template) whose keys are merged into each game's ReShade.ini at install or update: screenshot folder, overlay and screenshot keys, effect and texture search paths, disabled add-ons. " +
-            "A value the game's file already has is kept unless the game's Existing configs is set to apply settings. Sections of the add-ons (RenoDX, Lecram, Uplift, Deep Fried Chicken) are ignored here. Uninstalling puts the game's original ReShade.ini back."),
+            "A value the game's file already has is kept unless the game's Existing configs is set to apply settings. Sections of the add-ons (RenoDX, Lecram, Uplift) are ignored here. Uninstalling puts the game's original ReShade.ini back."),
         new("reshade-extras-addons", "ReShade", "ReShade add-ons", "Optional ReShade add-ons from crosire's public list, installed for all games or one game.",
             "The add-ons from crosire's public list (screenshot, capture, shader toggler, input and others). Tick the ones you want in Settings for every game, or on a game's Add-ons & shaders tab for that game alone; a game follows Settings (Auto) until you tick something there, and Reset to auto goes back. " +
             "Apply copies the add-ons into the folder ReShade loads add-ons from (the game's ReShade.ini [ADDON] AddonPath, else the install folder): .addon64 files for 64-bit games, .addon32 for 32-bit ones. The bitness comes from the game's exe; choose another there if it is wrong. " +
@@ -533,7 +469,7 @@ public static class HelpTopics
         new("comp-renodx", "Components", "ShortFuse RenoDX DLSS add-on", "ShortFuse's ReShade add-on that runs DLSS neural rendering; one NR route per game.",
             "ShortFuse's ReShade add-on (renodx-dlss.addon64) that runs DLSS neural rendering itself. The app downloads it automatically, or you import it; the dropdown picks which build this game gets. " +
             "Needs ReShade + add-ons mode, ReShade 6+ with add-on support, a game with its own DLSS and the NR runtime. " +
-            "It is one NR route: next to Lecram, GITC Uplift or Deep Fried Chicken it shows a warning and Install asks you to confirm. With Lecram, NR then runs twice."),
+            "It is one NR route: next to Lecram or GITC Uplift it shows a warning and Install asks you to confirm. With Lecram, NR then runs twice."),
         new("comp-lecram", "Components", "Lecram DLSS5 add-on", "Lecram's ReShade add-on that runs DLSS neural rendering; one NR route per game.",
             "Lecram's ReShade add-on that runs DLSS neural rendering itself: renodx-dlss5.addon64 (v10 and older) or dlss5-nr.addon64 (v11). Import only: you import it, and the dropdown picks the build. " +
             "Needs ReShade + add-ons mode, ReShade 6+ with add-on support, a game with its own DLSS and the NR runtime. " +
@@ -621,8 +557,6 @@ public static class HelpTopics
         "renodx" => "comp-renodx",
         "lecram" => "comp-lecram",
         "uplift" => "uplift",
-        "dfc" => "dfc",
-        "feeder" => "feeder",
         "dlss" => "comp-dlss",
         "streamline" => "comp-streamline",
         _ => throw new ArgumentOutOfRangeException(nameof(key), key, "No help topic for this component"),
@@ -637,14 +571,14 @@ public static class HelpTopics
                     "Special K would be replaced, not loaded: OptiScaler's wiki describes a plugins folder and a LoadSpecialK setting for it, which this app does not set up.",
         ["dlss-version"] = "Keep Latest globally. Pin a game only when a new DLSS build looks worse there (ghosting, shimmer), or for Dynamic MFG pin 310.9.1 or 310.9.16 " +
                            "together with the Streamline swap.",
-        ["opti-build"] = "OptiScaler F5 (janblade). Switch to OptiScaler-NR (ShyVortex) if F5 misbehaves in a game.",
-        ["prereleases"] = "Leave on: the OptiScaler-NR fork publishes nothing else.",
+        ["opti-build"] = "The newest F5 release; pick an older F5 build for a game only if the newest misbehaves there.",
+        ["prereleases"] = "On, unless you only want the releases their authors mark as stable.",
         ["streamline"] = "Only turn on for games where you want Dynamic MFG and the game ships an older Streamline (the DLSS files list shows the SL version). " +
                          "If FG disappears or the game crashes afterwards, use Restore DLSS on that game.",
         ["add-missing"] = "Leave on. It only adds a file to games that have none, and Uninstall removes it again.",
         ["ini-mode"] = "Keep game settings for everyday use: updates never undo tuning you did in-game. Apply app settings once after you changed something here and want " +
                        "it everywhere, then switch back. Fresh config when a mod's config got messy or a new release changed a lot.",
-        ["local-components"] = "The NR runtime is downloaded automatically; import any other nvngx_dlssnr.dll to keep it in the local library too. Choose the default here or a version on a game, then use Use this runtime now. Restore previous runtime puts its previous file back. The ShortFuse and Lecram add-ons and Deep Fried Chicken keep a library too: downloaded or imported builds all stay (Lecram's add-on is import only), pick the default, and name builds yourself.",
+        ["local-components"] = "The NR runtime is downloaded automatically; import any other nvngx_dlssnr.dll to keep it in the local library too. Choose the default here or a version on a game, then use Use this runtime now. Restore previous runtime puts its previous file back. The ShortFuse and Lecram add-ons keep a library too: downloaded or imported builds all stay (Lecram's add-on is import only), pick the default, and name builds yourself.",
         ["keybinds"] = "Pick keys the game doesn't use: Delete, Insert, End, Page Up/Down and \\ are usually free. Avoid Home if you use ReShade's default overlay key.",
         ["skip-tutorial"] = "On, unless you are new to ReShade.",
         ["performance-mode"] = "Off while you set up effects, on for playing. With only add-ons (RenoDX, MFG Unlock) and no effects it makes no difference.",
@@ -659,11 +593,8 @@ public static class HelpTopics
         ["dynamic-target"] = "Refresh rate for G-Sync / VRR displays. A fixed value slightly below refresh (e.g. 138 for 144 Hz) if you cap FPS anyway.",
         ["runtime-selection"] = "Prefer local files when you use a pinned DLSS version or the Streamline swap, otherwise NVIDIA may silently replace them. Game default otherwise.",
         ["hdr-compat"] = "Native until you see HUD smearing or wrong colours with FG in HDR, then UI Composition, then Auto guard + UI, then Final color fallback.",
-        ["nr-denoise-first"] = "Off. Try it in DX12 games with Ray Reconstruction when the model amplifies noise.",
         ["nr-deferred"] = "Off, unless the cost of running at output resolution is too high.",
-        ["nr-residual"] = "Off. Only try it with Ray Reconstruction and Run before upscaling both on.",
         ["nr-automask"] = "Default. Turn off only if people get odd edges.",
-        ["nr-private-upscaler"] = "Default: DLSS.",
         ["mfg-reflex"] = "Game setting. Off (FG-safe) only when a game misbehaves with Reflex while frame generation is forced.",
         ["mfg-fps-cap"] = "Off, or a value a few frames under your refresh rate.",
         ["mfg-vrr-headroom"] = "On with G-Sync / VRR displays when frame times look uneven near the refresh rate.",
@@ -698,16 +629,6 @@ public static class HelpTopics
         ["lc-foreign"] = "Add-on default alone; the app sets observe for you next to ShortFuse's add-on.",
         ["lc-hooks"] = "Add-on default. With a Streamline game and DLSS on set 1; if the game crashes at boot set 2.",
         ["lc-dx11"] = "Auto.",
-        ["dfc-no-dlss"] = "Use a 4.x import. Play in borderless or windowed mode when you want frame generation, and tick Add nvngx_dlssg.dll only on an RTX 40/50 card.",
-        ["dfc-arm"] = "Default. Switch off only to take DFC out of a game without uninstalling, then restart the game.",
-        ["dfc-enabled"] = "Default. Switch off to compare with the game's native image.",
-        ["dfc-passes"] = "1.0 first. Add passes in whole steps only with headroom to spare.",
-        ["dfc-scale"] = "100%. Use 75% to save FPS if you accept a softer image; 125% and above only on very strong cards.",
-        ["dfc-vulkan"] = "Off, unless the game is native Vulkan. Then switch on and restart the game fully.",
-        ["dfc-native-look"] = "Off. Try it if the model shifts the game's colours too far.",
-        ["dfc-cleanup"] = "Off for one or two passes. Try it when colour casts show up with several passes.",
-        ["dfc-colour"] = "Default: 1.0. Lower it in steps if colours look off.",
-        ["dfc-output"] = "Off. Try HUD protection for a crosshair or HUD the model changes, highlight protection for blown-out lights, deband for banding in skies.",
         ["rdx-scale"] = "100% on fast cards; 75% or 50% to save FPS.",
         ["rdx-ui"] = "Add-on default; On if the HUD looks processed.",
         ["rdx-encoding"] = "Add-on default. In HDR games with wrong colours, try HDR10 or scRGB.",
@@ -733,10 +654,8 @@ public static class HelpTopics
                       "replace modes only if composed looks too weak.",
         ["tm-white"] = "Auto HDR exposure for HDR games; Game exposure if the game reports exposure to the upscaler reliably (fewer brightness jumps); Manual as fallback.",
         ["tm-paper"] = "1.0. Lower (0.75) if bright skies or lights lose detail; raise (1.5) only for very dark games.",
-        ["tm-highlight"] = "0 to 25. Raise if lamps and the sky get blown out after NR.",
         ["tm-maxratio"] = "2x. Lower to 1.5x if bright lights break into coloured blocks.",
         ["tm-transfer"] = "1.0. 0.75 for a subtler effect without changing the model's strengths.",
-        ["tm-hdrtransfer"] = "Off unless you use Run before upscaling + Apply to finished picture in an HDR game and brightness looks wrong.",
         ["hdr-force"] = "Off. Only with an HDR mod that expects OptiScaler to make the swapchain HDR.",
         ["hdr-10"] = "Off (scRGB, more precision). On if your capture tool or display chain works better with HDR10.",
         ["hdr-output"] = "Off. On for an SDR game on an HDR display that looks washed out, with XeFG, FSR FG or no frame generation.",

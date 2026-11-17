@@ -5,14 +5,14 @@ namespace DLSSUpdater.Core;
 /// folder. Its keys are merged into a game's ReShade.ini when ReShade is installed or updated, through the same merge as every
 /// other setting: a value the game's ini already has is kept (unless the game's "Existing configs" says apply), the keys this app
 /// writes are recorded, and the file is backed up or removed on uninstall. Sections other components own (RenoDX, Lecram, Uplift,
-/// Deep Fried Chicken) are ignored here.
+/// and the DFC section older versions wrote) are ignored here.
 /// </summary>
 public static class ReShadeIniTemplate
 {
     public const string DefaultText = """
         ; DLSS5 Updater merges these keys into the ReShade.ini of every game it installs or updates ReShade in.
         ; A key a game's ReShade.ini already has is kept (unless that game's "Existing configs" is set to apply the settings).
-        ; Delete a line to stop managing that key. Sections of the add-ons (RenoDX, Lecram, Uplift, Deep Fried Chicken) are ignored.
+        ; Delete a line to stop managing that key. Sections of the add-ons (RenoDX, Lecram, Uplift) are ignored.
 
         [ADDON]
         ; Generic Depth and Effect Runtime Sync are ReShade's own add-ons; they are off here because HDR add-ons don't need them.
@@ -50,7 +50,7 @@ public static class ReShadeIniTemplate
         return s.StartsWith("renodx", StringComparison.OrdinalIgnoreCase)
                || s.Equals(LecramIni.Section, StringComparison.OrdinalIgnoreCase)
                || s.Equals(UpliftConfig.Section, StringComparison.OrdinalIgnoreCase)
-               || s.Equals(DfcConfig.Section, StringComparison.OrdinalIgnoreCase);
+               || s.Equals(AppSettings.DfcSection, StringComparison.OrdinalIgnoreCase);
     }
 
     /// <summary>The template's keys, minus those of sections other components own. Comments and empty values are dropped.</summary>

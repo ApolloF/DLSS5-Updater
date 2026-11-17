@@ -15,8 +15,6 @@ public sealed record InstallRefs
     public string? RenoDxTag { get; set; }
     public string? LecramId { get; set; }
     public string? LecramTag { get; set; }
-    public string? DfcId { get; set; }
-    public string? DfcTag { get; set; }
     public string? MfgTag { get; set; }
     public string? DlssTag { get; set; }
     public string? StreamlineTag { get; set; }
@@ -28,7 +26,7 @@ public sealed record InstallRefs
     public static InstallRefs From(InstallManifest m) => new()
     {
         OptiTag = m.OptiTag, UpliftTag = m.UpliftTag, DlssNrId = m.DlssNrId, PreviousDlssNrId = m.PreviousDlssNrId,
-        RenoDxId = m.RenoDxId, RenoDxTag = m.RenoDxTag, LecramId = m.LecramId, LecramTag = m.LecramTag, DfcId = m.DfcId, DfcTag = m.DfcTag,
+        RenoDxId = m.RenoDxId, RenoDxTag = m.RenoDxTag, LecramId = m.LecramId, LecramTag = m.LecramTag,
         MfgTag = m.MfgTag, DlssTag = m.DlssTag, StreamlineTag = m.StreamlineTag,
         Components = m.Components.Where(c => c.BuildId is not null).GroupBy(c => c.Id, StringComparer.OrdinalIgnoreCase)
             .ToDictionary(g => g.Key, g => g.First().BuildId!, StringComparer.OrdinalIgnoreCase) is { Count: > 0 } builds ? builds : null,
@@ -38,7 +36,7 @@ public sealed record InstallRefs
     public InstallManifest ToManifest(string dir) => new()
     {
         Dir = dir, OptiTag = OptiTag, UpliftTag = UpliftTag, DlssNrId = DlssNrId, PreviousDlssNrId = PreviousDlssNrId,
-        RenoDxId = RenoDxId, RenoDxTag = RenoDxTag, LecramId = LecramId, LecramTag = LecramTag, DfcId = DfcId, DfcTag = DfcTag,
+        RenoDxId = RenoDxId, RenoDxTag = RenoDxTag, LecramId = LecramId, LecramTag = LecramTag,
         MfgTag = MfgTag, DlssTag = DlssTag, StreamlineTag = StreamlineTag,
         Components = Components?.Select(c => new InstalledComponent { Id = c.Key, BuildId = c.Value }).ToList() ?? [],
     };
@@ -51,7 +49,6 @@ public sealed record InstallRefs
         if (DlssNrId is not null || PreviousDlssNrId is not null) yield return LibraryKind.DlssNr;
         if (RenoDxId is not null || RenoDxTag is not null) yield return LibraryKind.RenoDx;
         if (LecramId is not null || LecramTag is not null) yield return LibraryKind.Lecram;
-        if (DfcId is not null || DfcTag is not null) yield return LibraryKind.Dfc;
         foreach (var id in Components?.Keys ?? Enumerable.Empty<string>())
             if (ComponentRegistry.Find(id)?.Library is { } library) yield return library;
     }
@@ -61,7 +58,7 @@ public sealed record InstallRefs
         other is not null
         && OptiTag == other.OptiTag && UpliftTag == other.UpliftTag && DlssNrId == other.DlssNrId && PreviousDlssNrId == other.PreviousDlssNrId
         && RenoDxId == other.RenoDxId && RenoDxTag == other.RenoDxTag && LecramId == other.LecramId && LecramTag == other.LecramTag
-        && DfcId == other.DfcId && DfcTag == other.DfcTag && MfgTag == other.MfgTag && DlssTag == other.DlssTag
+        && MfgTag == other.MfgTag && DlssTag == other.DlssTag
         && StreamlineTag == other.StreamlineTag && VolumeSerial == other.VolumeSerial
         && SameBuilds(Components, other.Components);
 
@@ -71,7 +68,7 @@ public sealed record InstallRefs
         return a is null || a.All(p => b!.FirstOrDefault(q => q.Key.Equals(p.Key, StringComparison.OrdinalIgnoreCase)) is { Key: not null } q && q.Value == p.Value);
     }
 
-    public override int GetHashCode() => HashCode.Combine(OptiTag, DlssNrId, RenoDxId, LecramId, DfcId, VolumeSerial, Components?.Count ?? 0);
+    public override int GetHashCode() => HashCode.Combine(OptiTag, DlssNrId, RenoDxId, LecramId, VolumeSerial, Components?.Count ?? 0);
 }
 
 /// <summary>

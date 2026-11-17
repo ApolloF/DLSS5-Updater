@@ -94,7 +94,7 @@ public static class LegacyComponents
         if (m.Opti)
         {
             var proxy = m.Mode == InstallMode.OptiScaler ? m.Proxy : null;
-            var extras = OptiSources.All.SelectMany(s => s.ExtraFiles).ToArray();
+            var extras = OptiSources.F5.ExtraFiles;
             var opti = Add(ComponentRegistry.OptiScaler, m.OptiTag, m.OptiTag,
                 f => Local(f) is { } l && (l.Equals(proxy, StringComparison.OrdinalIgnoreCase) || extras.Contains(l, StringComparer.OrdinalIgnoreCase)
                                            || ComponentRegistry.Find(ComponentRegistry.OptiScaler)!.OwnsFile(l)));

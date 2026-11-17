@@ -284,8 +284,7 @@ Per-game build picks are untouched.
 ## App support
 
 DLSS5 Updater downloads and installs the add-on automatically from the catalog mirror (`neural.lecram`; the file itself decides v10 or v11) or imports it (the private build can also fetch v11 builds from the author's channel, see "Update source") and installs it per game in ReShade-only mode, with the same
-prerequisites as ShortFuse's add-on: ReShade 6+, a game with native DLSS and the NR runtime `nvngx_dlssnr.dll`. It excludes
-OptiScaler-NR and Deep Fried Chicken. It is not added to `[ADDON] LoadFromDllMain`, since nothing here shows it needs early load.
+prerequisites as ShortFuse's add-on: ReShade 6+, a game with native DLSS and the NR runtime `nvngx_dlssnr.dll`. It is not added to `[ADDON] LoadFromDllMain`, since nothing here shows it needs early load.
 
 - **Library.** Every imported build is kept: `components\lecram-dlss5\<sha256>\<file name>` plus a `version.json` (id = SHA-256,
   file name, file version, generation V10/V11, detected build label, the user's own label, import date). Importing the same file
@@ -300,7 +299,7 @@ OptiScaler-NR and Deep Fried Chicken. It is not added to `[ADDON] LoadFromDllMai
   `{label}-{sha256[..12]}`.
 - **Placement.** The chosen build's file is placed under its generation's name. The other generation's file is removed if the app
   placed it, or moved to the backup folder if it was already in the game (v11 goes inert next to `renodx-dlss5.addon64`). Other
-  NR injectors (`renodx-dlssfix`, Deep Fried Chicken) are moved aside too. Uninstall restores everything. ShortFuse's add-on is left alone.
+  NR injectors (`renodx-dlssfix`, Deep Fried Chicken from an older version) are moved aside too. Uninstall restores everything. ShortFuse's add-on is left alone.
 - **Keys written.** Only the options set in Settings, only to `[RenoDX.DLSS5]`, only while the add-on is installed. Options that
   exist in one generation only are hidden for the other (v10 only: `NRAutoMask`; v11 only: `NeuralUplift`, `NRPreset`,
   `NRPass2Preset`..`NRPass4Preset`, `NRVramBuffering`, `NRGpuCrashWitness`, `NRPresentFgPath`); `NRHookPoint`, `NRStyle`, `NRLocalStructure`, `NRSkinStructure` and `NRPresentGuides` offer

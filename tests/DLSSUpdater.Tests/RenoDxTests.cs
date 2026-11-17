@@ -28,11 +28,11 @@ public sealed class RenoDxTests : IDisposable
         _nr = _store.ImportDlssNr(nr);
         _game = new GameInfo { Id = _root, Root = _root, Name = "Reno game", Dlss = [new DlssDll { Name = "nvngx_dlss.dll" }] };
 
-        var pkg = Path.Combine(ComponentStore.TagDir(Component.OptiScaler, "v9.9.9"), "pkg");
+        var pkg = Path.Combine(ComponentStore.TagDir(Component.OptiScaler, "v0.1.30-f5"), "pkg");
         Directory.CreateDirectory(pkg);
         File.WriteAllText(Path.Combine(pkg, "OptiScaler.dll"), "OPTI");
         File.WriteAllText(Path.Combine(pkg, "OptiScaler.ini"), "[DLSSG]\nAdaMfgUnlock=auto\n[DlssNr]\nEnabled=auto\n");
-        var release = new ReleaseInfo { Tag = "v9.9.9" };
+        var release = new ReleaseInfo { Tag = "v0.1.30-f5" };
         ComponentStore.MarkComplete(Component.OptiScaler, release);
         _store.Opti = release;
     }

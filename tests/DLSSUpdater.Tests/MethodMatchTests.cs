@@ -45,7 +45,6 @@ public sealed class MethodMatchTests
     [InlineData("reshade", InstallMode.OptiScaler, true, true, null)]
     [InlineData("reshade", InstallMode.ReShadeOnly, true, false, true)]
     [InlineData("lecram", InstallMode.OptiScaler, false, true, false)]
-    [InlineData("feeder", InstallMode.OptiScaler, false, true, false)]
     [InlineData("lecram", InstallMode.ReShadeOnly, true, true, null)]
     [InlineData("mfg", InstallMode.OptiScaler, true, true, null)]
     public void RowRules_FollowTheMode(string key, InstallMode mode, bool visible, bool editable, bool? on) =>
@@ -106,7 +105,7 @@ public sealed class MethodMatchTests
     public void EveryComponentAMethodCanTurnOn_HasATableRow()
     {
         foreach (var id in new[] { ComponentRegistry.OptiScaler, ComponentRegistry.ReShade, ComponentRegistry.MfgUnlock, ComponentRegistry.DlssNr, ComponentRegistry.RenoDx,
-                     ComponentRegistry.Lecram, ComponentRegistry.Uplift, ComponentRegistry.Dfc, ComponentRegistry.Feeder, ComponentRegistry.Dlss, ComponentRegistry.Streamline })
+                     ComponentRegistry.Lecram, ComponentRegistry.Uplift, ComponentRegistry.Dlss, ComponentRegistry.Streamline })
             Assert.NotNull(ComponentTable.KeyOf(id));
         Assert.Equal(ComponentTable.Rows.Count, ComponentTable.Rows.Select(r => r.Key).Distinct().Count());
     }

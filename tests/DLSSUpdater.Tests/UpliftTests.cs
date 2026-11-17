@@ -74,7 +74,7 @@ public sealed class UpliftTests : IDisposable
         Assert.Equal("mine.ini", ini.Get("GENERAL", "PresetPath"));
         Assert.Equal("keep", ini.Get("OTHER", "Setting"));
         Assert.Equal("foreign", ini.Get(LecramIni.Section, "Junk"));
-        Assert.Null(DfcConfig.EffectSearchPathsFor(ini.Get("GENERAL", "EffectSearchPaths"), _root));
+        Assert.Null(UpliftConfig.EffectSearchPathsFor(ini.Get("GENERAL", "EffectSearchPaths"), _root));
         var m = Manifest();
         var backup = Assert.Single(m.Backups, b => b.Original == "ReShade.ini");
         Assert.Equal(original, File.ReadAllText(Path.Combine(InstallManifest.BackupDirFor(_root), backup.Backup)));
@@ -124,7 +124,7 @@ public sealed class UpliftTests : IDisposable
         Assert.Equal("2", Ini().Get("Uplift", "Style"));
         var paths = Ini().Get("GENERAL", "EffectSearchPaths");
         Assert.Contains("existing", paths);
-        Assert.Null(DfcConfig.EffectSearchPathsFor(paths, _root));
+        Assert.Null(UpliftConfig.EffectSearchPathsFor(paths, _root));
         var m = Manifest();
         Assert.True(m.Uplift);
         Assert.True(m.ReShade);
@@ -229,7 +229,7 @@ public sealed class UpliftTests : IDisposable
         ComponentRow Row(string key) => vm.Components.Single(c => c.Key == key);
         Assert.True(Row("uplift").Enabled);
         Assert.True(vm.BuildOptions(false, false).Uplift);
-        foreach (var key in new[] { "renodx", "lecram", "dfc" })
+        foreach (var key in new[] { "renodx", "lecram" })
         {
             Row(key).Enabled = true;
             Assert.True(Row("uplift").Enabled);
@@ -249,7 +249,7 @@ public sealed class UpliftTests : IDisposable
     public async Task Install_NeedsConfirmationForConflictingRoutes_AndRejects32BitGames_BeforeChangingGameFiles()
     {
         var installer = new Installer(_store);
-        foreach (var options in new[] { Options with { Lecram = true }, Options with { RenoDx = true }, Options with { Dfc = true }, Options with { DlssNr = false } })
+        foreach (var options in new[] { Options with { Lecram = true }, Options with { RenoDx = true }, Options with { DlssNr = false } })
             await Assert.ThrowsAsync<InvalidOperationException>(() => installer.InstallAsync(_game, _root, options, null, default));
         WriteExe(_game.Exes[0], Machine.I386);
         var ex = await Assert.ThrowsAsync<InvalidOperationException>(() => installer.InstallAsync(_game, _root, Options, null, default));
@@ -262,10 +262,10 @@ public sealed class UpliftTests : IDisposable
     public async Task Install_OptiScalerNr_DisplacesUpliftFiles_AndRestoresTheManualSet()
     {
         foreach (var rel in ComponentStore.UpliftFiles) FileUtil.AtomicWriteText(G(rel), "manual");
-        var pkg = Path.Combine(ComponentStore.TagDir(Component.OptiScaler, "v9.9.9"), "pkg");
+        var pkg = Path.Combine(ComponentStore.TagDir(Component.OptiScaler, "v0.1.30-f5"), "pkg");
         FileUtil.AtomicWriteText(Path.Combine(pkg, "OptiScaler.dll"), "opti");
         FileUtil.AtomicWriteText(Path.Combine(pkg, "OptiScaler.ini"), "[DlssNr]\nEnabled=auto\n");
-        _store.Opti = new ReleaseInfo { Tag = "v9.9.9" };
+        _store.Opti = new ReleaseInfo { Tag = "v0.1.30-f5" };
         ComponentStore.MarkComplete(Component.OptiScaler, _store.Opti);
         var installer = new Installer(_store);
         await installer.InstallAsync(_game, _root, new InstallOptions { Opti = true, DlssNr = true, DlssNrId = _nr.Id }, null, default);
@@ -385,7 +385,7 @@ public sealed class UpliftTests : IDisposable
         {
             foreach (var rel in ComponentStore.UpliftFiles)
             {
-                var path = rel.StartsWith(ComponentStore.DfcShaderDir) ? "Shaders/" + Path.GetFileName(rel) : "Addons/" + rel;
+                var path = rel.StartsWith(ComponentStore.ShaderDir) ? "Shaders/" + Path.GetFileName(rel) : "Addons/" + rel;
                 using var writer = new StreamWriter(archive.CreateEntry(path).Open());
                 writer.Write("uplift-" + rel);
             }

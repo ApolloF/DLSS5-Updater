@@ -8,7 +8,7 @@ public sealed record CompatReport(string Tag, IReadOnlyList<string> MissingKeys,
     public IReadOnlyList<string> ChangedKeys { get; init; } = [];
 
     /// <summary>The build the checked release belongs to, as the app names it.</summary>
-    public string Name { get; init; } = OptiSources.Default.Name;
+    public string Name { get; init; } = OptiSources.F5.Name;
 
     public string Summary
     {
@@ -36,7 +36,7 @@ public static class OptiCompat
 {
     public static async Task<CompatReport> CheckAsync(GitHubClient gh, string tag, IEnumerable<(string Section, string Key)> managed, CancellationToken ct)
     {
-        var source = OptiSources.OfTag(tag);
+        var source = OptiSources.F5;
         var cached = await FetchIniAsync(gh, tag, ct);
         var ini = IniFile.Load(cached);
 
@@ -80,7 +80,7 @@ public static class OptiCompat
     {
         var cached = Path.Combine(AppPaths.Cache, "optiscaler", $"ini-{string.Concat(tag.Where(char.IsLetterOrDigit))}.ini");
         if (!File.Exists(cached))
-            await gh.DownloadAsync($"https://raw.githubusercontent.com/{OptiSources.OfTag(tag).Repo}/{OptiSources.RawTag(tag)}/OptiScaler.ini", cached, "OptiScaler.ini", null, ct);
+            await gh.DownloadAsync($"https://raw.githubusercontent.com/{OptiSources.F5.Repo}/{OptiSources.RawTag(tag)}/OptiScaler.ini", cached, "OptiScaler.ini", null, ct);
         return cached;
     }
 

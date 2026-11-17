@@ -145,7 +145,7 @@ public sealed class NrLibraryTests : IDisposable
         Assert.Single(_store.DlssNrVersions);
         FileUtil.AtomicWriteText(AppPaths.SettingsFile, """{"OptiSource":"wilsjo2/OptiScaler-DLSSNR-PreSR-Multipass","DlssTag":"v310.1.0","Games":{"game":{"Proxy":"winmm.dll","DlssTag":"v3.7.0"}}}""");
         var settings = AppSettings.Load();
-        Assert.Equal(ComponentStore.OptiRepo, settings.OptiSource);
+        Assert.DoesNotContain("OptiSource", File.ReadAllText(AppPaths.SettingsFile));
         Assert.Equal("winmm.dll", settings.For("game").Proxy);
         Assert.Equal("v3.7.0", settings.For("game").DlssTag);
         Assert.Equal("v310.1.0", settings.DlssTag);

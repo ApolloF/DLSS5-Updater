@@ -10,20 +10,16 @@ public enum Method
 {
     /// <summary>A: newer DLSS files in a game that ships them.</summary>
     DlssUpdate,
-    /// <summary>B/C: an NR add-on on the game's own DLSS (ShortFuse, Lecram, Deep Fried Chicken, GITC Uplift).</summary>
+    /// <summary>B: an NR add-on loaded through ReShade (ShortFuse and Lecram on the game's own DLSS, GITC Uplift with or without it).</summary>
     NeuralAddon,
-    /// <summary>F: OptiScaler's NR build.</summary>
+    /// <summary>F: OptiScaler F5, OptiScaler's NR build.</summary>
     OptiScalerNr,
     /// <summary>E: OptiScaler without NR (FSR, XeSS, frame generation).</summary>
     OptiScaler,
-    /// <summary>D: DLSS5-Feeder with Deep Fried Chicken, for games without DLSS.</summary>
-    Feeder,
     /// <summary>H: MFG Unlock.</summary>
     MfgUnlock,
     /// <summary>I: NVIDIA's driver frame generation.</summary>
     SmoothMotion,
-    /// <summary>Not in the app yet: the DLSS5 DX11 bridge.</summary>
-    Dx11Bridge,
     /// <summary>G, not in the app yet: a third-party upscaler mod for this game (REFramework PDUpscaler, ...).</summary>
     UpscalerMod,
     /// <summary>G: a Luma framework mod, installed from the Luma section of the game page (never picked for you, and not to be stacked with a RenoDX HDR mod).</summary>
@@ -107,12 +103,8 @@ public sealed record AdvisorInput(GameInfo Game, GpuInfo Gpu)
     public LumaChoice? Luma { get; init; }
     /// <summary>Component ids with a build in the app's library that the user imported: the NR runtime and the NR add-ons.</summary>
     public IReadOnlySet<string> Imported { get; init; } = new HashSet<string>();
-    /// <summary>The newest Deep Fried Chicken build runs in games without their own DLSS (4.x or newer).</summary>
-    public bool DfcRunsWithoutDlss { get; init; } = true;
     /// <summary>The neural routes already in the game (<see cref="NrAddons.PresentIn"/>).</summary>
     public IReadOnlyList<NrAddon> InstalledRoutes { get; init; } = [];
-    /// <summary>A motion-vector provider shader for Feeder (LumeniteFX, ...) is already in the game's shader folder.</summary>
-    public bool MotionProviderPresent { get; init; }
     /// <summary>The NR add-ons (component ids) switched on in the game page's table: the neural rendering card uses the one the table has on.</summary>
     public IReadOnlyList<string> AddonsOn { get; init; } = [];
 }
@@ -130,7 +122,8 @@ public static class MethodAdvisor
     /// </summary>
     public static bool IsAddOn(Method m) => m == Method.MfgUnlock;
 
-    public const string FeederCaveat = "DLAA only: no performance gain, a few ms per frame at 4K. Single-player games only.";
+    /// <summary>What NR on a game without DLSS costs: the add-on runs on the finished image, so there is no upscaling.</summary>
+    public const string NoDlssCaveat = "No upscaling, so no FPS gain: NR costs a few ms per frame at 4K.";
 
     public static string TitleOf(Method m) => m switch
     {
@@ -138,10 +131,8 @@ public static class MethodAdvisor
         Method.NeuralAddon => "Neural rendering add-on",
         Method.OptiScalerNr => "OptiScaler with neural rendering",
         Method.OptiScaler => "OptiScaler (FSR, XeSS, frame generation)",
-        Method.Feeder => "DLSS5-Feeder + Deep Fried Chicken",
         Method.MfgUnlock => "MFG Unlock",
         Method.SmoothMotion => "NVIDIA Smooth Motion",
-        Method.Dx11Bridge => "DLSS5 DX11 bridge",
         Method.UpscalerMod => "Upscaler mod for this game",
         Method.Luma => "Luma framework mod",
         Method.AioAddon => "All-in-one add-on",
@@ -153,13 +144,11 @@ public static class MethodAdvisor
     public static string SummaryOf(Method m) => m switch
     {
         Method.DlssUpdate => "Replaces the game's DLSS files with the newest release.",
-        Method.NeuralAddon => "Adds neural rendering on top of the game's own DLSS, loaded through ReShade.",
+        Method.NeuralAddon => "Adds neural rendering through a ReShade add-on, on the game's own DLSS or on its image.",
         Method.OptiScalerNr => "OptiScaler replaces the game's upscaler and adds neural rendering.",
         Method.OptiScaler => "OptiScaler replaces the game's upscaler and adds frame generation.",
-        Method.Feeder => "Runs neural rendering through ReShade in a game without DLSS, at native resolution (no FPS gain).",
         Method.MfgUnlock => "Adds a mod that turns on multi frame generation in a game with DLSS frame generation: DLSS-G on RTX 40, Intel XeMFG on RTX 20/30.",
         Method.SmoothMotion => "Turns on NVIDIA's driver frame generation from the game's NVIDIA profile tab; adds no files.",
-        Method.Dx11Bridge => "Neural rendering for a DX11 game that has DLSS. Not in the app yet.",
         Method.UpscalerMod => "A community mod that gives this game an upscaler. Not in the app yet.",
         Method.Luma => "Installs this game's Luma mod, which changes its rendering and adds HDR and optional DLSS.",
         Method.AioAddon => "One add-on for neural rendering, upscaling and frame generation. Not in the app yet.",
@@ -248,7 +237,7 @@ public static class MethodAdvisor
                 ? "Upscaling swap to FSR or XeSS inputs and frame generation, no NVIDIA features needed."
                 : "FSR or XeSS inputs and frame generation. A game with only DLSS inputs needs DXGI spoofing or OptiPatcher (OptiScaler's Spoofing page); FSR 4 officially needs RDNA 3 or 4."),
         };
-        foreach (var m in new[] { Method.DlssUpdate, Method.NeuralAddon, Method.OptiScalerNr, Method.Feeder, Method.MfgUnlock, Method.SmoothMotion })
+        foreach (var m in new[] { Method.DlssUpdate, Method.NeuralAddon, Method.OptiScalerNr, Method.MfgUnlock, Method.SmoothMotion })
             methods.Add(Opt(m, Availability.NotPossible, $"Needs an NVIDIA RTX card: {why}."));
         var rows = new List<int> { 19 };
         AddExtras(ctx, rows, methods);
@@ -306,34 +295,35 @@ public static class MethodAdvisor
         if (api is GraphicsApis.Dx9 or GraphicsApis.Dx8)
         {
             rows.Add(10);
-            list.Add(Feed(c, c.Is32 ? "beta" : null, "D3D9 and older games are translated to D3D11 first with dgVoodoo2 (freeware, not redistributable: you add it, Feeder's README has the settings); best motion vectors of all APIs.",
-                "dgVoodoo2 placed by hand (D3D9.dll and dgVoodoo.conf beside the exe)"));
+            list.Add(api == GraphicsApis.Dx9
+                ? NoDlssNeural(c, "Direct3D 9: GITC Uplift runs NR through its 64-bit helper process.")
+                : NoDlssNeural(c, "Direct3D 8 runs through ReShade's Direct3D 9 path.", unverifiedWhy: "GITC Uplift's docs don't name Direct3D 8"));
             if (LumaOffered(c) is { } luma) list.Add(luma);
             return;
         }
         if (api == GraphicsApis.Dx10)
         {
             rows.Add(14);
-            list.Add(Feed(c, "beta", "Direct3D 10 needs nothing extra, but the README says it has not run in a game for 64-bit helper mode: low confidence.", null, unverified: true));
+            list.Add(NoDlssNeural(c, "Direct3D 10 game without DLSS.", unverifiedWhy: "GITC Uplift's docs don't name Direct3D 10"));
             return;
         }
         if (api == GraphicsApis.OpenGL)
         {
             rows.Add(12);
-            list.Add(Feed(c, null, "OpenGL works (Worms Ultimate Mayhem, KOTOR, MX Bikes); the game must render on the NVIDIA GPU. Many OpenGL games are 32-bit.", null));
+            list.Add(NoDlssNeural(c, "OpenGL needs ReShade 6.8 or newer, and the game must render on the NVIDIA GPU."));
             return;
         }
         if (api == GraphicsApis.Vulkan)
         {
             rows.Add(13);
-            list.Add(Feed(c, null, "Vulkan works through Feeder's layer (DOOM 2016 proven). Turn Smooth Motion off for this game's Vulkan path.",
-                "ReShade's Vulkan layer registered machine-wide (one administrator prompt) and the exe listed in ReShadeApps.ini"));
+            list.Add(NoDlssNeural(c, "Vulkan: ReShade loads through its Vulkan layer, so no dll goes into the game.",
+                "ReShade's Vulkan layer installed (Settings → ReShade → Vulkan layer; one administrator prompt)"));
             return;
         }
         if (c.Is32)
         {
             rows.Add(11);
-            list.Add(Feed(c, "beta", "NGX is 64-bit only, so a 32-bit game gets dlss5-feed.addon32 plus a 64-bit helper in host64\\.", null));
+            list.Add(NoDlssNeural(c, "32-bit game without DLSS."));
             return;
         }
 
@@ -355,7 +345,7 @@ public static class MethodAdvisor
             {
                 rows.Add(6);
                 list.Add(Opti(c, "The game has an FSR plugin: OptiScaler swaps it for FSR 3.1/4 or XeSS (optional OptiFG on DX12)."));
-                list.Add(Feed(c, null, "Neural rendering on top, only if OptiScaler is not used.", null));
+                list.Add(NoDlssNeural(c, "Neural rendering on top, only if OptiScaler is not used. " + NoDlssCaveat));
                 return;
             }
             if (c.In.OptiCompat is { List: "lumaUe" } && c.Api == GraphicsApis.Dx11)
@@ -363,7 +353,7 @@ public static class MethodAdvisor
                 list.Add(LumaOffered(c) ?? NoLumaDownload("Luma UE replaces this DX11 Unreal game's TAA with DLSS or DLAA (it is on OptiScaler's Luma UE list)"));
                 list.Add(Opti(c, "OptiScaler on top of what Luma UE adds."));
             }
-            list.Add(Feed(c, null, "Unreal game without an upscaler plugin: Feeder + Deep Fried Chicken adds NR. " + FeederCaveat, null));
+            list.Add(NoDlssNeural(c, "Unreal game without an upscaler plugin: GITC Uplift adds NR. " + NoDlssCaveat));
             return;
         }
 
@@ -372,21 +362,21 @@ public static class MethodAdvisor
             rows.Add(6);
             var what = inputs is not null ? $"OptiScaler's list shows it working with {string.Join(", ", inputs.Inputs)}" : "the game ships FSR or XeSS";
             list.Add(Opti(c, $"{Capital(what)}: OptiScaler swaps it for FSR 3.1/4 or XeSS (optional OptiFG on DX12)."));
-            list.Add(Feed(c, null, "NR on top, only if OptiScaler is not used. " + FeederCaveat, null));
+            list.Add(NoDlssNeural(c, "NR on top, only if OptiScaler is not used. " + NoDlssCaveat));
             return;
         }
 
         if (tech.Engine == GameEngine.Unity)
         {
             rows.Add(9);
-            list.Add(Feed(c, null, "Unity DX11 without DLSS: proven in Fell & Sell. Read the graphics API from Player.log when it says otherwise.", null));
+            list.Add(NoDlssNeural(c, "Unity game without DLSS: GITC Uplift adds NR. " + NoDlssCaveat));
             list.Add(SmoothMotion(c, "Frame generation only."));
             return;
         }
 
         rows.Add(5);
-        list.Add(Feed(c, null, "No upscaler in the game: Feeder + Deep Fried Chicken adds NR. ShortFuse's renodx-dlss alone does nothing here. " + FeederCaveat,
-            null, unverified: !c.ApiKnown, unverifiedWhy: "the graphics API wasn't detected, DX11/12 is assumed"));
+        list.Add(NoDlssNeural(c, "No upscaler in the game: GITC Uplift adds NR. ShortFuse's and Lecram's add-ons need the game's own DLSS. " + NoDlssCaveat,
+            unverifiedWhy: c.ApiKnown ? null : "the graphics API wasn't detected, DX11/12 is assumed"));
         list.Add(Opt(Method.AioAddon, Availability.Coming, "A standalone all-in-one add-on (kibblerz DLSS5-Reshade-AIO) does NR, SR and FG in one; young project, the app doesn't install it yet."));
         list.Add(SmoothMotion(c, "Frame generation only, no ReShade needed."));
     }
@@ -408,9 +398,8 @@ public static class MethodAdvisor
         }
         else if (dx11)
         {
-            list.Add(Neural(c, "NR on the game's DLSS. DX11 needs an add-on that bridges DX11 itself (renodx-dlss5 8.x) or the DX11 bridge; the app doesn't check which build you have.",
-                null, unverified: true, unverifiedWhy: "the DX11 bridge requirement isn't checked against your add-on build"));
-            list.Add(Opt(Method.Dx11Bridge, Availability.Coming, "NIGos' DLSS5 DX11 bridge with Deep Fried Chicken; never combine it with Feeder. The app doesn't install it yet."));
+            list.Add(Neural(c, "NR on the game's DLSS. DX11 needs an add-on build that supports DX11 itself (renodx-dlss5 8.x or newer); the app doesn't check which build you have.",
+                null, unverified: true, unverifiedWhy: "DX11 support isn't checked against your add-on build"));
             list.Add(OptiNr(c, "OptiScaler's NR build on the game's DLSS."));
         }
         else
@@ -516,18 +505,18 @@ public static class MethodAdvisor
     {
         // The add-on the table has on (what Install puts in), else the one already in the game (the install keeps it), else the first
         // one the user has imported, and GITC Uplift downloads itself when none is.
-        var addons = new[] { (NrAddon.RenoDx, ComponentRegistry.RenoDx), (NrAddon.Lecram, ComponentRegistry.Lecram), (NrAddon.Dfc, ComponentRegistry.Dfc), (NrAddon.Uplift, ComponentRegistry.Uplift) };
+        var addons = new[] { (NrAddon.RenoDx, ComponentRegistry.RenoDx), (NrAddon.Lecram, ComponentRegistry.Lecram), (NrAddon.Uplift, ComponentRegistry.Uplift) };
         var addon = addons.Select(x => x.Item2).FirstOrDefault(id => c.In.AddonsOn.Contains(id, StringComparer.OrdinalIgnoreCase))
             ?? addons.Where(x => c.In.InstalledRoutes.Contains(x.Item1)).Select(x => x.Item2).FirstOrDefault()
-            ?? new[] { ComponentRegistry.RenoDx, ComponentRegistry.Lecram, ComponentRegistry.Dfc }.FirstOrDefault(c.Has) ?? ComponentRegistry.Uplift;
+            ?? new[] { ComponentRegistry.RenoDx, ComponentRegistry.Lecram }.FirstOrDefault(c.Has) ?? ComponentRegistry.Uplift;
         var needs = new List<string>();
         if (NrRuntimeNeed(c) is { } nr) needs.Add(nr);
         if (extraNeed is not null) needs.Add(extraNeed);
         var cost = NrCost(c.Gpu);
         if (unverifiedWhy is not null) reason += $" Unverified: {unverifiedWhy}.";
-        var route = addon == ComponentRegistry.RenoDx ? NrAddon.RenoDx : addon == ComponentRegistry.Lecram ? NrAddon.Lecram : addon == ComponentRegistry.Dfc ? NrAddon.Dfc : NrAddon.Uplift;
+        var route = addon == ComponentRegistry.RenoDx ? NrAddon.RenoDx : addon == ComponentRegistry.Lecram ? NrAddon.Lecram : NrAddon.Uplift;
         return Opt(Method.NeuralAddon, needs.Count == 0 ? Availability.Available : Availability.NeedsSetup,
-            $"{reason} {cost}".Trim() + (addon == ComponentRegistry.Uplift ? " GITC Uplift downloads itself; ShortFuse's, Lecram's and Deep Fried Chicken's are imported." : ""),
+            $"{reason} {cost}".Trim() + (addon == ComponentRegistry.Uplift ? " GITC Uplift downloads itself; ShortFuse's and Lecram's are imported." : ""),
             [ComponentRegistry.ReShade, ComponentRegistry.DlssNr, addon], needs, InstallMode.ReShadeOnly, unverified)
             with { Route = route, Title = $"Neural rendering with {ComponentTable.NameOf(addon)}" };
     }
@@ -578,22 +567,20 @@ public static class MethodAdvisor
             : Opt(Method.SmoothMotion, Availability.NotPossible, "Smooth Motion needs an RTX 40 or 50 card (the research marks that as unverified).", unverified: true);
     }
 
-    /// <summary>Feeder with Deep Fried Chicken, with what it needs: the imports, a motion-vector shader and the route's manual steps.</summary>
-    private static MethodOption Feed(Ctx c, string? beta, string reason, string? routeNeed, bool unverified = false, string? unverifiedWhy = null)
+    /// <summary>
+    /// NR in a game without DLSS: GITC Uplift runs the model on the game's image (ShortFuse's and Lecram's add-ons need the game's own
+    /// DLSS here). The installer takes 64-bit x64 games only, so a 32-bit game gets a not-possible card.
+    /// </summary>
+    private static MethodOption NoDlssNeural(Ctx c, string reason, string? routeNeed = null, string? unverifiedWhy = null)
     {
+        if (c.Is32) return Opt(Method.NeuralAddon, Availability.NotPossible, "GITC Uplift, the NR add-on for games without DLSS, installs in 64-bit games only.");
         var needs = new List<string>();
         if (NrRuntimeNeed(c) is { } nr) needs.Add(nr);
-        if (!c.Has(ComponentRegistry.Dfc)) needs.Add("Import Deep Fried Chicken 4 or newer (it has no public download)");
-        else if (!c.In.DfcRunsWithoutDlss) needs.Add("Import Deep Fried Chicken 4 or newer: 2.x needs the game's own DLSS");
-        if (!c.In.MotionProviderPresent)
-            needs.Add("A motion-vector shader in reshade-shaders\\Shaders (LumeniteFX Kernel is recommended; its licence stops the app from shipping it)");
         if (routeNeed is not null) needs.Add(routeNeed);
-        if (c.Is32) needs.Add("The 64-bit half in host64\\: a 64-bit ReShade and Deep Fried Chicken's 64-bit set (the app places only Feeder's files there)");
-        if (beta is not null) reason += " The README calls this route beta.";
         if (unverifiedWhy is not null) reason += $" Unverified: {unverifiedWhy}.";
-        if (unverified && unverifiedWhy is null) reason += " Unverified: low confidence in the research.";
-        return Opt(Method.Feeder, needs.Count == 0 ? Availability.Available : Availability.NeedsSetup, reason,
-            [ComponentRegistry.ReShade, ComponentRegistry.DlssNr, ComponentRegistry.Dfc, ComponentRegistry.Feeder], needs, InstallMode.ReShadeOnly, unverified) with { Route = NrAddon.Dfc };
+        return Opt(Method.NeuralAddon, needs.Count == 0 ? Availability.Available : Availability.NeedsSetup, $"{reason} {NrCost(c.Gpu)}".Trim(),
+            [ComponentRegistry.ReShade, ComponentRegistry.DlssNr, ComponentRegistry.Uplift], needs, InstallMode.ReShadeOnly, unverifiedWhy is not null)
+            with { Route = NrAddon.Uplift, Title = $"Neural rendering with {ComponentTable.NameOf(ComponentRegistry.Uplift)}" };
     }
 
     /// <summary>

@@ -92,7 +92,6 @@ public sealed partial class GameOverride
         ComponentRegistry.DlssNr => DlssNrId,
         ComponentRegistry.RenoDx => RenoDxId,
         ComponentRegistry.Lecram => LecramId,
-        ComponentRegistry.Dfc => DfcId,
         ComponentRegistry.Dlss => DlssTag,
         ComponentRegistry.ReShade => ReShadeId,
         _ => ComponentPicks.Get(Components, id)?.Build,
@@ -107,7 +106,6 @@ public sealed partial class GameOverride
             case ComponentRegistry.DlssNr: DlssNrId = build; break;
             case ComponentRegistry.RenoDx: RenoDxId = build; break;
             case ComponentRegistry.Lecram: LecramId = build; break;
-            case ComponentRegistry.Dfc: DfcId = build; break;
             case ComponentRegistry.Dlss: DlssTag = build; break;
             case ComponentRegistry.ReShade: ReShadeId = build; break;
             default: Components = ComponentPicks.SetBuild(Components, id, build); break;
@@ -161,7 +159,6 @@ public sealed partial class AppSettings
         ComponentRegistry.DlssNr => DlssNrId,
         ComponentRegistry.RenoDx => RenoDxId,
         ComponentRegistry.Lecram => LecramId,
-        ComponentRegistry.Dfc => DfcId,
         ComponentRegistry.Dlss => DlssTag,
         ComponentRegistry.ReShade => ReShadeId,
         _ => ComponentPicks.Get(Components, id)?.Build,

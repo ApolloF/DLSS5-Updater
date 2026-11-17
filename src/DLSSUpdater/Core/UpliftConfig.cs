@@ -10,6 +10,30 @@ public static class UpliftConfig
     public static string? Warning(string? tag) => FileUtil.ParseTag(tag) > FileUtil.ParseTag(TestedVersion)
         ? $"GITC Uplift {tag} is newer than the tested {TestedVersion}; its settings or package may have changed." : null;
 
+    /// <summary>
+    /// ReShade finds effects only in [GENERAL] EffectSearchPaths, resolved against the folder of its dll; without the key it searches
+    /// ".\" alone, not recursively (crosire/reshade runtime.cpp). Uplift ships its effects in reshade-shaders\Shaders. Returns the
+    /// list with that folder appended, or null when an entry already covers it.
+    /// </summary>
+    public static string? EffectSearchPathsFor(string? current, string baseDir)
+    {
+        var shaders = Path.GetFullPath(Path.Combine(baseDir, ComponentStore.ShaderDir)).TrimEnd('\\');
+        var entries = (current ?? @".\").Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries).ToList();
+        foreach (var entry in entries)
+        {
+            var p = entry.Trim('"').Replace('/', '\\');
+            var recursive = p.EndsWith("**", StringComparison.Ordinal);
+            if (recursive) p = p[..^2];
+            if (p.Length == 0) p = @".\";
+            string full;
+            try { full = Path.GetFullPath(p, baseDir).TrimEnd('\\'); }
+            catch (Exception ex) when (ex is ArgumentException or NotSupportedException) { continue; }
+            if (full.Equals(shaders, StringComparison.OrdinalIgnoreCase) || (recursive && FileUtil.IsUnder(shaders, full))) return null;
+        }
+        entries.Add(@".\" + ComponentStore.ShaderDir + @"\**");
+        return string.Join(',', entries);
+    }
+
     public static readonly IReadOnlyDictionary<string, string> Defaults = new Dictionary<string, string>
     {
         ["StartEnabled"] = "0", ["EnableKey"] = "0", ["Intensity"] = "1.0", ["Style"] = "0", ["Preset"] = "1", ["PassCount"] = "1",

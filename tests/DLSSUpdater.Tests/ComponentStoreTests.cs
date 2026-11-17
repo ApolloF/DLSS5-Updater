@@ -81,16 +81,16 @@ public class ComponentStoreTests
     }
 
     [Fact]
-    public async Task MaintainedSource_UsesApiCache_AndFallsBackToCacheOffline()
+    public async Task F5Source_UsesApiCache_AndFallsBackToCacheOffline()
     {
         var offline = false;
         var handler = new FakeGitHub(r =>
         {
             var url = r.RequestUri!.ToString();
             if (offline) return new HttpResponseMessage(HttpStatusCode.ServiceUnavailable);
-            if (url.Contains(ComponentStore.OptiRepo + "/releases"))
+            if (url.Contains(OptiSources.F5.Repo + "/releases"))
             {
-                var result = Json("""[{"tag_name":"v0.9.51","assets":[{"name":"OptiScaler-NR-v0.9.51.zip","browser_download_url":"https://example.invalid/package.zip"}]}]""");
+                var result = Json("""[{"tag_name":"v0.1.32","assets":[{"name":"OptiScaler-DLSSNR-F5-0.1.32.zip","browser_download_url":"https://example.invalid/package.zip"}]}]""");
                 result.Headers.ETag = new System.Net.Http.Headers.EntityTagHeaderValue("\"opti\"");
                 return result;
             }
@@ -99,11 +99,10 @@ public class ComponentStoreTests
         });
         var store = new ComponentStore(new GitHubClient(handler), () => true);
         await store.RefreshAsync(default);
-        Assert.Equal("v0.9.51", store.Opti?.Tag);
+        Assert.Equal("v0.1.32-f5", store.Opti?.Tag);
         offline = true;
         await store.RefreshAsync(default);
-        Assert.Equal("v0.9.51", store.Opti?.Tag);
-        Assert.DoesNotContain(handler.Requests, r => r.Contains(ComponentStore.LegacyOptiRepo));
+        Assert.Equal("v0.1.32-f5", store.Opti?.Tag);
         Assert.DoesNotContain(handler.Requests, r => r.Contains("nvngx_dlssnr.dll"));
     }
 
@@ -124,7 +123,7 @@ public class ComponentStoreTests
     [Fact]
     public async Task F5Source_PicksTheF5Zip_AndSuffixesTheTag()
     {
-        var store = new ComponentStore(new GitHubClient(F5Github(() => false)), () => true) { OptiSourceRepo = () => OptiSources.F5.Repo };
+        var store = new ComponentStore(new GitHubClient(F5Github(() => false)), () => true);
         await store.RefreshAsync(default);
         Assert.Equal("v0.1.32-f5", store.Opti?.Tag);
         Assert.Equal("OptiScaler-DLSSNR-F5-0.1.32.zip", store.Opti!.Files[0].Name);
@@ -164,7 +163,7 @@ public class ComponentStoreTests
             if (url.StartsWith("https://api.github.com/")) return Json("[]");
             return new HttpResponseMessage(HttpStatusCode.NotFound);
         });
-        var store = new ComponentStore(new GitHubClient(gh), () => true) { OptiSourceRepo = () => OptiSources.F5.Repo };
+        var store = new ComponentStore(new GitHubClient(gh), () => true);
         await store.RefreshAsync(default);
         Assert.Equal("v0.1.34-f5", store.Opti?.Tag);
         Assert.Equal("OptiScaler-DLSSNR-F5-v0.1.34-with-dlss-fg.zip", Assert.Single(store.Opti!.Files).Name);
@@ -204,7 +203,7 @@ public class ComponentStoreTests
             if (url.StartsWith("https://api.github.com/")) return Json("[]");
             return new HttpResponseMessage(HttpStatusCode.NotFound);
         });
-        var store = new ComponentStore(new GitHubClient(gh), () => true) { OptiSourceRepo = () => OptiSources.F5.Repo };
+        var store = new ComponentStore(new GitHubClient(gh), () => true);
         await store.RefreshAsync(default);
         Assert.Equal("v0.1.37.2-f5", store.Opti?.Tag);
         Assert.Equal(new Version(0, 1, 37, 2), store.Opti!.Version);
@@ -231,14 +230,6 @@ public class ComponentStoreTests
     }
 
     [Fact]
-    public void OptiScalerNr_HasNoneOfTheF5OnlyKeys()
-    {
-        var nr = OptiSources.Default;
-        foreach (var (section, key) in new[] { ("F5Low", "FrameGenerator"), ("F5Low", "KeepGameDlssg"), ("DlssNr", "SecondaryFeatures"), ("DlssNr", "MultiViewScreens"), ("DlssNr", "DepthFade"), ("DlssNr", "DepthFadeSkyStrength") })
-            Assert.True(nr.Lacks(section, key, "v0.9.72"), $"[{section}] {key}");
-    }
-
-    [Fact]
     public void F5Options_ShowFromTheirBuild_AndNeverWriteFrameGenerationOutputKeys()
     {
         var options = DLSSUpdater.ViewModels.SettingsOptions.Nr([]);
@@ -252,25 +243,9 @@ public class ComponentStoreTests
         foreach (var o in options) o.ApplySource(OptiSources.F5, "v0.1.38-f5");
         Assert.True(Opt("DepthFadeSkyStrength").IsAvailable);
 
-        foreach (var o in options) o.ApplySource(OptiSources.Default, "v0.9.72");
-        Assert.All(new[] { "FrameGenerator", "KeepGameDlssg", "SecondaryFeatures", "MultiViewScreens", "DepthFade", "DepthFadeFarStart", "DepthFadeNearStrength" }, k => Assert.False(Opt(k).IsAvailable));
-
         Assert.Equal(["xefg_tensor", "dlssg", "intel"], Opt("FrameGenerator").Choices.Select(c => c.Value).Where(v => v is not null));
         Assert.Equal(["0", "1", "2"], Opt("SecondaryFeatures").Choices.Select(c => c.Value).Where(v => v is not null));
         Assert.DoesNotContain(options, o => o.Key.Equals("FGOutput", StringComparison.OrdinalIgnoreCase) || o.Key.StartsWith("NativeBlend") || o.Key.StartsWith("NativeDepth"));
-    }
-
-    [Fact]
-    public void OptiScalerNr_KeepsTheOldHdrAndUnlockKeys_InEveryVersion()
-    {
-        var nr = OptiSources.Default;
-        foreach (var tag in new[] { "v0.9.51", "v9.9.9", null })
-        {
-            Assert.False(nr.Lacks("HDR", "ForceHDR", tag));
-            Assert.False(nr.Lacks("DLSSG", "AmpereMfgUnlock", tag));
-            Assert.True(nr.Lacks("HDR", "Enabled", tag));
-            Assert.True(nr.Lacks("MFGUnlock", "XeFG", tag));
-        }
     }
 
     [Fact]
@@ -293,10 +268,6 @@ public class ComponentStoreTests
         Assert.True(Shown("PeakNits"));
         Assert.True(Shown("Decode"));
         Assert.True(Shown("UseHDR10"));
-
-        foreach (var o in options) o.ApplySource(OptiSources.Default, "v0.9.51");
-        Assert.True(Shown("ForceHDR"));
-        Assert.False(Shown("Enabled"));
     }
 
     [Fact]
@@ -334,70 +305,53 @@ public class ComponentStoreTests
     }
 
     [Fact]
-    public void RunBeforeSr_ShowsEachBuildsUpstreamDefault_AndOffIsWritten()
+    public void RunBeforeSr_ShowsF5sUpstreamDefault_AndOffIsWritten()
     {
         var overrides = new System.Collections.ObjectModel.ObservableCollection<IniOverride>();
         var before = DLSSUpdater.ViewModels.SettingsOptions.Nr(overrides).Single(o => o.Key == "RunBeforeSR");
         Assert.False(before.IsToggle);
         Assert.Null(before.Selected.Value);
-        Assert.Contains("(on)", before.Selected.Description);
+        Assert.Contains("(off)", before.Selected.Description);
 
         before.Selected = before.Choices.Single(c => c.Label == "Off");
         Assert.Equal("false", Assert.Single(overrides).Value);
-
-        before.ApplySource(OptiSources.F5);
-        Assert.Equal("false", before.Selected.Value);
         before.Selected = before.Choices[0];
         Assert.Empty(overrides);
-        Assert.Contains("(off)", before.Selected.Description);
     }
 
     [Fact]
-    public void OptionVariants_FollowTheChosenBuild()
+    public void OptionBases_AreF5s_AndTheNrOnlyOptionsAreGone()
     {
         var overrides = new System.Collections.ObjectModel.ObservableCollection<IniOverride> { new("DlssNr", "ReversibleMode", "6") };
         var mode = DLSSUpdater.ViewModels.SettingsOptions.Tonemap(overrides).Single(o => o.Key == "ReversibleMode");
-        var before = DLSSUpdater.ViewModels.SettingsOptions.Nr([]).Single(o => o.Key == "RunBeforeSR");
-        var denoise = DLSSUpdater.ViewModels.SettingsOptions.Nr([]).Single(o => o.Key == "DenoiseFirst");
-        Assert.Contains("custom", mode.Selected.Label);
+        var nr = DLSSUpdater.ViewModels.SettingsOptions.Nr([]);
 
-        mode.ApplySource(OptiSources.F5); before.ApplySource(OptiSources.F5); denoise.ApplySource(OptiSources.F5);
         Assert.Equal("PQ composed", mode.Selected.Label);
-        Assert.Contains("Ray Reconstruction", before.Hint);
-        Assert.False(denoise.IsAvailable);
-
-        mode.ApplySource(OptiSources.Default); before.ApplySource(OptiSources.Default); denoise.ApplySource(OptiSources.Default);
-        Assert.Contains("custom", mode.Selected.Label);
-        Assert.Equal(5, mode.Choices.Length - 1);
-        Assert.DoesNotContain("Ray Reconstruction", before.Hint);
-        Assert.True(denoise.IsAvailable);
-        Assert.Equal("6", overrides.Single().Value);
+        Assert.Contains("Ray Reconstruction", nr.Single(o => o.Key == "RunBeforeSR").Hint);
+        Assert.DoesNotContain(nr, o => o.Key is "DenoiseFirst" or "ResidualAcrossRR" or "PrivateUpscaler");
+        Assert.DoesNotContain(DLSSUpdater.ViewModels.SettingsOptions.Tonemap([]), o => o.Key == "AutoExposureHighlightProtection");
+        Assert.DoesNotContain(DLSSUpdater.ViewModels.SettingsOptions.HdrOutput([]), o => o.Key == "HdrTransfer");
     }
 
     [Fact]
-    public void OptiSources_OfTagAndRawTag_RoundTrip_AndUnknownRepoIsDefault()
+    public void OptiSources_TellF5TagsFromLegacyNrTags_AndRawTagStripsOnlyTheSuffix()
     {
-        Assert.Same(OptiSources.F5, OptiSources.OfTag("v0.1.32-f5"));
-        Assert.Same(OptiSources.Default, OptiSources.OfTag("v0.9.51"));
-        Assert.Same(OptiSources.Default, OptiSources.OfTag(null));
+        Assert.True(OptiSources.IsF5Tag("v0.1.32-f5"));
+        Assert.False(OptiSources.IsF5Tag("v0.9.51"));
+        Assert.False(OptiSources.IsF5Tag(null));
+        Assert.Equal("OptiScaler F5", OptiSources.NameOf("v0.1.32-f5"));
+        Assert.Equal("OptiScaler F5", OptiSources.NameOf(null));
+        Assert.Equal(OptiSources.LegacyNrName, OptiSources.NameOf("v0.9.51"));
         Assert.Equal("v0.1.32", OptiSources.RawTag("v0.1.32-f5"));
         Assert.Equal("v0.9.51", OptiSources.RawTag("v0.9.51"));
-        Assert.Same(OptiSources.F5, OptiSources.For("JanBlade/OptiScaler-F5-DLSSNR-Multipass"));
-        Assert.Same(OptiSources.Default, OptiSources.For("someone/else"));
-        Assert.Same(OptiSources.Default, OptiSources.For(null));
     }
 
     [Fact]
-    public async Task Offline_OnlyReturnsACachedReleaseOfTheCurrentSource()
+    public async Task Offline_OnlyReturnsACachedF5Release_NeverALegacyNrOne()
     {
         ComponentStore.MarkComplete(Component.OptiScaler, new ReleaseInfo { Tag = "v0.9.51" });
         var offline = true;
-        var repo = (string?)null;
-        var store = new ComponentStore(new GitHubClient(F5Github(() => offline)), () => true) { OptiSourceRepo = () => repo };
-        await store.RefreshAsync(default);
-        Assert.Equal("v0.9.51", store.Opti?.Tag);
-
-        repo = OptiSources.F5.Repo;
+        var store = new ComponentStore(new GitHubClient(F5Github(() => offline)), () => true);
         await store.RefreshAsync(default);
         Assert.Null(store.Opti);
 
@@ -407,10 +361,15 @@ public class ComponentStoreTests
     }
 
     [Fact]
-    public void SavedUnknownOptiSource_FallsBackToDefault()
+    public void SavedLegacyNrSourceAndPick_MoveToTheNewestF5()
     {
-        FileUtil.AtomicWriteText(AppPaths.SettingsFile, """{"OptiSource":"someone/else"}""");
-        Assert.Same(OptiSources.Default, OptiSources.For(AppSettings.Load().OptiSource));
+        FileUtil.AtomicWriteText(AppPaths.SettingsFile, """{"OptiSource":"someone/else","OptiTag":"v0.9.51","Games":{"g":{"OptiTag":"v0.9.40"}}}""");
+
+        var s = AppSettings.Load();
+
+        Assert.Null(s.OptiTag);
+        Assert.Null(s.For("g").OptiTag);
+        Assert.DoesNotContain("OptiSource", File.ReadAllText(AppPaths.SettingsFile));
     }
 
     [Fact]

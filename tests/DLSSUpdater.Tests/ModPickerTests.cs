@@ -17,16 +17,15 @@ public sealed class ModPickerTests : IDisposable
     public void Dispose() => Directory.Delete(_tmp, true);
 
     [Theory]
-    [InlineData(true, true, true, true, true, Mod.Uplift)]
-    [InlineData(true, false, true, true, true, Mod.Dfc)]
-    [InlineData(true, false, false, true, true, Mod.Lecram)] // ShortFuse + Lecram run as a pair; Lecram wins
-    [InlineData(true, false, false, false, true, Mod.RenoDx)]
-    [InlineData(true, false, false, true, false, Mod.Lecram)]
-    [InlineData(true, false, false, false, false, Mod.ReShade)]
-    [InlineData(false, false, false, false, false, Mod.OptiScalerNr)]
-    [InlineData(false, true, true, true, true, Mod.OptiScalerNr)] // add-ons don't exist outside ReShade-only mode
-    public void DefaultFor_FollowsTheNrRoute(bool reShadeOnly, bool uplift, bool dfc, bool lecram, bool renoDx, Mod expected) =>
-        Assert.Equal(expected, ModPicker.DefaultFor(reShadeOnly, uplift, dfc, lecram, renoDx));
+    [InlineData(true, true, true, true, Mod.Uplift)]
+    [InlineData(true, false, true, true, Mod.Lecram)] // ShortFuse + Lecram run as a pair; Lecram wins
+    [InlineData(true, false, false, true, Mod.RenoDx)]
+    [InlineData(true, false, true, false, Mod.Lecram)]
+    [InlineData(true, false, false, false, Mod.ReShade)]
+    [InlineData(false, false, false, false, Mod.OptiScalerNr)]
+    [InlineData(false, true, true, true, Mod.OptiScalerNr)] // add-ons don't exist outside ReShade-only mode
+    public void DefaultFor_FollowsTheNrRoute(bool reShadeOnly, bool uplift, bool lecram, bool renoDx, Mod expected) =>
+        Assert.Equal(expected, ModPicker.DefaultFor(reShadeOnly, uplift, lecram, renoDx));
 
     [Fact]
     public void Available_ListsAddOnsInReShadeOnlyModeOnly_AndEndsWithAllMods()
@@ -34,7 +33,7 @@ public sealed class ModPickerTests : IDisposable
         var opti = ModPicker.Available(false).Select(c => c.Mod).ToArray();
         Assert.Equal([Mod.OptiScalerNr, Mod.ReShade, Mod.Mfg, Mod.All], opti);
         var reShade = ModPicker.Available(true).Select(c => c.Mod).ToArray();
-        Assert.Equal([Mod.OptiScalerNr, Mod.ReShade, Mod.Mfg, Mod.RenoDx, Mod.Lecram, Mod.Dfc, Mod.Uplift, Mod.All], reShade);
+        Assert.Equal([Mod.OptiScalerNr, Mod.ReShade, Mod.Mfg, Mod.RenoDx, Mod.Lecram, Mod.Uplift, Mod.All], reShade);
         Assert.DoesNotContain(Mod.OptiScalerNr, ModPicker.AvailableInSettings.Select(c => c.Mod));
         Assert.Equal(Mod.All, ModPicker.AvailableInSettings[^1].Mod);
     }
@@ -80,13 +79,13 @@ public sealed class ModPickerTests : IDisposable
         Assert.False(vm.ShowLecram);
 
         vm.ModSelection = vm.ModChoices.Single(c => c.Mod == Mod.Mfg);
-        vm.Components.Single(c => c.Key == "dfc").Enabled = true;
+        vm.Components.Single(c => c.Key == "renodx").Enabled = true;
         Assert.Equal(Mod.Mfg, vm.ModSelection.Mod);
         Assert.True(vm.ShowMfg);
-        Assert.False(vm.ShowDfc);
+        Assert.False(vm.ShowRenoDx);
 
         vm.ModSelection = vm.ModChoices.Single(c => c.Mod == Mod.All);
-        Assert.True(vm.ShowDfc && vm.ShowReShade && vm.ShowOptiNr);
+        Assert.True(vm.ShowRenoDx && vm.ShowReShade && vm.ShowOptiNr);
     }
 
     [Fact]
@@ -94,11 +93,11 @@ public sealed class ModPickerTests : IDisposable
     {
         var vm = NewGame(new AppSettings { DefaultMode = InstallMode.ReShadeOnly, InstallUplift = true });
         Assert.Equal(Mod.Uplift, vm.ModSelection.Mod);
-        vm.ModSelection = vm.ModChoices.Single(c => c.Mod == Mod.Dfc);
+        vm.ModSelection = vm.ModChoices.Single(c => c.Mod == Mod.Lecram);
         vm.Mode = InstallMode.OptiScaler;
-        Assert.DoesNotContain(vm.ModChoices, c => c.Mod == Mod.Dfc);
+        Assert.DoesNotContain(vm.ModChoices, c => c.Mod == Mod.Lecram);
         Assert.Equal(Mod.OptiScalerNr, vm.ModSelection.Mod);
-        Assert.False(vm.ShowDfc);
+        Assert.False(vm.ShowLecram);
     }
 
     [Fact]
@@ -128,7 +127,7 @@ public sealed class ModPickerTests : IDisposable
     [InlineData(true, false, false, false, Mod.ReShade)]
     public void SettingsDefaults_PickTheRouteOfTheDefaultInstall_AndFallBackToReShade(bool reShadeOnly, bool uplift, bool lecram, bool renoDx, Mod expected)
     {
-        Assert.Equal(expected, ModPicker.DefaultInSettings(reShadeOnly, uplift, false, lecram, renoDx));
+        Assert.Equal(expected, ModPicker.DefaultInSettings(reShadeOnly, uplift, lecram, renoDx));
         Assert.Contains(ModPicker.AvailableInSettings, c => c.Mod == expected);
     }
 }

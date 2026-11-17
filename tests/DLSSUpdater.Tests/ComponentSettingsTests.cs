@@ -9,10 +9,9 @@ public class ComponentSettingsTests
     [Fact]
     public void GameOverride_MapsTheOldFieldsById()
     {
-        var g = new GameOverride { OptiTag = "v1", DfcId = "d1", DlssTag = "t1" };
+        var g = new GameOverride { OptiTag = "v1", DlssTag = "t1" };
 
         Assert.Equal("v1", g.BuildPick(ComponentRegistry.OptiScaler));
-        Assert.Equal("d1", g.BuildPick(ComponentRegistry.Dfc));
         Assert.Equal("t1", g.BuildPick(ComponentRegistry.Dlss));
         g.SetBuildPick(ComponentRegistry.Lecram, "l1");
         g.SetBuildPick(ComponentRegistry.Uplift, "u1");

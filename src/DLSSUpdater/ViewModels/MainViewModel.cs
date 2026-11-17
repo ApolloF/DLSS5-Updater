@@ -29,7 +29,7 @@ public sealed partial class MainViewModel : ObservableObject
         Log.TrimFile();
         var settings = AppSettings.Load();
         var gh = new GitHubClient { Token = settings.GitHubToken };
-        var store = new ComponentStore(gh, () => settings.IncludePrereleases) { AutoReShade = () => settings.AutoDownloadReShade, SelectedDlssNr = () => settings.DlssNrId, SelectedRenoDx = () => settings.RenoDxId, SelectedLecram = () => settings.LecramId, SelectedDfc = () => settings.DfcId, SelectedReShade = () => settings.ReShadeId, PairTests = () => settings.AddonPairTests, OptiSourceRepo = () => settings.OptiSource };
+        var store = new ComponentStore(gh, () => settings.IncludePrereleases) { AutoReShade = () => settings.AutoDownloadReShade, SelectedDlssNr = () => settings.DlssNrId, SelectedRenoDx = () => settings.RenoDxId, SelectedLecram = () => settings.LecramId, SelectedReShade = () => settings.ReShadeId, PairTests = () => settings.AddonPairTests };
         var installer = new Installer(store);
         S = new Services
         {
@@ -69,7 +69,7 @@ public sealed partial class MainViewModel : ObservableObject
             foreach (var game in Games) game.RefreshAddonPairStatus();
             SettingsVm.RefreshAddonPairStatus();
         };
-        OptiNews = new ReleaseNewsViewModel(Component.OptiScaler, OptiSources.For(settings.OptiSource).Name, settings);
+        OptiNews = new ReleaseNewsViewModel(Component.OptiScaler, OptiSources.F5.Name, settings);
         DlssNews = new ReleaseNewsViewModel(Component.Dlss, "DLSS", settings);
         UpliftNews = new ReleaseNewsViewModel(Component.Uplift, "GITC Uplift", settings);
         MfgNews = new ReleaseNewsViewModel(Component.MfgUnlock, "MFG Unlock", settings);
@@ -105,8 +105,8 @@ public sealed partial class MainViewModel : ObservableObject
     public ObservableCollection<string> LogLines { get; } = [];
     public ReleaseNewsViewModel OptiNews { get; }
 
-    /// <summary>The selected OptiScaler build's name, shared by every label that names it.</summary>
-    public string OptiName => OptiSources.For(S.Settings.OptiSource).Name;
+    /// <summary>The OptiScaler build's name, shared by every label that names it.</summary>
+    public string OptiName => OptiSources.F5.Name;
     public string OptiChipTitle => OptiName.ToUpperInvariant();
     public ReleaseNewsViewModel DlssNews { get; }
     public ReleaseNewsViewModel UpliftNews { get; }
@@ -326,7 +326,8 @@ public sealed partial class MainViewModel : ObservableObject
             if (Demo.Active)
             {
                 Demo.Seed(S.Store, S.Settings);
-                RefreshBuildNames();
+                SettingsVm.ApplyOptiSource();
+                foreach (var g in Games) g.RefreshBuildName();
             }
             else
             {
@@ -797,28 +798,6 @@ public sealed partial class MainViewModel : ObservableObject
     {
         foreach (var g in Games) g.RefreshConfig();
         SettingsVm.RefreshPresetNames();
-    }
-
-    /// <summary>
-    /// The OptiScaler build changed: hide options it lacks, then re-resolve releases and the config check. When a run is
-    /// going, the refresh waits for it, so no install pairs the old build's binary with the new build's options.
-    /// </summary>
-    public void OptiSourceChanged()
-    {
-        SettingsVm.ApplyOptiSource();
-        RefreshBuildNames();
-        _refreshPending = true;
-        StartPendingWork();
-    }
-
-    /// <summary>Renames every label that names the OptiScaler build: the chip, the Settings tab, and each game's mode and rows.</summary>
-    private void RefreshBuildNames()
-    {
-        OptiNews.Name = OptiName;
-        OnPropertyChanged(nameof(OptiName));
-        OnPropertyChanged(nameof(OptiChipTitle));
-        SettingsVm.RefreshBuildName();
-        foreach (var g in Games) g.RefreshBuildName();
     }
 
     /// <summary>Rescans now, or right after the current run.</summary>

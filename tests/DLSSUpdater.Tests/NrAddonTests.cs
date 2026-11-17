@@ -20,7 +20,6 @@ public sealed class NrAddonTests : IDisposable
     [InlineData(NrAddon.RenoDx, NrAddon.Lecram, "NR runs twice")]
     [InlineData(NrAddon.Lecram, NrAddon.RenoDx, "NR runs twice")]
     [InlineData(NrAddon.Uplift, NrAddon.RenoDx, "only one neural route")]
-    [InlineData(NrAddon.Dfc, NrAddon.Lecram, "Deep Fried Chicken does nothing")]
     public void AnyMix_IsAConflictWithAReason_NeverARefusal(NrAddon a, NrAddon b, string why)
     {
         Assert.Contains(why, NrAddons.Conflict(a, [b]));
@@ -30,7 +29,7 @@ public sealed class NrAddonTests : IDisposable
     [Fact]
     public void Conflicts_ListsEachClashingPairOnce()
     {
-        Assert.Empty(NrAddons.Conflicts([NrAddon.Dfc]));
+        Assert.Empty(NrAddons.Conflicts([NrAddon.Uplift]));
         Assert.Empty(NrAddons.Conflicts([]));
         Assert.Equal(2, NrAddons.Conflicts([NrAddon.RenoDx, NrAddon.Lecram, NrAddon.Uplift]).Count);
     }
@@ -68,15 +67,5 @@ public sealed class NrAddonTests : IDisposable
         var s = AppSettings.Load();
         Assert.True(s.InstallLecram);
         Assert.False(s.InstallRenoDx);
-    }
-
-    [Fact]
-    public void FreshSettings_DefaultToF5_SavedChoiceIsKept()
-    {
-        Assert.Same(OptiSources.F5, OptiSources.For(AppSettings.Load().OptiSource));
-        Assert.Same(OptiSources.F5, OptiSources.For(new AppSettings().OptiSource));
-
-        FileUtil.AtomicWriteText(AppPaths.SettingsFile, $$"""{"OptiSource":"{{ComponentStore.OptiRepo}}"}""");
-        Assert.Same(OptiSources.Default, OptiSources.For(AppSettings.Load().OptiSource));
     }
 }

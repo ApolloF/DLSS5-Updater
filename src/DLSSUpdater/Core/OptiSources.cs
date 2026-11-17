@@ -3,11 +3,12 @@ using System.Text.RegularExpressions;
 namespace DLSSUpdater.Core;
 
 /// <summary>
-/// One OptiScaler build the app can install. <paramref name="TagSuffix"/> is appended to the GitHub tag inside this
-/// app so cache folders, manifests and "installed vs latest" stay separate per build. <paramref name="Name"/> is the
-/// product name every label in the app uses; <paramref name="Label"/> adds the maintainer for the build dropdown.
-/// <paramref name="UnsupportedKeys"/> are keys no build of the source has; <paramref name="VersionedKeys"/> are keys only some
-/// of its builds have, so whether a build has one depends on its tag.
+/// The OptiScaler build the app installs (<see cref="OptiSources.F5"/>). <paramref name="TagSuffix"/> is appended to the GitHub tag
+/// inside this app, so its cache folders and install records stay apart from the OptiScaler-NR tags older versions recorded.
+/// <paramref name="Name"/> is the product name every label in the app uses; <paramref name="Label"/> adds the maintainer.
+/// <paramref name="UnsupportedKeys"/> are keys no build of the source has (OptiScaler-NR's own, so an update from an NR install
+/// drops what the app wrote for them); <paramref name="VersionedKeys"/> are keys only some of its builds have, so whether a build
+/// has one depends on its tag.
 /// </summary>
 public sealed record OptiSource(
     string Repo, string Name, string Label, Regex Asset, string TagSuffix, string TestedTag,
@@ -41,26 +42,15 @@ public static class OptiSources
     /// <summary>F5 0.1.33 replaced [HDR] ForceHDR / SkipColorSpace with its HDR output for SDR games.</summary>
     private static readonly string[] HdrOutputKeys = ["Enabled", "Convert", "PeakNits", "GameNits", "Decode", "CompareKey"];
 
-    /// <summary>
-    /// F5 0.1.35.1 and newer: keys the F5 builds have and OptiScaler-NR doesn't, each with the first tag that has it
-    /// (see <see cref="F5"/>'s VersionedKeys). [F5Low] is frame generation's own section; the rest are [DlssNr].
-    /// </summary>
-    private static readonly (string Section, string Key, string Since)[] F5NewKeys =
+    /// <summary>F5 0.1.37's depth fade, all in [DlssNr].</summary>
+    private static readonly string[] DepthFadeKeys =
     [
-        ("DlssNr", "MultiViewScreens", "v0.1.35.1"),
-        ("F5Low", "FrameGenerator", "v0.1.36"), ("F5Low", "KeepGameDlssg", "v0.1.36"), ("DlssNr", "SecondaryFeatures", "v0.1.36"),
-        ("DlssNr", "DepthFade", "v0.1.37"), ("DlssNr", "DepthFadeFarStart", "v0.1.37"), ("DlssNr", "DepthFadeFarEnd", "v0.1.37"),
-        ("DlssNr", "DepthFadeFarStrength", "v0.1.37"), ("DlssNr", "DepthFadeNearStart", "v0.1.37"), ("DlssNr", "DepthFadeNearEnd", "v0.1.37"),
-        ("DlssNr", "DepthFadeNearStrength", "v0.1.37"), ("DlssNr", "DepthFadeSkyStrength", "v0.1.37"),
+        "DepthFade", "DepthFadeFarStart", "DepthFadeFarEnd", "DepthFadeFarStrength", "DepthFadeNearStart", "DepthFadeNearEnd",
+        "DepthFadeNearStrength", "DepthFadeSkyStrength",
     ];
 
     /// <summary>F5 0.1.34's built-in MFG unlock, one key per GPU family; 0.1.33 had none, older builds the [DLSSG] Ada/Ampere keys.</summary>
     internal static readonly string[] MfgUnlockKeys = ["XeFG", "RTX40", "RTX2030"];
-
-    public static readonly OptiSource Default = new(
-        ComponentStore.OptiRepo, "OptiScaler-NR", "OptiScaler-NR (ShyVortex)",
-        new Regex(@"^OptiScaler-NR-v[\d.]+\.zip$", RegexOptions.IgnoreCase), "", "v0.9.72", [],
-        [.. HdrOutputKeys.Select(k => ("HDR", k)), .. MfgUnlockKeys.Select(k => ("MFGUnlock", k)), .. F5NewKeys.Select(k => (k.Section, k.Key))]);
 
     /// <summary>
     /// Asset names: "-0.1.32.zip" up to 0.1.32, "-0.1.33-with-dlss-fg.zip", "-v0.1.34-with-dlss-fg.zip" (up to 0.1.36), then
@@ -77,24 +67,23 @@ public static class OptiSources
             .. HdrOutputKeys.Select(k => new OptiKeyRange("HDR", k, Since: "v0.1.33")),
             new("DLSSG", "AdaMfgUnlock", Until: "v0.1.33"), new("DLSSG", "AmpereMfgUnlock", Until: "v0.1.33"),
             .. MfgUnlockKeys.Select(k => new OptiKeyRange("MFGUnlock", k, Since: "v0.1.34")),
-            .. F5NewKeys.Select(k => new OptiKeyRange(k.Section, k.Key, Since: k.Since)),
+            new("DlssNr", "MultiViewScreens", Since: "v0.1.35.1"),
+            new("F5Low", "FrameGenerator", Since: "v0.1.36"), new("F5Low", "KeepGameDlssg", Since: "v0.1.36"), new("DlssNr", "SecondaryFeatures", Since: "v0.1.36"),
+            .. DepthFadeKeys.Select(k => new OptiKeyRange("DlssNr", k, Since: "v0.1.37")),
         ]);
 
-    public static readonly IReadOnlyList<OptiSource> All = [Default, F5];
+    /// <summary>
+    /// What the app called OptiScaler-NR (ShyVortex's fork, earlier wilsjo2's), the second source until F5 became the only one. Its
+    /// app tags have no suffix, so a game whose record holds one still shows what it has until its next update installs F5.
+    /// </summary>
+    public const string LegacyNrName = "OptiScaler-NR";
 
-    /// <summary>The source for a saved repo name; anything unknown falls back to the default.</summary>
-    public static OptiSource For(string? repo) =>
-        All.FirstOrDefault(s => s.Repo.Equals(repo, StringComparison.OrdinalIgnoreCase)) ?? Default;
+    /// <summary>True for an app-internal tag of an F5 build; false for an OptiScaler-NR tag an older version recorded.</summary>
+    public static bool IsF5Tag(string? tag) => tag is not null && tag.EndsWith(F5.TagSuffix, StringComparison.OrdinalIgnoreCase);
 
-    /// <summary>The source an app-internal tag belongs to.</summary>
-    public static OptiSource OfTag(string? tag) =>
-        tag is null ? Default
-            : All.FirstOrDefault(s => s.TagSuffix.Length > 0 && tag.EndsWith(s.TagSuffix, StringComparison.OrdinalIgnoreCase)) ?? Default;
+    /// <summary>The product name for an app-internal tag; null means the build the app installs (F5).</summary>
+    public static string NameOf(string? tag) => tag is null || IsF5Tag(tag) ? F5.Name : LegacyNrName;
 
     /// <summary>The GitHub tag behind an app-internal tag.</summary>
-    public static string RawTag(string tag)
-    {
-        var s = OfTag(tag);
-        return s.TagSuffix.Length > 0 ? tag[..^s.TagSuffix.Length] : tag;
-    }
+    public static string RawTag(string tag) => IsF5Tag(tag) ? tag[..^F5.TagSuffix.Length] : tag;
 }

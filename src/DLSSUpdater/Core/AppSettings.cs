@@ -17,16 +17,12 @@ public sealed partial class GameOverride
     public string? RenoDxId { get; set; }
     /// <summary>Lecram add-on build (library id) pinned for this game; null follows the global choice.</summary>
     public string? LecramId { get; set; }
-    /// <summary>Deep Fried Chicken build (library id) pinned for this game; null follows the global choice.</summary>
-    public string? DfcId { get; set; }
     /// <summary>ReShade build (library id or "channel:...") chosen for this game; null follows the default.</summary>
     public string? ReShadeId { get; set; }
-    /// <summary>OptiScaler build (app tag, either source) chosen for this game; null follows the default.</summary>
+    /// <summary>OptiScaler build (app tag) chosen for this game; null follows the default.</summary>
     public string? OptiTag { get; set; }
     /// <summary>GITC Uplift build (release tag) chosen for this game; null follows the default.</summary>
     public string? UpliftTag { get; set; }
-    /// <summary>Deep Fried Chicken in a game without its own DLSS: also place nvngx_dlssg.dll for its DLSS-G frame generation.</summary>
-    public bool? DfcFrameGen { get; set; }
     /// <summary>Config preset used for this game; null uses the current settings.</summary>
     public string? Preset { get; set; }
     /// <summary>OptiScaler or ReShade-only for this game; null follows the default.</summary>
@@ -76,7 +72,7 @@ public sealed partial class AppSettings
         name is not null && (ProxyNames.Contains(name, StringComparer.OrdinalIgnoreCase) || ReShadeProxyNames.Contains(name, StringComparer.OrdinalIgnoreCase));
 
     public string DefaultProxy { get; set; } = "dxgi.dll";
-    /// <summary>What a new install puts in: OptiScaler-NR (the main purpose) or ReShade with add-ons only.</summary>
+    /// <summary>What a new install puts in: OptiScaler (the main purpose) or ReShade with add-ons only.</summary>
     public InstallMode DefaultMode { get; set; } = InstallMode.OptiScaler;
     public bool IncludePrereleases { get; set; } = true;
     public bool InstallReShade { get; set; } = true;
@@ -111,8 +107,18 @@ public sealed partial class AppSettings
     public bool InstallRenoDx { get; set; }
     public bool InstallUplift { get; set; }
     public bool InstallLecram { get; set; }
-    /// <summary>The OptiScaler build's repo. New installs start on F5; a saved choice is always kept.</summary>
-    public string OptiSource { get; set; } = OptiSources.F5.Repo;
+    /// <summary>
+    /// The OptiScaler source repo versions before F5 became the only build saved (F5, or OptiScaler-NR's ShyVortex or wilsjo2 repo).
+    /// Read once for <see cref="MigrateToF5"/>, never written.
+    /// </summary>
+    [JsonPropertyName("OptiSource")]
+    public string? LegacyOptiSource
+    {
+        get => null;
+        set => _legacyOptiSource = value;
+    }
+
+    private string? _legacyOptiSource;
     public string? PreviousDlssNrId { get; set; }
     public bool AddMissingDlss { get; set; } = true;
     /// <summary>Legacy (1.0/1.1); false maps to IniMode "fresh".</summary>
@@ -173,12 +179,10 @@ public sealed partial class AppSettings
     public string? LecramId { get; set; }
     /// <summary>Set once <see cref="LecramId"/> was reset to "Newest": older settings pinned the build automatically, which can't be told from a user's pick.</summary>
     public bool LecramNewestMigrated { get; set; }
-    /// <summary>Default Deep Fried Chicken build (library id); null follows the newest build in the library.</summary>
-    public string? DfcId { get; set; }
     public List<AddonPairTest> AddonPairTests { get; set; } = [];
     /// <summary>Default ReShade build: a library id, or "channel:nightly" (see <see cref="ReShadePick"/>); null follows the newest Stable add-on build.</summary>
     public string? ReShadeId { get; set; }
-    /// <summary>Default OptiScaler build (app tag, either source); null follows the newest release of the selected source.</summary>
+    /// <summary>Default OptiScaler build (app tag); null follows the newest F5 release.</summary>
     public string? OptiTag { get; set; }
     /// <summary>Default GITC Uplift build (release tag); null follows the newest release.</summary>
     public string? UpliftTag { get; set; }
@@ -203,15 +207,13 @@ public sealed partial class AppSettings
     public string? AddonId(AddonKind kind) => kind switch
     {
         AddonKind.RenoDx => RenoDxId,
-        AddonKind.Lecram => LecramId,
-        _ => DfcId,
+        _ => LecramId,
     };
 
     public void SetAddonId(AddonKind kind, string? id)
     {
         if (kind == AddonKind.RenoDx) RenoDxId = id;
-        else if (kind == AddonKind.Lecram) LecramId = id;
-        else DfcId = id;
+        else LecramId = id;
     }
 
     public void SelectDlssNr(string id)
@@ -241,12 +243,11 @@ public sealed partial class AppSettings
                     s.Repair();
                     if (!s.CarryOverGameIni && s.IniMode == "keep") s.IniMode = "fresh";
                     s.CarryOverGameIni = true;
-                    var sourceMigrated = s.OptiSource == ComponentStore.LegacyOptiRepo;
-                    if (sourceMigrated) s.OptiSource = ComponentStore.OptiRepo;
+                    var f5Migrated = s.MigrateToF5();
                     var presetsMigrated = s.MigratePresets();
                     var renoDxMigrated = RenoDxIni.Migrate(s);
                     var lecramMigrated = s.MigrateLecramNewest();
-                    if (s._legacyTokenRead || sourceMigrated || presetsMigrated || renoDxMigrated || lecramMigrated) s.Save();
+                    if (s._legacyTokenRead || f5Migrated || presetsMigrated || renoDxMigrated || lecramMigrated) s.Save();
                     return s;
                 }
             }
@@ -300,6 +301,52 @@ public sealed partial class AppSettings
         }
     }
 
+    /// <summary>
+    /// OptiScaler F5 is the only OptiScaler build, and Deep Fried Chicken and DLSS5-Feeder left the app: a saved OptiScaler-NR
+    /// source and NR builds picked as the default or per game go (null follows the newest F5), as do the Feeder build picks and
+    /// the DFC settings in the ReShade overrides. Games keep what they have installed until their next update. Logged once;
+    /// returns true when the settings changed.
+    /// </summary>
+    internal bool MigrateToF5()
+    {
+        var nr = _legacyOptiSource is { } repo && !repo.Equals(OptiSources.F5.Repo, StringComparison.OrdinalIgnoreCase);
+        _legacyOptiSource = null;
+        var picks = 0;
+        if (OptiTag is not null && !OptiSources.IsF5Tag(OptiTag))
+        {
+            OptiTag = null;
+            picks++;
+        }
+        foreach (var g in Games.Values.Where(g => g.OptiTag is not null && !OptiSources.IsF5Tag(g.OptiTag)))
+        {
+            g.OptiTag = null;
+            picks++;
+        }
+        if (nr || picks > 0)
+            Log.Info($"OptiScaler-NR is no longer offered: settings moved to OptiScaler F5{(picks > 0 ? $" ({picks} OptiScaler-NR build pick(s) now follow the newest F5)" : "")}. Games that have OptiScaler-NR get F5 at their next update.");
+
+        var dropped = DropFeeder(Components);
+        if (Components is { Count: 0 }) Components = null;
+        foreach (var g in Games.Values)
+        {
+            dropped += DropFeeder(g.Components);
+            if (g.Components is { Count: 0 }) g.Components = null;
+            if (g.ReShade is not null) dropped += g.ReShade.RemoveAll(IsDfcOverride);
+            foreach (var p in g.Presets ?? []) dropped += p.ReShade.RemoveAll(IsDfcOverride);
+        }
+        dropped += ReShadeOverrides.RemoveAll(IsDfcOverride);
+        foreach (var p in Presets) dropped += p.ReShade.RemoveAll(IsDfcOverride);
+        return nr || picks > 0 || dropped > 0;
+
+        static bool IsDfcOverride(IniOverride o) => o.Section.Trim().Equals(DfcSection, StringComparison.OrdinalIgnoreCase);
+
+        static int DropFeeder(Dictionary<string, ComponentPick>? map) =>
+            map?.Keys.Where(k => k.Equals(ComponentRegistry.Feeder, StringComparison.OrdinalIgnoreCase)).ToList().Count(map.Remove) ?? 0;
+    }
+
+    /// <summary>The pseudo-section older versions kept Deep Fried Chicken's options under in the ReShade overrides.</summary>
+    internal const string DfcSection = "DFC";
+
     /// <summary>One time: the Lecram default goes back to "Newest". Returns true when the settings changed.</summary>
     internal bool MigrateLecramNewest()
     {
@@ -312,7 +359,10 @@ public sealed partial class AppSettings
     internal static string BadSettingsFile => AppPaths.SettingsFile + ".bad";
 
     /// <summary>Fields older versions of this app wrote and that nothing reads anymore; dropped instead of kept as unknown.</summary>
-    private static readonly string[] RetiredKeys = ["AddonCombos", "TestedComboSeeded"];
+    private static readonly string[] RetiredKeys = ["AddonCombos", "TestedComboSeeded", "DfcId"];
+
+    /// <summary>The same for a game's entry: Deep Fried Chicken's build pick and its frame-generation switch.</summary>
+    private static readonly string[] RetiredGameKeys = ["DfcId", "DfcFrameGen"];
 
     /// <summary>The next save overwrites settings.json with defaults; one copy of the unreadable file survives for repair.</summary>
     private static void KeepUnreadable()
@@ -352,6 +402,11 @@ public sealed partial class AppSettings
         Games = games;
         foreach (var g in Games.Values)
         {
+            if (g.Unknown is not null)
+            {
+                foreach (var key in g.Unknown.Keys.Where(k => RetiredGameKeys.Contains(k, StringComparer.OrdinalIgnoreCase)).ToList()) g.Unknown.Remove(key);
+                if (g.Unknown.Count == 0) g.Unknown = null;
+            }
             if (g.Opti is not null) g.Opti = Overrides(g.Opti);
             if (g.ReShade is not null) g.ReShade = Overrides(g.ReShade);
             if (g.Presets is not null) g.Presets = PresetList(g.Presets);
@@ -365,7 +420,6 @@ public sealed partial class AppSettings
         AddonPairTests = (AddonPairTests ?? []).Where(t => t is not null).ToList();
         DefaultProxy ??= defaults.DefaultProxy;
         IniMode ??= defaults.IniMode;
-        OptiSource ??= defaults.OptiSource;
         LecramFolderKey ??= defaults.LecramFolderKey;
         LecramLastResult ??= defaults.LecramLastResult;
         AppUpdateLastResult ??= defaults.AppUpdateLastResult;

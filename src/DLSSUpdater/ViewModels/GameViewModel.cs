@@ -41,10 +41,10 @@ public sealed record DlssChoice(string? Tag, string Label)
 
 public sealed record ModeChoice(InstallMode Mode, string Label, string Description)
 {
-    /// <summary>The install modes with the OptiScaler entry named after <paramref name="source"/>.</summary>
-    public static ModeChoice[] For(OptiSource source) =>
+    /// <summary>The install modes, the OptiScaler entry named after the build the app installs.</summary>
+    public static ModeChoice[] All { get; } =
     [
-        new(InstallMode.OptiScaler, source.Name, $"{source.Name} loads into the game and brings ReShade, MFG Unlock and NR with it."),
+        new(InstallMode.OptiScaler, OptiSources.F5.Name, $"{OptiSources.F5.Name} loads into the game and brings ReShade, MFG Unlock and NR with it."),
         new(InstallMode.ReShadeOnly, "ReShade + add-ons", "ReShade loads into the game with MFG Unlock, DLSS updates and an optional NR add-on. No OptiScaler."),
     ];
 
@@ -108,16 +108,13 @@ public sealed partial class GameViewModel : ObservableObject
         FrameLimit = new FrameLimitViewModel(this, services);
         Dxvk = new DxvkViewModel(this, services);
         Luma = new LumaViewModel(this, services);
-        _modChoices = ModPicker.Available(false, SelectedBuild.Name);
+        _modChoices = ModPicker.Available(false);
         Components = [.. ComponentTable.Rows.Select(r => new ComponentRow(r.Key, r.Name))];
         foreach (var c in Components) c.PropertyChanged += (_, e) =>
         {
             if (e.PropertyName != nameof(ComponentRow.Enabled)) return;
             if (c.Key == "opti" && !_loading) Mode = ComponentTable.ModeFor(c.Enabled);
-            // Feeder only feeds Deep Fried Chicken (NrAddons.FeederRefusal): turning it on turns DFC on, and DFC going off takes it along.
-            if (c.Key == "feeder" && c.Enabled && !_loading) Components.First(r => r.Key == "dfc").Enabled = true;
-            if (c.Key == "dfc" && !c.Enabled) Components.First(r => r.Key == "feeder").Enabled = false;
-            if (c.Key is "renodx" or "lecram" or "dfc" or "uplift" && c.Enabled)
+            if (c.Key is "renodx" or "lecram" or "uplift" && c.Enabled)
             {
                 Components.First(r => r.Key == "dlssnr").Enabled = true;
                 Components.First(r => r.Key == "reshade").Enabled = true;
@@ -129,7 +126,6 @@ public sealed partial class GameViewModel : ObservableObject
             OnPropertyChanged(nameof(NrAddonWarning));
             RefreshConflicts();
             RefreshAddonPairStatus();
-            NotifyDfcHint();
             RefreshModPick();
             if (!_loading) SyncPick();
         };
@@ -153,8 +149,6 @@ public sealed partial class GameViewModel : ObservableObject
     public ObservableCollection<ComponentRow> Components { get; }
     public ObservableCollection<DlssRow> DlssRows { get; } = [];
     public IReadOnlyList<string> ProxyNames => IsReShadeOnly ? AppSettings.ReShadeProxyNames : AppSettings.ProxyNames;
-    /// <summary>The OptiScaler source this game installs: that of its chosen build, else the one selected in Settings.</summary>
-    private OptiSource SelectedBuild => EffectiveOptiTag is { } tag ? OptiSources.OfTag(tag) : OptiSources.For(_s.Settings.OptiSource);
 
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(IsReShadeOnly), nameof(ProxyNames), nameof(ProxyHint), nameof(ShowOptiBuild))]
@@ -168,7 +162,7 @@ public sealed partial class GameViewModel : ObservableObject
     partial void OnModeChanged(InstallMode value)
     {
         ApplyModeToRows();
-        if (IsReShadeOnly && !On("renodx") && !On("lecram") && !On("dfc") && !On("uplift")) Components.First(c => c.Key == "dlssnr").Enabled = false;
+        if (IsReShadeOnly && !On("renodx") && !On("lecram") && !On("uplift")) Components.First(c => c.Key == "dlssnr").Enabled = false;
         if (!ProxyNames.Contains(Proxy, StringComparer.OrdinalIgnoreCase)) Proxy = IsReShadeOnly ? AutoReShadeProxy : "dxgi.dll";
         RefreshModPick();
         if (_loading) return;
@@ -212,15 +206,11 @@ public sealed partial class GameViewModel : ObservableObject
 
     [ObservableProperty] private DlssChoice? _renoDxChoice;
     [ObservableProperty] private DlssChoice? _lecramChoice;
-    [ObservableProperty] private DlssChoice? _dfcChoice;
     public ObservableCollection<DlssChoice> RenoDxChoices { get; } = [];
     public ObservableCollection<DlssChoice> LecramChoices { get; } = [];
-    public ObservableCollection<DlssChoice> DfcChoices { get; } = [];
     /// <summary>The ShortFuse build this game installs: its own pick, else the default of the settings.</summary>
     public string? EffectiveRenoDxId => RenoDxChoice?.Tag ?? _s.Settings.RenoDxId;
     public string? EffectiveLecramId => LecramChoice?.Tag ?? _s.Settings.LecramId;
-    /// <summary>The Deep Fried Chicken build this game installs: its own pick, else the default (null follows the newest build).</summary>
-    public string? EffectiveDfcId => DfcChoice?.Tag ?? _s.Settings.DfcId;
     /// <summary>Generation of the Lecram build this game uses; it decides which Lecram options apply.</summary>
     public LecramGeneration? EffectiveLecramGeneration => _s.Store.LecramBuildFor(EffectiveLecramId)?.Generation;
 
@@ -261,14 +251,13 @@ public sealed partial class GameViewModel : ObservableObject
     [ObservableProperty] private DlssChoice? _upliftChoice;
     public ObservableCollection<DlssChoice> OptiChoices { get; } = [];
     public ObservableCollection<DlssChoice> UpliftChoices { get; } = [];
-    /// <summary>The OptiScaler build this game installs: its own pick, else the default; null is the newest release of the selected source.</summary>
+    /// <summary>The OptiScaler build this game installs: its own pick, else the default; null is the newest F5 release.</summary>
     public string? EffectiveOptiTag => OptiChoice?.Tag ?? _s.Settings.OptiTag;
     /// <summary>
-    /// The build the next install writes this game's OptiScaler options for: its pick, else the default, else the newest release of
-    /// the source (unknown before the first check, which means the tested build).
+    /// The build the next install writes this game's OptiScaler options for: its pick, else the default, else the newest release
+    /// (unknown before the first check, which means the tested build).
     /// </summary>
-    internal (OptiSource Source, string? Tag) OptiBuildForRows =>
-        (SelectedBuild, EffectiveOptiTag ?? (_s.Store.Opti is { } latest && OptiSources.OfTag(latest.Tag) == SelectedBuild ? latest.Tag : null));
+    internal (OptiSource Source, string? Tag) OptiBuildForRows => (OptiSources.F5, EffectiveOptiTag ?? _s.Store.Opti?.Tag);
     public string? EffectiveUpliftTag => UpliftChoice?.Tag ?? _s.Settings.UpliftTag;
     public bool RenoDxEnabled => On("renodx");
     public bool LecramEnabled => On("lecram");
@@ -290,7 +279,6 @@ public sealed partial class GameViewModel : ObservableObject
         "renodx" => NrAddon.RenoDx,
         "lecram" => NrAddon.Lecram,
         "uplift" => NrAddon.Uplift,
-        "dfc" => NrAddon.Dfc,
         _ => null,
     };
 
@@ -335,37 +323,6 @@ public sealed partial class GameViewModel : ObservableObject
         { Log.Error("Could not mark the ShortFuse + Lecram pair", ex); Views.Dialog.Show("Could not mark pair", UserErrors.Message(ex)); }
     }
 
-    /// <summary>Deep Fried Chicken is ticked for a game that ships no DLSS of its own (copies an install of ours added don't count).</summary>
-    public bool DfcWithoutNativeDlss => IsReShadeOnly && On("dfc") && !Installer.HasNativeDlss(Info, Manifest, SelectedTarget?.Dir ?? Root);
-    /// <summary>The DFC build this game uses is older than 4.x and the installer will refuse this game; null otherwise.</summary>
-    public string? DfcNoDlssWarning => DfcWithoutNativeDlss && _s.Store.DfcBuildFor(EffectiveDfcId) is { } dfc && !ComponentStore.DfcSupportsNonDlssGames(dfc)
-        ? Installer.DfcNeedsNativeDlss(dfc.FileVersion) : null;
-    public bool HasDfcNoDlssWarning => DfcNoDlssWarning is not null;
-    public bool ShowDfcNoDlssHint => DfcWithoutNativeDlss && !HasDfcNoDlssWarning;
-    public const string DfcNoDlssHint =
-        "No DLSS in this game: Deep Fried Chicken 4.x runs NR on its own motion vectors (its motion model is in the deep-fried-chicken-neural folder) or an external ReShade motion provider's, on top of the game's anti-aliasing. " +
-        "There is no DLSS upscaling (4.x removed DFC's own SR). nvngx_dlss.dll from NVIDIA's DLSS release is added beside the exe. " +
-        "Frame generation (DFC overlay, Rendering card) needs borderless or windowed mode; DLSS-G needs an RTX 40/50 GPU.";
-
-    /// <summary>Per game: place NVIDIA's nvngx_dlssg.dll for DFC's DLSS-G frame generation when the game has no DLSS of its own.</summary>
-    public bool DfcFrameGen
-    {
-        get => _s.Settings.Games.GetValueOrDefault(Id)?.DfcFrameGen == true;
-        set
-        {
-            _s.Settings.For(Id).DfcFrameGen = value ? true : null;
-            _s.Settings.Save();
-            OnPropertyChanged();
-        }
-    }
-
-    private void NotifyDfcHint()
-    {
-        OnPropertyChanged(nameof(DfcWithoutNativeDlss));
-        OnPropertyChanged(nameof(DfcNoDlssWarning));
-        OnPropertyChanged(nameof(HasDfcNoDlssWarning));
-        OnPropertyChanged(nameof(ShowDfcNoDlssHint));
-    }
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(IsLocalPresetSelected))]
     private PresetChoice? _presetChoice;
@@ -465,7 +422,7 @@ public sealed partial class GameViewModel : ObservableObject
         }
     }
 
-    private Mod DefaultMod => ModPicker.DefaultFor(IsReShadeOnly, On("uplift"), On("dfc"), On("lecram"), On("renodx"));
+    private Mod DefaultMod => ModPicker.DefaultFor(IsReShadeOnly, On("uplift"), On("lecram"), On("renodx"));
 
     public bool ShowOptiNr => ModPicker.Shows(ModSelection.Mod, Mod.OptiScalerNr);
     /// <summary>The build picker above OptiScaler's options; ReShade-only mode installs no OptiScaler.</summary>
@@ -474,13 +431,12 @@ public sealed partial class GameViewModel : ObservableObject
     public bool ShowMfg => ModPicker.Shows(ModSelection.Mod, Mod.Mfg);
     public bool ShowRenoDx => IsReShadeOnly && ModPicker.Shows(ModSelection.Mod, Mod.RenoDx);
     public bool ShowLecram => IsReShadeOnly && ModPicker.Shows(ModSelection.Mod, Mod.Lecram);
-    public bool ShowDfc => IsReShadeOnly && ModPicker.Shows(ModSelection.Mod, Mod.Dfc);
     public bool ShowUplift => IsReShadeOnly && ModPicker.Shows(ModSelection.Mod, Mod.Uplift);
 
     /// <summary>Mode or ticks changed: keep the user's pick while that mod is still listed; otherwise follow the route.</summary>
     private void RefreshModPick()
     {
-        var available = ModPicker.Available(IsReShadeOnly, SelectedBuild.Name);
+        var available = ModPicker.Available(IsReShadeOnly);
         if (!_modChoices.SequenceEqual(available))
         {
             _modChoices = available;
@@ -490,7 +446,7 @@ public sealed partial class GameViewModel : ObservableObject
         NotifyModShown();
     }
 
-    /// <summary>The selected OptiScaler build changed: rename the mod entry, the component row and the cards that name it.</summary>
+    /// <summary>The OptiScaler build this game installs changed: its row, the cards and the options that build has follow it.</summary>
     public void RefreshBuildName()
     {
         RefreshModPick();
@@ -508,7 +464,6 @@ public sealed partial class GameViewModel : ObservableObject
         OnPropertyChanged(nameof(ShowMfg));
         OnPropertyChanged(nameof(ShowRenoDx));
         OnPropertyChanged(nameof(ShowLecram));
-        OnPropertyChanged(nameof(ShowDfc));
         OnPropertyChanged(nameof(ShowUplift));
     }
 
@@ -517,11 +472,10 @@ public sealed partial class GameViewModel : ObservableObject
     public ObservableCollection<GameOptionViewModel> RenoDxRows { get; } = [];
     public ObservableCollection<GameOptionViewModel> LecramRows { get; } = [];
     public ObservableCollection<GameOptionViewModel> UpliftRows { get; } = [];
-    public ObservableCollection<GameOptionViewModel> DfcRows { get; } = [];
     public ObservableCollection<GameOptionViewModel> NrRows { get; } = [];
     public ObservableCollection<GameOptionViewModel> TonemapRows { get; } = [];
     public ObservableCollection<GameOptionViewModel> HdrRows { get; } = [];
-    private IEnumerable<GameOptionViewModel> ConfigRows => ReShadeRows.Concat(MfgRows).Concat(RenoDxRows).Concat(LecramRows).Concat(UpliftRows).Concat(DfcRows).Concat(NrRows).Concat(TonemapRows).Concat(HdrRows);
+    private IEnumerable<GameOptionViewModel> ConfigRows => ReShadeRows.Concat(MfgRows).Concat(RenoDxRows).Concat(LecramRows).Concat(UpliftRows).Concat(NrRows).Concat(TonemapRows).Concat(HdrRows);
     private bool _rowsBuilt;
 
     /// <summary>Built when the Game config tab first opens: most games never need them.</summary>
@@ -534,15 +488,14 @@ public sealed partial class GameViewModel : ObservableObject
         Fill(RenoDxRows, GameOptionViewModel.Definitions.RenoDx, true);
         Fill(LecramRows, GameOptionViewModel.Definitions.Lecram, true, () => _s.Store.LecramBuildFor(EffectiveLecramId));
         Fill(UpliftRows, GameOptionViewModel.Definitions.Uplift, true);
-        Fill(DfcRows, GameOptionViewModel.Definitions.Dfc, true, available: key => _s.Store.DfcCompat([key], EffectiveDfcId) is not { MissingKeys.Count: > 0 });
         Fill(NrRows, GameOptionViewModel.Definitions.Nr, false, opti: () => OptiBuildForRows);
         Fill(TonemapRows, GameOptionViewModel.Definitions.Tonemap, false, opti: () => OptiBuildForRows);
         Fill(HdrRows, GameOptionViewModel.Definitions.HdrOutput, false, opti: () => OptiBuildForRows);
 
         void Fill(ObservableCollection<GameOptionViewModel> rows, IEnumerable<IniOptionViewModel> defs, bool reShade, Func<AddonBuild?>? lecram = null,
-            Func<string, bool>? available = null, Func<(OptiSource, string?)>? opti = null)
+            Func<(OptiSource, string?)>? opti = null)
         {
-            foreach (var d in defs) rows.Add(new GameOptionViewModel(d, reShade, _s.Settings, Id, lecram, available, opti));
+            foreach (var d in defs) rows.Add(new GameOptionViewModel(d, reShade, _s.Settings, Id, lecram, opti));
         }
     }
 
@@ -699,7 +652,7 @@ public sealed partial class GameViewModel : ObservableObject
     }
 
     /// <summary>
-    /// The build dropdowns of the component table (add-ons, ReShade, OptiScaler, GITC Uplift, DLSS5-Feeder): the default first, then
+    /// The build dropdowns of the component table (add-ons, ReShade, OptiScaler, GITC Uplift): the default first, then
     /// the builds newest first, labelled by <see cref="GamePickerLabels"/>.
     /// </summary>
     public void RebuildAddonChoices()
@@ -710,25 +663,23 @@ public sealed partial class GameViewModel : ObservableObject
         var m = Manifest;
         RenoDxChoice = FillAddonChoices(RenoDxChoices, AddonKind.RenoDx, over?.RenoDxId, CatalogBuildKind.RenoDx, m?.RenoDx == true ? (m.RenoDxId, m.RenoDxTag) : null);
         LecramChoice = FillAddonChoices(LecramChoices, AddonKind.Lecram, over?.LecramId, CatalogBuildKind.Lecram, m?.Lecram == true ? (m.LecramId, m.LecramTag) : null);
-        DfcChoice = FillAddonChoices(DfcChoices, AddonKind.Dfc, over?.DfcId, null, m?.Dfc == true ? (m.DfcId, m.DfcTag) : null);
         ReShadeChoice = FillReShadeChoices(over?.ReShadeId, m?.ReShade == true ? m.ReShadeId : null);
         OptiChoice = FillBuildChoices(OptiChoices, _s.Store.Library(LibraryKind.OptiScaler), _s.Settings.OptiTag, _s.Store.Opti?.Tag, over?.OptiTag, m?.Opti == true ? m.OptiTag : null);
         UpliftChoice = FillBuildChoices(UpliftChoices, _s.Store.Library(LibraryKind.Uplift), _s.Settings.UpliftTag, _s.Store.Uplift?.Tag, over?.UpliftTag, m?.Uplift == true ? m.UpliftTag : null);
-        FillFeederChoices(over);
         _loading = loading;
         OnPropertyChanged(nameof(EffectiveLecramGeneration));
         RefreshAddonPairStatus();
         if (_rowsBuilt) RefreshConfigRows();
     }
 
-    /// <summary>"newest: OptiScaler-NR v0.9.51", what a default that follows the releases installs now.</summary>
+    /// <summary>"newest: OptiScaler F5 v0.1.38", what a default that follows the releases installs now.</summary>
     internal static string NewestOptiLabel(ComponentStore store) =>
-        store.Opti is { } r ? $"newest: {OptiSources.OfTag(r.Tag).Name} {OptiSources.RawTag(r.Tag)}" : $"newest {store.OptiSource.Name}";
+        store.Opti is { } r ? $"newest: {OptiSources.F5.Name} {OptiSources.RawTag(r.Tag)}" : $"newest {OptiSources.F5.Name}";
 
     internal static string NewestUpliftLabel(ComponentStore store) => store.Uplift is { } r ? $"newest: {r.Tag}" : "newest";
 
     /// <summary>
-    /// The default first ("Newest · OptiScaler-NR v0.9.51", "· download" while the release isn't in the library), then the library
+    /// The default first ("Newest · OptiScaler F5 v0.1.38", "· download" while the release isn't in the library), then the library
     /// newest first, then a game pick the library lost (downloaded on install).
     /// </summary>
     private static DlssChoice FillBuildChoices(ObservableCollection<DlssChoice> list, IReadOnlyList<LibraryBuild> builds, string? global, string? newest, string? pin, string? installed)
@@ -825,19 +776,11 @@ public sealed partial class GameViewModel : ObservableObject
         RebuildAddonChoices();
     }
 
-    partial void OnDfcChoiceChanged(DlssChoice? value)
-    {
-        if (_loading) return;
-        _s.Settings.For(Id).DfcId = value?.Tag;
-        AddonPicksChanged();
-    }
-
     partial void OnOptiChoiceChanged(DlssChoice? value)
     {
         if (_loading) return;
         _s.Settings.For(Id).OptiTag = value?.Tag;
         _s.Settings.Save();
-        // The chosen build may be the other OptiScaler source: its name goes on the mode, the mod list and the row.
         RefreshBuildName();
     }
 
@@ -926,8 +869,6 @@ public sealed partial class GameViewModel : ObservableObject
         Set("dlssnr", m?.DlssNr ?? (_s.Settings.InstallDlssNr && (!IsReShadeOnly || _s.Settings.InstallRenoDx || _s.Settings.InstallLecram || _s.Settings.InstallUplift)));
         Set("renodx", m?.RenoDx ?? _s.Settings.InstallRenoDx);
         Set("lecram", m?.Lecram ?? _s.Settings.InstallLecram);
-        Set("dfc", m?.Dfc ?? false);
-        Set("feeder", m?.Component(ComponentRegistry.Feeder) is not null);
         Set("uplift", m?.Uplift ?? _s.Settings.InstallUplift);
         Set("dlss", m?.Dlss ?? HasDlss); // nothing to replace in games that don't ship DLSS
         Set("streamline", m?.Streamline ?? (_s.Settings.InstallStreamline && HasStreamline));
@@ -954,8 +895,8 @@ public sealed partial class GameViewModel : ObservableObject
         var m = Manifest;
         var store = _s.Store;
 
-        // The row names the build actually installed (the manifest tag carries it); without an install it names the selected one.
-        Components.First(c => c.Key == "opti").Name = (m?.Opti == true && m.OptiTag is not null ? OptiSources.OfTag(m.OptiTag) : SelectedBuild).Name;
+        // The row names the build actually installed (an OptiScaler-NR install of an older version until its update installs F5).
+        Components.First(c => c.Key == "opti").Name = OptiSources.NameOf(m?.Opti == true ? m.OptiTag : null);
         Row("opti", m?.Opti == true ? m.OptiTag : null, EffectiveOptiTag ?? store.Opti?.Tag, true);
         Row("reshade", m?.ReShade == true ? (m.ReShadeVulkan ? "Vulkan layer" : InstalledVersion(ReShadeInstalledName(m))) : null, ReShadeLatest(), ReShadeCurrent(m));
         OnPropertyChanged(nameof(ReShadeTargetNow));
@@ -982,16 +923,9 @@ public sealed partial class GameViewModel : ObservableObject
         Row("renodx", m?.RenoDx == true ? InstalledAddon(AddonKind.RenoDx, m.RenoDxId, m.RenoDxTag) : null, sf?.Name, sf is not null && sf.Matches(m?.RenoDxId, m?.RenoDxTag));
         Row("lecram", m?.Lecram == true ? InstalledAddon(AddonKind.Lecram, m.LecramId, m.LecramTag) : null, lecram?.Name, lecram is not null && lecram.Matches(m?.LecramId, m?.LecramTag));
         Row("uplift", m?.Uplift == true ? m.UpliftTag : null, EffectiveUpliftTag ?? store.Uplift?.Tag, true);
-        var dfc = store.DfcBuildFor(EffectiveDfcId);
-        Row("dfc", m?.Dfc == true ? InstalledAddon(AddonKind.Dfc, m.DfcId, m.DfcTag) : null, dfc?.Name, dfc is not null && dfc.Matches(m?.DfcId, m?.DfcTag));
-        var feeder = m?.Component(ComponentRegistry.Feeder);
-        var feederBuild = FeederLibrary.Choose(EffectiveFeederId);
-        Row("feeder", feeder?.Version, feederBuild?.Label ?? "downloads on install",
-            feeder is null || EffectiveFeederId is null && feederBuild is null || feeder.BuildId?.Equals(feederBuild?.Id, StringComparison.OrdinalIgnoreCase) == true);
         OnPropertyChanged(nameof(CanSwitchNr));
         OnPropertyChanged(nameof(CanUndoNr));
         RefreshAddonPairStatus();
-        NotifyDfcHint();
 
         var latest = LatestDlss;
         DlssRows.Clear();
@@ -1025,7 +959,9 @@ public sealed partial class GameViewModel : ObservableObject
             : interposer?.Version is { } sv && slLatest is not null && Trim(sv) == Trim(slLatest) ? RowState.Current
             : m?.Streamline == true ? RowState.Update : RowState.None;
 
-        CoreNeedsUpdate = m is not null && Components.Where(c => c.Key != "dlss" || m.Dlss).Any(c => c.State == RowState.Update && IsTracked(m, c.Key));
+        // Deep Fried Chicken and DLSS5-Feeder left the app: a game an older version put them in needs the update that takes them out.
+        CoreNeedsUpdate = m is not null && (Components.Where(c => c.Key != "dlss" || m.Dlss).Any(c => c.State == RowState.Update && IsTracked(m, c.Key))
+                                            || m.Dfc || m.Component(ComponentRegistry.Feeder) is not null);
         RefreshExtrasUpdate();
         OnPropertyChanged(nameof(ActionText));
         OnPropertyChanged(nameof(IsInstalled));
@@ -1061,8 +997,6 @@ public sealed partial class GameViewModel : ObservableObject
         "renodx" => m.RenoDx,
         "lecram" => m.Lecram,
         "uplift" => m.Uplift,
-        "dfc" => m.Dfc,
-        "feeder" => m.Component(ComponentRegistry.Feeder) is not null,
         "streamline" => m.Streamline,
         _ => m.Dlss,
     };
@@ -1074,7 +1008,7 @@ public sealed partial class GameViewModel : ObservableObject
         row.Latest = latest ?? "—";
         row.State = latest is null ? RowState.Missing
             : installed is null ? RowState.None
-            : key is "reshade" or "dlssnr" or "renodx" or "lecram" or "dfc" or "feeder" ? (hashMatches ? RowState.Current : RowState.Update)
+            : key is "reshade" or "dlssnr" or "renodx" or "lecram" ? (hashMatches ? RowState.Current : RowState.Update)
             : installed == latest ? RowState.Current : RowState.Update;
     }
 
@@ -1134,11 +1068,6 @@ public sealed partial class GameViewModel : ObservableObject
         LecramId = EffectiveLecramId,
         Uplift = !dlssOnly && IsReShadeOnly && On("uplift"),
         UpliftTag = EffectiveUpliftTag,
-        Dfc = !dlssOnly && IsReShadeOnly && On("dfc"),
-        DfcId = EffectiveDfcId,
-        DfcFrameGen = DfcFrameGen,
-        Feeder = !dlssOnly && IsReShadeOnly && On("dfc") && On("feeder"),
-        FeederId = EffectiveFeederId,
         Dlss = dlssOnly || On("dlss"),
         AddMissingDlss = _s.Settings.AddMissingDlss && !dlssOnly && !IsReShadeOnly && On("opti"),
         DlssTag = EffectiveDlssTag,
@@ -1171,11 +1100,6 @@ public sealed partial class GameViewModel : ObservableObject
         LecramId = EffectiveLecramId,
         Uplift = m.Uplift,
         UpliftTag = EffectiveUpliftTag,
-        Dfc = m.Dfc,
-        DfcId = EffectiveDfcId,
-        DfcFrameGen = DfcFrameGen,
-        Feeder = m.Component(ComponentRegistry.Feeder) is not null,
-        FeederId = EffectiveFeederId,
         Dlss = m.Dlss,
         AddMissingDlss = m.Opti && m.Files.Any(f => Path.GetFileName(f).Equals("nvngx_dlss.dll", StringComparison.OrdinalIgnoreCase)),
         DlssTag = EffectiveDlssTag,
@@ -1196,8 +1120,5 @@ public sealed partial class GameViewModel : ObservableObject
 
     private bool On(string key) => Components.First(c => c.Key == key).Enabled;
 
-    /// <summary>The Feeder build this game installs: its own pick, else the default; null follows the newest release.</summary>
-    public string? EffectiveFeederId => _s.Settings.Games.GetValueOrDefault(Id)?.BuildPick(ComponentRegistry.Feeder) ?? _s.Settings.DefaultBuild(ComponentRegistry.Feeder);
-
-    public bool NeedsInjection(InstallOptions o) => o.Opti || o.ReShade || o.Mfg || o.DlssNr || o.RenoDx || o.Lecram || o.Dfc || o.Uplift || o.Feeder;
+    public bool NeedsInjection(InstallOptions o) => o.Opti || o.ReShade || o.Mfg || o.DlssNr || o.RenoDx || o.Lecram || o.Uplift;
 }

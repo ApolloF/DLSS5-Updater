@@ -112,7 +112,7 @@ public sealed partial class ComponentStore
         {
             var which = original.Equals(RenoDxFile, StringComparison.OrdinalIgnoreCase) || LegacyRenoDxFiles.Contains(original, StringComparer.OrdinalIgnoreCase)
                 ? "ShortFuse's add-on; import it under the RenoDX DLSS add-on instead"
-                : original.Equals(DfcFile, StringComparison.OrdinalIgnoreCase) ? "Deep Fried Chicken; import it from its release folder instead"
+                : original.Equals(DfcFile, StringComparison.OrdinalIgnoreCase) ? "Deep Fried Chicken, which this app no longer installs"
                 : null;
             throw new InvalidDataException(
                 $"This file is {original}, {(which is null ? "not Lecram's add-on" : "which is " + which)}. Choose {Lecram10File} (v10 and older) or {Lecram11File} (v11 and newer).");

@@ -7,15 +7,13 @@ public static class ComponentTable
 
     public static readonly IReadOnlyList<Row> Rows =
     [
-        new("opti", ComponentRegistry.OptiScaler, "OptiScaler-NR"),
+        new("opti", ComponentRegistry.OptiScaler, "OptiScaler F5"),
         new("reshade", ComponentRegistry.ReShade, "ReShade"),
         new("mfg", ComponentRegistry.MfgUnlock, "MFG Unlock"),
         new("dlssnr", ComponentRegistry.DlssNr, "NR runtime"),
         new("renodx", ComponentRegistry.RenoDx, "ShortFuse RenoDX DLSS add-on"),
         new("lecram", ComponentRegistry.Lecram, "Lecram DLSS5 add-on"),
         new("uplift", ComponentRegistry.Uplift, "GITC Uplift"),
-        new("dfc", ComponentRegistry.Dfc, "Deep Fried Chicken"),
-        new("feeder", ComponentRegistry.Feeder, "DLSS5-Feeder"),
         new("dlss", ComponentRegistry.Dlss, "DLSS (SR · RR · FG)"),
         new("streamline", ComponentRegistry.Streamline, "Streamline (for Dynamic MFG)"),
     ];
@@ -37,7 +35,7 @@ public static class ComponentTable
     {
         "opti" => new(true, true, mode == InstallMode.OptiScaler),
         "reshade" when mode == InstallMode.ReShadeOnly => new(true, false, true),
-        "renodx" or "lecram" or "dfc" or "uplift" or "feeder" when mode == InstallMode.OptiScaler => new(false, true, false),
+        "renodx" or "lecram" or "uplift" when mode == InstallMode.OptiScaler => new(false, true, false),
         _ => new(true, true, null),
     };
 

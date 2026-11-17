@@ -88,45 +88,6 @@ public sealed partial class GameViewModel
     }
     partial void OnAdviceCautionChanged(string? value) => OnPropertyChanged(nameof(HasAdviceCaution));
 
-    // ---------- the Feeder build: Auto, or the user's own pick ----------
-
-    public ObservableCollection<DlssChoice> FeederChoices { get; } = [];
-    [ObservableProperty] private DlssChoice? _feederChoice;
-
-    /// <summary>True when the game pins a Feeder build instead of following Auto.</summary>
-    public bool FeederIsManual => FeederChoice?.Tag is not null;
-
-    /// <summary>"Newest · 1.19.0" (or "Default · ..." when Settings chose a build) first, then the other library builds; a pin the library lost stays visible.</summary>
-    private void FillFeederChoices(GameOverride? over)
-    {
-        var pin = over?.BuildPick(ComponentRegistry.Feeder);
-        var defaultPick = _s.Settings.DefaultBuild(ComponentRegistry.Feeder);
-        var builds = FeederLibrary.Builds();
-        var pinned = builds.FirstOrDefault(b => b.Id.Equals(defaultPick, StringComparison.OrdinalIgnoreCase));
-        var follows = pinned ?? builds.FirstOrDefault();
-        // An empty library still installs: the newest release downloads with the first install.
-        var def = new PickerDefault(follows?.Id, follows?.Label ?? "", pinned is null, Download: follows is null);
-        var installed = Manifest?.Component(ComponentRegistry.Feeder)?.BuildId;
-        FeederChoices.Clear();
-        foreach (var c in GamePickerLabels.Compose(def, builds.Select(b => new PickerChoice(b.Id, b.Label)).ToList(), installed, pin))
-            FeederChoices.Add(new DlssChoice(c.Tag, c.Label));
-        if (pin is not null && FeederChoices.All(c => c.Tag != pin)) FeederChoices.Add(new DlssChoice(pin, $"{pin} · not in the library"));
-        FeederChoice = FeederChoices.FirstOrDefault(c => c.Tag == pin) ?? FeederChoices[0];
-    }
-
-    partial void OnFeederChoiceChanged(DlssChoice? value)
-    {
-        OnPropertyChanged(nameof(FeederIsManual));
-        if (_loading || value is null) return;
-        _s.Settings.For(Id).SetBuildPick(ComponentRegistry.Feeder, value.Tag);
-        _s.Settings.Save();
-        RefreshStatus();
-    }
-
-    /// <summary>Back to following the default for this game.</summary>
-    [RelayCommand]
-    private void ResetFeederToAuto() => FeederChoice = FeederChoices.FirstOrDefault();
-
     /// <summary>What the advisor needs to know about this game right now.</summary>
     public AdvisorInput AdviceInput()
     {
@@ -136,9 +97,6 @@ public sealed partial class GameViewModel
         if (File.Exists(store.DlssNrFor(EffectiveNrId))) imported.Add(ComponentRegistry.DlssNr);
         if (store.AddonBuilds(AddonKind.RenoDx).Count > 0) imported.Add(ComponentRegistry.RenoDx);
         if (store.AddonBuilds(AddonKind.Lecram).Count > 0) imported.Add(ComponentRegistry.Lecram);
-        var dfc = store.DfcBuildFor(EffectiveDfcId);
-        if (dfc is not null) imported.Add(ComponentRegistry.Dfc);
-        var shaders = Path.Combine(target, FeederLibrary.ShaderDir);
         var catalog = AdvisorCatalog.For(_s.Catalog?.Document);
         var protectedInstall = MethodAdvisor.IsProtectedStoreInstall(Info);
         return new AdvisorInput(Info, _s.Gpu)
@@ -151,9 +109,7 @@ public sealed partial class GameViewModel
             RenoDxMod = catalog.RenoDx?.Match(Info).Mod,
             Luma = _s.Catalog?.LumaPicker?.Pick(Info),
             Imported = imported,
-            DfcRunsWithoutDlss = dfc is null || ComponentStore.DfcSupportsNonDlssGames(dfc),
             InstalledRoutes = NrAddons.PresentIn(target, Manifest),
-            MotionProviderPresent = Directory.Exists(shaders) && Directory.EnumerateFiles(shaders, "lumenite_*.fx").Any(),
             AddonsOn = AddonsOn(),
         };
     }
@@ -189,7 +145,7 @@ public sealed partial class GameViewModel
         SyncPick(keep);
         AdviceBlocked = advice.Blocked;
         AdviceCaution = advice.Caution;
-        AdviceFooter = advice.Methods.Any(m => m.Method is Method.NeuralAddon or Method.OptiScalerNr or Method.Feeder)
+        AdviceFooter = advice.Methods.Any(m => m.Method is Method.NeuralAddon or Method.OptiScalerNr)
             ? $"{_s.Gpu.Label}. Neural rendering runs a DLSS 5 build NVIDIA hasn't released (nvngx_dlssnr.dll); the app downloads and installs it automatically."
             : _s.Gpu.IsKnown ? _s.Gpu.Label : "";
         OnPropertyChanged(nameof(HasMethods));
@@ -264,7 +220,7 @@ public sealed partial class GameViewModel
 
     /// <summary>The NR add-ons switched on in the table.</summary>
     private IReadOnlyList<string> AddonsOn() =>
-        [.. new[] { ComponentRegistry.RenoDx, ComponentRegistry.Lecram, ComponentRegistry.Uplift, ComponentRegistry.Dfc }
+        [.. new[] { ComponentRegistry.RenoDx, ComponentRegistry.Lecram, ComponentRegistry.Uplift }
             .Where(id => TableRowOf(id) is { Visible: true, Enabled: true })];
 
     private Dictionary<string, TableRow> Table()
