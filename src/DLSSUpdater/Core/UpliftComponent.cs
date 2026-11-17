@@ -25,10 +25,12 @@ public sealed partial class ComponentStore
     internal static void VerifyUplift(string zip, string assetName, string? sums)
     {
         if (sums is null) return;
-        var line = sums.Split('\n').Select(l => l.Trim().Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries))
-            .FirstOrDefault(parts => parts.Length == 2 && parts[1].Equals(assetName, StringComparison.Ordinal));
-        if (line is null || line[0].Length != 64 || !line[0].All(Uri.IsHexDigit)
-            || !FileUtil.Sha256(zip).Equals(line[0], StringComparison.OrdinalIgnoreCase))
+        // sha256sum format: "<hash>  <name>", or "<hash> *<name>" in binary mode (2.0.0+); names may contain spaces.
+        var hash = sums.Split('\n').Select(l => l.Trim().Split((char[]?)null, 2, StringSplitOptions.RemoveEmptyEntries))
+            .Where(parts => parts.Length == 2)
+            .FirstOrDefault(parts => parts[1].TrimStart().TrimStart('*').Equals(assetName, StringComparison.Ordinal))?[0];
+        if (hash is null || hash.Length != 64 || !hash.All(Uri.IsHexDigit)
+            || !FileUtil.Sha256(zip).Equals(hash, StringComparison.OrdinalIgnoreCase))
             throw new InvalidDataException($"{assetName}: SHA256SUMS verification failed.");
     }
 
