@@ -88,9 +88,37 @@ public sealed partial class ComponentStore
 
     /// <summary>
     /// Imports renodx-dlss5.addon64 (v10 and older) or dlss5-nr.addon64 (v11+) into the library; the file itself decides the generation.
-    /// ShortFuse's add-on and Deep Fried Chicken are named in the error instead.
+    /// ShortFuse's add-on and Deep Fried Chicken are named in the error instead. The author's setup exe (regular or Early Access) and his
+    /// add-on zip for a hand install are accepted too: only their root dlss5-nr.addon64 is taken.
     /// </summary>
-    public AddonBuild ImportLecram(string source) => ImportLecram(source, downloaded: false);
+    public AddonBuild ImportLecram(string source) =>
+        IsLecramPackage(source) ? ImportLecramPackage(source) : ImportLecram(source, downloaded: false);
+
+    private static bool IsLecramPackage(string source) =>
+        Path.GetExtension(source).Equals(".exe", StringComparison.OrdinalIgnoreCase) || Path.GetExtension(source).Equals(".zip", StringComparison.OrdinalIgnoreCase);
+
+    /// <summary>
+    /// The 32-bit add-on (dlss5-nr.addon32) and NR's host folder (dlss5-nr-host, with its own dlss5-nr.addon64) are left out: the app
+    /// installs neither yet (docs/addons/lecram-dlss5.md, "Host and 32-bit"). The exe is never run.
+    /// </summary>
+    private AddonBuild ImportLecramPackage(string source)
+    {
+        if (!File.Exists(source)) throw new FileNotFoundException("The file doesn't exist.", source);
+        var temp = Path.Combine(AppPaths.Cache, "lecram-import-" + Guid.NewGuid().ToString("N"));
+        try
+        {
+            Directory.CreateDirectory(temp);
+            var addon = Path.Combine(temp, Lecram11File);
+            MediaFireClient.ExtractAddon(source, addon);
+            Log.Info($"Extracted {Lecram11File} from {source}");
+            return ImportLecram(addon, downloaded: false);
+        }
+        finally
+        {
+            try { if (Directory.Exists(temp)) Directory.Delete(temp, true); }
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) { Log.Error("Could not remove the Lecram import folder", ex); }
+        }
+    }
 
     /// <param name="downloaded">Fetched from Lecram's channel by the app, so the automatic cleanup may remove it later.</param>
     /// <param name="knownLabel">The version the catalog names the build by (its release tag); it wins over the binary's strings.</param>
@@ -103,7 +131,7 @@ public sealed partial class ComponentStore
         {
             if (!LooksLikeLecramV11(source))
                 throw new InvalidDataException(
-                    $"This file isn't Lecram's add-on. Choose {Lecram10File} (v10 and older) or {Lecram11File} (v11 and newer). Extract archives first.");
+                    $"This file isn't Lecram's add-on. Choose {Lecram10File} (v10 and older), {Lecram11File} (v11 and newer), the author's DLSS5 NR setup exe or his add-on zip.");
             generation = Generation.V11;
         }
         else if (original.Equals(Lecram10File, StringComparison.OrdinalIgnoreCase)) generation = Generation.V10;

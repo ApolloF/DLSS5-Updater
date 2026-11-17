@@ -200,15 +200,16 @@ public static partial class SettingsOptions
     ];
 
     // Keys, defaults and ranges from docs/addons/lecram-dlss5.md (v10.7 and v11.0.0-beta.6 / beta.18 / beta.22 / beta.29 / beta.45 /
-    // beta.48, read from the binaries and probed; beta.48, v11 Patch 11, is the supported build). Values the docs don't confirm are
-    // not offered. Options of one generation only are hidden for the other (LecramIni.IsAvailable) and keys whose choices differ per
-    // generation carry a variant (IniOptionViewModel.In). Within v11 only values that mean the same in beta.6 and beta.18+ are offered
-    // (NRPresentGuides 0 flipped meaning, so it is not), so no per-build choice variant is needed; keys an older v11 build lacks
-    // (NRGpuCrashWitness before beta.22, NRPass2..4Preset before beta.29, NRPresentFgPath before beta.48) are hidden and not written
-    // for it, and so are keys a later build retired (NRPresentFgPath from v12.0.0). NRMaskBlendMode (raw NGX value, undocumented) and
-    // v12's NROpticalFlow (unprobed; the app writes ConfigVersion=11) are not offered.
-    // Not exposed: the other Present/HDR, normalisation, Look, model-lab, layer, per-pass look and screenshot keys, which are tuned
-    // in the add-on's own overlay.
+    // beta.48 read from the binaries and probed; v11.9.0, v12.0.0, v12.9.9 and v13.4.0 from their settings catalog and panel texts).
+    // Values the docs don't confirm are not offered. Options of one generation only are hidden for the other (LecramIni.IsAvailable) and
+    // keys whose choices differ per generation carry a variant (IniOptionViewModel.In). Within v11 only values that mean the same in
+    // beta.6 and beta.18+ are offered (NRPresentGuides 0 flipped meaning, so it is not), so no per-build choice variant is needed; keys an
+    // older v11 build lacks (NRGpuCrashWitness before beta.22, NRPass2..4Preset before beta.29, NRPresentFgPath before beta.48, the
+    // per-pass hook point and resolution, frame buffering, the upscaler and halo removal before v12.9.9, frame generation before v13.4.0)
+    // are hidden and not written for it, and so are keys a later build retired (NRPresentFgPath from v12.0.0). NRMaskBlendMode (raw NGX
+    // value, undocumented) and v12's NROpticalFlow (unprobed; the app writes ConfigVersion=11) are not offered.
+    // Not exposed: the other Present/HDR, normalisation, Look (Fine-tune), model-lab, layer, per-pass look, Input lab, experimental and
+    // screenshot keys, which are tuned in the add-on's own overlay.
     public static IniOptionViewModel[] Lecram(ObservableCollection<IniOverride> rs) =>
     [
         new IniOptionViewModel("Neural rendering", "Master switch of the neural model (v11 and newer).", LecramIni.Section, "NeuralUplift", rs,
@@ -260,7 +261,7 @@ public static partial class SettingsOptions
                 C("0.25", F(0.25), "Within the 0 to 2 range."), C("0.5", F(0.5), "Within the 0 to 2 range."), C("0.75", F(0.75), "Within the 0 to 2 range."),
                 C("1.0", F(1.0), "The add-on's default."), C("1.5", F(1.5), "Within the 0 to 2 range."), C("2.0", F(2.0), "The top of the 0 to 2 range.")),
         new IniOptionViewModel("Character / skin", "Structure strength on characters and skin.", LecramIni.Section, "NRSkinStructure", rs,
-            C("Add-on default", null, "Leave the add-on's own choice (v10: -1, follow the stock value; v11: 0)."),
+            C("Add-on default", null, "Leave the add-on's own choice (v10: -1, follow the stock value; v11 to v12.0: 0; v12.9.9 and newer: 1)."),
             C("0", F(0), "The bottom of the range."), C("0.25", F(0.25), "Within the 0 to 1 range."), C("0.5", F(0.5), "Within the 0 to 1 range."),
             C("1.0", F(1.0), "The top of the range."))
             .About("lc-strengths")
@@ -269,9 +270,9 @@ public static partial class SettingsOptions
                 C("Follow stock", F(-1), "The add-on's default."),
                 C("0", F(0), "Within the -1 to 1 range."), C("0.5", F(0.5), "Within the -1 to 1 range."), C("1.0", F(1.0), "The top of the range."))
             .In(LecramGeneration.V11, null,
-                C("Add-on default", null, "Leave the add-on's own choice (0)."),
-                C("0", F(0), "The add-on's default."), C("0.25", F(0.25), "Within the 0 to 1 range."), C("0.5", F(0.5), "Within the 0 to 1 range."),
-                C("1.0", F(1.0), "The top of the range.")),
+                C("Add-on default", null, "Leave the add-on's own choice (v11 to v12.0: 0, faces protected; v12.9.9 and newer: 1, NVIDIA's stock face treatment)."),
+                C("0", F(0), "Protects faces; the default up to v12.0."), C("0.25", F(0.25), "Within the 0 to 1 range."), C("0.5", F(0.5), "Within the 0 to 1 range."),
+                C("1.0", F(1.0), "NVIDIA's stock face treatment; the default from v12.9.9.")),
         IniOptionViewModel.Toggle("Character mask", "v10 and older only; v11 always has it on.", LecramIni.Section, "NRAutoMask", "1", rs).About("lc-mask"),
         IniOptionViewModel.Toggle("UI correction", "Protects the HUD from the model.", LecramIni.Section, "NRUICorrection", "1", rs).About("lc-ui"),
         new IniOptionViewModel("Passes", "Model passes per frame.", LecramIni.Section, "NRPasses", rs,
@@ -287,6 +288,8 @@ public static partial class SettingsOptions
             C("Old (preset 1)", "1", "DLL 310.9.16: honest_tench, the first model and the one the model lab edits. The add-on calls it Old from beta.45 on."),
             C("New (preset 2)", "2", "DLL 310.9.16: the small FP8 model, newer and faster. The add-on calls it New from beta.45 on.")).About("lc-preset"),
         LecramPassPreset(2, rs), LecramPassPreset(3, rs), LecramPassPreset(4, rs),
+        LecramPassHookPoint(2, rs), LecramPassHookPoint(3, rs), LecramPassHookPoint(4, rs),
+        LecramPassScale(2, rs), LecramPassScale(3, rs), LecramPassScale(4, rs),
         new IniOptionViewModel("VRAM buffering", "How much video memory the model keeps in reserve (v11 and newer).", LecramIni.Section, "NRVramBuffering", rs,
             C("Add-on default", null, "Leave the add-on's own choice (0, Full)."),
             C("Full", "0", "The add-on's default."), C("Reduced", "1", "Reduced."), C("Minimal", "2", "Minimal.")).About("lc-vram"),
@@ -332,7 +335,56 @@ public static partial class SettingsOptions
             C("Add-on default", null, "Leave the add-on's own choice (beta.29+: on, with DRED from the launch after a crash; beta.22: off)."),
             C("Off", "0", "No crash report and no DRED."),
             C("On, DRED always", "1", "Direct3D 12 DRED crash breadcrumbs from every launch (beta.29+ also writes the crash report).")).About("lc-crash"),
+        new IniOptionViewModel("Frame buffering", "Whether NR's picture comes with its own frame or one frame late (v12.9.9 and newer; Direct3D 11 at Present).", LecramIni.Section, "NRFrameBuffering", rs,
+            C("Add-on default", null, "Leave the add-on's own choice (0, Automatic)."),
+            C("Automatic", "0", "The add-on's default: the same frame while the game idles in its Present long enough for NR, else one frame late."),
+            C("One frame", "1", "NR works beside the game's next frame: the fastest, the picture one frame late."),
+            C("Same frame", "2", "No added latency: the game's Present waits for NR.")).About("lc-buffering"),
+        new IniOptionViewModel("Upscaler", "NR's own DLSS Super Resolution in place of the game's FSR 3.1 or XeSS (v12.9.9 and newer).", LecramIni.Section, "NRUpscaler", rs,
+            C("Add-on default", null, "Leave the add-on's own choice (0, the game's own upscaler)."),
+            C("Game's", "0", "The game's own FSR 3.1 or XeSS runs. The add-on's default."),
+            C("DLSS", "1", "NR's own DLSS (DLAA where the game renders at its output size) with the game's exact inputs. Needs an NVIDIA RTX card.")).About("lc-upscaler"),
+        new IniOptionViewModel("DLSS preset", "The preset NR's own DLSS is created with (v12.9.9 and newer; only with Upscaler DLSS).", LecramIni.Section, "NRUpscalerPreset", rs,
+            C("Add-on default", null, "Leave the add-on's own choice (0, NVIDIA's default per mode)."),
+            C("Default", "0", "NVIDIA's per mode: K for DLAA, Quality and Balanced, M for Performance, L for Ultra Performance."),
+            C("J", "1", "Preset J."), C("K", "2", "Preset K."), C("L", "3", "Preset L."), C("M", "4", "Preset M.")).About("lc-upscaler"),
+        new IniOptionViewModel("Halo removal", "Takes off NR's bright rims along silhouettes (v12.9.9 and newer).", LecramIni.Section, "NRLookHaloRemoval", rs,
+            C("Add-on default", null, "Leave the add-on's own choice (0, off)."),
+            C("Off", F(0), "The add-on's default."), C("0.25", F(0.25), "Within the 0 to 1 range."), C("0.5", F(0.5), "Within the 0 to 1 range."),
+            C("0.75", F(0.75), "Within the 0 to 1 range."), C("1.0", F(1.0), "The top of the range.")).About("lc-halo"),
+        new IniOptionViewModel("Frame generation", "NVIDIA DLSS Frame Generation hosted by NR, after NR's pass (v13.4 and newer). Read when the game starts.", LecramIni.Section, "NRFrameGen", rs,
+            C("Add-on default", null, "Leave the add-on's own choice (0, Off)."),
+            C("Off", "0", "NR hosts nothing and loads no NVIDIA file. The add-on's default."),
+            C("On", "1", "DLSS Frame Generation through Streamline at the multiplier below; NR runs on every real frame, never on a generated one."),
+            C("Dynamic", "2", "NVIDIA's dynamic multiplier where supported, else On. v13.4 doesn't have it yet and uses the fixed multiplier.")).About("lc-framegen"),
+        new IniOptionViewModel("Frame multiplier", "Frames shown per real frame with NR's frame generation (v13.4 and newer).", LecramIni.Section, "NRFrameGenMultiplier", rs,
+            C("Add-on default", null, "Leave the add-on's own choice."),
+            C("2x", "0", "One generated frame per real frame."), C("3x", "1", "Two generated frames."), C("4x", "2", "Three generated frames."),
+            C("5x", "3", "Four generated frames."), C("6x", "4", "Five generated frames. Clamped to what the GPU supports.")).About("lc-framegen"),
+        new IniOptionViewModel("UI in generated frames", "How the game's HUD is handled by NR's frame generation (v13.4 and newer). Read when the game starts.", LecramIni.Section, "NRFrameGenUi", rs,
+            C("Add-on default", null, "Leave the add-on's own choice."),
+            C("Steady", "0", "DLSS-G puts the real UI back on each frame: it never warps and moves at the real frame rate."),
+            C("Interpolated", "1", "The UI is generated with the picture: smooth, and it can warp.")).About("lc-fg-ui"),
+        new IniOptionViewModel("Frame generation on HDR screens", "How NR's frame generation reaches a Windows HDR screen in an HDR10 game (v13.4 and newer). Read when the game starts.", LecramIni.Section, "NRHdrScreen", rs,
+            C("Add-on default", null, "Leave the add-on's own choice."),
+            C("HDR10", "0", "NR's swap chain on the screen, as DLSS-G makes it."),
+            C("scRGB", "1", "Each frame turned into scRGB on an FP16 swap chain at its native Present.")).About("lc-fg-hdr"),
     ];
+
+    private static IniOptionViewModel LecramPassHookPoint(int pass, ObservableCollection<IniOverride> rs) =>
+        new IniOptionViewModel($"Pass {pass} runs at", $"Where pass {pass} runs (v12.9.9 and newer; needs Passes {pass} or more). Numbered unlike Where it runs.", LecramIni.Section, $"NRPass{pass}HookPoint", rs,
+            C("Add-on default", null, "Leave the add-on's own choice."),
+            C("As the pass before", "0", "Where the pass before it runs."),
+            C("Before upscaling", "1", "Before DLSS upscales the frame."),
+            C("After upscaling", "2", "On DLSS's output, before the game's HUD and screen effects."),
+            C("Present", "3", "The finished frame, HUD and screen effects included.")).About("lc-pass-hook");
+
+    private static IniOptionViewModel LecramPassScale(int pass, ObservableCollection<IniOverride> rs) =>
+        new IniOptionViewModel($"Pass {pass} resolution", $"Fraction of the frame pass {pass} works at (v12.9.9 and newer; needs Passes {pass} or more).", LecramIni.Section, $"NRPass{pass}ResolutionScale", rs,
+            C("Add-on default", null, "Leave the add-on's own choice."),
+            C("As pass 1", "0", "Pass 1's resolution."),
+            C("0.33", F(0.33), "The add-on's minimum."), C("0.5", F(0.5), "Half."), C("0.75", F(0.75), "Three quarters."),
+            C("1.0", F(1.0), "Full resolution. A pass before upscaling always runs at the game's own resolution.")).About("lc-pass-scale");
 
     private static IniOptionViewModel LecramPassPreset(int pass, ObservableCollection<IniOverride> rs) =>
         new IniOptionViewModel($"Pass {pass} preset", $"Model for pass {pass} alone (v11 beta.29 and newer; needs Passes {pass} or more).", LecramIni.Section, $"NRPass{pass}Preset", rs,
@@ -409,6 +461,51 @@ public static partial class SettingsOptions
             C("Default · 1.0", null, "Model's colour fully."),
             C("0", F(0), "Keep the game's hues exactly; only brightness changes."),
             C("0.2", F(0.2), "Mostly the game's colour."), C("0.5", F(0.5), "Half and half."), C("1.0", F(1.0), "Model's colour fully.")).About("nr-colour"),
+        // OptiScaler F5 only (OptiSources.F5's VersionedKeys say from which build); OptiScaler-NR has none of these keys.
+        new IniOptionViewModel("Frame generator", "What makes the generated frames (F5Low output); applies after a game restart.", "F5Low", "FrameGenerator", o,
+            C("Default · auto", null, "XeFG on the NVIDIA tensor cores (xefg_tensor)."),
+            C("XeFG (tensor cores)", "xefg_tensor", "F5's own XeFG frame generation on the NVIDIA tensor cores (f5low.dll)."),
+            C("DLSS-G", "dlssg", "NVIDIA's DLSS-G, run by f5low.dll through its own Streamline. Needs an RTX GPU, and Streamline with nvngx_dlssg.dll in OptiScaler's streamline folder."),
+            C("Intel XeFG", "intel", "Intel's XeFG (libxess_fg.dll and libxell.dll), runs on any GPU vendor; up to 6x.")).About("f5-framegen"),
+        new IniOptionViewModel("Keep the game's DLSS-G", "With DLSS-G as the frame generator: let the game's own DLSS-G load.", "F5Low", "KeepGameDlssg", o,
+            C("Default · auto", null, "Off: the game's own nvngx_dlssg.dll is kept from loading."),
+            C("On", "true", "Let the game's DLSS-G load and don't force it off."),
+            C("Off", "false", "Keep the game's own nvngx_dlssg.dll from loading while DLSS-G is the frame generator.")).About("f5-keep-dlssg"),
+        new IniOptionViewModel("Other DLSS features", "For games that keep more than one DLSS feature alive: what NR does with the extra ones.", "DlssNr", "SecondaryFeatures", o,
+            C("Default · stand aside", null, "The extra pictures stay as DLSS made them."),
+            C("Stand aside", "0", "NR works on the main feature only; the others stay as DLSS made them."),
+            C("Own model", "1", "Each extra feature gets a model of its own: more video memory."),
+            C("Share the main model", "2", "The old behaviour: the pictures take turns in one history.")).About("nr-secondary"),
+        new IniOptionViewModel("Several screens", "Games that draw several views into one picture (triple screen): which views NR works on.", "DlssNr", "MultiViewScreens", o,
+            C("Default · none", null, "0: NR stands down while several views are drawn."),
+            C("Left screen", "1", "Screen 1 only."),
+            C("Two screens", "3", "Screens 1 and 2 (1 + 2)."),
+            C("Three screens", "7", "All three screens (1 + 2 + 4). Needs Run before upscaling."),
+            C("Combined view", "256", "The game's whole combined view, with a model of its own."),
+            C("All screens as one picture", "512", "NR runs once per frame after SR on the whole output, with one model. May smear a thin strip where two screens meet.")).About("nr-multiview"),
+        IniOptionViewModel.Toggle("Depth fade", "Keep less of NR's result on faraway surfaces, very near ones and the sky, using the game's depth.", "DlssNr", "DepthFade", "true", o).About("nr-depthfade"),
+        new IniOptionViewModel("Far fade start", "Where the far fade begins: full NR up to here (0 near, 1 far).", "DlssNr", "DepthFadeFarStart", o,
+            C("Default · 0.5", null, "Half way on the log distance scale."),
+            C("0.3", F(0.3), "Starts early."), C("0.5", F(0.5), "Default."), C("0.7", F(0.7), "Starts late.")).About("nr-depthfade"),
+        new IniOptionViewModel("Far fade end", "Where the far fade reaches its strength.", "DlssNr", "DepthFadeFarEnd", o,
+            C("Default · 0.85", null, "Reached at 0.85."),
+            C("0.6", F(0.6), "Reached early: a short fade."), C("0.85", F(0.85), "Default."), C("1.0", F(1.0), "Reached at the far plane.")).About("nr-depthfade"),
+        new IniOptionViewModel("Far fade strength", "Share of NR's result kept on far surfaces.", "DlssNr", "DepthFadeFarStrength", o,
+            C("Default · 0.5", null, "Half of NR's result."),
+            C("0", F(0), "None: the upscaler's picture."), C("0.25", F(0.25), "A quarter."), C("0.5", F(0.5), "Default."),
+            C("0.75", F(0.75), "Most of it."), C("1.0", F(1.0), "All: no far fade.")).About("nr-depthfade"),
+        new IniOptionViewModel("Near fade start", "Up to here the near strength applies (0 at the camera).", "DlssNr", "DepthFadeNearStart", o,
+            C("Default · 0.0", null, "At the camera."),
+            C("0.0", F(0), "Default."), C("0.05", F(0.05), "Slightly away from the camera."), C("0.1", F(0.1), "A bit further.")).About("nr-depthfade"),
+        new IniOptionViewModel("Near fade end", "Where very near surfaces get full NR again.", "DlssNr", "DepthFadeNearEnd", o,
+            C("Default · 0.1", null, "Full NR from 0.1."),
+            C("0.05", F(0.05), "A short zone."), C("0.1", F(0.1), "Default."), C("0.2", F(0.2), "A longer zone."), C("0.3", F(0.3), "A long zone.")).About("nr-depthfade"),
+        new IniOptionViewModel("Near fade strength", "Share of NR's result kept on very near surfaces (a first-person weapon).", "DlssNr", "DepthFadeNearStrength", o,
+            C("Default · 1.0", null, "All of NR's result: near fade off."),
+            C("0", F(0), "None."), C("0.5", F(0.5), "Half."), C("1.0", F(1.0), "Default: near fade off.")).About("nr-depthfade"),
+        new IniOptionViewModel("Sky strength", "Share of NR's result kept on the sky (pixels at the far plane).", "DlssNr", "DepthFadeSkyStrength", o,
+            C("Default · 1.0", null, "All of NR's result on the sky."),
+            C("0", F(0), "None."), C("0.5", F(0.5), "Half."), C("1.0", F(1.0), "Default.")).About("nr-depthfade"),
     ];
 
     public static IniOptionViewModel[] Tonemap(ObservableCollection<IniOverride> o) =>

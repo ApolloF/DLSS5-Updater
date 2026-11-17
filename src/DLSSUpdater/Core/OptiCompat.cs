@@ -60,8 +60,20 @@ public static class OptiCompat
 
         var v = FileUtil.ParseTag(tag);
         var tested = FileUtil.ParseTag(source.TestedTag)!;
-        var newer = v is not null && (v.Major > tested.Major || (v.Major == tested.Major && v.Minor > tested.Minor));
+        var newer = v is not null && IsNewerThanTested(v, tested);
         return new CompatReport(tag, missing, newer, source.TestedTag) { ChangedKeys = changed, Name = source.Name };
+    }
+
+    /// <summary>
+    /// A new major or minor version counts as newer. In a 0.x series the patch number is a real release too (F5 ships 0.1.34,
+    /// 0.1.37.2, 0.1.38 ...), so there the patch and a fourth part count as well.
+    /// </summary>
+    internal static bool IsNewerThanTested(Version v, Version tested)
+    {
+        if (v.Major != tested.Major) return v.Major > tested.Major;
+        if (v.Minor != tested.Minor) return v.Minor > tested.Minor;
+        if (v.Major != 0) return false;
+        return (Math.Max(v.Build, 0), Math.Max(v.Revision, 0)).CompareTo((Math.Max(tested.Build, 0), Math.Max(tested.Revision, 0))) > 0;
     }
 
     private static async Task<string> FetchIniAsync(GitHubClient gh, string tag, CancellationToken ct)
