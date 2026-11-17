@@ -285,7 +285,7 @@ public sealed class UpliftTests : IDisposable
     [Fact]
     public async Task Install_WarnsForANewerTag_AndWritesAllExposedOptions()
     {
-        var release = new ReleaseInfo { Tag = "v1.6.3" };
+        var release = new ReleaseInfo { Tag = "v2.0.1" };
         var pkg = Path.Combine(ComponentStore.TagDir(Component.Uplift, release.Tag), "pkg");
         foreach (var rel in ComponentStore.UpliftFiles) FileUtil.AtomicWriteText(Path.Combine(pkg, rel), rel);
         ComponentStore.MarkComplete(Component.Uplift, release);
@@ -301,7 +301,7 @@ public sealed class UpliftTests : IDisposable
             }, null, default);
         }
         finally { Log.Line -= Capture; }
-        Assert.Contains(lines, l => l.Contains("WARNING") && l.Contains("newer than the tested 1.6.2"));
+        Assert.Contains(lines, l => l.Contains("WARNING") && l.Contains("newer than the tested 2.0.0"));
         Assert.All(UpliftConfig.Defaults, kv => Assert.Equal(kv.Value, Ini().Get("Uplift", kv.Key)));
         Assert.Equal("1", Ini().Get("Uplift", "Enabled"));
     }
@@ -329,13 +329,14 @@ public sealed class UpliftTests : IDisposable
     [Theory]
     [InlineData("v1.6.2", false)]
     [InlineData("1.4.2", false)]
-    [InlineData("v1.6.3", true)]
+    [InlineData("v2.0.0", false)]
+    [InlineData("v2.0.1", true)]
     public void TestedVersion_WarnsOnlyForNewerTags(string tag, bool warns) => Assert.Equal(warns, UpliftConfig.Warning(tag) is not null);
 
     [Fact]
     public void Options_ExposeExactlyTheDocumentedKeysAndDefaults()
     {
-        const string expected = "EnableKey=0;Intensity=1.0;Style=0;Preset=1;PassCount=1;ResolutionMode=0;ResolutionScale=100;Source=0;PreUpscale=0;KeepFaces=0;FaceProtection=0;LightingScale=2.5;AutoMask=1;LocalStructure=1.0;LocalTone=1.0;SkinStructure=1.0;UICorrection=0;MotionVectors=0;Upsampling=1;PresentWithFrameGen=0;AllowCrossQueuePasses=0;Encoding=0;DiffuseWhiteNits=0;InputExposure=0;AutoExposureMode=0;AutoExposureBlend=0.8;ExposureAdapt=1;VramCheck=0;GraceSeconds=5;NgxHooks=0;ForeignNr=0;VulkanNr=0;UseD3D9Ex=0;ShowNvIndicator=0;LogLevel=2;MaskBlendMode=1";
+        const string expected = "StartEnabled=0;EnableKey=0;Intensity=1.0;Style=0;Preset=1;PassCount=1;ResolutionMode=0;ResolutionScale=100;Source=0;PreUpscale=0;KeepFaces=0;FaceProtection=0;LightingScale=2.5;AutoMask=1;LocalStructure=1.0;LocalTone=1.0;SkinStructure=1.0;UICorrection=0;MotionVectors=0;Upsampling=1;PresentWithFrameGen=0;AllowCrossQueuePasses=0;Encoding=0;DiffuseWhiteNits=0;InputExposure=0;AutoExposureMode=0;AutoExposureBlend=0.8;ExposureAdapt=1;VramCheck=0;GraceSeconds=5;NgxHooks=0;ForeignNr=0;VulkanNr=0;UseD3D9Ex=0;ShowNvIndicator=0;LogLevel=2;MaskBlendMode=1";
         var defaults = expected.Split(';').Select(pair => pair.Split('=')).ToDictionary(pair => pair[0], pair => pair[1]);
         var options = SettingsOptions.Uplift([]);
         Assert.Equal(defaults.Count, options.Length);
@@ -375,6 +376,7 @@ public sealed class UpliftTests : IDisposable
     [InlineData("bad")]
     [InlineData("missing")]
     [InlineData("no-line")]
+    [InlineData("binary")]
     public async Task Download_VerifiesSums_ExtractsOnlyNeededFiles_AndWorksOffline(string sumsMode)
     {
         const string asset = "GITC-Uplift-1.4.3.zip";
@@ -410,7 +412,14 @@ public sealed class UpliftTests : IDisposable
             if (url.EndsWith(asset)) return new HttpResponseMessage(HttpStatusCode.OK) { Content = new ByteArrayContent(File.ReadAllBytes(zip)) };
             if (url.EndsWith("SHA256SUMS.txt")) return new HttpResponseMessage(HttpStatusCode.OK)
             {
-                Content = new StringContent(sumsMode == "no-line" ? digest + "  other.zip" : (sumsMode == "bad" ? new string('0', 64) : digest) + "  " + asset + "\n"),
+                Content = new StringContent(sumsMode switch
+                {
+                    "no-line" => digest + "  other.zip",
+                    "bad" => new string('0', 64) + "  " + asset + "\n",
+                    // Uplift 2.0.0's format: binary-mode marker, and a file name with spaces on another line.
+                    "binary" => new string('1', 64) + " *Addons/GITC-Uplift/Put nvngx_dlssnr.dll here.txt\n" + digest + " *" + asset + "\n",
+                    _ => digest + "  " + asset + "\n",
+                }),
             };
             return new HttpResponseMessage(HttpStatusCode.NotFound);
         });
