@@ -23,6 +23,7 @@ public static partial class SettingsOptions
         double[] Unit() => Enumerable.Range(0, 11).Select(i => i / 10d).ToArray();
         return
         [
+            Bool("Start enabled", "2.0.0+. Off: every game session starts with NR off, so the game starts up without it; turn it on in the overlay or with the hotkey. On: NR runs from the first frame.", "StartEnabled"),
             Number("Enable hotkey", "Virtual-key code 0-255; 0 means no hotkey.", "EnableKey", Enumerable.Range(0, 256).Select(i => (double)i).ToArray()),
             Number("Intensity", "NR strength, 0-10; the overlay slider covers 0-1.", "Intensity", [.. Unit(), 2, 3, 4, 5, 6, 7, 8, 9, 10]),
             Enum("Style", "NR style A, B or C.", "Style", "Style A", "Style B", "Style C"),

@@ -30,7 +30,7 @@ public static class Demo
     public static string LatestOpti => OptiNr ? "v0.9.72" : "v0.1.38" + OptiSources.F5.TagSuffix;
     private static string PreviousOpti => OptiNr ? "v0.9.51" : "v0.1.37.2" + OptiSources.F5.TagSuffix;
     public const string LatestMfg = "v1.4.0";
-    public const string LatestUplift = "v1.6.2";
+    public const string LatestUplift = "v2.0.0";
     public const string LatestReShade = "6.6.2";
 
     private const string NrCompatId = "e67dee209320cdafe0e93e45675d7aa34323a53acc57a72b2e40a181581c989a";

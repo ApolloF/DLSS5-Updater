@@ -5,6 +5,12 @@ Open source (MIT): https://github.com/ghostinthecamera/GITC-Uplift. Facts below 
 (v1.6.2, 2026-10-22); file:line references are into that tree. Re-check them for every new release.
 v1.4.2 → v1.6.2 changed no existing key, default or range; it added `AllowCrossQueuePasses` (1.5.0) and the hidden
 `Language` (1.5.0), and the package layout and `SHA256SUMS.txt` stayed the same.
+v2.0.0 (2026-11-12, mostly a refactor; file:line references below are still from v1.6.2) kept every key the app writes and
+the package layout (plus `Addons/GITC-Uplift/Put nvngx_dlssnr.dll here.txt`, which the app does not extract). Changes that
+matter here: `SHA256SUMS.txt` now uses the binary-mode marker (`<hash> *<name>`) and lists every packaged file; the new
+`StartEnabled` key (default 0) makes every session start with NR off, writing `Enabled=0` back at start
+(`src/addon/host_common.hpp`, `ApplyStartEnabled`); and Uplift now runs beside a DLSS 5 game's own `nvngx_dlssnr.dll`
+instead of refusing to start.
 
 ## Release package
 
@@ -48,6 +54,7 @@ Main keys (default; range; values). H = hidden in the overlay.
 | Key | Default | Range / values |
 |---|---|---|
 | Enabled | 0 | bool; overlay "Enable" |
+| StartEnabled | 0 | bool (2.0.0+); 0 = forced off at every game start |
 | EnableKey | 0 | VK code 0-255, 0 = none |
 | Intensity | 1.0 | 0-10 (slider 0-1) |
 | Style | 0 | 0 Style A, 1 B, 2 C |
@@ -122,7 +129,8 @@ Hidden / no effect: `Language` (1.5.0+, 0 English, 1 Simplified Chinese; set fro
 
 DLSS5 Updater installs the x64 add-on, helper and both effects, writes `[Uplift] Enabled=1`, and places the NR runtime
 from the NR library (downloaded from the catalog mirror or imported) in `GITC-Uplift\nvngx_dlssnr.dll`. ReShade + add-ons mode is required; other NR
-routes are displaced and restored on uninstall. Releases newer than tested v1.6.2 warn in the log.
+routes are displaced and restored on uninstall. Releases newer than tested v2.0.0 warn in the log. `StartEnabled` is
+exposed with Uplift's default (off), so from 2.0.0 the user turns NR on in-game unless they switch it on.
 
 The app exposes the main stage, resolution, strength, face protection, exposure, compatibility (including cross-queue passes) and diagnostics options.
 The look/shape keys, advanced face-mask keys, per-pass keys, HDR detail keys and hidden keys remain in the in-game

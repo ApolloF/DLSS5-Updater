@@ -1258,7 +1258,7 @@ public sealed class DfcTests : IDisposable
         Assert.Contains("dlss5-feed.addon64", m.Files, StringComparer.OrdinalIgnoreCase);
 
         // Installing again keeps both: DFC's own foreign-add-on sweep must not take Feeder's files, they are ours.
-        await installer.InstallAsync(PlainGame(), PlainRoot, Dfc() with { Feeder = true }, null, default);
+        await installer.InstallAsync(PlainGame(), PlainRoot, Dfc() with { Feeder = true, FeederId = FeederTag }, null, default);
         Assert.Equal("F64", File.ReadAllText(P("dlss5-feed.addon64")));
         Assert.NotNull(InstallManifest.Read(PlainRoot)!.Component(ComponentRegistry.Feeder));
 
