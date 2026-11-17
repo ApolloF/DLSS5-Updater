@@ -10,6 +10,7 @@ checked, and keep the "Checked builds" table current.
 | RenoDX HDR mods | RenoDX authors | `renodx-*.addon64` / `.addon32` per game | [renodx-hdr.md](renodx-hdr.md) (from the catalog; open source, nothing to probe) |
 | ReShade | crosire | `ReShade64.dll`, `ReShade32.dll` | [reshade.md](reshade.md) (open source: sources, verification, DLL names, Vulkan layer, foreign-dll signs) |
 | DLSS5 Neural Rendering | Lecram | `renodx-dlss5.addon64` (≤ v10.x), `dlss5-nr.addon64` (v11+) | [lecram-dlss5.md](lecram-dlss5.md) |
+| OptiScaler F5 | janblade | `OptiScaler.dll` + `OptiScaler\` folder | [optiscaler-f5.md](optiscaler-f5.md) (open source; checked builds, keys by version, not-exposed keys) |
 
 Deep Fried Chicken's licence forbids reverse engineering, so none of the methods below apply to it.
 [deep-fried-chicken.md](deep-fried-chicken.md) records only what its author ships (INSTALL.txt, cfg keys and

@@ -57,9 +57,10 @@ public static class HelpTopics
             "F5 is experimental and releases often; it needs its own open-source NGX forwarder (nvngx.dll_dlssnr.dll), which is installed next to OptiScaler and removed again when you switch back. " +
             "A few DLSSNR options it does not have are hidden, and so are options only some F5 versions have. Games keep the build they have until you update them. " +
             "Each game can pick its own build, in the OptiScaler row on the Install tab or at the top of Game config; both show the same pick. Untick the row to install ReShade + add-ons without OptiScaler. " +
-            "From 0.1.33 the F5 zip ships NVIDIA's DLSS frame generation and Streamline files in OptiScaler\\streamline; they are installed with it, only used when DLSS-G is OptiScaler's frame generation output, and never counted as the game's own DLSS or Streamline files. " +
+            "From 0.1.33 the F5 zip ships NVIDIA's DLSS frame generation and Streamline files in OptiScaler\\streamline; they are installed with it, only used when DLSS-G is the frame generator, and never counted as the game's own DLSS or Streamline files. " +
+            "From 0.1.36 OptiScaler's frame generation output is F5Low by default (FGOutput=f5low, which this app never writes), made by OptiScaler\\plugins\\f5low.dll; the Frame generator option picks what it runs: XeFG on the tensor cores, DLSS-G or Intel's XeFG. " +
             "RTX 30: F5's troubleshooting guide reports games hanging the GPU (\"device hung\") seconds after start when the game's own DLSS frame generation is on and an nvngx_dlssg.dll is in the OptiScaler folder. " +
-            "Its fix: remove that file from the OptiScaler folder or turn DLSS Frame Generation off in the game, and use OptiScaler's frame generation with FSR FG or XeFG output instead."),
+            "Its fix: remove that file from the OptiScaler folder or turn DLSS Frame Generation off in the game, and use OptiScaler's own frame generation with the default F5Low output (not DLSS-G) instead."),
         new("prereleases", "General", "Include prereleases", "Include prerelease builds in update checks; the OptiScaler-NR fork only publishes prereleases.",
             "The OptiScaler-NR fork only publishes prereleases, so turning this off usually means no OptiScaler updates. Applies to every source."),
         new("streamline", "General", "Replace Streamline files", "Replaces the game's sl.*.dll files with one signed Streamline release; needed for Dynamic MFG.",
@@ -280,6 +281,28 @@ public static class HelpTopics
             "On: the model edits the lower-resolution input before DLSS SR / RR, which is cheaper and the upscaler cleans up its output. " +
             "Off: it runs on the upscaled image, sharper but costlier. Before RR it sees noisy ray-traced colour, so test per game. " +
             "OptiScaler F5: off by default, and Ray Reconstruction always forces NR after the upscaler, so this only matters without RR."),
+        new("nr-secondary", "DLSSNR", "Other DLSS features", "OptiScaler F5 0.1.36+: what NR does with a game's extra DLSS features, such as a 3D character preview.",
+            "OptiScaler F5 0.1.36 and newer. Some games keep more than one DLSS feature alive, for example a 3D character preview next to the world. NR works on the main one; for the others: " +
+            "stand aside (default) leaves their picture as DLSS made it, own model gives each its own model (more video memory; it uses the main picture's exposure and scene cuts), " +
+            "share the main model is the old behaviour, where the pictures take turns in one history."),
+        new("nr-multiview", "DLSSNR", "Several screens", "OptiScaler F5 0.1.35.1+: which views NR works on when a game draws several screens into one picture.",
+            "OptiScaler F5 0.1.35.1 and newer. A game that draws several views into one picture (a triple-screen rig) calls the upscaler once per view. The value is a sum: 1 left screen, 2 second, 4 third (8, 16 and so on for more), " +
+            "256 the game's combined view; each view gets a model of its own. 7 is all three screens. 0 (default) makes NR stand down while several views are drawn. " +
+            "Screens need Run before upscaling. Adding 512 runs NR once per frame after SR on the whole output with one model, whatever else is ticked; it may smear a thin strip where two screens meet. " +
+            "Also in the OptiScaler menu under Neural Rendering, Input, Several views. Other sums can be typed in the Advanced tab."),
+        new("nr-depthfade", "DLSSNR", "Depth fade", "OptiScaler F5 0.1.37+: keeps less of NR's result on faraway surfaces, very near ones and the sky.",
+            "OptiScaler F5 0.1.37 and newer. Uses the game's depth to keep less of NR's result on faraway surfaces, on very near ones (a first-person weapon) and on the sky; the rest is the frame as the upscaler made it. " +
+            "Off by default. It needs depth from the game: on a frame without it the fade does nothing. Distances run 0 to 1 on a log scale from the camera's near plane (each step of 1/16 doubles the distance); " +
+            "strengths are the share of NR's result that is kept, 0 (none) to 1 (all). Far fade: full NR up to its start, falling to the far strength at its end and beyond (defaults 0.5, 0.85, 0.5). " +
+            "Near fade: the near strength up to its start, rising to full NR at its end (defaults 0.0, 0.1, 1.0; strength 1 turns it off). Sky strength replaces the far fade at the far plane (default 1.0). " +
+            "The OptiScaler menu's debug view 4 shows how much of NR is kept as grey."),
+        new("f5-framegen", "OptiScaler F5", "Frame generator", "OptiScaler F5 0.1.36+: what makes the generated frames with the F5Low output, the default.",
+            "OptiScaler F5 0.1.36 and newer. F5Low (FGOutput=f5low, OptiScaler\\plugins\\f5low.dll) is OptiScaler's frame generation output by default, and this app doesn't change it. This option sets what F5Low runs: " +
+            "XeFG on the NVIDIA tensor cores (xefg_tensor, the default), NVIDIA's DLSS-G, or Intel's XeFG (libxess_fg.dll and libxell.dll, any GPU vendor, up to 6x). " +
+            "DLSS-G needs an NVIDIA RTX GPU and Streamline with nvngx_dlssg.dll in OptiScaler's streamline folder (the F5 zip ships them). It takes effect after a game restart."),
+        new("f5-keep-dlssg", "OptiScaler F5", "Keep the game's DLSS-G", "OptiScaler F5 0.1.36+: with DLSS-G as the frame generator, lets the game's own DLSS-G load.",
+            "OptiScaler F5 0.1.36 and newer. With the frame generator set to DLSS-G, the game's own nvngx_dlssg.dll is kept from loading: a second DLSS-G next to F5Low's faulted the GPU at level load. " +
+            "On also stops OptiScaler from forcing the game's DLSS-G off. Not used while the frame generation input is DLSS-G (then the game's DLSS-G is the input). Default (auto) is off."),
         new("nr-finished", "DLSSNR", "Apply to finished picture", "Applies the model after the game's post-processing; it can also change the HUD.",
             "Applies NR after the game's post-processing (bloom, grading) instead of at the upscaler. DX12 and the D3D11 bridge only. " +
             "Can also alter the HUD and menus. With Run before upscaling on, the edit is made early and carried to the final image."),
@@ -700,6 +723,11 @@ public static class HelpTopics
         ["nr-style"] ="Standard. Natural if the result looks over-processed, Cinematic for a graded look.",
         ["nr-strengths"] = "A good start is local structure 0.7, local tone 0.25, skin 0.5: detail without changing the game's lighting too much. " +
                            "Lower local tone first if the image looks re-lit; lower skin structure if faces look aged.",
+        ["nr-secondary"] = "Leave on stand aside. Try own model in a game that shows a second 3D picture (a character preview) when NR is missing there; it costs video memory.",
+        ["nr-multiview"] = "0 for a single screen. For a triple-screen setup use 7 with Run before upscaling on; 512 if the per-screen look is wrong.",
+        ["nr-depthfade"] = "Off. Try it when NR changes the sky, distant scenery or a first-person weapon too much: far strength 0.25 to 0.5, lower sky strength, near strength under 1. It does nothing in games that give no depth.",
+        ["f5-framegen"] = "Leave on auto. DLSS-G only on an RTX GPU with the streamline files in place; Intel XeFG if the tensor-core path misbehaves. Restart the game after changing it.",
+        ["f5-keep-dlssg"] = "Leave on auto. Only try On if the game's own DLSS-G has to stay, and expect a possible GPU fault at level load.",
         ["nr-colour"] = "Low (0.2) keeps the game's art direction. Raise toward 1 only if you like the model's colour grading.",
         ["tm-mode"] = "SDR games: leave it, it doesn't apply. HDR games: Hybrid composed as the safe default; Neutwo composed if highlights look dull; " +
                       "replace modes only if composed looks too weak.",

@@ -151,4 +151,4 @@ Measured against this guideline on main (after #63, #66 and #67). Each is fixed 
   `ComponentCompat` shape (tested version, schema, missing keys, summary) that each config class fills.
 - **OptiScaler F5 vendor-neutral forwarder**: since 0.1.33 F5 releases carry `Optional-Vendor-Neutral-DLSS5-Forwarder.zip`, an
   `nvngx.dll_dlssnr.dll` that runs the NR model itself so AMD and Intel GPUs can use DLSS-NR (DirectML, DirectX 12, 310.9
-  `nvngx_dlssnr.dll` only). The app installs only the main zip and its NVIDIA forwarder; it doesn't offer this one as an option.
+  `nvngx_dlssnr.dll` only). The app installs only the main zip and its NVIDIA forwarder; it doesn't offer this one as an option. The same goes for `Optional-F5Low-Update-*.zip` (an optional F5Low plugin update).

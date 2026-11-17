@@ -35,6 +35,24 @@ public sealed class OptiCompatTests
         return new OptiCompatIndex(doc.Sections.OptiscalerCompat);
     }
 
+    [Theory]
+    [InlineData("v0.1.38", "v0.1.38", false)]
+    [InlineData("v0.1.37.2", "v0.1.38", false)]
+    [InlineData("v0.1.39", "v0.1.38", true)]
+    [InlineData("v0.1.38.1", "v0.1.38", true)]
+    [InlineData("v0.1.38.1", "v0.1.38.2", false)]
+    [InlineData("v0.2.0", "v0.1.38", true)]
+    [InlineData("v0.1.99", "v0.2.0", false)]
+    [InlineData("v1.0.0", "v0.1.38", true)]
+    [InlineData("v0.9.73", "v0.9.72", true)]
+    [InlineData("v0.9.72", "v0.9.72", false)]
+    [InlineData("v0.9.51", "v0.9.72", false)]
+    [InlineData("v3.2.9", "v3.2.1", false)]
+    [InlineData("v3.3.0", "v3.2.1", true)]
+    [InlineData("v4.0.0", "v3.2.1", true)]
+    public void NewerThanTested_CountsThePatchOnlyInAZeroPointXSeries(string tag, string tested, bool newer) =>
+        Assert.Equal(newer, OptiCompat.IsNewerThanTested(FileUtil.ParseTag(tag)!, FileUtil.ParseTag(tested)!));
+
     [Fact]
     public void TheSectionIsRead_AndAnOldCatalogWithoutItIsFine()
     {

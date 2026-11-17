@@ -338,6 +338,56 @@ public class InstallerTests : IDisposable
         Assert.Equal(before, Snapshot());
     }
 
+    private void SeedF5Low(string tag)
+    {
+        SeedOpti(tag, "OPTI-F5");
+        var pkg = Path.Combine(ComponentStore.TagDir(Component.OptiScaler, tag), "pkg");
+        Write(Path.Combine(pkg, "nvngx.dll_dlssnr.dll"), "FORWARDER");
+        Write(Path.Combine(pkg, @"OptiScaler\plugins\f5low.dll"), "F5LOW");
+        Write(Path.Combine(pkg, @"OptiScaler\libxess_fg.dll"), "XESS-FG-NEW");
+    }
+
+    [Fact]
+    public async Task F5Build_InstallsTheF5LowPlugin_RecordsTheFolder_AndUninstallRemovesIt()
+    {
+        var before = Snapshot();
+        var installer = new Installer(_store);
+        SeedF5Low("v0.1.38-f5");
+
+        await installer.InstallAsync(Game(), _target, new InstallOptions { Opti = true, Proxy = "dxgi.dll" }, null, default);
+
+        Assert.Equal("F5LOW", T(@"OptiScaler\plugins\f5low.dll"));
+        Assert.Equal("XESS-FG-NEW", T(@"OptiScaler\libxess_fg.dll"));
+        var m = InstallManifest.Load(_target)!;
+        Assert.Equal("v0.1.38-f5", m.OptiTag);
+        Assert.Contains(m.Dirs, d => d.EndsWith("OptiScaler", StringComparison.OrdinalIgnoreCase));
+
+        await installer.UninstallAsync(Game(), _target, default);
+        Assert.False(Directory.Exists(Path.Combine(_target, "OptiScaler")));
+        Assert.Equal(before, Snapshot());
+    }
+
+    [Fact]
+    public async Task F5Build_WithAnOptiScalerFolderAlreadyInTheGame_TracksEachFile_AndUninstallRestoresTheGamesOwn()
+    {
+        Write(Path.Combine(_target, @"OptiScaler\libxess_fg.dll"), "GAME-XESS-FG");
+        var before = Snapshot();
+        var installer = new Installer(_store);
+        SeedF5Low("v0.1.38-f5");
+
+        await installer.InstallAsync(Game(), _target, new InstallOptions { Opti = true, Proxy = "dxgi.dll" }, null, default);
+
+        Assert.Equal("F5LOW", T(@"OptiScaler\plugins\f5low.dll"));
+        Assert.Equal("XESS-FG-NEW", T(@"OptiScaler\libxess_fg.dll"));
+        var m = InstallManifest.Load(_target)!;
+        Assert.True(m.Owns(Path.GetRelativePath(_root, Path.Combine(_target, @"OptiScaler\plugins\f5low.dll"))));
+
+        await installer.UninstallAsync(Game(), _target, default);
+        Assert.Equal("GAME-XESS-FG", T(@"OptiScaler\libxess_fg.dll"));
+        Assert.False(File.Exists(Path.Combine(_target, @"OptiScaler\plugins\f5low.dll")));
+        Assert.Equal(before, Snapshot());
+    }
+
     [Fact]
     public async Task F5Build_ReShadeOnlySwitch_RemovesForwarder()
     {

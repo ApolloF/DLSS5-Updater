@@ -41,18 +41,35 @@ public static class OptiSources
     /// <summary>F5 0.1.33 replaced [HDR] ForceHDR / SkipColorSpace with its HDR output for SDR games.</summary>
     private static readonly string[] HdrOutputKeys = ["Enabled", "Convert", "PeakNits", "GameNits", "Decode", "CompareKey"];
 
+    /// <summary>
+    /// F5 0.1.35.1 and newer: keys the F5 builds have and OptiScaler-NR doesn't, each with the first tag that has it
+    /// (see <see cref="F5"/>'s VersionedKeys). [F5Low] is frame generation's own section; the rest are [DlssNr].
+    /// </summary>
+    private static readonly (string Section, string Key, string Since)[] F5NewKeys =
+    [
+        ("DlssNr", "MultiViewScreens", "v0.1.35.1"),
+        ("F5Low", "FrameGenerator", "v0.1.36"), ("F5Low", "KeepGameDlssg", "v0.1.36"), ("DlssNr", "SecondaryFeatures", "v0.1.36"),
+        ("DlssNr", "DepthFade", "v0.1.37"), ("DlssNr", "DepthFadeFarStart", "v0.1.37"), ("DlssNr", "DepthFadeFarEnd", "v0.1.37"),
+        ("DlssNr", "DepthFadeFarStrength", "v0.1.37"), ("DlssNr", "DepthFadeNearStart", "v0.1.37"), ("DlssNr", "DepthFadeNearEnd", "v0.1.37"),
+        ("DlssNr", "DepthFadeNearStrength", "v0.1.37"), ("DlssNr", "DepthFadeSkyStrength", "v0.1.37"),
+    ];
+
     /// <summary>F5 0.1.34's built-in MFG unlock, one key per GPU family; 0.1.33 had none, older builds the [DLSSG] Ada/Ampere keys.</summary>
     internal static readonly string[] MfgUnlockKeys = ["XeFG", "RTX40", "RTX2030"];
 
     public static readonly OptiSource Default = new(
         ComponentStore.OptiRepo, "OptiScaler-NR", "OptiScaler-NR (ShyVortex)",
         new Regex(@"^OptiScaler-NR-v[\d.]+\.zip$", RegexOptions.IgnoreCase), "", "v0.9.72", [],
-        [.. HdrOutputKeys.Select(k => ("HDR", k)), .. MfgUnlockKeys.Select(k => ("MFGUnlock", k))]);
+        [.. HdrOutputKeys.Select(k => ("HDR", k)), .. MfgUnlockKeys.Select(k => ("MFGUnlock", k)), .. F5NewKeys.Select(k => (k.Section, k.Key))]);
 
-    /// <summary>Asset names: "-0.1.32.zip" up to 0.1.32, "-0.1.33-with-dlss-fg.zip", then "-v0.1.34-with-dlss-fg.zip".</summary>
+    /// <summary>
+    /// Asset names: "-0.1.32.zip" up to 0.1.32, "-0.1.33-with-dlss-fg.zip", "-v0.1.34-with-dlss-fg.zip" (up to 0.1.36), then
+    /// "v0.1.37-Optiscaler-F5.zip" (the tag can have four parts, v0.1.37.2). The forwarder, the F5Low update and the guide
+    /// beside the zip don't match.
+    /// </summary>
     public static readonly OptiSource F5 = new(
         "janblade/OptiScaler-F5-DLSSNR-Multipass", "OptiScaler F5", "OptiScaler F5 (janblade)",
-        new Regex(@"^OptiScaler-DLSSNR-F5-v?[\d.]+(-with-dlss-fg)?\.zip$", RegexOptions.IgnoreCase), "-f5", "v0.1.34",
+        new Regex(@"^(OptiScaler-DLSSNR-F5-v?[\d.]+(-with-dlss-fg)?|v[\d.]+-Optiscaler-F5)\.zip$", RegexOptions.IgnoreCase), "-f5", "v0.1.38",
         ["nvngx.dll_dlssnr.dll"],
         [("DlssNr", "DenoiseFirst"), ("DlssNr", "PrivateUpscaler"), ("DlssNr", "ResidualAcrossRR"), ("DlssNr", "HdrTransfer"), ("DlssNr", "AutoExposureHighlightProtection")],
         [
@@ -60,6 +77,7 @@ public static class OptiSources
             .. HdrOutputKeys.Select(k => new OptiKeyRange("HDR", k, Since: "v0.1.33")),
             new("DLSSG", "AdaMfgUnlock", Until: "v0.1.33"), new("DLSSG", "AmpereMfgUnlock", Until: "v0.1.33"),
             .. MfgUnlockKeys.Select(k => new OptiKeyRange("MFGUnlock", k, Since: "v0.1.34")),
+            .. F5NewKeys.Select(k => new OptiKeyRange(k.Section, k.Key, Since: k.Since)),
         ]);
 
     public static readonly IReadOnlyList<OptiSource> All = [Default, F5];
