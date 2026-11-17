@@ -34,6 +34,8 @@ public enum Method
     RenoDxHdr,
     /// <summary>Advice only: DXVK (Direct3D 8 to 11 over Vulkan), with the Lilium HDR fork for an HDR output the game lacks. Installed from the DXVK section of the game page.</summary>
     Dxvk,
+    /// <summary>Advice only, offered once the user has imported HSF: Capt-Hunter's frame generation add-on for a game without its own DLSS-G. Installed from the HSF section of the game page.</summary>
+    Hsf,
 }
 
 public enum Availability
@@ -146,6 +148,7 @@ public static class MethodAdvisor
         Method.Luma => "Luma framework mod",
         Method.AioAddon => "All-in-one add-on",
         Method.Dxvk => "DXVK (Vulkan translation, Lilium HDR)",
+        Method.Hsf => "HSF frame generation (preview)",
         _ => "RenoDX HDR mod",
     };
 
@@ -164,6 +167,7 @@ public static class MethodAdvisor
         Method.Luma => "Installs this game's Luma mod, which changes its rendering and adds HDR and optional DLSS.",
         Method.AioAddon => "One add-on for neural rendering, upscaling and frame generation. Not in the app yet.",
         Method.Dxvk => "Runs an older Direct3D game on Vulkan, with optional HDR output.",
+        Method.Hsf => "Feeds NVIDIA DLSS frame generation into a game that has none, through a ReShade add-on you imported.",
         _ => "Installs this game's RenoDX mod, which adds HDR output.",
     };
 
@@ -444,6 +448,14 @@ public static class MethodAdvisor
                 $"{GraphicsApiInfo.Label(c.In.Game.Effective.PrimaryApi)} game with no HDR mod of its own: DXVK runs it on Vulkan, and the Lilium HDR build can output scRGB HDR (start with the Safest preset). Install it from the DXVK section on this page; it is never picked for you.");
             list.Add(c.In.Game.AntiCheat is { } ac ? dxvk with { Warning = AntiCheatCaution(ac) } : dxvk);
         }
+        // Not a table row: HSF (import only, private licence) for a game without its own frame generation, once the user has imported it. Advice only, never picked for you.
+        if (c.Has(ComponentRegistry.Hsf) && c.Gpu.MayRunNvidiaMethods && !c.HasFg)
+        {
+            var hsf = Opt(Method.Hsf, Availability.NeedsSetup,
+                "Preview: Capt-Hunter's HSF adds DLSS frame generation to a game that has none, as a ReShade add-on. Install it from the HSF section on this page. Never use it in online games with anti-cheat.",
+                needs: [.. HsfNeeds.For(HsfNeeds.NeedsFlowSource(c.Api, c.Native), c.Gpu)]);
+            list.Add(c.In.Game.AntiCheat is { } ac ? hsf with { Warning = AntiCheatCaution(ac) } : hsf);
+        }
         // Row 16: a Luma mod the app can install, or a game OptiScaler's list shows running one that the Luma catalog has no download for.
         if (list.All(m => m.Method != Method.Luma))
         {
@@ -603,7 +615,7 @@ public static class MethodAdvisor
     private static List<MethodOption> Rank(List<MethodOption> methods) =>
         methods.Select((m, i) => (m, i))
             .OrderBy(x => x.m.Availability switch { Availability.NotPossible => 3, Availability.Coming => 2, _ => 0 })
-            .ThenBy(x => x.m.Method is Method.RenoDxHdr or Method.Dxvk ? 1 : 0)
+            .ThenBy(x => x.m.Method is Method.RenoDxHdr or Method.Dxvk or Method.Hsf ? 1 : 0)
             .ThenBy(x => x.m.Availability == Availability.NeedsSetup ? 1 : 0)
             .ThenBy(x => x.i).Select(x => x.m).ToList();
 }

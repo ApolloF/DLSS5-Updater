@@ -34,7 +34,7 @@ public sealed partial class MainViewModel : ObservableObject
         S = new Services
         {
             Settings = settings, Store = store, Installer = installer,
-            Catalog = new CatalogState(new CatalogClient(gh)), Hdr = new HdrService(store, installer, new CatalogDownloader(gh)), Luma = new LumaService(store, installer, new CatalogDownloader(gh)),
+            Catalog = new CatalogState(new CatalogClient(gh)), Hdr = new HdrService(store, installer, new CatalogDownloader(gh)), Luma = new LumaService(store, installer, new CatalogDownloader(gh)), Hsf = new HsfService(store, installer),
             FrameLimit = new FrameLimitService(store, installer, new CatalogDownloader(gh), NvidiaProfile.Real),
             Dxvk = new DxvkService(installer, gh, NvidiaProfile.Real),
         };
@@ -206,7 +206,7 @@ public sealed partial class MainViewModel : ObservableObject
     [ObservableProperty]
     [NotifyCanExecuteChangedFor(nameof(InstallCommand), nameof(DlssOnlyCommand), nameof(UninstallCommand),
         nameof(RestoreDlssCommand), nameof(SwitchNrCommand), nameof(UndoNrCommand), nameof(UpdateAllCommand), nameof(CheckUpdatesCommand), nameof(RescanCommand),
-        nameof(AddGameFolderCommand), nameof(AddLibraryRootCommand), nameof(RemoveGameCommand), nameof(InstallHdrCommand), nameof(RemoveHdrCommand), nameof(InstallLumaCommand), nameof(RemoveLumaCommand), nameof(ApplyFrameLimitCommand), nameof(RemoveFrameLimitCommand), nameof(ApplyDxvkCommand), nameof(RemoveDxvkCommand))]
+        nameof(AddGameFolderCommand), nameof(AddLibraryRootCommand), nameof(RemoveGameCommand), nameof(InstallHdrCommand), nameof(RemoveHdrCommand), nameof(InstallLumaCommand), nameof(RemoveLumaCommand), nameof(InstallHsfCommand), nameof(RemoveHsfCommand), nameof(ApplyFrameLimitCommand), nameof(RemoveFrameLimitCommand), nameof(ApplyDxvkCommand), nameof(RemoveDxvkCommand))]
     private bool _isBusy;
 
     // component chips
@@ -618,6 +618,10 @@ public sealed partial class MainViewModel : ObservableObject
             CountUpdates();
             if (ReferenceEquals(g, SelectedGame)) NotifyHdrCommands();
         };
+        g.Hsf.Changed += () =>
+        {
+            if (ReferenceEquals(g, SelectedGame)) NotifyHdrCommands();
+        };
         return g;
     }
 
@@ -631,6 +635,8 @@ public sealed partial class MainViewModel : ObservableObject
         RemoveDxvkCommand.NotifyCanExecuteChanged();
         InstallLumaCommand.NotifyCanExecuteChanged();
         RemoveLumaCommand.NotifyCanExecuteChanged();
+        InstallHsfCommand.NotifyCanExecuteChanged();
+        RemoveHsfCommand.NotifyCanExecuteChanged();
     }
 
     [RelayCommand(CanExecute = nameof(CanRun))]
@@ -980,6 +986,34 @@ public sealed partial class MainViewModel : ObservableObject
         await Run($"Removing the Luma mod from {g.Name}", async ct =>
         {
             await g.Luma.RemoveAsync(ct);
+            await RescanOne(g);
+        });
+    }
+
+    private bool CanRunHsf() => !IsBusy && SelectedGame?.Hsf is { CanInstall: true };
+    private bool CanRemoveHsf() => !IsBusy && SelectedGame?.Hsf is { CanRemove: true };
+
+    /// <summary>Installs or reinstalls HSF (the newest imported release) in the selected game.</summary>
+    [RelayCommand(CanExecute = nameof(CanRunHsf))]
+    private async Task InstallHsf()
+    {
+        var g = SelectedGame;
+        if (g?.SelectedTarget is null || !g.Hsf.CanInstall) return;
+        await Run($"Installing HSF to {g.Name}", async ct =>
+        {
+            await g.Hsf.InstallAsync(TransferProgress(), ct);
+            await RescanOne(g);
+        });
+    }
+
+    [RelayCommand(CanExecute = nameof(CanRemoveHsf))]
+    private async Task RemoveHsf()
+    {
+        var g = SelectedGame;
+        if (g?.SelectedTarget is null || !g.Hsf.CanRemove) return;
+        await Run($"Removing HSF from {g.Name}", async ct =>
+        {
+            await g.Hsf.RemoveAsync(ct);
             await RescanOne(g);
         });
     }

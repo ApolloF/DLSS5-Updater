@@ -81,6 +81,8 @@ public sealed class Services
     public HdrService? Hdr { get; init; }
     /// <summary>The Luma component's installer; null hides the Luma section.</summary>
     public LumaService? Luma { get; init; }
+    /// <summary>The HSF component's installer (import only); null hides the HSF section.</summary>
+    public HsfService? Hsf { get; init; }
     /// <summary>The frame limiters (driver, add-ons, Unreal cap); null hides the Frame limit section.</summary>
     public FrameLimitService? FrameLimit { get; init; }
     /// <summary>DXVK and its Lilium HDR build; null hides the DXVK section.</summary>
@@ -108,6 +110,7 @@ public sealed partial class GameViewModel : ObservableObject
         FrameLimit = new FrameLimitViewModel(this, services);
         Dxvk = new DxvkViewModel(this, services);
         Luma = new LumaViewModel(this, services);
+        Hsf = new HsfViewModel(this, services);
         _modChoices = ModPicker.Available(false, SelectedBuild.Name);
         Components = [.. ComponentTable.Rows.Select(r => new ComponentRow(r.Key, r.Name))];
         foreach (var c in Components) c.PropertyChanged += (_, e) =>
@@ -143,6 +146,7 @@ public sealed partial class GameViewModel : ObservableObject
     public FrameLimitViewModel FrameLimit { get; }
     public DxvkViewModel Dxvk { get; }
     public LumaViewModel Luma { get; }
+    public HsfViewModel Hsf { get; }
     public string Id => Info.Id;
     public string Name => Info.Name;
     public string Source => Info.Source;
@@ -1050,6 +1054,7 @@ public sealed partial class GameViewModel : ObservableObject
         OnPropertyChanged(nameof(NeedsDxvkUpdate));
         Luma.Refresh();
         OnPropertyChanged(nameof(NeedsLumaUpdate));
+        Hsf.Refresh();
     }
 
     private static bool IsTracked(InstallManifest m, string key) => key switch

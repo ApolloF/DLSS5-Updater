@@ -136,6 +136,7 @@ public sealed partial class GameViewModel
         if (File.Exists(store.DlssNrFor(EffectiveNrId))) imported.Add(ComponentRegistry.DlssNr);
         if (store.AddonBuilds(AddonKind.RenoDx).Count > 0) imported.Add(ComponentRegistry.RenoDx);
         if (store.AddonBuilds(AddonKind.Lecram).Count > 0) imported.Add(ComponentRegistry.Lecram);
+        if (HsfLibrary.Newest() is not null) imported.Add(ComponentRegistry.Hsf);
         var dfc = store.DfcBuildFor(EffectiveDfcId);
         if (dfc is not null) imported.Add(ComponentRegistry.Dfc);
         var shaders = Path.Combine(target, FeederLibrary.ShaderDir);

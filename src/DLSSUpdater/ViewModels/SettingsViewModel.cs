@@ -24,6 +24,7 @@ public sealed partial class SettingsViewModel : ObservableObject
         Feeder = new FeederSettingsViewModel(main, AddonsChanged);
         Dxvk = new DxvkSettingsViewModel(main, AddonsChanged);
         Luma = new LumaSettingsViewModel(main, AddonsChanged);
+        Hsf = new HsfSettingsViewModel(AddonsChanged);
         Cleanup = new BuildCleanupViewModel(main);
         Overrides = new ObservableCollection<IniOverride>(Settings.IniOverrides);
         ReShadeOverrides = new ObservableCollection<IniOverride>(Settings.ReShadeOverrides);
@@ -55,6 +56,7 @@ public sealed partial class SettingsViewModel : ObservableObject
     public FeederSettingsViewModel Feeder { get; }
     public DxvkSettingsViewModel Dxvk { get; }
     public LumaSettingsViewModel Luma { get; }
+    public HsfSettingsViewModel Hsf { get; }
     public AddonLibraryViewModel Lecram { get; }
     public AddonLibraryViewModel Dfc { get; }
     public BuildCleanupViewModel Cleanup { get; }
@@ -571,6 +573,7 @@ public sealed partial class SettingsViewModel : ObservableObject
         Feeder.Reload();
         Dxvk.Reload();
         Luma.Reload();
+        Hsf.Reload();
         ApplyLecramGeneration();
         ApplyDfcCompat();
         RefreshAddonPairStatus();
