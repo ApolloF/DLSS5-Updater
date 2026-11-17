@@ -17,12 +17,7 @@ public static class LecramIni
     /// <summary>v10 and older only: the character mask is always on in v11.</summary>
     private static readonly HashSet<string> V10Only = new(["NRAutoMask"], StringComparer.OrdinalIgnoreCase);
 
-    /// <summary>v11 only: v10.7 does not read these.</summary>
-    private static readonly HashSet<string> V11Only = new(
-        ["NeuralUplift", "NRPreset", "NRPass2Preset", "NRPass3Preset", "NRPass4Preset", "NRVramBuffering", "NRGpuCrashWitness", "NRPresentFgPath"],
-        StringComparer.OrdinalIgnoreCase);
-
-    /// <summary>v11 keys that only later builds read, by the first checked build that has them (docs/addons/lecram-dlss5.md).</summary>
+    /// <summary>v11-generation keys that only later builds read, by the first checked build that has them (docs/addons/lecram-dlss5.md).</summary>
     private static readonly Dictionary<string, string> FirstV11Build = new(StringComparer.OrdinalIgnoreCase)
     {
         ["NRGpuCrashWitness"] = "v11.0.0-beta.22",
@@ -30,7 +25,26 @@ public static class LecramIni
         ["NRPass3Preset"] = "v11.0.0-beta.29",
         ["NRPass4Preset"] = "v11.0.0-beta.29",
         ["NRPresentFgPath"] = "v11.0.0-beta.48",
+        ["NRPass2HookPoint"] = "v12.9.9",
+        ["NRPass3HookPoint"] = "v12.9.9",
+        ["NRPass4HookPoint"] = "v12.9.9",
+        ["NRPass2ResolutionScale"] = "v12.9.9",
+        ["NRPass3ResolutionScale"] = "v12.9.9",
+        ["NRPass4ResolutionScale"] = "v12.9.9",
+        ["NRFrameBuffering"] = "v12.9.9",
+        ["NRUpscaler"] = "v12.9.9",
+        ["NRUpscalerPreset"] = "v12.9.9",
+        ["NRLookHaloRemoval"] = "v12.9.9",
+        ["NRFrameGen"] = "v13.4.0",
+        ["NRFrameGenMultiplier"] = "v13.4.0",
+        ["NRFrameGenUi"] = "v13.4.0",
+        ["NRHdrScreen"] = "v13.4.0",
     };
+
+    /// <summary>v11 only: v10.7 does not read these (every key a later v11-generation build added included).</summary>
+    private static readonly HashSet<string> V11Only = new(
+        ["NeuralUplift", "NRPreset", "NRVramBuffering", .. FirstV11Build.Keys],
+        StringComparer.OrdinalIgnoreCase);
 
     /// <summary>v11-generation keys a later build no longer acts on, by the first checked build that retired them (it still reads them and logs <c>retired=1</c>).</summary>
     private static readonly Dictionary<string, string> RetiredIn = new(StringComparer.OrdinalIgnoreCase)

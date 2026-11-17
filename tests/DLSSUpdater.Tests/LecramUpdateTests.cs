@@ -17,6 +17,8 @@ public sealed class LecramUpdateTests : IDisposable
     {
         public List<string> Requests { get; } = [];
 
+        public HttpResponseMessage Respond(HttpRequestMessage request) => respond(request);
+
         protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken ct)
         {
             lock (Requests) Requests.Add(request.RequestUri!.ToString());
@@ -125,6 +127,15 @@ public sealed class LecramUpdateTests : IDisposable
     [InlineData("DLSS5-NR-v11.0.0-rc.1.zip", "v11.0.0-rc.1")]
     [InlineData("DLSS5-NR-v12.0.0-alpha.3.zip", "v12.0.0-alpha.3")]
     [InlineData("dlss5-nr-v11.0.1.addon64", "v11.0.1")]
+    [InlineData("DLSS5-NR-Setup-v12.9.9.exe", "v12.9.9")]
+    [InlineData("DLSS5-NR-Dev-Setup-v13.4.0.exe", "v13.4.0")]
+    [InlineData("dlss5-nr-dev-setup-v13.0.0-rc.1.exe", "v13.0.0-rc.1")]
+    [InlineData("DLSS5-NR-Dev-v13.4.0.zip", "v13.4.0")]
+    [InlineData("dlss5-nr-dev-v13.4.0.addon64", "v13.4.0")]
+    [InlineData("DLSS5-NR-Dev-Setup-v10.8.0.exe", null)]
+    [InlineData("DLSS5-NR-Dev-Setup-latest.exe", null)]
+    [InlineData("DLSS5-NR-Dev-Setup-v13.4.0.zip", null)]
+    [InlineData("DLSS5 NR Add-on v13.4.0.zip", null)]
     [InlineData("DLSS5-NR-Setup-v10.9.0.exe", null)]
     [InlineData("DLSS5-NR-v10.7.0.zip", null)]
     [InlineData("DLSS5-NR-Setup-v11.0.0-gamma.1.exe", null)]
@@ -259,13 +270,16 @@ public sealed class LecramUpdateTests : IDisposable
     private const string LiveV11 =
         """{"response":{"folder_content":{"chunk_size":"100","content_type":"files","chunk_number":"1","files":[{"hash":"fb995c9f98a3adbb6fda0074a4b129c1ee700aaa57d354ed2cf17bff989278d8","filename":"changelog-v11.9.0.txt","size":"3993","created_utc":"2026-10-21T23:11:23Z","links":{"normal_download":"https://www.mediafire.com/file/4zk2fndd7i5hswl/changelog-v11.9.0.txt/file"}},{"hash":"a6b7f99b7370b9781c706bdbebfe85fbf442af19bb308f1629ccd2978708c11a","filename":"DLSS5-NR-Setup-v11.9.0.exe","size":"9526805","created_utc":"2026-10-21T23:11:05Z","links":{"normal_download":"https://www.mediafire.com/file/ckbaexfm65x2tkt/DLSS5-NR-Setup-v11.9.0.exe/file"}},{"hash":"ec1b223c9d22f0757bfb406f415a6414825016a08fc7ec0e18fd7dcc84fef460","filename":"licenses.txt","size":"174074","created_utc":"2026-10-18T18:55:00Z","links":{"normal_download":"https://www.mediafire.com/file/jfeyxw0k3e966so/licenses.txt/file"}}],"more_chunks":"no"},"result":"Success"}}""";
 
+    private const string EmptyFolder = """{"response":{"folder_content":{"files":[],"more_chunks":"no"},"result":"Success"}}""";
+
     [Fact]
     public async Task CheckFolders_FindsV12InTheLiveListings_EvenFromTheRememberedV11Folder()
     {
         var server = new FakeMediaFire(r =>
         {
             var key = System.Web.HttpUtility.ParseQueryString(r.RequestUri!.Query)["folder_key"];
-            return new HttpResponseMessage(HttpStatusCode.OK) { Content = new StringContent(key == "r1xp6x0i043wx" ? LiveV12 : LiveV11) };
+            return new HttpResponseMessage(HttpStatusCode.OK)
+            { Content = new StringContent(key == "r1xp6x0i043wx" ? LiveV12 : key == MediaFireClient.DevFolder ? EmptyFolder : LiveV11) };
         });
 
         var result = await new MediaFireClient(server).CheckFoldersAsync("wrwi1qkpgy0qu", CancellationToken.None);
@@ -274,7 +288,9 @@ public sealed class LecramUpdateTests : IDisposable
         Assert.Equal("DLSS5-NR-Setup-v12.0.0.exe", result.Latest!.Name);
         Assert.Equal("v12.0.0", result.Latest.Version);
         Assert.Equal("b63590ec239cc321796f6cd41fa9f32dd2bac350e1c33964656db9b6e9f61275", result.Latest.Hash);
-        Assert.Single(server.Requests);
+        // The v12 folder, then the Early Access folder; the v11 folder is never asked.
+        Assert.Equal(2, server.Requests.Count);
+        Assert.Contains(MediaFireClient.DevFolder, server.Requests[1]);
         Assert.Equal("DLSS5-NR-Setup-v11.9.0.exe", MediaFireClient.SelectLatest(MediaFireClient.ParseListing(LiveV11).Files)!.Name);
     }
 
@@ -305,7 +321,7 @@ public sealed class LecramUpdateTests : IDisposable
         var result = await new MediaFireClient(server).CheckFoldersAsync("r1xp6x0i043wx", CancellationToken.None);
 
         Assert.Equal(("wrwi1qkpgy0qu", "DLSS5-NR-Setup-v11.9.0.exe"), (result.Key, result.Latest!.Name));
-        Assert.Equal(2, server.Requests.Count);
+        Assert.Equal(3, server.Requests.Count);
 
         var none = await new MediaFireClient(Server(new())).CheckFoldersAsync("r1xp6x0i043wx", CancellationToken.None);
         Assert.Equal(("r1xp6x0i043wx", null), (none.Key, none.Latest));
@@ -323,6 +339,47 @@ public sealed class LecramUpdateTests : IDisposable
         var result = await new MediaFireClient(Server(folders)).CheckFoldersAsync("moved1", CancellationToken.None);
 
         Assert.Equal(("moved1", "DLSS5-NR-Setup-v12.1.0.exe"), (result.Key, result.Latest!.Name));
+    }
+
+    [Fact]
+    public async Task CheckFolders_TakesTheNewestUploadAcrossTheRegularAndTheEarlyAccessFolder()
+    {
+        // v13.4.0's sources.json: regular releases stay in r1xp6x0i043wx, Early Access setups go to their own folder.
+        var regular = new Remote("DLSS5-NR-Setup-v12.9.9.exe", AddonBytes("v12.9.9"), "2026-11-05T14:30:18Z");
+        var dev = new Remote("DLSS5-NR-Dev-Setup-v13.4.0.exe", AddonBytes("v13.4.0"), "2026-11-09T20:53:02Z");
+
+        var newerDev = await new MediaFireClient(Server(new() { ["r1xp6x0i043wx"] = [regular], [MediaFireClient.DevFolder] = [dev] }))
+            .CheckFoldersAsync("r1xp6x0i043wx", CancellationToken.None);
+        // The key stays the regular folder's: the Early Access folder is listed on every check, never remembered.
+        Assert.Equal(("r1xp6x0i043wx", "DLSS5-NR-Dev-Setup-v13.4.0.exe", "v13.4.0"), (newerDev.Key, newerDev.Latest!.Name, newerDev.Latest.Version));
+
+        // A regular release uploaded after the Early Access build wins, whatever its version.
+        var later = new Remote("DLSS5-NR-Setup-v12.9.10.exe", AddonBytes("v12.9.10"), "2026-11-12T10:00:00Z");
+        var newerRegular = await new MediaFireClient(Server(new() { ["r1xp6x0i043wx"] = [regular, later], [MediaFireClient.DevFolder] = [dev] }))
+            .CheckFoldersAsync("r1xp6x0i043wx", CancellationToken.None);
+        Assert.Equal(("r1xp6x0i043wx", "DLSS5-NR-Setup-v12.9.10.exe"), (newerRegular.Key, newerRegular.Latest!.Name));
+
+        // With nothing in the regular folders, the Early Access build is still taken.
+        var onlyDev = await new MediaFireClient(Server(new() { [MediaFireClient.DevFolder] = [dev] })).CheckFoldersAsync("r1xp6x0i043wx", CancellationToken.None);
+        Assert.Equal(("r1xp6x0i043wx", "DLSS5-NR-Dev-Setup-v13.4.0.exe"), (onlyDev.Key, onlyDev.Latest!.Name));
+    }
+
+    [Fact]
+    public async Task CheckFolders_IsOffline_WhenTheEarlyAccessListingComesFromTheCache()
+    {
+        var folders = new Dictionary<string, Remote[]>
+        {
+            ["r1xp6x0i043wx"] = [new Remote("DLSS5-NR-Setup-v12.9.9.exe", AddonBytes("v12.9.9"), "2026-11-05T14:30:18Z")],
+            [MediaFireClient.DevFolder] = [new Remote("DLSS5-NR-Dev-Setup-v13.4.0.exe", AddonBytes("v13.4.0"), "2026-11-09T20:53:02Z")],
+        };
+        await new MediaFireClient(Server(folders)).CheckAsync(MediaFireClient.DevFolder, CancellationToken.None);
+        var regularOnly = Server(folders);
+        var devDown = new FakeMediaFire(r => r.RequestUri!.Query.Contains(MediaFireClient.DevFolder)
+            ? throw new HttpRequestException("no network") : regularOnly.Respond(r));
+
+        var result = await new MediaFireClient(devDown).CheckFoldersAsync("r1xp6x0i043wx", CancellationToken.None);
+
+        Assert.True(result.Offline);
     }
 
     [Fact]
@@ -432,7 +489,43 @@ public sealed class LecramUpdateTests : IDisposable
         await _store.CheckLecramAsync(settings, new MediaFireClient(server), CancellationToken.None);
         Assert.Single(_store.LecramBuilds);
         Assert.StartsWith("Up to date", settings.LecramLastResult);
-        Assert.Equal(requests + 1, server.Requests.Count);
+        // Only the listings again (the regular folder and the Early Access folder), no download.
+        Assert.Equal(requests + 2, server.Requests.Count);
+    }
+
+    private static Remote DevSetupRemote(string version, string created) =>
+        new($"DLSS5-NR-Dev-Setup-{version}.exe", SetupExe(Zip(
+            ("package.json", Encoding.UTF8.GetBytes($"{{\"schema\":1,\"version\":\"{version}\",\"kind\":\"v11\",\"channel\":\"dev\"}}")),
+            ("dlss5-nr.addon64", AddonBytes(version)), ("dlss5-nr.addon32", AddonBytes(version + "-x86")),
+            ("nr-host64.exe", "MZ host"u8.ToArray()), ("reshade/ReShade64.dll", "MZ reshade"u8.ToArray())), absolute: false), created);
+
+    [Fact]
+    public async Task Update_TakesTheEarlyAccessSetup_WhenItIsTheNewestUpload_AndKeepsTheRegularFolderKey()
+    {
+        var settings = new AppSettings();
+        var folders = new Dictionary<string, Remote[]>
+        {
+            ["r1xp6x0i043wx"] = [SetupRemote("v12.9.9", "2026-11-05T14:30:18Z")],
+            [MediaFireClient.DevFolder] = [DevSetupRemote("v13.4.0", "2026-11-09T20:53:02Z")],
+        };
+
+        await _store.CheckLecramAsync(settings, new MediaFireClient(Server(folders)), CancellationToken.None);
+
+        var build = Assert.Single(_store.LecramBuilds);
+        Assert.Equal(("v13.4.0", LecramGeneration.V11), (build.DetectedLabel, build.Generation));
+        // Only the root 64-bit add-on is taken from the setup, not the 32-bit one.
+        Assert.Equal(Hex(AddonBytesOf(folders[MediaFireClient.DevFolder][0], "dlss5-nr.addon64")), build.Id);
+        Assert.Equal(("r1xp6x0i043wx", "v13.4.0"), (settings.LecramFolderKey, settings.LecramLastVersion));
+        Assert.Empty(Directory.GetDirectories(AppPaths.Cache, "lecram-download-*"));
+    }
+
+    private static byte[] AddonBytesOf(Remote setup, string entry)
+    {
+        using var zip = new ZipArchive(new MemoryStream(setup.Data[0x1000..]), ZipArchiveMode.Read);
+        using var stream = zip.GetEntry(entry)!.Open();
+        using var copy = new MemoryStream();
+        stream.CopyTo(copy);
+        return copy.ToArray();
     }
 
     [Fact]

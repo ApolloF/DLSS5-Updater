@@ -18,15 +18,21 @@ internal sealed record MediaFireFile(string Name, string Hash, DateTimeOffset Cr
 internal sealed record MediaFireListing(IReadOnlyList<MediaFireFile> Files, bool More);
 internal sealed record LecramChannel(string Key, MediaFireFile? Latest, bool Offline, string? Notice);
 
-/// <summary>The public update channel used by DLSS5-NR-Setup; requests within a check are sequential.</summary>
+/// <summary>The public update channel used by DLSS5-NR-Setup and DLSS5-NR-Dev-Setup; requests within a check are sequential.</summary>
 internal sealed partial class MediaFireClient
 {
     /// <summary>
     /// The author's update folders, newest generation first. Each major gets its own folder and no older folder points to it
     /// (v12's installer: "v12's own folder, so v11 setups never see v12"), so a new major is added here with a release.
     /// </summary>
-    internal static readonly string[] Folders = ["r1xp6x0i043wx" /* v12 */, "wrwi1qkpgy0qu" /* v11 */];
+    internal static readonly string[] Folders = ["r1xp6x0i043wx" /* v12 and later regular releases */, "wrwi1qkpgy0qu" /* v11 */];
     internal static readonly string DefaultFolder = Folders[0];
+
+    /// <summary>
+    /// The Early Access setups' own folder (<c>updates_dev</c> in v13.4.0's sources.json, <c>DLSS5-NR-Dev-Setup-v*.exe</c>). It is listed
+    /// on every check next to the regular folders and the newest upload across both wins. It is never remembered as the channel's key.
+    /// </summary>
+    internal const string DevFolder = "uh4x7j5f7fj2y";
     private const int MaxDownload = 256 * 1024 * 1024;
     private static readonly HttpClient SharedHttp = CreateHttp(new SocketsHttpHandler
     {
@@ -54,11 +60,17 @@ internal sealed partial class MediaFireClient
     [GeneratedRegex(@"^v(\d+)\.\d+\.\d+(?:-(?:alpha|beta|rc)\.\d+)?$", RegexOptions.IgnoreCase)]
     private static partial Regex VersionPattern();
 
+    /// <summary>Setup exes (regular and Early Access) and add-on zips or files (regular and Early Access), longest prefix first.</summary>
+    private static readonly string[] SetupPrefixes = ["DLSS5-NR-Dev-Setup-", "DLSS5-NR-Setup-"];
+    private static readonly string[] PackagePrefixes = ["DLSS5-NR-Dev-", "DLSS5-NR-"];
+
     internal static string? VersionOf(string name)
     {
-        var prefix = name.StartsWith("DLSS5-NR-Setup-", StringComparison.OrdinalIgnoreCase) && name.EndsWith(".exe", StringComparison.OrdinalIgnoreCase)
-            ? "DLSS5-NR-Setup-" : name.StartsWith("DLSS5-NR-", StringComparison.OrdinalIgnoreCase)
-                && (name.EndsWith(".zip", StringComparison.OrdinalIgnoreCase) || name.EndsWith(".addon64", StringComparison.OrdinalIgnoreCase)) ? "DLSS5-NR-" : null;
+        var extension = Path.GetExtension(name);
+        string[] prefixes = extension.Equals(".exe", StringComparison.OrdinalIgnoreCase) ? SetupPrefixes
+            : extension.Equals(".zip", StringComparison.OrdinalIgnoreCase) || extension.Equals(".addon64", StringComparison.OrdinalIgnoreCase) ? PackagePrefixes
+            : [];
+        var prefix = prefixes.FirstOrDefault(p => name.StartsWith(p, StringComparison.OrdinalIgnoreCase));
         if (prefix is null) return null;
         var version = name[prefix.Length..^Path.GetExtension(name).Length];
         var match = VersionPattern().Match(version);
@@ -93,10 +105,29 @@ internal sealed partial class MediaFireClient
         .OrderByDescending(f => f.Created).ThenByDescending(f => f.Rank).FirstOrDefault();
 
     /// <summary>
-    /// Checks the folders newest generation first and takes the first one with a build, so a late fix in an older generation's
-    /// folder never wins over a newer major. A key the settings remembered from a move (not one of <see cref="Folders"/>) goes first.
+    /// Checks the regular folders (<see cref="CheckRegularAsync"/>), then the Early Access folder (<see cref="DevFolder"/>): the newest
+    /// upload of the two wins, by the same rule as within a folder. The key stays the regular folder's. When either listing comes from
+    /// the cache (offline), the result is offline.
     /// </summary>
     internal async Task<LecramChannel> CheckFoldersAsync(string remembered, CancellationToken ct)
+    {
+        var regular = await CheckRegularAsync(remembered, ct);
+        if (regular.Offline) return regular;
+        var dev = await CheckAsync(DevFolder, ct);
+        var notices = new[] { regular.Notice, dev.Notice }.Where(n => !string.IsNullOrWhiteSpace(n)).ToArray();
+        return regular with
+        {
+            Latest = SelectLatest(new[] { regular.Latest, dev.Latest }.OfType<MediaFireFile>()),
+            Offline = dev.Offline,
+            Notice = notices.Length > 0 ? string.Join(" ", notices) : null,
+        };
+    }
+
+    /// <summary>
+    /// Checks the regular folders newest generation first and takes the first one with a build, so a late fix in an older generation's
+    /// folder never wins over a newer major. A key the settings remembered from a move (not one of <see cref="Folders"/>) goes first.
+    /// </summary>
+    private async Task<LecramChannel> CheckRegularAsync(string remembered, CancellationToken ct)
     {
         var keys = Folders.Contains(remembered, StringComparer.OrdinalIgnoreCase) ? Folders : [remembered, .. Folders];
         LecramChannel? first = null;
@@ -229,9 +260,13 @@ internal sealed partial class MediaFireClient
         }
     }
 
-    /// <summary>Uses the EOCD to locate a ZIP with either file-relative or ZIP-relative offsets; never runs the PE.</summary>
+    /// <summary>
+    /// Uses the EOCD to locate a ZIP with either file-relative or ZIP-relative offsets: a setup exe with its ZIP appended, or a plain
+    /// .zip. Never runs the PE. Only the root dlss5-nr.addon64 is taken (not the copy in the add-on zip's dlss5-nr-host folder).
+    /// </summary>
     internal static void ExtractAddon(string package, string dest)
     {
+        if (new FileInfo(package).Length > MaxDownload) throw new InvalidDataException("Lecram package is too large.");
         var data = File.ReadAllBytes(package);
         var end = -1;
         for (var i = data.Length - 22; i >= Math.Max(0, data.Length - 65557); i--)
