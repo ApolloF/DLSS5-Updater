@@ -35,7 +35,7 @@ public static class HelpTopics
             "Use it instead of ShortFuse, Lecram, Deep Fried Chicken or OptiScaler-NR; these NR routes cannot coexist. " +
             "This app installs the 64-bit add-on, its helper and Uplift effects. ReShade with full add-on support is required; Vulkan and OpenGL need ReShade 6.8+. " +
             "It uses the NR runtime from your library (downloaded automatically; you can import another). It goes in GITC-Uplift beside the add-on because Uplift blocks a runtime mapped from the game folder (NVIDIA DLSS can load that copy first on RTX 50). " +
-            "The app writes Enabled=1. In the game press Home, then open the GITC Uplift tab. Tested with 1.6.2; newer tags warn in the log. " +
+            "The app writes Enabled=1. From 2.0.0 Uplift still starts each game session with NR off unless Start enabled is on: in the game press Home, open the GITC Uplift tab and tick Enable (or use the hotkey). Tested with 2.0.0; newer tags warn in the log. " +
             "Preset B needs NR 310.9.16. Present with frame generation runs NR on every generated frame too, so at 3x/4x frame generation each Present pass runs 3-4 times per game frame; After DLSS avoids that. " +
             "Cross-queue passes (64-bit DX12 only, experimental, off by default) let a DLSS-stage pass and a later Present pass use different GPU queues, at a possible FPS and latency cost. NGX hooks Off is safe mode, Present only. Use D3D9Ex changes exclusive fullscreen to borderless. Mask blend values are undocumented."),
         // ---------- General ----------
