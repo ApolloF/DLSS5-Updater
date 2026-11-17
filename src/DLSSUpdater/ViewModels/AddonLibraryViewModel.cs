@@ -131,8 +131,8 @@ public sealed partial class AddonLibraryViewModel : ObservableObject
         : "Import only: get new builds from the author's page.";
 
     internal static string NoLecramBuilds(bool channelEnabled) => channelEnabled
-        ? $"No builds yet. Use Check now to fetch the latest v11 build, or import your own copy ({ComponentStore.Lecram10File} for v10 and older, {ComponentStore.Lecram11File} for v11 and newer)."
-        : $"No builds yet. Import the add-on ({ComponentStore.Lecram10File} for v10 and older, {ComponentStore.Lecram11File} for v11 and newer).";
+        ? $"No builds yet. Use Check now to fetch the latest build, or import your own copy ({ComponentStore.Lecram10File} for v10 and older, {ComponentStore.Lecram11File} for v11 and newer, or the author's setup exe or add-on zip)."
+        : $"No builds yet. Import the add-on ({ComponentStore.Lecram10File} for v10 and older, {ComponentStore.Lecram11File} for v11 and newer, or the author's setup exe or add-on zip).";
 
     private const string NoDfcBuilds =
         "Not imported. Its licence is personal use only, so import your own copy: extract the release and choose its folder (Folder…), " +
@@ -213,7 +213,7 @@ public sealed partial class AddonLibraryViewModel : ObservableObject
         var filter = _kind switch
         {
             AddonKind.RenoDx => "RenoDX DLSS add-on|renodx-dlss.addon64;*.addon64",
-            AddonKind.Lecram => "Lecram DLSS5 add-on|renodx-dlss5.addon64;dlss5-nr.addon64;*.addon64",
+            AddonKind.Lecram => "Lecram DLSS5 add-on, setup or add-on zip|renodx-dlss5.addon64;dlss5-nr.addon64;*.addon64;DLSS5-NR-*.exe;*.zip",
             _ => "Deep Fried Chicken|deep-fried-chicken.addon64;*.addon64;*.zip",
         };
         var dlg = new OpenFileDialog { Filter = filter, Title = IsDfc ? "Select deep-fried-chicken.addon64 or a .zip of the release" : $"Select {Title}" };

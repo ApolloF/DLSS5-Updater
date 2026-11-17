@@ -15,11 +15,15 @@
 | v11 Patch 11 / beta.48 (**supported**) | `dlss5-nr.addon64` (sha256 `30f3154e7bee…`) | **none** | `v11.0.0-beta.48` | 2026-10-20 (static + probe) | Catalog as beta.45; classification (`classify111.py`) identical to beta.29. Adds the API key `NRPresentFgPath` (test option, Present with frame generation). Same file standalone (channel `addon` folder) and inside `DLSS5-NR-Setup-v11.0.0-beta.48.exe`. beta.40 (Patch 9) is not on the public channel and was not checked. |
 | v11.9 | `dlss5-nr.addon64` (sha256 `173954453862…`) | **11.9.0.3000** (product `v11.9 (11.9.0)`, OriginalFilename `dlss5-nr.addon64`, internal name `nr-addon`) | `v11.9.0` | 2026-10-26 (static only, probe not run) | The MediaFire channel's current build. With v12.0.0 the first builds with a PE version resource; the generation comes from its OriginalFilename. The app writes the same keys as for beta.48, `NRPresentFgPath` included. |
 | v12.0.0 | `dlss5-nr.addon64` (sha256 `124cd5a76b71…`) | **12.0.0.3000** (product `v12 (12.0.0)`, OriginalFilename `dlss5-nr.addon64`, internal name `nr-addon`) | `v12.0.0` | 2026-10-26 (static only, probe not run) | Same file name and section as v11, so the app treats it as the v11 generation. `NRPresentFgPath` retired (still read, logged `retired=1`). `ForeignNr` gains `auto`, the new default. New `NROpticalFlow` (settings schema 12, on by default; not offered). Also ships inside `DLSS5-NR-Setup-v12.0.0.exe` (not opened). |
+| v12.9.9 (regular channel) | `dlss5-nr.addon64` (sha256 `d8561030015e…`) | **12.9.9.3000** (product `v12.9.9 (12.9.9)`, OriginalFilename `dlss5-nr.addon64`, internal name `nr-addon`) | `v12.9.9` | 2026-11-17 (static only, probe not run) | Extracted from `DLSS5-NR-Setup-v12.9.9.exe` (`package.json` `version` `v12.9.9`, `kind` `v11`). Settings schema still 12. Adds the per-pass hook point and resolution, frame buffering, NR's own DLSS upscaler and preset, halo removal, and Input-lab keys; retires `NRLookDetail`, `NRLookDetailRadius` and `NRLookHaloBrightSide`; the `NRSkinStructure` default moves from 0 to 1. First build that also ships a 32-bit add-on and NR's host (see "Host and 32-bit"). |
+| v13.4.0 (Early Access, dev channel) | `dlss5-nr.addon64` (sha256 `f3ecd69e137c…`) | **13.4.0.3000** (product `v13.4 (13.4.0)`, OriginalFilename `dlss5-nr.addon64`, internal name `nr-addon`) | `v13.4.0` | 2026-11-17 (static only, probe not run) | The same file in `DLSS5-NR-Dev-Setup-v13.4.0.exe` (`package.json` adds `"channel": "dev"`), in the hand-install zip `DLSS5 NR Add-on v13.4.0.zip` and in that zip's `dlss5-nr-host` folder. Everything of v12.9.9 plus NR's own frame generation (`NRFrameGen*`), HDR and experimental keys. Settings schema still 12. |
 
 The author's own names (from the beta.18 installer's `sources.json`): `v11.0.0-beta.5`..`beta.11` = "v11 Patch 3",
 `beta.12`..`beta.18` = "v11 Patch 4" (C). The beta.29 installer's `sources.json` adds beta.22 = "v11 Patch 5", beta.24 = "Patch 6",
 beta.26 = "Patch 7", beta.29 = "Patch 8" (C). The beta.48 installer's `sources.json` adds beta.40 = "v11 Patch 9", beta.45 = "v11 Patch 10" and
-beta.48 = "v11 Patch 11" (C).
+beta.48 = "v11 Patch 11" (C). The v12.9.9 installer's `sources.json` names `v12.5.0`..`v12.6.1`, `v12.9.0`..`v12.9.9` by their own number and
+`v13.0.0-alpha.1`..`alpha.15` "v13 Alpha N"; the v13.4.0 Early Access installer's adds `v13.0.0-alpha.60`..`alpha.78` and `v13.0.0-rc.1` (all
+"v13 Alpha") and `v13.1.0`..`v13.4.0` = "v13.1".."v13.4" (C). None of the builds between v12.0.0 and v12.9.9, or between v12.9.9 and v13.4.0, was checked.
 
 The detected build label is the app's own name for a build (the add-ons publish none): the highest `vX.Y.Z[-pre]` ASCII string in
 the binary. Every build also carries the RenoDX framework strings `v6.1.0` / `v6.1.2`, which lose by being lower. The v10.7
@@ -31,7 +35,11 @@ same layout; the app's import reads `v11.0.0-beta.29` from the real file and ext
 beta.48 drop the `dlss5-nr11.0.0-beta.NN` description string: `v11.0.0-beta.NN` three times (glued to "NR on", in the menu-key tooltip,
 bare) and `v11.0.0-H` once, so the label is still `v11.0.0-beta.NN` (C, test `Label_ReadsTheV11Beta18AndBeta22Layouts`). v11 has no
 framework `v6.1.x` strings. v11.9.0 and v12.0.0 carry `vX.Y.0` twice (bare and glued to "NR") and nothing higher, so the label is
-`v11.9.0` / `v12.0.0` (C, test `Label_ReadsTheV11_9AndV12Layouts`); their version resource agrees.
+`v11.9.0` / `v12.0.0` (C, test `Label_ReadsTheV11_9AndV12Layouts`); their version resource agrees. v12.9.9 carries `v12.9.9` seven times
+(glued to "NR on", in its `build=` and `patch=` log fields, in the panel and menu-key texts, bare) and v13.4.0 carries `v13.4.0` twice (glued to
+"NR on", bare); neither has a higher `vX.Y.Z`, and v13's `v13.4 (13.4.0)` description has two parts and is no label, so the labels are `v12.9.9`
+and `v13.4.0` (C on the real files, test `Label_ReadsTheV12_9AndV13_4Layouts`). Both have a version resource with OriginalFilename
+`dlss5-nr.addon64`, so they are the v11 generation.
 
 The DLSS SDK's version string (`v310.8.0`) is never a build label: some older v10 builds (for example the one released as
 `renodx-dlss5-7.0.0-rc8`, and one with file version 0.2026.828.517) carry no label of their own, only that string, which earlier
@@ -80,6 +88,49 @@ build) and notices (C). From README, release notes and strings (C/D):
 - Finds `dlss5-nr.addon64` / `renodx-dlss5.addon64` "on every drive"; "Update all" updates every game behind, hand-made
   installs included, and `-Action adopt` takes one over (C). A game this app manages would be updated by it too. No
   ShortFuse (`renodx-dlss.addon64`) or DLSS5 Updater handling found (D).
+
+### v12.9.9 and v13.4.0 packages (static only, never run)
+
+- **`DLSS5-NR-Setup-v12.9.9.exe`** (regular channel): the same appended ZIP. Root entries `dlss5-nr.addon64`, `dlss5-nr.addon32`,
+  `nr-host64.exe`, `package.json` (`version` `v12.9.9`, `kind` `v11`), `sources.json`, `README.txt`, `RELEASE-NOTES.md`, `setup-gui.ps1`,
+  `THIRD-PARTY-NOTICES.txt`, `reshade\ReShade64.dll` + `reshade\ReShade32.dll` (the author's fixed ReShade 6.8.0 build, file version 6.8.0.1,
+  "6.8.0 UNOFFICIAL"; its hashes are `fixed_sha256` / `fixed32_sha256` in `sources.json`) and `studio\` (Offline Studio with a v10 add-on). One
+  root `dlss5-nr.addon64` (C).
+- **`DLSS5-NR-Dev-Setup-v13.4.0.exe`** (Early Access): the same layout; `package.json` adds `"channel": "dev"`. Per its release notes it "updates
+  itself to each new dev build, with its own settings" (`%LOCALAPPDATA%\DLSS5-NR\dev\updates.json`); to go back, the regular setup installs a
+  regular release in that game (C). Its `sources.json` also pins NVIDIA files for NR's frame generation and DLSS (`dlss_store` 310.9.16,
+  `streamline` 2.12.0 with five `bin/x64` plugins, `dlssg` 310.7.0) and MFG Unlock 1.9.0 (C).
+- **`DLSS5 NR Add-on v13.4.0.zip`** (hand install, from the author's page): `dlss5-nr.addon64`, `dlss5-nr.addon32`, `INSTALL.txt`,
+  `RELEASE-NOTES.md`, `THIRD-PARTY-NOTICES.txt` at the root and `dlss5-nr-host\` with `dlss5-nr.addon64` (the same file as the root one),
+  `nr-host64.exe` and `ReShade64.dll` (the fixed 6.8.0.1 build). `INSTALL.txt`: copy everything into the game's ReShade folder, the host folder
+  as it is; ReShade loads the add-on that matches the game's bitness and leaves the other (C). v12.9.9's release notes name the same layout
+  for `DLSS5 NR Add-on v12.9.9.zip` (D, not opened).
+- The release page (pasted by the owner, 2026-11-17) offers v12.9.9 as the regular release, v13.4.0 as Early Access through the dev setup,
+  and v10.8 as the stable legacy build (D).
+
+### Host and 32-bit (not yet supported)
+
+From v12.9 the add-on runs NR in a 64-bit host process for the games it can't serve in-process. Facts for the PR that adds it (C unless marked):
+
+- **Which games.** Direct3D 9, Direct3D 10, OpenGL and every 32-bit game (Direct3D 9, 10, 11, OpenGL), and 64-bit Direct3D 11 games with
+  in-game MSAA, run NR through the host; D3D12, Vulkan and other D3D11 games run it in the game. Not supported by the author yet: 32-bit
+  Vulkan and 32-bit Direct3D 12 (README). The setup adds Direct3D 9/10, OpenGL and 32-bit games only through Browse (release page, D).
+- **Files.** In the game's ReShade folder: `dlss5-nr.addon32` for a 32-bit game (version resource 12.9.9.3000 / 13.4.0.3000,
+  OriginalFilename `dlss5-nr.addon32`, internal name `relay32`, "each frame goes to NR in the 64-bit host beside it") or `dlss5-nr.addon64`
+  for a 64-bit one, plus the folder `dlss5-nr-host` beside them with `nr-host64.exe` (internal name `nr-host`, "DLSS5 NR host for relayed
+  games"), its own `dlss5-nr.addon64` and `ReShade64.dll`. The setup exe holds `nr-host64.exe` and `reshade\ReShade64.dll` at its own
+  paths and no `dlss5-nr-host` folder; how it assembles the folder in a game was not checked. Only the hand-install zip has the folder ready.
+- **Settings.** A game NR reaches through its host has a second ReShade.ini in `dlss5-nr-host`: NR's shortcuts go to the host's ini, the
+  panel key to both (README). Which other `[RenoDX.DLSS5]` keys the host reads from its own ini has not been checked; the later PR has to
+  find out before writing options there. Host keys seen in v12.9.9: `NRRelay`, `NRRelayFlipEx`, `NRRelayFullscreenMode`,
+  `NRResumeTakeover`, and in v13.4.0 also `NRRelayTwins`, `NRRelayVelocity`; none has a catalog entry (undocumented). `NRFrameBuffering`
+  acts on relayed games too.
+- **Logs.** The host writes its own `dlss5-nr-host\ReShade.log` (release page).
+- **What the app does now.** It installs only `dlss5-nr.addon64` for 64-bit D3D11, D3D12 and Vulkan games. The import of a setup exe or
+  the hand-install zip takes only the root `dlss5-nr.addon64`; `dlss5-nr.addon32`, `nr-host64.exe` and `dlss5-nr-host\` are left out. The
+  later PR needs: library builds that hold the whole set (addon32, host exe, host ReShade), placement of the host folder and the 32-bit add-on
+  per game bitness and API, the host's ini, uninstall of the folder, the ReShade build for the host (the author ships his fixed 6.8.0.1),
+  and the detection of the games that need the host (bitness, API, D3D11 MSAA).
 
 ## ReShade.ini
 
@@ -158,6 +209,58 @@ Runtime (probe, `tools/addon-probe`):
   - `NROpticalFlow` is new (settings schema 12: "NROpticalFlow on by default; an older file that stores it off adopts on once";
     `NR-OFA v1 available=... enabled=...` log lines). Not offered: what it does in a game needs a probe, and the app writes
     `ConfigVersion=11` when it seeds a hook point.
+- **v12.9.9 and v13.4.0** (static only; the probe was not run, the binaries were never executed). Method: `strings` (ASCII and UTF-16) of
+  each `dlss5-nr.addon64`; the `nr-settings` catalog (`crates\nr-settings\src\catalog.rs`) holds one description per key in index order and
+  the key names in reverse order right before it, so new keys pair with new descriptions one to one; v12.0.0's catalog was diffed against
+  v12.9.9's and v12.9.9's against v13.4.0's. Panel option lists (`As the pass before|Before Upscaling|After Upscaling|Present`,
+  `2x|3x|4x|5x|6x`, ...) and the panel's one-line hover help come from the same strings; the release notes are inside each setup (C).
+  - **Schema.** Both still carry the settings-schema text of v12.0.0 (schema 12: `NROpticalFlow` on by default; schema 11: `NRHookPoint`
+    Auto); no newer schema (C).
+  - **Keys the app writes.** Every key the app writes is still in both catalogs with an unchanged entry, or still read through the API
+    (`NeuralUplift`, `EnableHooks`, `DX11Source`, `ForeignNr` with `yield`/`observe` overrides, `NRFeedMode` via `nr_core_feed_mode`,
+    `NRGpuCrashWitness` with the `NR-DRED v1` lines, `NRPresentFgPath` still `retired=1`). None is newly retired, so no retire entry was
+    added (C for presence and catalog text; whether each value still acts was not probed). One default moved: `NRSkinStructure` (panel
+    "Skin", 0..100 = runtime 0..1) defaults to 1, NVIDIA's stock face treatment, from v12.9.9 ("owner, 2026-10-25; 0 from 2026-10-14"; v12.0.0
+    still said 0); a stored negative value reads as the default (C).
+  - **New in v12.9.9** (catalog, C): `NRPass2HookPoint`..`NRPass4HookPoint` (0 same as the pass before, 1 Before Upscaling, 2 After
+    Upscaling, 3 Present; "a point before the previous pass's reads as the previous pass's"; D3D12, Vulkan, D3D11),
+    `NRPass2ResolutionScale`..`NRPass4ResolutionScale` (0 as pass 1, else 0.33..1 of the output, under 0.33 reads as 0.33; a pass at Before
+    Upscaling stays native), `NRFrameBuffering` (0 Automatic default, 1 One frame, 2 Same frame; D3D11 at Present and relayed games),
+    `NRUpscaler` (0 the game's FSR 3.1 or XeSS, default; 1 NR's own DLSS SR / DLAA with the game's exact inputs), `NRUpscalerPreset` (0 NVIDIA's
+    default per mode, 1 J, 2 K, 3 L, 4 M), `NRLookHaloRemoval` (0..1, default 0; "acts with Fine-tune off too"), `NRLookTexture` and
+    `NRLookClarity` (0..4, panel 0..2, default 1; they replace `NRLookDetail`), `NRMotionSource`, `NRMotionConvention`, `NRMotionBottomUp`,
+    `NRDepthSource`, `NRReader` (the Input lab) and `NRGridPad` (native-size padding, off by default). Retired with a migration: `NRLookDetail`
+    (loads once as Texture and Clarity), `NRLookDetailRadius`, `NRLookHaloBrightSide` (replaced by Halo removal); `NRLookHalo` is now "Dark
+    halos", 0..1 default 0. New API-only keys without a catalog entry: `NRD3D11PresentAfterAddons`, `NRRelay`, `NRRelayFlipEx`,
+    `NRRelayFullscreenMode`, `NRResumeTakeover` (C names, meanings undocumented).
+  - **New in v13.4.0** (catalog, C): `NRFrameGen` (0 Off, default "until the owner's field sitting": NR hosts nothing and loads no NVIDIA file;
+    1 On: DLSS Frame Generation hosted by NR through Streamline after NR's pass, NR on every real frame and never on a generated one; 2 Dynamic:
+    NVIDIA's dynamic multiplier where supported, else On; the panel help says Dynamic "is not available in this version of NR, which uses the
+    multiplier below"; read at the game's start), `NRFrameGenMultiplier` (0..4 = 2x..6x, clamped to what the GPU reports, logged
+    `multiplier_clamped`; not used under Dynamic; no default named), `NRFrameGenUi` (0 Steady: NR's HUD-less image and UI alpha, DLSS-G puts the
+    real UI back; 1 Interpolated: the UI is generated with the picture; read at start; no default named), `NRHdrScreen` (0 HDR10, 1 scRGB, how
+    FG's picture reaches a Windows HDR screen in a game with an HDR10 chain; read at start; no default named), `NRGameBrightness` (the game's own
+    brightness in nits at Present on an HDR chain, 48..1000, below 48 a RenoDX mod's value or 203), `NRInputCurve` (0 Off, 1 Per channel, 2 Same
+    hue; what NR reads at After Upscaling; no default named), `NRPresentShoulder` (HDR roll-off modes 0..7, default 6) with its migration marker
+    `NRPresentShoulderAdopted`, and the experimental `NRExpCamera` (off), `NRExpTaaInputs` (on by default from 2026-11-09), `NRPresentCallGuides`
+    (off) and `NRQueueHeal` (0 Off, 1 Auto default, 2 On); `NRExperimental=1` turns the experimental inputs on. FG needs an RTX 40 or newer, the
+    Streamline 2.12.0 plugins and `nvngx_dlssg.dll` 310.7.0+ in `%LOCALAPPDATA%\DLSS5-NR\runtime\streamline\2.12.0\` (or `NRNvidiaPath=<folder>`
+    with the same layout), unless the game ships its own Streamline (`INSTALL.txt`, C). The game's own frame generation, another tool's and
+    NVIDIA Smooth Motion keep NR's off (C). New API-only keys without a catalog entry: `NRNvidiaPath` (documented in `INSTALL.txt`),
+    `NRFrameGenPreset` (logged with `NR-HUDLESS v1 preset profile=`, so a HUD-less profile, not a DLSS-G preset), `NRFrameGenNoTear`,
+    `NRFrameGenReflexAsked`, `NRFgChainBound`, `NRFgCrashGuard`, `NRQueueOrder`, `NRCameraTranslation`, `NRMotionOwn`, `NRTaaMerged`,
+    `NRUiAlphaTold`, `NRRtssUnder`, `NRVkIcdSeed`, `NRVulkanLineage`, `NRPresentShoulderSkin`, `NRRelayTwins`, `NRRelayVelocity` (C names,
+    meanings undocumented).
+  - **Offered by the app** (version-gated in `LecramIni`, v12.9.9 keys from `v12.9.9`, v13 keys from `v13.4.0`): the pass hook points and
+    resolutions, `NRFrameBuffering`, `NRUpscaler`, `NRUpscalerPreset`, `NRLookHaloRemoval`, `NRFrameGen`, `NRFrameGenMultiplier`,
+    `NRFrameGenUi`, `NRHdrScreen`. **Not offered:** `NRLookTexture` / `NRLookClarity` (they act only with Fine-tune, `NRLookMode`, on, and the
+    app offers none of the Fine-tune set); the Input lab (`NRMotionSource`, `NRMotionConvention`, `NRMotionBottomUp`, `NRDepthSource`,
+    `NRReader`: overrides for when NR misreads a game's motion or depth, tuned per game in the panel); `NRGridPad` (a quality detail whose value
+    format beyond "off by default" isn't stated); `NRGameBrightness`, `NRInputCurve` and `NRPresentShoulder` (HDR measurement and roll-off with
+    many modes; `NRInputCurve` has no default named; the panel sets the shoulder from its HDR icon); the experimental keys and `NRExperimental`
+    (the author ships them off or judged per session); `NRFrameGenPreset` and every other API-only key above (undocumented values); the host
+    keys (host not supported yet). `NRFrameGenMultiplier`, `NRFrameGenUi`, `NRHdrScreen` and the pass hook point have no default in the
+    texts, so their Add-on default choice names none.
 
 ### Main keys
 
@@ -171,7 +274,7 @@ Runtime (probe, `tools/addon-probe`):
 | `NRStyle` | int | 0, 0..2 | 0, 0..2 | 0928 overlay Default/Natural/Cinematic; v11 overlay Model A/B/C | D/C |
 | `NRLocalTone` | float | 1.0, 0..2 | 1.0, 0..2 | | D/C |
 | `NRLocalStructure` | float | 1.0, 0..2 | 1.0, 0..1 | | D/C |
-| `NRSkinStructure` | float | -1, -1..1 (-1 = follow stock) | 0, 0..1 (negative reads 0) | | D/C |
+| `NRSkinStructure` | float | -1, -1..1 (-1 = follow stock) | 0, 0..1 (negative reads 0); v12.9.9+: 1 (negative reads the default) | 0 protects faces, 1 NVIDIA's stock face treatment (panel 0..100) | D/C |
 | `NRSkinIndependent` | bool | 1 | retired (always on) | | D/C |
 | `NRAutoMask` | bool | 0 | retired (always on) | Character mask | D/C |
 | `NRUICorrection` | bool | 0 | 0 | | D |
@@ -189,6 +292,16 @@ Runtime (probe, `tools/addon-probe`):
 | `NRPresentFgPath` | int | — | beta.48 to v11.9, absent = 0; v12.0.0: retired (read, logged `retired=1`) | 0 the usual Present path with frame generation (`classic`), 1 NR once per real frame at frame generation's call (`contract`, test option). Other values read as 0 | C |
 | `NROpticalFlow` | int | — | v12.0.0+, on by default (schema 12) | Optical flow (`NR-OFA`); not probed, not offered by the app | C |
 | `NRGpuCrashWitness` | int | — | beta.22+ | beta.22: absent/0 off, non-zero DRED breadcrumbs. beta.29: absent = crash watcher on (DRED after a crash), 0 all off, non-zero watcher + DRED from launch | C |
+| `NRPass2HookPoint`..`NRPass4HookPoint` | int | — | v12.9.9+, no default named | 0 same as the pass before, 1 Before Upscaling, 2 After Upscaling, 3 Present (numbered unlike `NRHookPoint`); an earlier point than the pass before's runs at that pass's | C |
+| `NRPass2ResolutionScale`..`NRPass4ResolutionScale` | float | — | v12.9.9+, 0 or 0.33..1 | 0 as pass 1, else the fraction of the output (under 0.33 reads 0.33); a pass at Before Upscaling stays native | C |
+| `NRFrameBuffering` | int | — | v12.9.9+, 0 | 0 Automatic, 1 One frame, 2 Same frame; D3D11 at Present and relayed games | C |
+| `NRUpscaler` | int | — | v12.9.9+, 0 | 0 the game's FSR 3.1 / XeSS, 1 NR's own DLSS SR (DLAA at native size) | C |
+| `NRUpscalerPreset` | int | — | v12.9.9+, 0 | 0 NVIDIA's per mode (K DLAA/Quality/Balanced, M Performance, L Ultra Performance), 1 J, 2 K, 3 L, 4 M | C |
+| `NRLookHaloRemoval` | float | — | v12.9.9+, 0, 0..1 | Takes off NR's bright rims along silhouettes; acts with Fine-tune off | C |
+| `NRFrameGen` | int | — | v13.4.0+, 0 | 0 Off, 1 On (DLSS-G hosted by NR after NR's pass), 2 Dynamic (v13.4: the fixed multiplier); read at the game's start | C |
+| `NRFrameGenMultiplier` | int | — | v13.4.0+, no default named, 0..4 | 2x..6x, clamped to the GPU's limit; not used under Dynamic | C |
+| `NRFrameGenUi` | int | — | v13.4.0+, no default named | 0 Steady (real UI recomposed), 1 Interpolated; read at start | C |
+| `NRHdrScreen` | int | — | v13.4.0+, no default named | 0 HDR10, 1 scRGB (FG on a Windows HDR screen, HDR10 games); read at start | C |
 | `NRToggleKey` / `NRScreenshotKey` / `NRShotKey` | VK | 117 F6 / 116 F5 / 118 F7 | unbound when absent | | D/C |
 
 v10.7 also has Present/HDR keys (`NRPresentEncoding` Auto/SDR/HDR10/scRGB, `NRPresentWhiteSource` Auto/Windows/Game,
@@ -242,9 +355,19 @@ Since the builds went behind the author's Buy Me a Coffee, the public DLSS5 Upda
   v12 (C). The app checks the folders newest generation first and takes the first one with a build, so a late v11 fix never wins
   over v12. A new major's folder has to be added to `Folders` with a release; the folder of the installer each new major ships
   (`updates.mediafire_folder` in its `sources.json`) is the key.
+- **Early Access folder.** v13.4.0's Early Access setup (`sources.json`, static read) keeps `updates.mediafire_folder` `r1xp6x0i043wx` (the
+  regular releases) and adds `updates_dev`: folder `uh4x7j5f7fj2y`, pattern `DLSS5-NR-Dev-Setup-*.exe`, "the newest dev builds, never the
+  regular folder ... (made 11-07, archive inside)" (C). The owner's rule is "always take the newest": the app (`MediaFireClient.DevFolder`) lists
+  the dev folder on every check after the regular folders and takes the newest upload of the two (the regular pick, by the generation rule
+  above, against the dev folder's newest, by the upload rule below). The settings keep remembering the regular folder's key only; a move inside
+  the dev folder is followed for that check. When either listing comes from the cache, the check counts as offline and keeps the library. Going
+  back from an Early Access build to a regular one is the user's choice (pick the build); the app never switches games.
 - **Channel move.** A `channel.json` in the root (fields `notice`, `moved_to`) moves the channel to a new folder key. The app
   follows it once per check, remembers the new key in its settings (checked before the built-in folders) and refuses a loop or a second move.
-- **Candidates.** `DLSS5-NR-Setup-v*.exe`, `DLSS5-NR-*.zip`, `dlss5-nr.addon64`, `dlss5-nr-v*.addon64`. The version comes from
+- **Candidates.** `DLSS5-NR-Setup-v*.exe`, `DLSS5-NR-Dev-Setup-v*.exe`, `DLSS5-NR-*.zip`, `DLSS5-NR-Dev-*.zip`, `dlss5-nr.addon64`,
+  `dlss5-nr-v*.addon64`, `dlss5-nr-dev-v*.addon64` (the dev zip and add-on names are guesses modelled on the regular ones; only the dev setup
+  pattern is documented). The hand-install zip's name (`DLSS5 NR Add-on v13.4.0.zip`, with spaces) is not a channel candidate; it is offered on
+  the author's page, not known in a folder. The version comes from
   the file name (`vN.N.N` with an optional `-alpha.N`/`-beta.N`/`-rc.N`); a major below 11, or a missing hash or `created_utc`, skips
   the file. The newest upload wins, not the highest version. The installer prefers EXE over ZIP over raw add-on on a tie; the app only
   needs the add-on, so it prefers raw over ZIP over EXE.
@@ -255,7 +378,8 @@ Since the builds went behind the author's Buy Me a Coffee, the public DLSS5 Upda
 - **Setup exe.** A Rust PE with a normal DEFLATE ZIP appended after the PE sections (central directory offsets count from the ZIP's
   start; the app also accepts offsets counted from the file start). Entries include `dlss5-nr.addon64` and `package.json`
   (schema 1, `version` `v11.0.0-beta.22`, `kind` `v11`). The app finds the end-of-central-directory record, reads the ZIP in
-  memory and extracts only the root `dlss5-nr.addon64`; the exe is deleted afterwards.
+  memory and extracts only the root `dlss5-nr.addon64`; the exe is deleted afterwards. The Early Access setup has the same layout (C), and
+  from v12.9.9 both also hold `dlss5-nr.addon32` and `nr-host64.exe`, which are not extracted.
 - **Live state (2026-10-18):** the folder lists `DLSS5-NR-Setup-v11.0.0-beta.24.exe` (8,981,402 bytes) and `licenses.txt`.
 - **Live state (2026-10-20):** the root lists `DLSS5-NR-Setup-v11.0.0-beta.48.exe` (9,116,821 bytes), `changelog-v11.0.0-beta.48.txt` and
   `licenses.txt`. Two subfolders appeared: `addon` (the raw beta.48 `dlss5-nr.addon64`) and `archive` (older setups beta.18..beta.45,
@@ -266,6 +390,9 @@ Since the builds went behind the author's Buy Me a Coffee, the public DLSS5 Upda
   `changelog-v12.0.0.txt`, `licenses.txt` and an `addon` subfolder. The setup holds one root `dlss5-nr.addon64` (sha256 `124cd5a76b71…`,
   the checked v12.0.0 build) with the three strings the app recognises v11+ by (C). Release 3.1.0 only read the `v11` folder, so it
   stayed at v11.9.0.
+- **Live state (2026-11-17): not checked.** The v12.9.9 and v13.4.0 packages were checked from copies the owner provided; MediaFire was not
+  called. Which files the regular and the dev folder list now (setup exes only, or also zips or raw add-ons, and whether either has a
+  `channel.json`) is open.
 - **In the app (private build only).** The listing is cached under `%LocalAppData%\DLSS5Updater\cache` (ETag/Last-Modified sent when present). One
   listing per folder until one has a build, requests in sequence. The add-on goes through the normal import (labels, generation, dedupe by SHA-256) and
   never writes the default (see "Default build"). Games are never switched. Offline, a broken listing or an
@@ -283,10 +410,14 @@ Per-game build picks are untouched.
 
 ## App support
 
-DLSS5 Updater downloads and installs the add-on automatically from the catalog mirror (`neural.lecram`; the file itself decides v10 or v11) or imports it (the private build can also fetch v11 builds from the author's channel, see "Update source") and installs it per game in ReShade-only mode, with the same
+DLSS5 Updater downloads and installs the add-on automatically from the catalog mirror (`neural.lecram`; the file itself decides v10 or v11) or imports it (the private build can also fetch v11-generation builds, regular and Early Access, from the author's channel, see "Update source") and installs it per game in ReShade-only mode (64-bit Direct3D 11, Direct3D 12 and Vulkan games; see "Host and 32-bit"), with the same
 prerequisites as ShortFuse's add-on: ReShade 6+, a game with native DLSS and the NR runtime `nvngx_dlssnr.dll`. It excludes
 OptiScaler-NR and Deep Fried Chicken. It is not added to `[ADDON] LoadFromDllMain`, since nothing here shows it needs early load.
 
+- **Import.** The add-on file itself (`renodx-dlss5.addon64` or `dlss5-nr.addon64`), or one of the author's packages: a setup exe
+  (`DLSS5-NR-Setup-v*.exe`, `DLSS5-NR-Dev-Setup-v*.exe`) or the hand-install zip (`DLSS5 NR Add-on v*.zip`). From a package the app takes only
+  the root `dlss5-nr.addon64` (the same appended-ZIP reader as the channel; the exe is never run) and imports it like the file; the 32-bit
+  add-on and the `dlss5-nr-host` folder (with its own copy of the add-on) are left out, and a package without a root add-on is refused.
 - **Library.** Every imported build is kept: `components\lecram-dlss5\<sha256>\<file name>` plus a `version.json` (id = SHA-256,
   file name, file version, generation V10/V11, detected build label, the user's own label, import date). Importing the same file
   again changes nothing, an import never deletes another build, and Remove deletes the selected one. The first run after the
@@ -303,13 +434,16 @@ OptiScaler-NR and Deep Fried Chicken. It is not added to `[ADDON] LoadFromDllMai
   NR injectors (`renodx-dlssfix`, Deep Fried Chicken) are moved aside too. Uninstall restores everything. ShortFuse's add-on is left alone.
 - **Keys written.** Only the options set in Settings, only to `[RenoDX.DLSS5]`, only while the add-on is installed. Options that
   exist in one generation only are hidden for the other (v10 only: `NRAutoMask`; v11 only: `NeuralUplift`, `NRPreset`,
-  `NRPass2Preset`..`NRPass4Preset`, `NRVramBuffering`, `NRGpuCrashWitness`, `NRPresentFgPath`); `NRHookPoint`, `NRStyle`, `NRLocalStructure`, `NRSkinStructure` and `NRPresentGuides` offer
+  `NRPass2Preset`..`NRPass4Preset`, `NRVramBuffering`, `NRGpuCrashWitness`, `NRPresentFgPath` and every v12.9.9 / v13.4.0 key below); `NRHookPoint`, `NRStyle`, `NRLocalStructure`, `NRSkinStructure` and `NRPresentGuides` offer
   per-generation values. Within v11 the options only offer values that mean the same in beta.6 through beta.48
   (`NRPresentGuides` 1/2, not 0), so there is no per-build choice variant; `NRFeedMode` (1/2) is offered for both generations and
   beta.6 ignores it. Keys only later v11 builds read are tied to the first checked build that has them (`LecramIni`): GPU crash
   reports (Off 0, On 1) from beta.22, the pass presets (offered 0..2, Old and New of 310.9.16) from beta.29, Present with frame
-  generation (0, or 1 as a test) from beta.48. Keys a later build retired are tied to that build the same way (Present with frame
-  generation is retired from v12.0.0). For an older build (by its detected label), or one that retired the key, the option is hidden
+  generation (0, or 1 as a test) from beta.48; from v12.9.9 the pass hook points (0..3) and resolutions (0, 0.33..1), frame buffering
+  (0..2), the upscaler (0/1) and its DLSS preset (0..4) and halo removal (0..1); from v13.4.0 NR's frame generation (0..2), its multiplier
+  (0..4 = 2x..6x), the UI in generated frames (0/1) and frame generation on HDR screens (0/1), so a v12 build never gets the frame
+  generation keys. Keys a later build retired are tied to that build the same way (Present with frame
+  generation is retired from v12.0.0; nothing the app writes is retired in v12.9.9 or v13.4.0). For an older build (by its detected label), or one that retired the key, the option is hidden
   and the key is not written; a key the app wrote is removed when the game moves to a build that doesn't read it, unless you changed
   it since. A build
   without a readable label gets every v11 key. Because v11 resets `NRHookPoint` once in a v10-era ini, a hook point set here has to be applied again
