@@ -176,6 +176,18 @@ public sealed class AddonLibraryTests : IDisposable
     }
 
     [Fact]
+    public void Label_ReadsTheV14Dev3Layout()
+    {
+        // v14.0.0 Dev3 carries v14.0.0 ten times: glued to "NR on", bare, and followed by " Dev3" or " Dev3 (14.0.0)" in its build, patch
+        // and label log fields and its description. The dev build's number is no part of the label; nothing higher than v14.0.0.
+        Assert.Equal("v14.0.0", Label("event=restart retained=1\0v14.0.0NR onNR off\0build=v14.0.0 Dev3 (14.0.0)\n" +
+                                      "patch=\"v14.0.0 Dev3\" observe_only=0 label=\"v14.0.0 Dev3 (14.0.0)\"\0v14.0.0\0v14.0.0 Dev3\0" +
+                                      "v14.0.0 Dev3 (14.0.0): ReShade's menu key\0v4.0.30319\0"));
+        var v1400 = LecramV11("v14.0.0NR on\0v14.0.0 Dev3\0v14.0.0", frameworkNoise: false);
+        Assert.Equal((LecramGeneration.V11, "v14.0.0"), (v1400.Generation, v1400.DetectedLabel));
+    }
+
+    [Fact]
     public void Label_IsNeverTheDlssSdkVersion()
     {
         // Older v10 builds hold no label of their own, only the DLSS SDK's v310.8.0.

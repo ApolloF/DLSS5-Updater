@@ -39,6 +39,10 @@ public static class LecramIni
         ["NRFrameGenMultiplier"] = "v13.4.0",
         ["NRFrameGenUi"] = "v13.4.0",
         ["NRHdrScreen"] = "v13.4.0",
+        ["NRFrameGenVSync"] = "v14.0.0",
+        ["NRUpscalerMode"] = "v14.0.0",
+        ["NRSafeMode"] = "v14.0.0",
+        ["NRSdrHdr"] = "v14.0.0",
     };
 
     /// <summary>v11 only: v10.7 does not read these (every key a later v11-generation build added included).</summary>
@@ -46,10 +50,14 @@ public static class LecramIni
         ["NeuralUplift", "NRPreset", "NRVramBuffering", .. FirstV11Build.Keys],
         StringComparer.OrdinalIgnoreCase);
 
-    /// <summary>v11-generation keys a later build no longer acts on, by the first checked build that retired them (it still reads them and logs <c>retired=1</c>).</summary>
+    /// <summary>
+    /// v11-generation keys a later build no longer acts on, by the first checked build that retired them (it still reads them and logs
+    /// <c>retired=1</c>, or its catalog logs a non-default value once and ignores it).
+    /// </summary>
     private static readonly Dictionary<string, string> RetiredIn = new(StringComparer.OrdinalIgnoreCase)
     {
         ["NRPresentFgPath"] = "v12.0.0",
+        ["NRHdrScreen"] = "v14.0.0",
     };
 
     /// <summary>The first build whose default ForeignNr=auto keeps running next to another NR producer such as ShortFuse's add-on.</summary>

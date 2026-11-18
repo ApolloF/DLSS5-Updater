@@ -200,16 +200,18 @@ public static partial class SettingsOptions
     ];
 
     // Keys, defaults and ranges from docs/addons/lecram-dlss5.md (v10.7 and v11.0.0-beta.6 / beta.18 / beta.22 / beta.29 / beta.45 /
-    // beta.48 read from the binaries and probed; v11.9.0, v12.0.0, v12.9.9 and v13.4.0 from their settings catalog and panel texts).
+    // beta.48 read from the binaries and probed; v11.9.0, v12.0.0, v12.9.9, v13.4.0 and v14.0.0 from their settings catalog and panel texts).
     // Values the docs don't confirm are not offered. Options of one generation only are hidden for the other (LecramIni.IsAvailable) and
     // keys whose choices differ per generation carry a variant (IniOptionViewModel.In). Within v11 only values that mean the same in
     // beta.6 and beta.18+ are offered (NRPresentGuides 0 flipped meaning, so it is not), so no per-build choice variant is needed; keys an
     // older v11 build lacks (NRGpuCrashWitness before beta.22, NRPass2..4Preset before beta.29, NRPresentFgPath before beta.48, the
-    // per-pass hook point and resolution, frame buffering, the upscaler and halo removal before v12.9.9, frame generation before v13.4.0)
-    // are hidden and not written for it, and so are keys a later build retired (NRPresentFgPath from v12.0.0). NRMaskBlendMode (raw NGX
+    // per-pass hook point and resolution, frame buffering, the upscaler and halo removal before v12.9.9, frame generation before v13.4.0,
+    // VSync, DLSS mode, SDR to HDR and Safe mode before v14.0.0) are hidden and not written for it, and so are keys a later build retired
+    // (NRPresentFgPath from v12.0.0, NRHdrScreen from v14.0.0). NRMaskBlendMode (raw NGX
     // value, undocumented) and v12's NROpticalFlow (unprobed; the app writes ConfigVersion=11) are not offered.
     // Not exposed: the other Present/HDR, normalisation, Look (Fine-tune), model-lab, layer, per-pass look, Input lab, experimental and
-    // screenshot keys, which are tuned in the add-on's own overlay.
+    // screenshot keys, which are tuned in the add-on's own overlay; v14's SDR to HDR sliders, optical flow level and grid, Engine inputs,
+    // Game mode, the new hotkeys and its migration markers likewise.
     public static IniOptionViewModel[] Lecram(ObservableCollection<IniOverride> rs) =>
     [
         new IniOptionViewModel("Neural rendering", "Master switch of the neural model (v11 and newer).", LecramIni.Section, "NeuralUplift", rs,
@@ -356,7 +358,7 @@ public static partial class SettingsOptions
             C("Add-on default", null, "Leave the add-on's own choice (0, Off)."),
             C("Off", "0", "NR hosts nothing and loads no NVIDIA file. The add-on's default."),
             C("On", "1", "DLSS Frame Generation through Streamline at the multiplier below; NR runs on every real frame, never on a generated one."),
-            C("Dynamic", "2", "NVIDIA's dynamic multiplier where supported, else On. v13.4 doesn't have it yet and uses the fixed multiplier.")).About("lc-framegen"),
+            C("Dynamic", "2", "NVIDIA's Dynamic Multi Frame Generation where supported, else On: generated frames follow the game's frame rate up to your refresh rate. v13.4 doesn't have it yet and uses the fixed multiplier.")).About("lc-framegen"),
         new IniOptionViewModel("Frame multiplier", "Frames shown per real frame with NR's frame generation (v13.4 and newer).", LecramIni.Section, "NRFrameGenMultiplier", rs,
             C("Add-on default", null, "Leave the add-on's own choice."),
             C("2x", "0", "One generated frame per real frame."), C("3x", "1", "Two generated frames."), C("4x", "2", "Three generated frames."),
@@ -365,10 +367,30 @@ public static partial class SettingsOptions
             C("Add-on default", null, "Leave the add-on's own choice."),
             C("Steady", "0", "DLSS-G puts the real UI back on each frame: it never warps and moves at the real frame rate."),
             C("Interpolated", "1", "The UI is generated with the picture: smooth, and it can warp.")).About("lc-fg-ui"),
-        new IniOptionViewModel("Frame generation on HDR screens", "How NR's frame generation reaches a Windows HDR screen in an HDR10 game (v13.4 and newer). Read when the game starts.", LecramIni.Section, "NRHdrScreen", rs,
+        new IniOptionViewModel("Frame generation on HDR screens", "How NR's frame generation reaches a Windows HDR screen in an HDR10 game (v13.4 only; v14 retired it). Read when the game starts.", LecramIni.Section, "NRHdrScreen", rs,
             C("Add-on default", null, "Leave the add-on's own choice."),
             C("HDR10", "0", "NR's swap chain on the screen, as DLSS-G makes it."),
             C("scRGB", "1", "Each frame turned into scRGB on an FP16 swap chain at its native Present.")).About("lc-fg-hdr"),
+        new IniOptionViewModel("VSync for frame generation", "Generated frames paced to your display without tearing (v14 and newer).", LecramIni.Section, "NRFrameGenVSync", rs,
+            C("Add-on default", null, "Leave the add-on's own choice."),
+            C("Off", "0", "NR's frames go out with tearing allowed, as before v14's VSync row."),
+            C("On", "1", "VSync on every route NR hosts while DLSS-G generates, where DLSS-G supports it. Never with Dynamic: the add-on turns one off.")).About("lc-framegen"),
+        new IniOptionViewModel("DLSS mode", "The size a game renders at when NR's own DLSS replaces its FSR 3.1 or XeSS (v14 and newer; only with Upscaler DLSS).", LecramIni.Section, "NRUpscalerMode", rs,
+            C("Add-on default", null, "Leave the add-on's own choice (0, the game's choice)."),
+            C("Game's choice", "0", "NR's DLSS follows the game's render size: DLAA where it renders at full size. The add-on's default."),
+            C("DLAA", "1", "Full size."),
+            C("Ultra Quality", "2", "NVIDIA's DLSS 310 doesn't offer it; the add-on lists only the modes DLSS reports."),
+            C("Quality", "3", "Quality."), C("Balanced", "4", "Balanced."), C("Performance", "5", "Performance."),
+            C("Ultra Performance", "6", "Ultra Performance.")).About("lc-upscaler"),
+        new IniOptionViewModel("SDR to HDR", "Turns an SDR game on a Windows HDR display into HDR with NR's own inverse tone mapping (v14 and newer).", LecramIni.Section, "NRSdrHdr", rs,
+            C("Add-on default", null, "Leave the add-on's own choice (0, Off)."),
+            C("Off", "0", "SDR as Windows shows it. The add-on's default."),
+            C("Balanced", "1", "The add-on's Balanced curve."),
+            C("Bright", "2", "The add-on's Bright curve.")).About("lc-sdrhdr"),
+        new IniOptionViewModel("Safe mode", "Turns off everything beyond NR's core for a game that misbehaves (v14 and newer). Read when the game starts.", LecramIni.Section, "NRSafeMode", rs,
+            C("Add-on default", null, "Leave the add-on's own choice (0, off)."),
+            C("Off", "0", "The add-on's default."),
+            C("On", "1", "The camera finder, the TAA pass input, extended DLSS, call-time guides, frame pairing repair, engine inputs, Game mode and the overlay key off; their own values kept.")).About("lc-safe"),
     ];
 
     private static IniOptionViewModel LecramPassHookPoint(int pass, ObservableCollection<IniOverride> rs) =>
