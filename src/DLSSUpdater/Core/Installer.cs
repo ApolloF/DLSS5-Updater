@@ -394,7 +394,7 @@ public sealed partial class Installer(ComponentStore store)
     /// Why this selection is a poor mix, one line each; empty when it is fine. Never blocks by itself: the user confirms the
     /// lines (<see cref="InstallOptions.ConfirmedConflict"/>), the install goes ahead and the warning stays on the game.
     /// Covers the one-neural-consumer rule (docs/advisor.md, decision table row 18) and OptiScaler's built-in MFG unlock next to
-    /// the MFG Unlock add-on.
+    /// the MFG Unlock add-on, and OptiScaler in a folder the game's exe doesn't run from (<see cref="GameProcess"/>).
     /// </summary>
     /// <param name="latestOptiTag">The newest OptiScaler release, which a run without a pinned build installs.</param>
     public static IReadOnlyList<string> Conflicts(string targetDir, InstallOptions o, string? latestOptiTag = null)
@@ -403,6 +403,7 @@ public sealed partial class Installer(ComponentStore store)
         var found = new List<string>(NrAddons.Conflicts(routes));
         var optiTag = o.OptiTag ?? latestOptiTag;
         if (MfgUnlockConflict(targetDir, WithMfgDefaults(targetDir, o, optiTag), optiTag) is { } mfg) found.Add(mfg);
+        if (o.Opti && !o.ReShadeOnly && GameProcess.OptiScalerFolderWarning(targetDir) is { } folder) found.Add(folder);
         if (InjectsFiles(o) && IsStorePath(targetDir)) found.Add(MethodAdvisor.StoreCaution);
         return found;
     }
