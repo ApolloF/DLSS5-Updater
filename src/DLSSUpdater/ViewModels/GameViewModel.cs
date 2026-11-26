@@ -117,11 +117,12 @@ public sealed partial class GameViewModel : ObservableObject
         {
             if (e.PropertyName != nameof(ComponentRow.Enabled)) return;
             if (c.Key == "opti" && !_loading) Mode = ComponentTable.ModeFor(c.Enabled);
-            if (c.Key is "renodx" or "lecram" or "uplift" && c.Enabled)
-            {
-                Components.First(r => r.Key == "dlssnr").Enabled = true;
-                Components.First(r => r.Key == "reshade").Enabled = true;
-            }
+            // The rows this one needs follow it (ComponentTable.Follow). While loading, only the NR add-ons' rows do, so a loaded
+            // install shows as it is.
+            var id = ComponentTable.Rows.First(r => r.Key == c.Key).Id;
+            if (!_loading || ComponentTable.NrAddonIds.Contains(id))
+                foreach (var (follower, on) in ComponentTable.Follow(id, c.Enabled, Mode))
+                    Components.First(r => r.Key == ComponentTable.KeyOf(follower)).Enabled = on;
             OnPropertyChanged(nameof(AnyEnabled));
             OnPropertyChanged(nameof(RenoDxEnabled));
             OnPropertyChanged(nameof(LecramEnabled));
@@ -750,6 +751,8 @@ public sealed partial class GameViewModel : ObservableObject
         RefreshAddonPairStatus();
         if (_rowsBuilt) RefreshConfigRows();
         RefreshStatus();
+        // Lecram's card follows the build this game uses (its host, whether it runs without DLSS).
+        RefreshAdvice();
     }
 
     partial void OnRenoDxChoiceChanged(DlssChoice? value)
@@ -803,6 +806,7 @@ public sealed partial class GameViewModel : ObservableObject
         _s.Settings.For(Id).DlssNrId = value?.Tag;
         _s.Settings.Save();
         RefreshStatus();
+        RefreshAdvice();
     }
 
     partial void OnDlssChoiceChanged(DlssChoice? value)

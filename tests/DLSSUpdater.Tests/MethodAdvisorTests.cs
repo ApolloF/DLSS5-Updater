@@ -32,6 +32,9 @@ public sealed class MethodAdvisorTests
 
     private static MethodOption Option(MethodAdvice a, Method m) => a.Methods.Single(o => o.Method == m);
 
+    /// <summary>The first neural add-on card: a game with DLSS lists one per NR add-on it can use, the one in the game first.</summary>
+    private static MethodOption FirstNeural(MethodAdvice a) => a.Methods.First(o => o.Method == Method.NeuralAddon);
+
     // ---------- row 1-4: the game has DLSS ----------
 
     [Fact]
@@ -513,16 +516,25 @@ public sealed class MethodAdvisorTests
     }
 
     [Fact]
-    public void NeuralMethod_UsesTheAddonTheTableHasOn_AndNamesItInTheTitle()
+    public void NeuralMethod_InAGameWithDlss_ListsACardPerAddon_TheInstalledOneFirst()
     {
-        var input = Input(Game(dlss: true)) with { InstalledRoutes = [NrAddon.RenoDx], Imported = new HashSet<string> { ComponentRegistry.DlssNr, ComponentRegistry.RenoDx, ComponentRegistry.Lecram } };
-        Assert.Equal("Neural rendering with ShortFuse RenoDX DLSS add-on", Option(MethodAdvisor.Advise(input), Method.NeuralAddon).Title);
+        var input = Input(Game(dlss: true)) with { InstalledRoutes = [NrAddon.Lecram], Imported = new HashSet<string> { ComponentRegistry.DlssNr, ComponentRegistry.RenoDx, ComponentRegistry.Lecram } };
 
-        var neural = Option(MethodAdvisor.Advise(input with { AddonsOn = [ComponentRegistry.Lecram] }), Method.NeuralAddon);
+        var cards = MethodAdvisor.Advise(input).Methods.Where(m => m.Method == Method.NeuralAddon).ToList();
 
-        Assert.Equal([ComponentRegistry.ReShade, ComponentRegistry.DlssNr, ComponentRegistry.Lecram], neural.Components);
-        Assert.Equal(NrAddon.Lecram, neural.Route);
-        Assert.Equal("Neural rendering with Lecram DLSS5 add-on", neural.Title);
+        Assert.Equal(["Neural rendering with Lecram DLSS5 add-on", "Neural rendering with ShortFuse RenoDX DLSS add-on", "Neural rendering with GITC Uplift"],
+            cards.Select(m => m.Title));
+        Assert.Equal([NrAddon.Lecram, NrAddon.RenoDx, NrAddon.Uplift], cards.Select(m => m.Route));
+        Assert.Equal([ComponentRegistry.ReShade, ComponentRegistry.DlssNr, ComponentRegistry.Lecram], cards[0].Components);
+        Assert.All(cards, m => Assert.Equal(InstallMode.ReShadeOnly, m.Mode));
+    }
+
+    [Fact]
+    public void NeuralMethod_WithNothingImported_IsTheUpliftCardAlone()
+    {
+        var cards = Advise(Game(dlss: true)).Methods.Where(m => m.Method == Method.NeuralAddon).ToList();
+
+        Assert.Equal(NrAddon.Uplift, Assert.Single(cards).Route);
     }
 
     [Fact]
@@ -533,13 +545,12 @@ public sealed class MethodAdvisorTests
         var a = MethodAdvisor.Advise(input);
 
         Assert.Contains(18, a.Rows);
-        var neural = Option(a, Method.NeuralAddon);
+        var neural = FirstNeural(a);
         Assert.Equal(Availability.Available, neural.Availability);
         Assert.Equal(NrAddon.Lecram, neural.Route);
         Assert.Contains(ComponentRegistry.Lecram, neural.Components);
         Assert.DoesNotContain(ComponentRegistry.RenoDx, neural.Components);
-        foreach (var m in new[] { Method.NeuralAddon, Method.OptiScalerNr, Method.OptiScaler })
-            Assert.Null(Option(a, m).Warning);
+        Assert.All(a.Methods, m => Assert.Null(m.Warning));
     }
 
     [Fact]
@@ -570,14 +581,14 @@ public sealed class MethodAdvisorTests
     }
 
     [Fact]
-    public void Row18_AnImportedAddonThatIsNotTheInstalledOne_IsNotUsed_TheInstalledOneStays()
+    public void Row18_TheInstalledAddonsCardComesFirst_AnImportedOneIsListedAfterIt()
     {
         var input = Input(Game(dlss: true)) with { InstalledRoutes = [NrAddon.Uplift], Imported = new HashSet<string> { ComponentRegistry.DlssNr, ComponentRegistry.RenoDx } };
 
-        var neural = Option(MethodAdvisor.Advise(input), Method.NeuralAddon);
+        var a = MethodAdvisor.Advise(input);
 
-        Assert.Equal(NrAddon.Uplift, neural.Route);
-        Assert.Null(neural.Warning);
+        Assert.Equal([NrAddon.Uplift, NrAddon.RenoDx], a.Methods.Where(m => m.Method == Method.NeuralAddon).Select(m => m.Route));
+        Assert.All(a.Methods, m => Assert.Null(m.Warning));
     }
 
     [Fact]
@@ -841,13 +852,13 @@ public sealed class MethodAdvisorTests
     }
 
     [Fact]
-    public void Neural_PicksTheFirstImportedAddon_ElseUpliftWhichDownloadsItself()
+    public void Neural_ListsTheImportedAddonFirst_ElseUpliftWhichDownloadsItself()
     {
         var plain = Option(Advise(Game(dlss: true)), Method.NeuralAddon);
-        var imported = Option(MethodAdvisor.Advise(Input(Game(dlss: true)) with
+        var imported = FirstNeural(MethodAdvisor.Advise(Input(Game(dlss: true)) with
         {
             Imported = new HashSet<string> { ComponentRegistry.DlssNr, ComponentRegistry.Lecram },
-        }), Method.NeuralAddon);
+        }));
 
         Assert.Contains(ComponentRegistry.Uplift, plain.Components);
         Assert.Equal(Availability.NeedsSetup, plain.Availability);
@@ -951,12 +962,13 @@ public sealed class MethodAdvisorTests
     }
 
     [Fact]
-    public void Lecram_InAGameWithDlss_StaysTheNeuralCardOfTheNativeRows()
+    public void Lecram_InAGameWithDlss_IsOneNeuralCardOfTheNativeRows_NotAddedTwice()
     {
         var a = AdviseLecram(Game(dlss: true), LecramHost);
 
-        Assert.Single(a.Methods, m => m.Method == Method.NeuralAddon);
-        Assert.Equal(MethodAdvisor.SummaryOf(Method.NeuralAddon), Option(a, Method.NeuralAddon).Summary);
+        var lecram = Assert.Single(a.Methods, m => m.Route == NrAddon.Lecram);
+        Assert.Equal(MethodAdvisor.SummaryOf(Method.NeuralAddon), lecram.Summary);
+        Assert.Equal([LecramTitle, UpliftTitle], a.Methods.Where(m => m.Method == Method.NeuralAddon).Select(m => m.Title));
     }
 
     [Fact]
