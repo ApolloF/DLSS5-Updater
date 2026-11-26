@@ -438,8 +438,9 @@ public static class HelpTopics
         new("max-count", "MFG Unlock", "Max frame count", "The highest multiplier reported to the game; games build their FG menu from it.",
             "The highest multiplier reported to the game (DLSS-G MultiFrameCountMax). Games build their FG menu from it, so 4 shows up to 4x. The add-on accepts 2 to 5; 6x is only reachable through Force frame multiplier."),
         new("dynamic-mfg", "MFG Unlock", "Dynamic MFG", "Lets NVIDIA's runtime pick the multiplier every frame to hold a target frame rate.",
-            "Lets NVIDIA's runtime pick the multiplier every frame to hold a target frame rate. Needs D3D12, nvngx_dlssg.dll 310.9.1 or 310.9.16, the matching " +
-            "Streamline set (2.14.1 / 2.14.16) (see Replace Streamline files), driver 595.41+, and the NVIDIA App's DLSS Frame Generation override set to " +
+            "Lets NVIDIA's runtime pick the multiplier every frame to hold a target frame rate. Needs D3D12 and a runtime that reports Dynamic support. MFG Unlock accepts " +
+            "nvngx_dlssg.dll 310.9.1 or newer with Streamline 2.14 or newer (since its 1.8.5); only 310.9.1 with 2.14.1 and 310.9.16 with 2.14.16 are validated, so the app warns for other pairs. " +
+            "Use one matching Streamline set (see Replace Streamline files), driver 595.41+, and the NVIDIA App's DLSS Frame Generation override set to " +
             "'Use the 3D application setting'. Fully close and restart the game. Takes priority over the forced multiplier."),
         new("dynamic-target", "MFG Unlock", "Dynamic target FPS", "The frame rate Dynamic MFG aims for.",
             "The frame rate Dynamic MFG aims for. Refresh rate follows the display. Ignored while VSync is on."),
@@ -507,7 +508,10 @@ public static class HelpTopics
             "DLSS-G (the default) unlocks 3x and 4x DLSS multi frame generation on RTX 40 cards; it needs a game with DLSS frame generation through Streamline and a modern nvngx_dlssg.dll. " +
             "Intel XeMFG (1.5.0 and newer) runs Intel XeSS frame generation at 2x to 6x on RTX 20, 30, 40 and 50, fed by the game's DLSS-G inputs (or its own XeSS-FG or FSR 3.1 frame generation). It is D3D12 only, " +
             "needs Intel's libxess_fg.dll and libxell.dll beside the game exe (install them from the panel: Diagnostics, Intel runtime files) and does not work in exclusive fullscreen: use borderless or windowed. " +
-            "Other games are not affected. Turn it off on RTX 50 (it has MFG natively), on cards without frame generation, or when the game misbehaves with frame generation forced."),
+            "Other games are not affected. Turn it off on RTX 50 (it has MFG natively), on cards without frame generation, or when the game misbehaves with frame generation forced. " +
+            "Since 1.11.0 its panel also has a performance overlay (off, Shift+F10), and since 1.12.0 a DLSS 5 tab where MFG Unlock runs NVIDIA's neural rendering itself (off by default, needs nvngx_dlssnr.dll beside the game exe). " +
+            "The app never turns either on or writes MFGAdaUnlock.ini. Keep MFG Unlock's own DLSS 5 off whenever OptiScaler's NR, GITC Uplift, Lecram or the RenoDX DLSS add-on is in the game: " +
+            "two neural routes hook the same NGX calls, and MFG Unlock only stands aside for add-ons with dlss5 in their file name or ones that create NR through NVIDIA's runtime."),
         new("comp-dlssnr", "Components", "NR runtime", "NVIDIA's DLSS 5 neural rendering model (nvngx_dlssnr.dll), needed by every NR route.",
             "NVIDIA's DLSS 5 neural rendering model, nvngx_dlssnr.dll. The app downloads it automatically into Settings, Local components; you can also import your own. " +
             "NVIDIA's original needs an RTX 50 card; for RTX 20/30/40 use a compat build (import it if it isn't in the library). OptiScaler's NR and every NR add-on need it. " +

@@ -179,6 +179,7 @@ public sealed partial class Installer(ComponentStore store)
         var mfgPlan = o.Mfg ? PlanMfg(game, o, dlss, FileUtil.ParseTag(store.Streamline?.Tag)) : null;
         if (mfgPlan?.Skip is { } skip) Log.Info($"{game.Name}: MFG Unlock skipped. {skip}");
         foreach (var w in mfgPlan?.Warnings ?? []) Log.Warn($"{game.Name}: {w}");
+        if (mfgPlan?.Install == true && MfgConfig.Warning(o.MfgTag ?? store.Mfg?.Tag) is { } mfgWarning) Log.Warn($"{game.Name}: {mfgWarning}");
         if (mfgPlan?.SwapStreamline == true) Log.Info($"{game.Name}: Dynamic MFG needs the matching Streamline set, so the game's sl.*.dll files are replaced too");
         var mfg = mfgPlan?.Install == true ? await store.EnsureMfgAsync(o.MfgTag, progress, ct) : null;
         var swapSl = o.Streamline || mfgPlan?.SwapStreamline == true;

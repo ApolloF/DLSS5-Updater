@@ -9,10 +9,11 @@ public sealed record MfgPlan(string? Skip, bool SwapStreamline, IReadOnlyList<st
 }
 
 /// <summary>
-/// The Streamline / DLSS-G requirements of mavismmg's MFG Unlock add-on (README, checked 2026-10-18):
+/// The Streamline / DLSS-G requirements of mavismmg's MFG Unlock add-on (README and docs/settings.md of 1.12.1, checked 2026-11-26):
 /// it only unlocks multi-frame generation that the game already ships through Streamline DLSS-G, needs an
-/// nvngx_dlssg.dll from 310.x on, and Dynamic MFG additionally needs one of the validated DLSS-G + Streamline pairs
-/// with every sl.*.dll from the same package.
+/// nvngx_dlssg.dll from 310.x on, and Dynamic MFG is validated with the listed DLSS-G + Streamline pairs
+/// with every sl.*.dll from the same package. Since 1.8.5 the add-on itself accepts 310.9.1 or newer with Streamline 2.14 or newer
+/// and leaves the rest to the runtime's support bit; the app stays with the validated pairs and warns for anything else.
 /// </summary>
 public static class MfgCompat
 {
@@ -57,7 +58,7 @@ public static class MfgCompat
         if (dynamic)
         {
             if (pair.DlssG is null || !pair.Dynamic)
-                warnings.Add($"Dynamic MFG needs nvngx_dlssg.dll 310.9.1 or 310.9.16; this game will have {FileUtil.Format(dlssG)}. Pin DLSS to one of them.");
+                warnings.Add($"Dynamic MFG is only validated with nvngx_dlssg.dll 310.9.1 or 310.9.16; this game will have {FileUtil.Format(dlssG)}. Pin DLSS to one of them.");
             else if (!after.Any(s => s.Where(f => CoreSlFiles.Contains(f.Name, StringComparer.OrdinalIgnoreCase)).All(f => Build(f.Version) == Build(pair.Streamline))))
                 warnings.Add($"Dynamic MFG needs the complete Streamline {Format(pair.Streamline)} set next to DLSS-G {Format(pair.DlssG)}" +
                              (sdk is null ? ", and no Streamline SDK is available right now." : $"; the available SDK is {Format(sdk)}. Pin DLSS to the build that matches it."));
