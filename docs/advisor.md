@@ -42,6 +42,9 @@ components are all on (or none).
 MFG Unlock (H) is an add-on, not a method (`MethodAdvisor.IsAddOn`): it shows as a checkbox card under the methods ("Add to the
 method you picked") and goes on or off by itself, so picking a method never takes it out and it works with no method picked too.
 It is never the recommended one.
+Since 1.12.0 the add-on can run NR itself (its DLSS 5 tab, `[DLSS5] Enabled` in `MFGAdaUnlock.ini`, off by default). That would be a second neural
+consumer, so the app never writes that file or turns it on, and the `comp-mfg` help topic says to keep it off whenever another NR route
+is in the game (docs/addons/mfg-unlock.md).
 Smooth Motion has no components: it is a driver setting on the game's NVIDIA tab, so its card isn't pickable.
 
 The recommended method (`MethodAdvice.Top`, badged "Recommended") is the first selectable one without a warning. `Rank` puts
