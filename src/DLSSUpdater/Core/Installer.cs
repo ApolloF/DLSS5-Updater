@@ -392,8 +392,8 @@ public sealed partial class Installer(ComponentStore store)
     /// <summary>
     /// Why this selection is a poor mix, one line each; empty when it is fine. Never blocks by itself: the user confirms the
     /// lines (<see cref="InstallOptions.ConfirmedConflict"/>), the install goes ahead and the warning stays on the game.
-    /// Covers the one-neural-consumer rule (docs/advisor.md, decision table row 18), OptiScaler's built-in MFG unlock next to
-    /// the MFG Unlock add-on, and GITC Uplift next to the MFG Unlock add-on (<see cref="UpliftMfgConflict"/>).
+    /// Covers the one-neural-consumer rule (docs/advisor.md, decision table row 18) and OptiScaler's built-in MFG unlock next to
+    /// the MFG Unlock add-on.
     /// </summary>
     /// <param name="latestOptiTag">The newest OptiScaler release, which a run without a pinned build installs.</param>
     public static IReadOnlyList<string> Conflicts(string targetDir, InstallOptions o, string? latestOptiTag = null)
@@ -402,18 +402,9 @@ public sealed partial class Installer(ComponentStore store)
         var found = new List<string>(NrAddons.Conflicts(routes));
         var optiTag = o.OptiTag ?? latestOptiTag;
         if (MfgUnlockConflict(targetDir, WithMfgDefaults(targetDir, o, optiTag), optiTag) is { } mfg) found.Add(mfg);
-        if (o.Uplift && (o.Mfg || (o.KeepMfg && InstallManifest.Read(targetDir)?.Mfg == true))) found.Add(UpliftMfgConflict);
         if (InjectsFiles(o) && IsStorePath(targetDir)) found.Add(MethodAdvisor.StoreCaution);
         return found;
     }
-
-    /// <summary>
-    /// GITC Uplift hooks swap-chain creation, so the game's swap chain goes past Streamline: MFG Unlock's frame generation stops
-    /// (MFG Unlock 1.12.1 notes, Kingdom Come: Deliverance II) and Unreal Engine games with their own Streamline can fail to
-    /// create it at all (Phantom Blade Zero: "Failed to create swap chain", 887A0002, then a crash at start).
-    /// </summary>
-    public const string UpliftMfgConflict =
-        "GITC Uplift and the MFG Unlock add-on don't work together: Uplift creates the game's swap chain past Streamline, so MFG Unlock's frame generation breaks and some Unreal Engine games crash at start. Leave MFG Unlock off with GITC Uplift.";
 
     private static bool InjectsFiles(InstallOptions o) => o.Opti || o.ReShade || o.Mfg || o.DlssNr || o.RenoDx || o.Lecram || o.Uplift;
 

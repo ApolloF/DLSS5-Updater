@@ -1516,16 +1516,6 @@ public class InstallerTests : IDisposable
         Assert.Equal(InstallMode.OptiScaler, m.Mode);
     }
 
-    [Fact]
-    public void UpliftWithMfgUnlock_IsAConflictToConfirm()
-    {
-        var o = new InstallOptions { Mode = InstallMode.ReShadeOnly, ReShade = true, Uplift = true, DlssNr = true, Mfg = true, Proxy = "dxgi.dll" };
-
-        Assert.Contains(Installer.UpliftMfgConflict, Installer.Conflicts(_target, o));
-        Assert.DoesNotContain(Installer.UpliftMfgConflict, Installer.Conflicts(_target, o with { Mfg = false }));
-        Assert.DoesNotContain(Installer.UpliftMfgConflict, Installer.Conflicts(_target, o with { Uplift = false }));
-    }
-
     [Theory]
     [InlineData(false)]
     [InlineData(true)]
