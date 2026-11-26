@@ -109,8 +109,6 @@ public sealed record AdvisorInput(GameInfo Game, GpuInfo Gpu)
     public LecramBuildInfo? Lecram { get; init; }
     /// <summary>The neural routes already in the game (<see cref="NrAddons.PresentIn"/>).</summary>
     public IReadOnlyList<NrAddon> InstalledRoutes { get; init; } = [];
-    /// <summary>The NR add-ons (component ids) switched on in the game page's table: the neural rendering card uses the one the table has on.</summary>
-    public IReadOnlyList<string> AddonsOn { get; init; } = [];
 }
 
 /// <summary>
@@ -122,7 +120,8 @@ public static class MethodAdvisor
 {
     /// <summary>
     /// MFG Unlock adds frame generation next to the upscaler or NR route, and the installer combines it with every mode
-    /// (OptiScaler + MFG, ReShade + Lecram + MFG, ...), so picking a method never takes it out.
+    /// (OptiScaler + MFG, ReShade + Lecram + MFG, ...), so picking a method never takes it out. Next to OptiScaler it needs the
+    /// ReShade row (<see cref="ComponentTable.Follow"/>).
     /// </summary>
     public static bool IsAddOn(Method m) => m == Method.MfgUnlock;
 
@@ -280,7 +279,7 @@ public static class MethodAdvisor
             if (c.Native)
             {
                 list.Add(DlssUpdate(c, "Newest DLSS files (Resident Evil 4 and Requiem ship DLSS)."));
-                list.Add(Neural(c, "NR on the game's own DLSS.", refw));
+                list.AddRange(Neural(c, "NR on the game's own DLSS.", refw));
                 list.Add(OptiNr(c, "OptiScaler's NR build on the game's DLSS."));
             }
             else
@@ -400,6 +399,8 @@ public static class MethodAdvisor
     /// </summary>
     private static void AddLecramWithoutDlss(Ctx c, List<MethodOption> list)
     {
+        // A game with DLSS already lists Lecram's card among its neural cards (Neural).
+        if (list.Any(m => m.Route == NrAddon.Lecram)) return;
         var uplift = list.FindIndex(m => m.Method == Method.NeuralAddon && m.Title == NoDlssTitle);
         if (uplift < 0 || c.In.Lecram is not { } build || c.Api is GraphicsApis.Vulkan or GraphicsApis.Dx8) return;
         var title = $"Neural rendering with {ComponentTable.NameOf(ComponentRegistry.Lecram)}";
@@ -444,13 +445,13 @@ public static class MethodAdvisor
         }
         else if (dx11)
         {
-            list.Add(Neural(c, "NR on the game's DLSS. DX11 needs an add-on build that supports DX11 itself (renodx-dlss5 8.x or newer); the app doesn't check which build you have.",
+            list.AddRange(Neural(c, "NR on the game's DLSS. DX11 needs an add-on build that supports DX11 itself (renodx-dlss5 8.x or newer); the app doesn't check which build you have.",
                 null, unverified: true, unverifiedWhy: "DX11 support isn't checked against your add-on build"));
             list.Add(OptiNr(c, "OptiScaler's NR build on the game's DLSS."));
         }
         else
         {
-            list.Add(Neural(c, "NR on top of the game's own DLSS.", null));
+            list.AddRange(Neural(c, "NR on top of the game's own DLSS.", null));
             list.Add(OptiNr(c, "OptiScaler's NR build; the better pick for games that churn their NGX features (Cyberpunk-style)."));
             list.Add(Opti(c, "Only for FSR/XeSS or frame-generation tweaks."));
         }
@@ -555,24 +556,30 @@ public static class MethodAdvisor
     private static string? NrRuntimeNeed(Ctx c) =>
         c.Has(ComponentRegistry.DlssNr) ? null : "nvngx_dlssnr.dll (downloaded automatically at the next update check, or import it)";
 
-    private static MethodOption Neural(Ctx c, string reason, string? extraNeed, bool unverified = false, string? unverifiedWhy = null)
+    /// <summary>
+    /// NR on the game's own DLSS: one card per NR add-on the game can use, so the cards never depend on the rows ticked in the table. The
+    /// add-on already in the game comes first (the install keeps it), then the imported ShortFuse and Lecram add-ons, then GITC Uplift,
+    /// which downloads itself.
+    /// </summary>
+    private static IEnumerable<MethodOption> Neural(Ctx c, string reason, string? extraNeed, bool unverified = false, string? unverifiedWhy = null)
     {
-        // The add-on the table has on (what Install puts in), else the one already in the game (the install keeps it), else the first
-        // one the user has imported, and GITC Uplift downloads itself when none is.
         var addons = new[] { (NrAddon.RenoDx, ComponentRegistry.RenoDx), (NrAddon.Lecram, ComponentRegistry.Lecram), (NrAddon.Uplift, ComponentRegistry.Uplift) };
-        var addon = addons.Select(x => x.Item2).FirstOrDefault(id => c.In.AddonsOn.Contains(id, StringComparer.OrdinalIgnoreCase))
-            ?? addons.Where(x => c.In.InstalledRoutes.Contains(x.Item1)).Select(x => x.Item2).FirstOrDefault()
-            ?? new[] { ComponentRegistry.RenoDx, ComponentRegistry.Lecram }.FirstOrDefault(c.Has) ?? ComponentRegistry.Uplift;
+        var ids = addons.Where(x => c.In.InstalledRoutes.Contains(x.Item1)).Select(x => x.Item2)
+            .Concat(new[] { ComponentRegistry.RenoDx, ComponentRegistry.Lecram }.Where(c.Has))
+            .Append(ComponentRegistry.Uplift)
+            .Distinct();
         var needs = new List<string>();
         if (NrRuntimeNeed(c) is { } nr) needs.Add(nr);
         if (extraNeed is not null) needs.Add(extraNeed);
         var cost = NrCost(c.Gpu);
         if (unverifiedWhy is not null) reason += $" Unverified: {unverifiedWhy}.";
-        var route = addon == ComponentRegistry.RenoDx ? NrAddon.RenoDx : addon == ComponentRegistry.Lecram ? NrAddon.Lecram : NrAddon.Uplift;
-        return Opt(Method.NeuralAddon, needs.Count == 0 ? Availability.Available : Availability.NeedsSetup,
-            $"{reason} {cost}".Trim() + (addon == ComponentRegistry.Uplift ? " GITC Uplift downloads itself; ShortFuse's and Lecram's are imported." : ""),
-            [ComponentRegistry.ReShade, ComponentRegistry.DlssNr, addon], needs, InstallMode.ReShadeOnly, unverified)
-            with { Route = route, Title = $"Neural rendering with {ComponentTable.NameOf(addon)}" };
+        foreach (var addon in ids)
+        {
+            var card = Opt(Method.NeuralAddon, needs.Count == 0 ? Availability.Available : Availability.NeedsSetup,
+                $"{reason} {cost}".Trim() + (addon == ComponentRegistry.Uplift ? " GITC Uplift downloads itself; ShortFuse's and Lecram's are imported." : ""),
+                [ComponentRegistry.ReShade, ComponentRegistry.DlssNr, addon], needs, InstallMode.ReShadeOnly, unverified);
+            yield return card with { Route = addons.First(x => x.Item2 == addon).Item1, Title = $"Neural rendering with {ComponentTable.NameOf(addon)}" };
+        }
     }
 
     private static MethodOption OptiNr(Ctx c, string reason)

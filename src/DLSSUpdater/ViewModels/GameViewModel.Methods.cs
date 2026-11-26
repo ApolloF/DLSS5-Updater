@@ -68,8 +68,6 @@ public sealed partial class GameViewModel
     [NotifyPropertyChangedFor(nameof(HasCustomSelection))]
     private string? _customSelection;
     public bool HasCustomSelection => CustomSelection is not null;
-    /// <summary>The input of the last advice, so a change of NR add-on in the table can re-advise without reading the disk again.</summary>
-    private AdvisorInput? _adviceInput;
 
     public bool HasAdviceBlocked => AdviceBlocked is not null;
     /// <summary>
@@ -112,23 +110,23 @@ public sealed partial class GameViewModel
             Imported = imported,
             Lecram = store.LecramBuildFor(EffectiveLecramId) is { } lecram ? LecramBuildInfo.Of(lecram) : null,
             InstalledRoutes = NrAddons.PresentIn(target, Manifest),
-            AddonsOn = AddonsOn(),
         };
     }
 
-    /// <summary>Recomputes the panel. Cheap and pure; called after a load, an install, and when the GPU or the catalog arrive.</summary>
+    /// <summary>
+    /// Recomputes the panel from the game, the GPU, the catalog and the library, never from the rows ticked in the table, so ticking rows
+    /// never changes which cards are listed. Called after a load, an install, a library change and when the GPU or the catalog arrive.
+    /// </summary>
     public void RefreshAdvice()
     {
         MethodAdvice advice;
         try
         {
-            _adviceInput = AdviceInput();
-            advice = MethodAdvisor.Advise(_adviceInput);
+            advice = MethodAdvisor.Advise(AdviceInput());
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or UnsafeManifestException)
         {
             Log.Info($"{Name}: method advice not computed ({ex.Message})");
-            _adviceInput = null;
             advice = new MethodAdvice([], [], null);
         }
         ShowAdvice(advice);
@@ -137,9 +135,12 @@ public sealed partial class GameViewModel
     private void ShowAdvice(MethodAdvice advice)
     {
         var top = advice.Top;
-        var keep = Methods.FirstOrDefault(m => m.IsPicked)?.Option.Method;
-        var rows = advice.Choices.Select(m => new MethodRow(m, ReferenceEquals(m, top), advice.Caution)).ToList();
-        var addOns = advice.AddOns.Select(m => new MethodRow(m, false, advice.Caution)).ToList();
+        var keep = Methods.FirstOrDefault(m => m.IsPicked)?.Option;
+        var open = Methods.Concat(AddOns).Where(m => m.IsExpanded).Select(m => m.Option).ToList();
+        MethodRow Row(MethodOption m, bool isTop) =>
+            new(m, isTop, advice.Caution) { IsExpanded = open.Any(o => MethodMatch.SameCard(o, m)) };
+        var rows = advice.Choices.Select(m => Row(m, ReferenceEquals(m, top))).ToList();
+        var addOns = advice.AddOns.Select(m => Row(m, false)).ToList();
         Methods.Clear();
         foreach (var r in rows) Methods.Add(r);
         AddOns.Clear();
@@ -175,17 +176,16 @@ public sealed partial class GameViewModel
         }
         if (!row.IsSelectable) return;
         SelectMethod(row, Methods.FirstOrDefault(m => m.IsPicked));
-        SyncPick(row.Option.Method);
+        SyncPick(row.Option);
     }
 
     /// <summary>
     /// Marks the card the component table installs (<see cref="MethodMatch.Picked"/>; the card clicked last only breaks a tie), fills
     /// each card's "Turns on" line and the picked card's "Also on" line, or the custom-selection line when no card matches. Runs
-    /// after a refresh and whenever the user changes the mode or a component by hand.
+    /// after a refresh and whenever the user changes the mode or a component by hand. It never changes which cards are listed.
     /// </summary>
-    private void SyncPick(Method? clicked)
+    private void SyncPick(MethodOption? clicked)
     {
-        if (NeuralCardIsStale()) return;
         var table = Table();
         var picked = MethodMatch.Picked(Methods.Select(m => m.Option), table, Mode, clicked);
         var outside = MethodMatch.Outside(picked, AddOns.Where(AddOnOn).Select(a => a.Option), table);
@@ -194,36 +194,17 @@ public sealed partial class GameViewModel
         {
             m.IsPicked = ReferenceEquals(m.Option, picked);
             m.AlsoOn = m.IsPicked ? also : null;
-            m.TurnsOn = TurnsOnText(m.Option);
+            m.TurnsOn = MethodMatch.TurnsOnText(m.Option, Mode, RowName);
         }
         foreach (var a in AddOns)
         {
             a.IsPicked = AddOnOn(a);
-            a.TurnsOn = TurnsOnText(a.Option);
+            a.TurnsOn = MethodMatch.TurnsOnText(a.Option, Mode, RowName);
         }
         CustomSelection = picked is null ? also : null;
     }
 
-    private void SyncPick() => SyncPick(Methods.FirstOrDefault(m => m.IsPicked)?.Option.Method);
-
-    /// <summary>
-    /// The neural rendering card names the add-on it installs. When the table has another NR add-on on, the card is advised again
-    /// with that one (reusing the last input, so no disk reads); the refresh marks the pick.
-    /// </summary>
-    private bool NeuralCardIsStale()
-    {
-        if (_adviceInput is null || Methods.FirstOrDefault(m => m.Option.Method == Method.NeuralAddon) is not { IsSelectable: true } neural) return false;
-        var on = AddonsOn();
-        if (on.Count == 0 || on.SequenceEqual(_adviceInput.AddonsOn) || on.Any(id => neural.Option.Components.Contains(id, StringComparer.OrdinalIgnoreCase))) return false;
-        _adviceInput = _adviceInput with { AddonsOn = on };
-        ShowAdvice(MethodAdvisor.Advise(_adviceInput));
-        return true;
-    }
-
-    /// <summary>The NR add-ons switched on in the table.</summary>
-    private IReadOnlyList<string> AddonsOn() =>
-        [.. new[] { ComponentRegistry.RenoDx, ComponentRegistry.Lecram, ComponentRegistry.Uplift }
-            .Where(id => TableRowOf(id) is { Visible: true, Enabled: true })];
+    private void SyncPick() => SyncPick(Methods.FirstOrDefault(m => m.IsPicked)?.Option);
 
     private Dictionary<string, TableRow> Table()
     {
@@ -238,27 +219,21 @@ public sealed partial class GameViewModel
     /// <summary>The name the table shows for a component (the OptiScaler row is named after its build).</summary>
     private string RowName(string id) => TableRowOf(id)?.Name ?? ComponentTable.NameOf(id);
 
-    private string TurnsOnText(MethodOption m)
-    {
-        if (!m.Selectable) return "";
-        var text = "Turns on: " + MethodMatch.Names(m.Components, RowName);
-        return m.Mode == InstallMode.ReShadeOnly ? $"{text}. Turns off: {RowName(ComponentRegistry.OptiScaler)}" : text;
-    }
-
     /// <summary>
-    /// Turns on the rows of the method (and the install mode it needs, which ticks or unticks the OptiScaler row), and turns off the rows only the <paramref name="previous"/>
-    /// card used, so switching from OptiScaler + MFG to OptiScaler leaves MFG off. Nothing is installed until the user presses Install.
+    /// Turns on the rows of the method (and the install mode it needs, which ticks or unticks the OptiScaler row), and turns off what
+    /// <see cref="MethodMatch.TurnsOff"/> says: the rows only the <paramref name="previous"/> card used (so switching from OptiScaler NR to
+    /// OptiScaler leaves the NR runtime off) and the other NR add-ons, keeping what the add-ons that are on need. Nothing is installed
+    /// until the user presses Install.
     /// </summary>
     private void SelectMethod(MethodRow row, MethodRow? previous)
     {
         if (!row.IsSelectable) return;
+        var off = MethodMatch.TurnsOff(row.Option, ReferenceEquals(previous, row) ? null : previous?.Option, AddOns.Where(AddOnOn).Select(a => a.Option), Mode);
         if (row.Option.Mode is { } mode && mode != Mode) Mode = mode;
         foreach (var id in row.Option.Components)
             if (EditableRow(id) is { } component) component.Enabled = true;
-        if (previous is not null && !ReferenceEquals(previous, row))
-            foreach (var id in previous.Option.Components.Except(row.Option.Components, StringComparer.OrdinalIgnoreCase))
-                if (EditableRow(id) is { } component) component.Enabled = false;
-        // The NR add-ons exclude each other: the one the method picked stays, the others go (see NrAddons).
+        foreach (var id in off)
+            if (EditableRow(id) is { } component) component.Enabled = false;
         RefreshStatus();
         OnPropertyChanged(nameof(AnyEnabled));
     }
@@ -270,7 +245,10 @@ public sealed partial class GameViewModel
         return row.IsSelectable && rows.Count > 0 && rows.All(c => c!.Enabled);
     }
 
-    /// <summary>Switches an add-on's components on or off. The picked method, its mode and its components stay as they are.</summary>
+    /// <summary>
+    /// Switches an add-on's components on or off; the rows they need follow (<see cref="ComponentTable.Follow"/>: ReShade for MFG Unlock
+    /// next to OptiScaler). Turning it off leaves those rows as they are. The picked method, its mode and its components stay as they are.
+    /// </summary>
     private void ToggleAddOn(MethodRow row)
     {
         if (!row.IsSelectable) return;

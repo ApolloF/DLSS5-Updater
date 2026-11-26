@@ -386,7 +386,8 @@ public sealed partial class MainViewModel : ObservableObject
             : auto ? "auto-download" : "not imported";
         // An imported ReShade doesn't follow releases, so there is nothing new to point at.
         ReShadeNews.Load(auto ? store.ReShade : null);
-        foreach (var g in Games) { g.RebuildNrChoices(); g.RebuildAddonChoices(); g.RefreshStatus(); }
+        // An import or a new download changes which cards are possible (the NR runtime, the add-ons in the library).
+        foreach (var g in Games) { g.RebuildNrChoices(); g.RebuildAddonChoices(); g.RefreshStatus(); g.RefreshAdvice(); }
         SettingsVm.ReloadReleaseChoices();
         CountUpdates();
         OnPropertyChanged(nameof(LecramVersion));

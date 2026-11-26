@@ -358,7 +358,7 @@ public sealed class MethodPickTests : IDisposable
     }
 
     [Fact]
-    public void SwitchingTheNrAddOnInTheTable_RenamesTheNeuralCard()
+    public void SwitchingTheNrAddOnInTheTable_KeepsTheNeuralCard_AndShowsTheCustomSelection()
     {
         var root = Path.Combine(_tmp, "nr-game");
         Directory.CreateDirectory(root);
@@ -375,10 +375,176 @@ public sealed class MethodPickTests : IDisposable
         Component(vm, "uplift").Enabled = false;
         Component(vm, "lecram").Enabled = true;
 
-        neural = vm.Methods.Single(r => r.Option.Method == Method.NeuralAddon);
-        Assert.Equal("Neural rendering with Lecram DLSS5 add-on", neural.Title);
-        Assert.Contains(ComponentRegistry.Lecram, neural.Option.Components);
-        Assert.True(neural.IsPicked);
+        // Lecram isn't in the library, so there is no Lecram card: the Uplift card stays, unpicked, and the Lecram row shows as an extra.
+        Assert.Same(neural, vm.Methods.Single(r => r.Option.Method == Method.NeuralAddon));
+        Assert.False(neural.IsPicked);
+        var extra = vm.CustomSelection ?? vm.Methods.Single(m => m.IsPicked).AlsoOn;
+        Assert.Contains("Lecram DLSS5 add-on", extra);
+    }
+
+    /// <summary>A 64-bit DX12 game that ships DLSS and DLSS frame generation; nothing is imported, the GPU is unknown.</summary>
+    private GameViewModel FgGame()
+    {
+        var root = Path.Combine(_tmp, "fg-dlss-game");
+        Directory.CreateDirectory(root);
+        var info = new GameInfo { Id = root, Root = root, Name = "FG DLSS game", Installs = [root] };
+        info.Tech = new GameTech { Apis = GraphicsApis.Dx12, Bits = 64 };
+        info.Dlss.Add(new DlssDll { Name = "nvngx_dlss.dll", Path = Path.Combine(root, "nvngx_dlss.dll") });
+        info.Dlss.Add(new DlssDll { Name = "nvngx_dlssg.dll", Path = Path.Combine(root, "nvngx_dlssg.dll") });
+        var store = new ComponentStore(new GitHubClient(), () => true);
+        var vm = new GameViewModel(info, new Services { Settings = new AppSettings(), Store = store, Installer = new Installer(store) });
+        vm.RefreshAdvice();
+        return vm;
+    }
+
+    private static string[] Titles(GameViewModel vm) => [.. vm.Methods.Select(m => m.Title), .. vm.AddOns.Select(m => m.Title)];
+
+    [Fact]
+    public void TickingRowsByHand_NeverChangesWhichCardsAreListed()
+    {
+        var vm = FgGame();
+        var before = Titles(vm);
+        vm.PickMethodCommand.Execute(vm.Methods.Single(m => m.Title == "Neural rendering with GITC Uplift"));
+
+        Component(vm, "uplift").Enabled = false;
+        Component(vm, "lecram").Enabled = true;
+        Component(vm, "renodx").Enabled = true;
+        Component(vm, "opti").Enabled = true;
+
+        Assert.Equal(before, Titles(vm));
+    }
+
+    [Fact]
+    public void TheMfgCard_InOptiScalerMode_SaysItTurnsReShadeOn_AndDoes()
+    {
+        var vm = FgGame();
+        Assert.Equal(InstallMode.OptiScaler, vm.Mode);
+        Component(vm, "mfg").Enabled = false;
+        Component(vm, "reshade").Enabled = false;
+        var mfg = Assert.Single(vm.AddOns);
+
+        Assert.Contains("ReShade", mfg.TurnsOn);
+
+        vm.PickMethodCommand.Execute(mfg);
+
+        Assert.True(Component(vm, "mfg").Enabled);
+        Assert.True(Component(vm, "reshade").Enabled);
+        Assert.True(mfg.IsPicked);
+
+        vm.PickMethodCommand.Execute(mfg);
+
+        Assert.False(Component(vm, "mfg").Enabled);
+        Assert.True(Component(vm, "reshade").Enabled);
+    }
+
+    [Fact]
+    public void TickingMfgByHand_InOptiScalerMode_TurnsReShadeOn_AndUntickingReShadeTakesMfgOff()
+    {
+        var vm = FgGame();
+        Component(vm, "mfg").Enabled = false;
+        Component(vm, "reshade").Enabled = false;
+
+        Component(vm, "mfg").Enabled = true;
+        Assert.True(Component(vm, "reshade").Enabled);
+
+        Component(vm, "reshade").Enabled = false;
+        Assert.False(Component(vm, "mfg").Enabled);
+        Assert.False(vm.AddOns.Single().IsPicked);
+    }
+
+    [Fact]
+    public void SwitchingFromAReShadeCardToOptiScaler_KeepsTheReShadeTheMfgAddOnNeeds()
+    {
+        var vm = NewGame();
+        vm.Methods.Clear();
+        var lecram = Row(Method.NeuralAddon, InstallMode.ReShadeOnly, ComponentRegistry.ReShade, ComponentRegistry.DlssNr, ComponentRegistry.Lecram);
+        var optiNr = Row(Method.OptiScalerNr, InstallMode.OptiScaler, ComponentRegistry.OptiScaler, ComponentRegistry.DlssNr);
+        var mfg = Mfg();
+        vm.Methods.Add(lecram);
+        vm.Methods.Add(optiNr);
+        vm.AddOns.Add(mfg);
+        vm.PickMethodCommand.Execute(lecram);
+        Component(vm, "mfg").Enabled = true;
+
+        vm.PickMethodCommand.Execute(optiNr);
+
+        Assert.Equal(InstallMode.OptiScaler, vm.Mode);
+        Assert.True(optiNr.IsPicked);
+        Assert.True(Component(vm, "mfg").Enabled);
+        Assert.True(Component(vm, "reshade").Enabled);
+        Assert.True(mfg.IsPicked);
+    }
+
+    [Fact]
+    public void SwitchingFromAReShadeCardToOptiScaler_WithoutMfg_TurnsTheCardsReShadeOff()
+    {
+        var vm = NewGame();
+        vm.Methods.Clear();
+        var lecram = Row(Method.NeuralAddon, InstallMode.ReShadeOnly, ComponentRegistry.ReShade, ComponentRegistry.DlssNr, ComponentRegistry.Lecram);
+        var optiNr = Row(Method.OptiScalerNr, InstallMode.OptiScaler, ComponentRegistry.OptiScaler, ComponentRegistry.DlssNr);
+        vm.Methods.Add(lecram);
+        vm.Methods.Add(optiNr);
+        vm.AddOns.Add(Mfg());
+        vm.PickMethodCommand.Execute(lecram);
+        Component(vm, "mfg").Enabled = false;
+
+        vm.PickMethodCommand.Execute(optiNr);
+
+        Assert.False(Component(vm, "reshade").Enabled);
+        Assert.True(optiNr.IsPicked);
+    }
+
+    [Fact]
+    public void PickingTheUpliftCard_KeepsMfgUnlockOn_AndTheMfgCardSelectable()
+    {
+        var vm = FgGame();
+        Component(vm, "mfg").Enabled = true;
+        var uplift = vm.Methods.Single(m => m.Title == "Neural rendering with GITC Uplift");
+        var mfg = Assert.Single(vm.AddOns);
+
+        vm.PickMethodCommand.Execute(uplift);
+
+        Assert.True(uplift.IsPicked);
+        Assert.True(Component(vm, "mfg").Enabled);
+        Assert.True(mfg is { IsPicked: true, IsSelectable: true });
+    }
+
+    [Fact]
+    public void PickingAnNrAddOnCard_TurnsTheOtherNrAddOnsOff()
+    {
+        var vm = NewGame();
+        vm.Methods.Clear();
+        var lecram = Row(Method.NeuralAddon, InstallMode.ReShadeOnly, ComponentRegistry.ReShade, ComponentRegistry.DlssNr, ComponentRegistry.Lecram);
+        vm.Methods.Add(lecram);
+        vm.Mode = InstallMode.ReShadeOnly;
+        Component(vm, "renodx").Enabled = true;
+        Component(vm, "uplift").Enabled = true;
+
+        vm.PickMethodCommand.Execute(lecram);
+
+        Assert.True(Component(vm, "lecram").Enabled);
+        Assert.False(Component(vm, "renodx").Enabled);
+        Assert.False(Component(vm, "uplift").Enabled);
+        Assert.True(lecram.IsPicked);
+    }
+
+    [Fact]
+    public void TwoCardsOfTheSameMethod_TheClickedOneIsMarked()
+    {
+        var vm = NewGame();
+        vm.Methods.Clear();
+        var sf = new MethodRow(new MethodOption(Method.NeuralAddon, "SF", Availability.Available, "reason",
+            [ComponentRegistry.ReShade, ComponentRegistry.DlssNr, ComponentRegistry.RenoDx], [], InstallMode.ReShadeOnly, false), false);
+        var lecram = new MethodRow(new MethodOption(Method.NeuralAddon, "Lecram", Availability.Available, "reason",
+            [ComponentRegistry.ReShade, ComponentRegistry.DlssNr, ComponentRegistry.Lecram], [], InstallMode.ReShadeOnly, false), false);
+        vm.Methods.Add(sf);
+        vm.Methods.Add(lecram);
+        vm.PickMethodCommand.Execute(lecram);
+
+        Component(vm, "renodx").Enabled = true;
+
+        Assert.True(lecram.IsPicked);
+        Assert.False(sf.IsPicked);
     }
 
     [Fact]

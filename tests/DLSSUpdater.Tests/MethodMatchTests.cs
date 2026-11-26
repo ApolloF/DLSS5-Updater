@@ -25,7 +25,7 @@ public sealed class MethodMatchTests
         var table = Table(ComponentRegistry.ReShade, ComponentRegistry.MfgUnlock, ComponentRegistry.DlssNr, ComponentRegistry.Lecram,
             ComponentRegistry.Dlss, ComponentRegistry.Streamline);
 
-        var picked = MethodMatch.Picked(Choices, table, InstallMode.ReShadeOnly, clicked: Method.DlssUpdate);
+        var picked = MethodMatch.Picked(Choices, table, InstallMode.ReShadeOnly, clicked: Dlss);
 
         Assert.Same(Neural, picked);
         Assert.Equal([ComponentRegistry.Dlss, ComponentRegistry.Streamline], MethodMatch.Outside(picked, [Mfg], table));
@@ -77,7 +77,7 @@ public sealed class MethodMatchTests
         var table = Table(ComponentRegistry.OptiScaler, ComponentRegistry.Dlss);
 
         Assert.Same(Dlss, MethodMatch.Picked(Choices, table, InstallMode.OptiScaler));
-        Assert.Same(Opti, MethodMatch.Picked(Choices, table, InstallMode.OptiScaler, Method.OptiScaler));
+        Assert.Same(Opti, MethodMatch.Picked(Choices, table, InstallMode.OptiScaler, Opti));
         Assert.Equal([ComponentRegistry.Dlss], MethodMatch.Outside(Opti, [], table));
     }
 
@@ -108,5 +108,53 @@ public sealed class MethodMatchTests
                      ComponentRegistry.Lecram, ComponentRegistry.Uplift, ComponentRegistry.Dlss, ComponentRegistry.Streamline })
             Assert.NotNull(ComponentTable.KeyOf(id));
         Assert.Equal(ComponentTable.Rows.Count, ComponentTable.Rows.Select(r => r.Key).Distinct().Count());
+    }
+
+    private static readonly MethodOption ShortFuse = Opt(Method.NeuralAddon, InstallMode.ReShadeOnly, ComponentRegistry.ReShade, ComponentRegistry.DlssNr, ComponentRegistry.RenoDx) with { Title = "ShortFuse card" };
+    private static readonly MethodOption Uplift = Opt(Method.NeuralAddon, InstallMode.ReShadeOnly, ComponentRegistry.ReShade, ComponentRegistry.DlssNr, ComponentRegistry.Uplift) with { Title = "Uplift card" };
+
+    [Fact]
+    public void MfgUnlockNextToOptiScaler_BringsReShade_AndUntickingReShadeTakesItOff()
+    {
+        Assert.Equal([(ComponentRegistry.ReShade, true)], ComponentTable.Follow(ComponentRegistry.MfgUnlock, true, InstallMode.OptiScaler));
+        Assert.Equal([(ComponentRegistry.MfgUnlock, false)], ComponentTable.Follow(ComponentRegistry.ReShade, false, InstallMode.OptiScaler));
+        Assert.Empty(ComponentTable.Follow(ComponentRegistry.MfgUnlock, false, InstallMode.OptiScaler));
+        Assert.Empty(ComponentTable.Follow(ComponentRegistry.MfgUnlock, true, InstallMode.ReShadeOnly));
+        Assert.Equal([(ComponentRegistry.DlssNr, true), (ComponentRegistry.ReShade, true)], ComponentTable.Follow(ComponentRegistry.Lecram, true, InstallMode.ReShadeOnly));
+    }
+
+    [Fact]
+    public void TheMfgCardsTurnsOnLine_NamesReShade_NextToOptiScalerOnly()
+    {
+        Assert.Equal("Turns on: MFG Unlock · ReShade", MethodMatch.TurnsOnText(Mfg, InstallMode.OptiScaler));
+        Assert.Equal("Turns on: MFG Unlock", MethodMatch.TurnsOnText(Mfg, InstallMode.ReShadeOnly));
+        Assert.Equal("Turns on: ReShade · NR runtime · Lecram DLSS5 add-on. Turns off: OptiScaler F5", MethodMatch.TurnsOnText(Neural, InstallMode.OptiScaler));
+        Assert.Equal("", MethodMatch.TurnsOnText(Dlss with { Availability = Availability.NotPossible }, InstallMode.OptiScaler));
+    }
+
+    [Fact]
+    public void PickingOptiScalerAfterAReShadeCard_TurnsTheCardsReShadeOff_UnlessMfgUnlockNeedsIt()
+    {
+        Assert.Equal([ComponentRegistry.ReShade, ComponentRegistry.Lecram], MethodMatch.TurnsOff(OptiNr, Neural, [], InstallMode.ReShadeOnly));
+        Assert.Equal([ComponentRegistry.Lecram], MethodMatch.TurnsOff(OptiNr, Neural, [Mfg], InstallMode.ReShadeOnly));
+    }
+
+    [Fact]
+    public void PickingAnNrAddonCard_TurnsTheOtherNrAddonsOff_AndNeverMfgUnlock()
+    {
+        Assert.Equal([ComponentRegistry.RenoDx, ComponentRegistry.Uplift], MethodMatch.TurnsOff(Neural, null, [Mfg], InstallMode.OptiScaler));
+        Assert.Equal([ComponentRegistry.Lecram, ComponentRegistry.RenoDx], MethodMatch.TurnsOff(Uplift, Neural, [Mfg], InstallMode.ReShadeOnly));
+        Assert.Empty(MethodMatch.TurnsOff(Dlss, null, [Mfg], InstallMode.OptiScaler));
+    }
+
+    [Fact]
+    public void TwoCardsOfOneMethod_ATieGoesToTheClickedCard_AlsoAfterTheAdviceIsBuiltAgain()
+    {
+        var table = Table(ComponentRegistry.ReShade, ComponentRegistry.DlssNr, ComponentRegistry.RenoDx, ComponentRegistry.Lecram);
+        var choices = new[] { ShortFuse, Neural };
+
+        Assert.Same(ShortFuse, MethodMatch.Picked(choices, table, InstallMode.ReShadeOnly));
+        Assert.Same(Neural, MethodMatch.Picked(choices, table, InstallMode.ReShadeOnly, Neural with { Reason = "advised again" }));
+        Assert.False(MethodMatch.SameCard(ShortFuse, Neural));
     }
 }

@@ -38,10 +38,27 @@ Each method is a clickable card: a one-line plain summary (`MethodAdvisor.Summar
 "Needs:" line; the long reason opens under **Details**. Clicking a card applies it: the method's components go on on the game
 page and the install mode follows (the OptiScaler row's tick is the mode: ticked OptiScaler, unticked ReShade + add-ons). It never installs; the user presses Install. The picked card is the one the page is set to:
 after a refresh, or when the user changes the mode or a component by hand, the app marks the most specific method whose mode and
-components are all on (or none).
+components are all on (`MethodMatch.Picked`; a tie goes to the card clicked last, told apart by title because one method can have
+several cards), or shows the "No card matches your own selection" line.
+
+The set of cards is a function of the game, the GPU, the catalog and the library, never of the rows ticked in the table: ticking rows
+only moves the mark, it never adds, removes or renames a card. In a game with DLSS the neural add-on method (B) has one card per NR
+add-on the game can use: the one already in the game first, then ShortFuse's and Lecram's when they are in the library, then GITC
+Uplift (which downloads itself). The panel is advised again after a load, an install, a library change (an import or download, or the
+game's NR runtime or add-on build pick) and when the GPU or the catalog arrive.
+
+Picking a card turns off what `MethodMatch.TurnsOff` lists: the rows only the previously picked card used and, for an NR add-on card,
+the other NR add-ons (one neural consumer). A row an add-on that is on still needs stays on.
+
+Rows bring the rows they need with them (`ComponentTable.Follow`), by hand or from a card: an NR add-on turns on ReShade and the NR
+runtime; MFG Unlock is a ReShade add-on, so next to OptiScaler (OptiScaler mode, where OptiScaler loads ReShade64.dll through
+LoadReshade) it turns the ReShade row on, and unticking ReShade there takes MFG Unlock off. Turning MFG Unlock off leaves ReShade as it
+is. A loaded install is shown as it is (only the NR add-on rule runs while the page loads). The card's "Turns on" line
+(`MethodMatch.TurnsOnText`) names these rows too, so the MFG Unlock card says ReShade in OptiScaler mode.
+
 MFG Unlock (H) is an add-on, not a method (`MethodAdvisor.IsAddOn`): it shows as a checkbox card under the methods ("Add to the
-method you picked") and goes on or off by itself, so picking a method never takes it out and it works with no method picked too.
-It is never the recommended one.
+method you picked") and goes on or off by itself, so picking a method never takes it out (GITC Uplift included) and it works with no
+method picked too. It is never the recommended one.
 Smooth Motion has no components: it is a driver setting on the game's NVIDIA tab, so its card isn't pickable.
 
 The recommended method (`MethodAdvice.Top`, badged "Recommended") is the first selectable one without a warning. `Rank` puts
