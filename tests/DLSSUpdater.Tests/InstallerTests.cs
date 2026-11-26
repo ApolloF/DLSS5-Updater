@@ -1424,6 +1424,63 @@ public class InstallerTests : IDisposable
         Assert.Null(ini.Get("DLSSG", "AdaMfgUnlock"));
     }
 
+    private const string F5Ini039 = ReleaseIni + "[F5Low]\nVulkanTearing=auto\nVulkanPacer=auto\n[DLSSG]\nPreset=auto\n[Memory]\nProtectMemory=auto\n[XeSS]\nUnrealDepth=auto\n";
+
+    private static readonly IniOverride[] F5Keys039 =
+    [
+        new("F5Low", "VulkanTearing", "false"), new("F5Low", "VulkanPacer", "false"), new("DLSSG", "Preset", "C"),
+        new("Memory", "ProtectMemory", "all"), new("XeSS", "UnrealDepth", "false"),
+    ];
+
+    [Fact]
+    public async Task F5Keys039_AreWrittenFromThatBuild_AndGoWhenAnOlderBuildIsInstalled()
+    {
+        var installer = new Installer(_store);
+        var o = Full with { Overrides = [.. TestProfiles.Recommended(), .. F5Keys039] };
+
+        SeedF5("v0.1.38-f5", ReleaseIni, bundledStreamline: false);
+        await installer.InstallAsync(Game(), _target, o, null, default);
+        var ini = IniFile.Load(Path.Combine(_target, "OptiScaler.ini"));
+        foreach (var k in F5Keys039) Assert.Null(ini.Get(k.Section, k.Key));
+
+        SeedF5("v0.1.39-f5", F5Ini039, bundledStreamline: false);
+        await installer.InstallAsync(Game(), _target, o, null, default);
+        ini = IniFile.Load(Path.Combine(_target, "OptiScaler.ini"));
+        foreach (var k in F5Keys039) Assert.Equal(k.Value, ini.Get(k.Section, k.Key));
+        Assert.Equal("v0.1.39-f5", InstallManifest.Load(_target)!.OptiTag);
+        Assert.All(F5Keys039, k => Assert.Contains(k.Id, InstallManifest.Load(_target)!.OptiIni.Keys, StringComparer.OrdinalIgnoreCase));
+
+        await installer.InstallAsync(Game(), _target, o with { OptiTag = "v0.1.38-f5" }, null, default);
+        ini = IniFile.Load(Path.Combine(_target, "OptiScaler.ini"));
+        foreach (var k in F5Keys039) Assert.Null(ini.Get(k.Section, k.Key));
+        Assert.DoesNotContain(InstallManifest.Load(_target)!.OptiIni.Keys, k => F5Keys039.Any(f => f.Id.Equals(k, StringComparison.OrdinalIgnoreCase)));
+    }
+
+    [Fact]
+    public async Task F5Build039_MirrorsTheRenamedVulkanFfxDlls_AndUninstallRemovesThem()
+    {
+        var before = Snapshot();
+        var installer = new Installer(_store);
+        SeedF5Low("v0.1.39-f5");
+        var pkg = Path.Combine(ComponentStore.TagDir(Component.OptiScaler, "v0.1.39-f5"), "pkg", "OptiScaler");
+        foreach (var f in new[] { "amd_fidelityfx_upscaler_vk.dll", "amd_fidelityfx_loader_vk.dll", "amd_fidelityfx_framegeneration_vk.dll" })
+            Write(Path.Combine(pkg, f), f);
+
+        await installer.InstallAsync(Game(), _target, new InstallOptions { Opti = true, Proxy = "dxgi.dll" }, null, default);
+
+        var m = InstallManifest.Load(_target)!;
+        Assert.Equal("v0.1.39-f5", m.OptiTag);
+        foreach (var f in new[] { "amd_fidelityfx_upscaler_vk.dll", "amd_fidelityfx_loader_vk.dll", "amd_fidelityfx_framegeneration_vk.dll" })
+        {
+            Assert.Equal(f, T(Path.Combine("OptiScaler", f)));
+            Assert.Contains(m.Dirs, d => d.EndsWith("OptiScaler", StringComparison.OrdinalIgnoreCase));
+        }
+        Assert.Equal("F5LOW", T(@"OptiScaler\plugins\f5low.dll"));
+
+        await installer.UninstallAsync(Game(), _target, default);
+        Assert.Equal(before, Snapshot());
+    }
+
     [Theory]
     [InlineData("detect", true)]
     [InlineData("true", true)]
@@ -1501,6 +1558,21 @@ public class InstallerTests : IDisposable
         Assert.Null(m.ReShadeSha);
     }
 
+    [Fact]
+    public async Task OptiScalerMode_MfgUnlockWithoutReShade_InstallsTheReShadeThatLoadsIt()
+    {
+        // MFG Unlock is a ReShade add-on: next to OptiScaler nothing loads it unless OptiScaler loads ReShade64.dll.
+        await new Installer(_store).InstallAsync(Game(), _target, Full with { ReShade = false }, null, default);
+
+        var m = InstallManifest.Read(_target)!;
+        Assert.Equal("MFG-1", T(ComponentStore.MfgFile));
+        Assert.Equal("RESHADE", T(ComponentStore.ReShadeFile));
+        Assert.Equal("true", IniFile.Load(Path.Combine(_target, "OptiScaler.ini")).Get("Plugins", "LoadReshade"));
+        Assert.True(m.Mfg);
+        Assert.True(m.ReShade);
+        Assert.Equal(InstallMode.OptiScaler, m.Mode);
+    }
+
     [Theory]
     [InlineData(false)]
     [InlineData(true)]
@@ -1512,7 +1584,7 @@ public class InstallerTests : IDisposable
         Assert.Equal("RESHADE", T(ComponentStore.ReShadeFile));
         Assert.Equal("true", IniFile.Load(Path.Combine(_target, "OptiScaler.ini")).Get("Plugins", "LoadReshade"));
 
-        await installer.InstallAsync(Game(), _target, Full with { ReShade = false }, null, default);
+        await installer.InstallAsync(Game(), _target, Full with { ReShade = false, Mfg = false }, null, default);
         var m = InstallManifest.Read(_target)!;
         Assert.False(m.ReShade);
         Assert.Null(m.ReShadeSha);
@@ -1523,7 +1595,7 @@ public class InstallerTests : IDisposable
         Assert.Equal(gameHadReShade ? "true" : "auto", IniFile.Load(Path.Combine(_target, "OptiScaler.ini")).Get("Plugins", "LoadReshade"));
 
         // "Update all" reproduces the record and doesn't bring ReShade back.
-        await installer.InstallAsync(Game(), _target, Full with { ReShade = m.ReShade }, null, default);
+        await installer.InstallAsync(Game(), _target, Full with { ReShade = m.ReShade, Mfg = m.Mfg }, null, default);
         Assert.False(InstallManifest.Read(_target)!.ReShade);
         if (!gameHadReShade) Assert.False(File.Exists(Path.Combine(_target, ComponentStore.ReShadeFile)));
     }
@@ -1655,6 +1727,109 @@ public class InstallerTests : IDisposable
         await installer.UninstallAsync(Game(), _target, default);
         Assert.False(Directory.Exists(InstallManifest.DirFor(_target)));
         Assert.Equal("OTHER-MOD", T("dxgi.dll"));
+    }
+
+    [Fact]
+    public async Task Backups_CarryTheSuffix_AndNoDllLivesInTheBackupFolder()
+    {
+        var installer = new Installer(_store);
+        var before = Snapshot();
+        await installer.InstallAsync(Game(), _target, Full, null, default);
+        SeedDlss("v310.10.0", "NEWER");
+        await installer.InstallAsync(Game(), _target, new InstallOptions { Dlss = true }, null, default);
+
+        var backups = InstallManifest.Read(_target)!.Backups;
+        Assert.NotEmpty(backups);
+        Assert.All(backups, b => Assert.EndsWith(Installer.BackupSuffix, b.Backup));
+        var files = Directory.EnumerateFiles(InstallManifest.BackupDirFor(_target), "*", SearchOption.AllDirectories).ToList();
+        Assert.NotEmpty(files);
+        Assert.All(files, f => Assert.EndsWith(Installer.BackupSuffix, f));
+        Assert.DoesNotContain(files, f => f.EndsWith(".dll", StringComparison.OrdinalIgnoreCase));
+
+        await installer.UninstallAsync(Game(), _target, default);
+        Assert.Equal(before.OrderBy(k => k.Key), Snapshot().OrderBy(k => k.Key));
+    }
+
+    [Fact]
+    public async Task BackupNameTaken_GetsANumberBeforeTheSuffix()
+    {
+        var taken = Path.Combine(InstallManifest.BackupDirFor(_target), @"Game\Binaries\Win64\dxgi.dll" + Installer.BackupSuffix);
+        Write(taken, "STRAY");
+        var installer = new Installer(_store);
+        await installer.InstallAsync(Game(), _target, Full, null, default);
+
+        var entry = InstallManifest.Read(_target)!.BackupOf(Rel(Path.Combine(_target, "dxgi.dll")))!;
+        Assert.EndsWith(".1" + Installer.BackupSuffix, entry.Backup);
+        Assert.Equal("OTHER-MOD", File.ReadAllText(Path.Combine(InstallManifest.BackupDirFor(_target), entry.Backup)));
+        Assert.Equal("STRAY", File.ReadAllText(taken));
+
+        await installer.UninstallAsync(Game(), _target, default);
+        Assert.Equal("OTHER-MOD", T("dxgi.dll"));
+    }
+
+    /// <summary>Puts an installed record back the way versions before the suffix wrote it.</summary>
+    private void MakeBackupsLegacy()
+    {
+        var m = InstallManifest.Read(_target)!;
+        var dir = InstallManifest.BackupDirFor(_target);
+        foreach (var b in m.Backups)
+        {
+            var legacy = b.Backup[..^Installer.BackupSuffix.Length];
+            File.Move(Path.Combine(dir, b.Backup), Path.Combine(dir, legacy));
+            foreach (var c in m.Components)
+                foreach (var k in c.Backups.Where(kv => kv.Value == b.Backup).Select(kv => kv.Key).ToList()) c.Backups[k] = legacy;
+            b.Backup = legacy;
+        }
+        m.Save(_target);
+    }
+
+    [Fact]
+    public async Task RecordFromBeforeTheSuffix_IsMigratedOnTheNextInstall_AndStillUninstalls()
+    {
+        var installer = new Installer(_store);
+        var before = Snapshot();
+        await installer.InstallAsync(Game(), _target, Full, null, default);
+        MakeBackupsLegacy();
+        var dir = InstallManifest.BackupDirFor(_target);
+        Assert.Contains(Directory.EnumerateFiles(dir, "*", SearchOption.AllDirectories), f => f.EndsWith(".dll"));
+
+        SeedDlss("v310.10.0", "NEWER");
+        await installer.InstallAsync(Game(), _target, new InstallOptions { Dlss = true }, null, default);
+
+        var m = InstallManifest.Read(_target)!;
+        Assert.All(m.Backups, b => Assert.EndsWith(Installer.BackupSuffix, b.Backup));
+        Assert.All(m.Components.SelectMany(c => c.Backups.Values), v => Assert.EndsWith(Installer.BackupSuffix, v));
+        Assert.All(Directory.EnumerateFiles(dir, "*", SearchOption.AllDirectories), f => Assert.EndsWith(Installer.BackupSuffix, f));
+
+        await installer.UninstallAsync(Game(), _target, default);
+        Assert.Equal(before.OrderBy(k => k.Key), Snapshot().OrderBy(k => k.Key));
+    }
+
+    [Fact]
+    public async Task RecordFromBeforeTheSuffix_MissingBackupFile_DoesNotStopTheMigration()
+    {
+        var installer = new Installer(_store);
+        await installer.InstallAsync(Game(), _target, Full, null, default);
+        MakeBackupsLegacy();
+        var dir = InstallManifest.BackupDirFor(_target);
+        File.Delete(Path.Combine(dir, InstallManifest.Read(_target)!.Backups[0].Backup));
+
+        await installer.InstallAsync(Game(), _target, Full, null, default);
+
+        Assert.All(InstallManifest.Read(_target)!.Backups, b => Assert.EndsWith(Installer.BackupSuffix, b.Backup));
+        Assert.All(Directory.EnumerateFiles(dir, "*", SearchOption.AllDirectories), f => Assert.EndsWith(Installer.BackupSuffix, f));
+    }
+
+    [Fact]
+    public async Task RecordFromBeforeTheSuffix_UninstallsWithoutAnInstallFirst()
+    {
+        var installer = new Installer(_store);
+        var before = Snapshot();
+        await installer.InstallAsync(Game(), _target, Full, null, default);
+        MakeBackupsLegacy();
+
+        await installer.UninstallAsync(Game(), _target, default);
+        Assert.Equal(before.OrderBy(k => k.Key), Snapshot().OrderBy(k => k.Key));
     }
 
     [Fact]

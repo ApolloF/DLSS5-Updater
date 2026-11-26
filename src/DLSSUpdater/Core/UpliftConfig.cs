@@ -7,8 +7,21 @@ public static class UpliftConfig
     public const string Section = "Uplift";
     public static bool IsUplift(IniOverride o) => o.Section.Trim().Equals(Section, StringComparison.OrdinalIgnoreCase);
     public static string NrPath(string target) => Path.Combine(target, ComponentStore.UpliftNrDir, ComponentStore.DlssNrFile);
-    public static string? Warning(string? tag) => FileUtil.ParseTag(tag) > FileUtil.ParseTag(TestedVersion)
-        ? $"GITC Uplift {tag} is newer than the tested {TestedVersion}; its settings or package may have changed." : null;
+    public static string? Warning(string? tag)
+    {
+        var v = FileUtil.ParseTag(tag);
+        if (v > FileUtil.ParseTag(TestedVersion)) return $"GITC Uplift {tag} is newer than the tested {TestedVersion}; its settings or package may have changed.";
+        return v >= StreamlineProbeBug.From && v <= StreamlineProbeBug.Until
+            ? $"GITC Uplift {tag} can crash a game at start when another layer also wraps Streamline's DXGI factory (Unreal's FSR frame interpolation swap chain, MFG Unlocker): fixed upstream after 2.0.0 (issue 18). If the game crashes, pick GITC Uplift 1.7.0 for it."
+            : null;
+    }
+
+    /// <summary>
+    /// From 1.8.0 Uplift's Before FG start-up probe created a factory through Streamline's own export, a second hook layer when
+    /// another tool wraps that factory; the game faults in dxgi.dll at swap-chain creation (upstream issues 18 and 26, fixed in
+    /// 29f0d43 after 2.0.0; seen in Phantom Blade Zero, whose FSR plugin overrides the DX12 swap chain).
+    /// </summary>
+    public static readonly (Version From, Version Until) StreamlineProbeBug = (new(1, 8, 0), new(2, 0, 0));
 
     /// <summary>
     /// ReShade finds effects only in [GENERAL] EffectSearchPaths, resolved against the folder of its dll; without the key it searches

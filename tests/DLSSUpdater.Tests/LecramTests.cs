@@ -498,6 +498,7 @@ public sealed class LecramTests : IDisposable
     ];
     private static readonly string[] V13_4Keys = ["NRFrameGen", "NRFrameGenMultiplier", "NRFrameGenUi", "NRHdrScreen"];
     private static readonly string[] V14Keys = ["NRFrameGenVSync", "NRUpscalerMode", "NRSdrHdr", "NRSafeMode"];
+    private static readonly string[] V15Keys = ["NRFrameGenEngine", "NRFrameGenRealInputs"];
 
     [Theory]
     [InlineData("v12.0.0", false, false)]
@@ -562,6 +563,39 @@ public sealed class LecramTests : IDisposable
         await installer.UninstallAsync(_game, _root, default);
         Assert.Null(Value("NRFrameGenVSync"));
         Assert.Null(Value("NRHdrScreen"));
+    }
+
+    [Theory]
+    [InlineData("v14.0.0", false)]
+    [InlineData("v15.2.0", true)]
+    public async Task V15Keys_AreWrittenOnlyForBuildsThatReadThem(string label, bool v15)
+    {
+        var build = _store.ImportLecram(FakeV11(label));
+        var installer = new Installer(_store);
+        IniOverride[] overrides = [Key("NRFrameGen", "1"), Key("NRFrameGenVSync", "1"), Key("NRFrameGenEngine", "2"), Key("NRFrameGenRealInputs", "1")];
+
+        await installer.InstallAsync(_game, _root, Lec(lecramId: build.Id, overrides: overrides), null, default);
+
+        Assert.Equal(("1", "1"), (Value("NRFrameGen"), Value("NRFrameGenVSync")));
+        Assert.Equal(v15 ? ("2", "1") : (null, null), (Value("NRFrameGenEngine"), Value("NRFrameGenRealInputs")));
+
+        await installer.UninstallAsync(_game, _root, default);
+        Assert.Null(Value("NRFrameGenEngine"));
+        Assert.Null(Value("NRFrameGenRealInputs"));
+    }
+
+    [Fact]
+    public async Task SwitchingFromV15ToV14_DropsTheV15KeysTheAppWrote()
+    {
+        var v1400 = _store.ImportLecram(FakeV11("v14.0.0"));
+        var v1520 = _store.ImportLecram(FakeV11("v15.2.0"));
+        var installer = new Installer(_store);
+        IniOverride[] overrides = [Key("NRFrameGenEngine", "2"), Key("NRFrameGenVSync", "1")];
+
+        await installer.InstallAsync(_game, _root, Lec(lecramId: v1520.Id, overrides: overrides), null, default);
+        Assert.Equal(("2", "1"), (Value("NRFrameGenEngine"), Value("NRFrameGenVSync")));
+        await installer.InstallAsync(_game, _root, Lec(lecramId: v1400.Id, overrides: overrides), null, default);
+        Assert.Equal((null, "1"), (Value("NRFrameGenEngine"), Value("NRFrameGenVSync")));
     }
 
     [Fact]
@@ -927,7 +961,7 @@ public sealed class LecramTests : IDisposable
     {
         var options = SettingsOptions.Lecram([]);
         string[] v11Only = ["NeuralUplift", "NRPreset", "NRPass2Preset", "NRPass3Preset", "NRPass4Preset", "NRVramBuffering", "NRGpuCrashWitness", "NRPresentFgPath",
-            .. V12_9Keys, .. V13_4Keys, .. V14Keys];
+            .. V12_9Keys, .. V13_4Keys, .. V14Keys, .. V15Keys];
         string[] values(string key) => Option(options, key).Choices.Select(c => c.Value ?? "").ToArray();
 
         foreach (var o in options) o.ApplyGeneration(null);
@@ -1028,13 +1062,19 @@ public sealed class LecramTests : IDisposable
             Option(options, "NRUpscalerMode").Choices.Skip(1).Select(c => c.Label));
         Assert.Equal([0.0, 1, 2], Numbers(Option(options, "NRSdrHdr")));
         Assert.Equal([0.0, 1], Numbers(Option(options, "NRSafeMode")));
-        // Internal, experimental or undocumented keys of v12.9.9, v13.4.0 and v14.0.0 are not offered (docs/addons/lecram-dlss5.md).
+        // v15.2.0 catalog: generator 0 NVIDIA DLSS / 2 NVIDIA VFG (1, Intel XeSS, is gated to the author's installs and not offered), where
+        // frame generation runs 0 Always on / 1 In game.
+        Assert.Equal([0.0, 2], Numbers(Option(options, "NRFrameGenEngine")));
+        Assert.Equal([0.0, 1], Numbers(Option(options, "NRFrameGenRealInputs")));
+        // Internal, experimental or undocumented keys of v12.9.9, v13.4.0, v14.0.0 and v15.2.0 are not offered (docs/addons/lecram-dlss5.md).
         Assert.DoesNotContain(options, o => o.Key is "NRFrameGenPreset" or "NRExperimental" or "NRExpCamera" or "NRExpTaaInputs" or "NRQueueHeal"
             or "NRPresentCallGuides" or "NRPresentShoulder" or "NRInputCurve" or "NRGameBrightness" or "NRMotionSource" or "NRDepthSource"
             or "NRReader" or "NRGridPad" or "NRLookTexture" or "NRLookClarity"
             or "NRSdrHdrWhite" or "NRSdrHdrPeak" or "NRSdrHdrLight" or "NRSdrHdrColour" or "NRSdrHdrUi" or "NROpticalFlowLevel" or "NROpticalFlowGrid"
             or "NREngineInputs" or "NRTaaGameLook" or "NRExpTaaDeferred" or "NRCallMotion" or "NRCallDepth" or "NRFrameGenKey" or "NRAllKey"
-            or "NRReShadeMenuKey" or "NRKeysWere" or "NRInputCurveAdopted");
+            or "NRReShadeMenuKey" or "NRKeysWere" or "NRInputCurveAdopted"
+            or "NRXeFg" or "NROpticalFlowHalf" or "NRModelLabMode" or "NRModelLiveWeights" or "NRInputsAdopted" or "NRInputCurveOffAdopted"
+            or "NRPresentShoulderExtendedAdopted");
     }
 
     [Fact]
@@ -1113,6 +1153,13 @@ public sealed class LecramTests : IDisposable
     [InlineData("NRSafeMode", "v14.2.0", true)]
     [InlineData("NRSdrHdr", "v13.4.0", false)]
     [InlineData("NRFrameGen", "v14.0.0", true)]
+    [InlineData("NRFrameGenEngine", "v14.0.0", false)]
+    [InlineData("NRFrameGenEngine", "v15.2.0", true)]
+    [InlineData("NRFrameGenRealInputs", "v15.0.0", false)]
+    [InlineData("NRFrameGenRealInputs", "v15.2.0", true)]
+    [InlineData("NRFrameGenRealInputs", "v16.0.0", true)]
+    [InlineData("NRHdrScreen", "v15.2.0", false)]
+    [InlineData("NRFrameGenVSync", "v15.2.0", true)]
     [InlineData("NRFrameGen", null, true)]
     public void LecramIni_HidesV11KeysFromBuildsOlderThanTheFirstThatReadsThem(string key, string? build, bool available)
     {
@@ -1153,6 +1200,11 @@ public sealed class LecramTests : IDisposable
         Assert.All(V14Keys, k => Assert.Equal((false, true),
             (Option(options, k).ViewFor(LecramGeneration.V11, "v13.4.0").IsAvailable, Option(options, k).ViewFor(LecramGeneration.V11, "v14.0.0").IsAvailable)));
         Assert.All(V13_4Keys, k => Assert.Equal(k != "NRHdrScreen", Option(options, k).ViewFor(LecramGeneration.V11, "v14.0.0").IsAvailable));
+        // v15.2.0 keys from v15.2.0 on; every v14 key stays, NRHdrScreen stays retired.
+        Assert.All(V15Keys, k => Assert.Equal((false, true),
+            (Option(options, k).ViewFor(LecramGeneration.V11, "v14.0.0").IsAvailable, Option(options, k).ViewFor(LecramGeneration.V11, "v15.2.0").IsAvailable)));
+        Assert.All(V14Keys, k => Assert.True(Option(options, k).ViewFor(LecramGeneration.V11, "v15.2.0").IsAvailable));
+        Assert.All(V13_4Keys, k => Assert.Equal(k != "NRHdrScreen", Option(options, k).ViewFor(LecramGeneration.V11, "v15.2.0").IsAvailable));
 
         fgPath.ApplyGeneration(LecramGeneration.V11);
         Assert.True(fgPath.IsAvailable);

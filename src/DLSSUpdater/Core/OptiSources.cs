@@ -49,6 +49,9 @@ public static class OptiSources
         "DepthFadeNearStrength", "DepthFadeSkyStrength",
     ];
 
+    /// <summary>F5 0.1.39's F5Low settings for a native Vulkan swapchain.</summary>
+    private static readonly string[] VulkanF5LowKeys = ["VulkanLatencyGate", "VulkanTearing", "VulkanFlipMetering", "VulkanPacer"];
+
     /// <summary>F5 0.1.34's built-in MFG unlock, one key per GPU family; 0.1.33 had none, older builds the [DLSSG] Ada/Ampere keys.</summary>
     internal static readonly string[] MfgUnlockKeys = ["XeFG", "RTX40", "RTX2030"];
 
@@ -59,7 +62,7 @@ public static class OptiSources
     /// </summary>
     public static readonly OptiSource F5 = new(
         "janblade/OptiScaler-F5-DLSSNR-Multipass", "OptiScaler F5", "OptiScaler F5 (janblade)",
-        new Regex(@"^(OptiScaler-DLSSNR-F5-v?[\d.]+(-with-dlss-fg)?|v[\d.]+-Optiscaler-F5)\.zip$", RegexOptions.IgnoreCase), "-f5", "v0.1.38",
+        new Regex(@"^(OptiScaler-DLSSNR-F5-v?[\d.]+(-with-dlss-fg)?|v[\d.]+-Optiscaler-F5)\.zip$", RegexOptions.IgnoreCase), "-f5", "v0.1.39",
         ["nvngx.dll_dlssnr.dll"],
         [("DlssNr", "DenoiseFirst"), ("DlssNr", "PrivateUpscaler"), ("DlssNr", "ResidualAcrossRR"), ("DlssNr", "HdrTransfer"), ("DlssNr", "AutoExposureHighlightProtection")],
         [
@@ -70,6 +73,8 @@ public static class OptiSources
             new("DlssNr", "MultiViewScreens", Since: "v0.1.35.1"),
             new("F5Low", "FrameGenerator", Since: "v0.1.36"), new("F5Low", "KeepGameDlssg", Since: "v0.1.36"), new("DlssNr", "SecondaryFeatures", Since: "v0.1.36"),
             .. DepthFadeKeys.Select(k => new OptiKeyRange("DlssNr", k, Since: "v0.1.37")),
+            .. VulkanF5LowKeys.Select(k => new OptiKeyRange("F5Low", k, Since: "v0.1.39")),
+            new("DLSSG", "Preset", Since: "v0.1.39"), new("Memory", "ProtectMemory", Since: "v0.1.39"), new("XeSS", "UnrealDepth", Since: "v0.1.39"),
         ]);
 
     /// <summary>

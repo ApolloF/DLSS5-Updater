@@ -235,11 +235,14 @@ public static class HelpTopics
             "It acts with the add-on's Fine-tune off too. The add-on doesn't say what a value between 0 and 1 looks like. The rest of the Fine-tune set (Texture, Clarity, Dark halos and the others) only acts with Fine-tune on, so it stays in the add-on's overlay."),
         new("lc-framegen", "Lecram DLSS5", "Frame generation", "NVIDIA DLSS Frame Generation hosted by NR, and its multiplier (v13.4 and newer).",
             "NRFrameGen, v13.4 and newer (Early Access), off by default: 0 Off (NR hosts nothing and loads no NVIDIA file), 1 On (NVIDIA's DLSS Frame Generation hosted by NR through Streamline, after NR's pass: NR runs on every real frame and never on a generated one), 2 Dynamic (NVIDIA's Dynamic Multi Frame Generation where the GPU and driver support it, else On: the number of generated frames follows the game's frame rate up to your refresh rate; v13.4's panel says it isn't available in that version and uses the fixed multiplier, v14 has it). " +
-            "Read when the game starts: turning it on later needs a restart. The game's own frame generation, another tool's and NVIDIA Smooth Motion keep NR's off. It needs an RTX 40 or newer card, NVIDIA's Streamline 2.12.0 plugins and nvngx_dlssg.dll 310.7.0 or newer in %LOCALAPPDATA%\\DLSS5-NR\\runtime\\streamline\\2.12.0 (the author's setup fetches them; this app doesn't), unless the game ships its own Streamline. " +
+            "Read when the game starts: turning it on later needs a restart. The game's own frame generation, another tool's and NVIDIA Smooth Motion keep NR's off. It needs an RTX 40 or newer card, NVIDIA's Streamline 2.12.0 plugins and nvngx_dlssg.dll 310.7.0 or newer in %LOCALAPPDATA%\\DLSS5-NR\\runtime\\streamline\\2.12.0 (v15.2.0 uses Streamline 2.14.16, folder streamline\\2.14.16; the author's setup fetches them; this app doesn't), unless the game ships its own Streamline. " +
             "NRFrameGenMultiplier: 0 to 4 for 2x to 6x, clamped to what the GPU supports (logged as multiplier_clamped); not used under Dynamic. The add-on's texts don't name its default. " +
             "NRFrameGenVSync, v14 and newer: 0 Off (NR's frames go out with tearing allowed), 1 On (VSync on every route NR hosts while DLSS-G generates, whatever the game asks, where DLSS-G says it supports VSync; with VSync on, the lowest multiplier that reaches your refresh rate leaves the game the most frames of its own). Never together with Dynamic: the add-on turns the other off. A session whose frame generation falls short with it goes back to Off and says so. Applies at the next present. The add-on's texts don't name its default. " +
+            "NRFrameGenEngine, v15.2.0 and newer, read when the game starts (a change applies at the next start): 0 NVIDIA DLSS Frame Generation (the default), made from the game's own motion and depth; 2 NVIDIA Video Frame Generation (VFG), made from the picture alone, on RTX 40 and 50 cards where its files are in NR's store (the author's setup fetches them from NVIDIA; this app doesn't). " +
+            "A choice that can't run here gives way to DLSS Frame Generation, else frame generation is off, and the log and the panel say why. The add-on also has 1 for Intel XeSS frame generation, behind a gate (NRXeFg) that only the author's own installs set, so the app doesn't offer it. " +
+            "NRFrameGenRealInputs, v15.2.0 and newer: 0 Always on (the default: DLSS-G is given every frame, and a frame without the game's camera gets NR's stand-in), 1 In game (generated frames only from frames whose camera and motion are the game's own; the rest, such as menus and loading screens, show only the game's own frames, and the panel says why). Safe mode turns it to Always on. Applies at the next frame. " +
             "From v14 frame generation also turns on and off during play in a game where it has been on before, and runs beside the game's own Reflex and a game's or mod's own Streamline. " +
-            "The author's known issues: it can crash or stay black in a few games (v13.4: Silent Hill Townfall; turn it off there), and in Vulkan games a pause's first frame shows without NR (v14). Older builds ignore the keys, so the app hides them and does not write them there."),
+            "The author's known issues: it can crash or stay black in a few games (v13.4: Silent Hill Townfall; turn it off there), in Vulkan games a pause's first frame shows without NR (v14), and in v15.2.0 Dev11 Assassin's Creed Mirage, Madden 27, The Last of Us Part II and Uncharted 4 can crash with it on. Older builds ignore the keys, so the app hides them and does not write them there."),
         new("lc-fg-ui", "Lecram DLSS5", "UI in generated frames", "How NR's frame generation handles the game's HUD (v13.4 and newer).",
             "NRFrameGenUi, v13.4 and newer: 0 Steady (NR hands DLSS-G its HUD-less image and UI alpha and DLSS-G puts the real UI back: it never warps and moves at the real frame rate), 1 Interpolated (the UI is generated with the picture: smooth, and it can warp). " +
             "Read when the game starts. Only matters with Frame generation on. The add-on's texts don't name its default."),
@@ -293,6 +296,22 @@ public static class HelpTopics
         new("f5-keep-dlssg", "OptiScaler F5", "Keep the game's DLSS-G", "OptiScaler F5 0.1.36+: with DLSS-G as the frame generator, lets the game's own DLSS-G load.",
             "OptiScaler F5 0.1.36 and newer. With the frame generator set to DLSS-G, the game's own nvngx_dlssg.dll is kept from loading: a second DLSS-G next to F5Low's faulted the GPU at level load. " +
             "On also stops OptiScaler from forcing the game's DLSS-G off. Not used while the frame generation input is DLSS-G (then the game's DLSS-G is the input). Default (auto) is off."),
+        new("f5-dlssg-preset", "OptiScaler F5", "DLSS-G preset", "OptiScaler F5 0.1.39+: which DLSS-G frame generation model runs, A, B or C (FG Lite).",
+            "OptiScaler F5 0.1.39 and newer. Answers the DLSS-G preset inside this game; the NVIDIA driver profile is not changed. Auto uses what the driver profile says; A is the default model, " +
+            "B is UI focus (UI recomposition), C is NVIDIA's lighter FG Lite (faster generation, slightly lower quality; about 12% more real fps in one game F5's author tested) and needs nvngx_dlssg.dll 310.9.16 or newer. " +
+            "DLSS-G reads it when it starts, so a change applies at the next game start. F5Low uses it too when DLSS-G is its frame generator. A custom DLSS-G replacement only gets the presets its dll knows."),
+        new("f5-memory", "OptiScaler F5", "Protect video memory", "OptiScaler F5 0.1.39+: asks Windows to keep OptiScaler's video memory on the graphics card.",
+            "OptiScaler F5 0.1.39 and newer. Gives the video memory of OptiScaler's modules a high residency priority, so when the card runs full the game's own memory is moved out first. " +
+            "That kept F5Low's frame rate from dropping after a few minutes on 6 to 8 GB cards. Off does nothing; frame generator (default) covers f5low.dll only, as Intel's frame generation library does for its own memory; " +
+            "everything also covers OptiScaler itself and the NVIDIA runtimes. Read once at start, so restart the game. The F5 release notes say it is not yet tested on RTX 20 and 30 cards."),
+        new("f5-vulkan", "OptiScaler F5", "Vulkan frame generation", "OptiScaler F5 0.1.39+: F5Low settings for games that use Vulkan.",
+            "OptiScaler F5 0.1.39 and newer, NVIDIA only. F5Low frame generation runs on the game's own Vulkan swapchain from 0.1.39. Show every generated frame (VulkanTearing, default on) matters with V-Sync off: every generated frame reaches the screen and may tear, like DirectX 12; off keeps the game's no-tearing mode, where the driver drops frames above the refresh rate. " +
+            "The mode is chosen when the swapchain is made. Latency gate (VulkanLatencyGate, default on) keeps the game from running ahead of what is shown; it needs VK_KHR_present_wait on the device. " +
+            "F5Low pacer (VulkanPacer, default on) paces the frames with f5low's own pacer and needs a newer f5low.dll; off is plain even spacing. Flip metering (VulkanFlipMetering, default off) uses VK_NV_present_metering: experimental, RTX 50 only. " +
+            "The F5 release notes call Vulkan frame generation new and ask for a log with issues."),
+        new("f5-unreal-xess", "OptiScaler F5", "XeSS depth in Unreal Engine", "OptiScaler F5 0.1.39+: takes depth and motion vectors from Intel's XeSS plugin in Unreal Engine games.",
+            "OptiScaler F5 0.1.39 and newer, ported from upstream OptiScaler. Unreal Engine games with Intel's XeSS plugin give XeSS no depth and display resolution motion vectors. " +
+            "OptiScaler takes the scene depth and render resolution motion vectors from the plugin instead, so picking XeSS in the game also works with DLSS, FSR 2/3 and frame generation. On by default; turn it off if a game misbehaves with it."),
         new("nr-finished", "DLSSNR", "Apply to finished picture", "Applies the model after the game's post-processing; it can also change the HUD.",
             "Applies NR after the game's post-processing (bloom, grading) instead of at the upscaler. DX12 and the D3D11 bridge only. " +
             "Can also alter the HUD and menus. With Run before upscaling on, the edit is made early and carried to the final image."),
@@ -435,8 +454,9 @@ public static class HelpTopics
         new("max-count", "MFG Unlock", "Max frame count", "The highest multiplier reported to the game; games build their FG menu from it.",
             "The highest multiplier reported to the game (DLSS-G MultiFrameCountMax). Games build their FG menu from it, so 4 shows up to 4x. The add-on accepts 2 to 5; 6x is only reachable through Force frame multiplier."),
         new("dynamic-mfg", "MFG Unlock", "Dynamic MFG", "Lets NVIDIA's runtime pick the multiplier every frame to hold a target frame rate.",
-            "Lets NVIDIA's runtime pick the multiplier every frame to hold a target frame rate. Needs D3D12, nvngx_dlssg.dll 310.9.1 or 310.9.16, the matching " +
-            "Streamline set (2.14.1 / 2.14.16) (see Replace Streamline files), driver 595.41+, and the NVIDIA App's DLSS Frame Generation override set to " +
+            "Lets NVIDIA's runtime pick the multiplier every frame to hold a target frame rate. Needs D3D12 and a runtime that reports Dynamic support. MFG Unlock accepts " +
+            "nvngx_dlssg.dll 310.9.1 or newer with Streamline 2.14 or newer (since its 1.8.5); only 310.9.1 with 2.14.1 and 310.9.16 with 2.14.16 are validated, so the app warns for other pairs. " +
+            "Use one matching Streamline set (see Replace Streamline files), driver 595.41+, and the NVIDIA App's DLSS Frame Generation override set to " +
             "'Use the 3D application setting'. Fully close and restart the game. Takes priority over the forced multiplier."),
         new("dynamic-target", "MFG Unlock", "Dynamic target FPS", "The frame rate Dynamic MFG aims for.",
             "The frame rate Dynamic MFG aims for. Refresh rate follows the display. Ignored while VSync is on."),
@@ -504,7 +524,10 @@ public static class HelpTopics
             "DLSS-G (the default) unlocks 3x and 4x DLSS multi frame generation on RTX 40 cards; it needs a game with DLSS frame generation through Streamline and a modern nvngx_dlssg.dll. " +
             "Intel XeMFG (1.5.0 and newer) runs Intel XeSS frame generation at 2x to 6x on RTX 20, 30, 40 and 50, fed by the game's DLSS-G inputs (or its own XeSS-FG or FSR 3.1 frame generation). It is D3D12 only, " +
             "needs Intel's libxess_fg.dll and libxell.dll beside the game exe (install them from the panel: Diagnostics, Intel runtime files) and does not work in exclusive fullscreen: use borderless or windowed. " +
-            "Other games are not affected. Turn it off on RTX 50 (it has MFG natively), on cards without frame generation, or when the game misbehaves with frame generation forced."),
+            "Other games are not affected. Turn it off on RTX 50 (it has MFG natively), on cards without frame generation, or when the game misbehaves with frame generation forced. " +
+            "Since 1.11.0 its panel also has a performance overlay (off, Shift+F10), and since 1.12.0 a DLSS 5 tab where MFG Unlock runs NVIDIA's neural rendering itself (off by default, needs nvngx_dlssnr.dll beside the game exe). " +
+            "The app never turns either on or writes MFGAdaUnlock.ini. Keep MFG Unlock's own DLSS 5 off whenever OptiScaler's NR, GITC Uplift, Lecram or the RenoDX DLSS add-on is in the game: " +
+            "two neural routes hook the same NGX calls, and MFG Unlock only stands aside for add-ons with dlss5 in their file name or ones that create NR through NVIDIA's runtime."),
         new("comp-dlssnr", "Components", "NR runtime", "NVIDIA's DLSS 5 neural rendering model (nvngx_dlssnr.dll), needed by every NR route.",
             "NVIDIA's DLSS 5 neural rendering model, nvngx_dlssnr.dll. The app downloads it automatically into Settings, Local components; you can also import your own. " +
             "NVIDIA's original needs an RTX 50 card; for RTX 20/30/40 use a compat build (import it if it isn't in the library). OptiScaler's NR and every NR add-on need it. " +
@@ -684,7 +707,7 @@ public static class HelpTopics
         ["lc-buffering"] = "Add-on default. Same frame only if the added frame of latency bothers you and the FPS holds.",
         ["lc-upscaler"] = "Add-on default. DLSS in a game that only offers FSR 3.1 or XeSS, on an RTX card; keep the preset at Default and the mode at the game's choice unless you want another render size.",
         ["lc-halo"] = "Add-on default. Raise it if bright rims appear around characters or objects.",
-        ["lc-framegen"] = "Add-on default (off). On at 2x on an RTX 40 or newer card in a game without its own frame generation; turn it off if the game crashes or stays black. VSync On if you see tearing (not with Dynamic).",
+        ["lc-framegen"] = "Add-on default (off). On at 2x on an RTX 40 or newer card in a game without its own frame generation; turn it off if the game crashes or stays black. VSync On if you see tearing (not with Dynamic). Keep the generator on NVIDIA DLSS unless you have the Video Frame Generation files; In game only if menus or loading screens show artefacts.",
         ["lc-fg-ui"] = "Add-on default. Interpolated only if the HUD stutters and you accept it warping.",
         ["lc-fg-hdr"] = "Add-on default. scRGB only if HDR looks wrong with NR's frame generation in v13.4; v14 ignores it.",
         ["lc-sdrhdr"] = "Add-on default (Off). Balanced for an SDR game on an HDR display if you'd otherwise use RTX HDR; Bright if Balanced looks flat.",
@@ -709,6 +732,10 @@ public static class HelpTopics
         ["nr-depthfade"] = "Off. Try it when NR changes the sky, distant scenery or a first-person weapon too much: far strength 0.25 to 0.5, lower sky strength, near strength under 1. It does nothing in games that give no depth.",
         ["f5-framegen"] = "Leave on auto. DLSS-G only on an RTX GPU with the streamline files in place; Intel XeFG if the tensor-core path misbehaves. Restart the game after changing it.",
         ["f5-keep-dlssg"] = "Leave on auto. Only try On if the game's own DLSS-G has to stay, and expect a possible GPU fault at level load.",
+        ["f5-dlssg-preset"] = "Leave on auto. Try C (FG Lite) when frame generation costs too much and DLSS 310.9.16 or newer is in place; B if the UI breaks up.",
+        ["f5-memory"] = "Leave it. Switch to everything only if the frame rate still drops when video memory is full; off only to compare.",
+        ["f5-vulkan"] = "Leave all four on their defaults. Turn the tearing option off if a Vulkan game tears with V-Sync off and you prefer none. Flip metering only on an RTX 50 card and to compare.",
+        ["f5-unreal-xess"] = "Leave it on. Turn it off only when an Unreal Engine game with the XeSS plugin misbehaves while XeSS is picked.",
         ["nr-colour"] = "Low (0.2) keeps the game's art direction. Raise toward 1 only if you like the model's colour grading.",
         ["tm-mode"] = "SDR games: leave it, it doesn't apply. HDR games: Hybrid composed as the safe default; Neutwo composed if highlights look dull; " +
                       "replace modes only if composed looks too weak.",

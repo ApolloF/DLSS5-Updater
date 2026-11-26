@@ -23,21 +23,21 @@ public static partial class SettingsOptions
 
     public static IniOptionViewModel[] Mfg(ObservableCollection<IniOverride> rs) =>
     [
-        new IniOptionViewModel("Force frame multiplier", "Only for games with just an FG on/off switch.", "RenoDX.MFGUnlock", "ForceMultiplier", rs,
+        new IniOptionViewModel("Force frame multiplier", "Only for games with just an FG on/off switch.", MfgConfig.Section, "ForceMultiplier", rs,
             C("Game setting", null, "Use the multiplier the game's own menu selects."),
             C("2x", "2", "One generated frame per rendered frame."),
             C("3x", "3", "Two generated frames per rendered frame."),
             C("4x", "4", "Three generated frames; the usual RTX 50 maximum."),
             C("5x", "5", "Four generated frames. May need Max frame count 5+; not every game accepts it."),
             C("6x", "6", "Five generated frames. Highest the add-on allows; most latency and artifacts.")).About("force-multiplier"),
-        new IniOptionViewModel("Max frame count", "Highest multiplier reported to the game.", "RenoDX.MFGUnlock", "MaxCount", rs,
+        new IniOptionViewModel("Max frame count", "Highest multiplier reported to the game.", MfgConfig.Section, "MaxCount", rs,
             C("Default · 4", null, "Report up to 4x, like an RTX 50 card."),
             C("3", "3", "Game offers up to 3x."),
             C("4", "4", "Game offers up to 4x."),
             C("5", "5", "Game may offer 5x if its menu is built from the reported maximum. Highest the add-on accepts; some games break above 4.")).About("max-count"),
-        IniOptionViewModel.Toggle("Dynamic MFG", "Needs DLSS-G 310.9.1 or 310.9.16 with the matching Streamline set (2.14.1 / 2.14.16), D3D12. Overrides the forced multiplier.",
-            "RenoDX.MFGUnlock", "DynamicMFG", "1", rs).About("dynamic-mfg"),
-        new IniOptionViewModel("Dynamic target FPS", "What Dynamic MFG aims for.", "RenoDX.MFGUnlock", "DynamicTargetFPS", rs,
+        IniOptionViewModel.Toggle("Dynamic MFG", "D3D12, DLSS-G 310.9.1 or newer with Streamline 2.14 or newer; validated with 310.9.1 / 310.9.16 and 2.14.1 / 2.14.16. Overrides the forced multiplier.",
+            MfgConfig.Section, "DynamicMFG", "1", rs).About("dynamic-mfg"),
+        new IniOptionViewModel("Dynamic target FPS", "What Dynamic MFG aims for.", MfgConfig.Section, "DynamicTargetFPS", rs,
             C("Refresh rate", null, "Follow the display's refresh rate."),
             C("60", "60", "Hold 60 FPS output."),
             C("90", "90", "Hold 90 FPS output."),
@@ -45,21 +45,21 @@ public static partial class SettingsOptions
             C("144", "144", "Hold 144 FPS output."),
             C("165", "165", "Hold 165 FPS output."),
             C("240", "240", "Hold 240 FPS output.")).About("dynamic-target"),
-        new IniOptionViewModel("Runtime selection", "Which DLSS-G files NVIDIA's runtime may use.", "RenoDX.MFGUnlock", "RuntimeSelectionMode", rs,
+        new IniOptionViewModel("Runtime selection", "Which DLSS-G files NVIDIA's runtime may use.", MfgConfig.Section, "RuntimeSelectionMode", rs,
             C("Game default", null, "Keep the game's own over-the-air policy. NVIDIA may swap in its downloaded FG."),
             C("Prefer local files", "1", "Disable OTA so the DLLs installed in the game folder are used. Recommended with pinned DLSS or the Streamline swap."),
             C("Force NVIDIA OTA", "2", "Force NVIDIA's downloaded runtime even if the game disables it.")).About("runtime-selection"),
-        new IniOptionViewModel("HDR compatibility", "Workarounds when FG breaks HDR UI or colours.", "RenoDX.MFGUnlock", "HDRCompatibilityMode", rs,
+        new IniOptionViewModel("HDR compatibility", "Workarounds when FG breaks HDR UI or colours.", MfgConfig.Section, "HDRCompatibilityMode", rs,
             C("Native", null, "No workaround. Use when HDR looks right."),
             C("UI Composition", "1", "Handle the HUD separately from the generated frames. First thing to try for broken or smeared UI."),
             C("Auto guard + UI", "2", "UI Composition plus automatic detection of problem frames."),
             C("Final color fallback", "3", "Most invasive fallback for games the other modes don't fix.")).About("hdr-compat"),
-        new IniOptionViewModel("Reflex mode", "Overrides the game's NVIDIA Reflex setting.", "RenoDX.MFGUnlock", "ReflexModeOverride", rs,
+        new IniOptionViewModel("Reflex mode", "Overrides the game's NVIDIA Reflex setting.", MfgConfig.Section, "ReflexModeOverride", rs,
             C("Game setting", null, "Leave Reflex as the game sets it."),
             C("Off (FG-safe)", "1", "Reflex off, which some games need while frame generation is forced."),
             C("On", "2", "Reflex on."),
             C("On + Boost", "3", "Reflex on with Boost.")).About("mfg-reflex"),
-        new IniOptionViewModel("Output FPS cap", "Highest output frame rate with frame generation.", "RenoDX.MFGUnlock", "ReflexSourceFpsCap", rs,
+        new IniOptionViewModel("Output FPS cap", "Highest output frame rate with frame generation.", MfgConfig.Section, "ReflexSourceFpsCap", rs,
             C("Off", null, "No cap from the add-on."),
             C("60", "60", "Cap output at 60 FPS."),
             C("120", "120", "Cap output at 120 FPS."),
@@ -67,24 +67,24 @@ public static partial class SettingsOptions
             C("165", "165", "Cap output at 165 FPS."),
             C("240", "240", "Cap output at 240 FPS.")).About("mfg-fps-cap"),
         IniOptionViewModel.Toggle("Reflex VRR headroom", "Keep the frame rate a little under the refresh rate on VRR displays.",
-            "RenoDX.MFGUnlock", "ReflexVrrHeadroomEnabled", "1", rs).About("mfg-vrr-headroom"),
+            MfgConfig.Section, "ReflexVrrHeadroomEnabled", "1", rs).About("mfg-vrr-headroom"),
         IniOptionViewModel.Toggle("Raise frame ceiling", "Lets old Streamline plugins reach 6x. Breaks some games.",
-            "RenoDX.MFGUnlock", "RaiseFrameCeiling", "1", rs).About("mfg-raise-ceiling"),
+            MfgConfig.Section, "RaiseFrameCeiling", "1", rs).About("mfg-raise-ceiling"),
         IniOptionViewModel.Toggle("Force flip metering off", "Only if 3x / 4x freezes the game. Restart the game afterwards.",
-            "RenoDX.MFGUnlock", "ForceFlipMeteringOff", "1", rs).About("mfg-flip-metering"),
-        new IniOptionViewModel("Depth edge guard", "Frame generation protection around sharp depth edges.", "RenoDX.MFGUnlock", "DepthEdgeGuardLevel", rs,
+            MfgConfig.Section, "ForceFlipMeteringOff", "1", rs).About("mfg-flip-metering"),
+        new IniOptionViewModel("Depth edge guard", "Frame generation protection around sharp depth edges.", MfgConfig.Section, "DepthEdgeGuardLevel", rs,
             C("Game setting", null, "Leave the game's own behaviour."),
             C("1", "1", "Slightly lower separation thresholds."),
             C("2", "2", "Lower."),
             C("3", "3", "Lower still."),
             C("4", "4", "Lowest thresholds; the strongest guard.")).About("mfg-depth-edge"),
-        new IniOptionViewModel("VRR headroom amount", "How far under the refresh rate Reflex VRR headroom keeps the output.", "RenoDX.MFGUnlock", "ReflexVrrHeadroomBasisPoints", rs,
+        new IniOptionViewModel("VRR headroom amount", "How far under the refresh rate Reflex VRR headroom keeps the output.", MfgConfig.Section, "ReflexVrrHeadroomBasisPoints", rs,
             C("Add-on default (1%)", null, "1% under the refresh rate."),
             C("0.5%", "50", "Closest to the refresh rate."),
             C("1%", "100", "Add-on default."),
             C("2%", "200", "More margin for uneven frame times."),
             C("3%", "300", "Largest margin the add-on accepts.")).About("mfg-vrr-headroom"),
-        new IniOptionViewModel("Boundary artifact fix", "Cleans generated-frame artifacts at screen and object boundaries. Restart the game after changing.", "RenoDX.MFGUnlock", "BoundaryArtifactMitigationMode", rs,
+        new IniOptionViewModel("Boundary artifact fix", "Cleans generated-frame artifacts at screen and object boundaries. Restart the game after changing.", MfgConfig.Section, "BoundaryArtifactMitigationMode", rs,
             C("Add-on default (Balanced)", null, "Balanced mitigation."),
             C("Off (old behaviour)", "0", "Behaviour from before the fix."),
             C("Balanced", "1", "Add-on default."),
@@ -200,18 +200,19 @@ public static partial class SettingsOptions
     ];
 
     // Keys, defaults and ranges from docs/addons/lecram-dlss5.md (v10.7 and v11.0.0-beta.6 / beta.18 / beta.22 / beta.29 / beta.45 /
-    // beta.48 read from the binaries and probed; v11.9.0, v12.0.0, v12.9.9, v13.4.0 and v14.0.0 from their settings catalog and panel texts).
+    // beta.48 read from the binaries and probed; v11.9.0, v12.0.0, v12.9.9, v13.4.0, v14.0.0 and v15.2.0 from their settings catalog and panel texts).
     // Values the docs don't confirm are not offered. Options of one generation only are hidden for the other (LecramIni.IsAvailable) and
     // keys whose choices differ per generation carry a variant (IniOptionViewModel.In). Within v11 only values that mean the same in
     // beta.6 and beta.18+ are offered (NRPresentGuides 0 flipped meaning, so it is not), so no per-build choice variant is needed; keys an
     // older v11 build lacks (NRGpuCrashWitness before beta.22, NRPass2..4Preset before beta.29, NRPresentFgPath before beta.48, the
     // per-pass hook point and resolution, frame buffering, the upscaler and halo removal before v12.9.9, frame generation before v13.4.0,
-    // VSync, DLSS mode, SDR to HDR and Safe mode before v14.0.0) are hidden and not written for it, and so are keys a later build retired
+    // VSync, DLSS mode, SDR to HDR and Safe mode before v14.0.0, the frame generator and where frame generation runs before v15.2.0) are hidden and not written for it, and so are keys a later build retired
     // (NRPresentFgPath from v12.0.0, NRHdrScreen from v14.0.0). NRMaskBlendMode (raw NGX
     // value, undocumented) and v12's NROpticalFlow (unprobed; the app writes ConfigVersion=11) are not offered.
     // Not exposed: the other Present/HDR, normalisation, Look (Fine-tune), model-lab, layer, per-pass look, Input lab, experimental and
     // screenshot keys, which are tuned in the add-on's own overlay; v14's SDR to HDR sliders, optical flow level and grid, Engine inputs,
-    // Game mode, the new hotkeys and its migration markers likewise.
+    // Game mode, the new hotkeys and its migration markers likewise; v15's optical flow input size, the Intel XeSS gate (NRXeFg, the author's
+    // own installs only), the model lab's new-model keys and its migration markers.
     public static IniOptionViewModel[] Lecram(ObservableCollection<IniOverride> rs) =>
     [
         new IniOptionViewModel("Neural rendering", "Master switch of the neural model (v11 and newer).", LecramIni.Section, "NeuralUplift", rs,
@@ -391,6 +392,14 @@ public static partial class SettingsOptions
             C("Add-on default", null, "Leave the add-on's own choice (0, off)."),
             C("Off", "0", "The add-on's default."),
             C("On", "1", "The camera finder, the TAA pass input, extended DLSS, call-time guides, frame pairing repair, engine inputs, Game mode and the overlay key off; their own values kept.")).About("lc-safe"),
+        new IniOptionViewModel("Frame generator", "Which frame generation NR runs (v15.2.0 and newer). Read when the game starts.", LecramIni.Section, "NRFrameGenEngine", rs,
+            C("Add-on default", null, "Leave the add-on's own choice (0, NVIDIA DLSS)."),
+            C("NVIDIA DLSS", "0", "NVIDIA's DLSS Frame Generation, made from the game's own motion and depth. The add-on's default."),
+            C("NVIDIA VFG", "2", "NVIDIA's Video Frame Generation, made from the picture alone, on RTX 40 and 50 cards. Needs files in NR's store that the author's setup fetches; where they are missing the add-on falls back to DLSS and logs why.")).About("lc-framegen"),
+        new IniOptionViewModel("Frame generation runs", "Which frames NR's frame generation is given (v15.2.0 and newer).", LecramIni.Section, "NRFrameGenRealInputs", rs,
+            C("Add-on default", null, "Leave the add-on's own choice (0, Always on)."),
+            C("Always on", "0", "Every frame, menus and loading screens too; a frame without the game's camera gets NR's stand-in. The add-on's default."),
+            C("In game", "1", "Only frames with the game's own camera and motion; menus, loading screens and the like show only the game's own frames.")).About("lc-framegen"),
     ];
 
     private static IniOptionViewModel LecramPassHookPoint(int pass, ObservableCollection<IniOverride> rs) =>
@@ -516,6 +525,37 @@ public static partial class SettingsOptions
         new IniOptionViewModel("Sky strength", "Share of NR's result kept on the sky (pixels at the far plane).", "DlssNr", "DepthFadeSkyStrength", o,
             C("Default · 1.0", null, "All of NR's result on the sky."),
             C("0", F(0), "None."), C("0.5", F(0.5), "Half."), C("1.0", F(1.0), "Default.")).About("nr-depthfade"),
+        // From F5 0.1.39 (OptiSources.F5's VersionedKeys).
+        new IniOptionViewModel("DLSS-G preset", "Which DLSS-G frame generation model runs in this game; applies after a game restart.", "DLSSG", "Preset", o,
+            C("Default · auto", null, "What the NVIDIA driver profile says."),
+            C("A", "A", "The default model."),
+            C("B", "B", "UI focus (UI recomposition)."),
+            C("C", "C", "FG Lite: faster generation, slightly lower quality. Needs nvngx_dlssg.dll 310.9.16 or newer.")).About("f5-dlssg-preset"),
+        new IniOptionViewModel("Protect video memory", "Keeps OptiScaler's video memory on the graphics card when it runs full.", "Memory", "ProtectMemory", o,
+            C("Default · frame generator", null, "Only the frame generator (f5low.dll)."),
+            C("Off", "off", "Do nothing."),
+            C("Frame generator", "fg", "Only the frame generator (f5low.dll)."),
+            C("Everything", "all", "Also OptiScaler itself and the NVIDIA runtimes.")).About("f5-memory"),
+        new IniOptionViewModel("Vulkan: show every generated frame", "F5Low on a Vulkan game with V-Sync off; the swapchain is made with it.", "F5Low", "VulkanTearing", o,
+            C("Default · on", null, "Every generated frame reaches the screen; it may tear, like DirectX 12."),
+            C("On", "true", "Every generated frame reaches the screen; it may tear, like DirectX 12."),
+            C("Off", "false", "Keep the game's no-tearing mode: the driver drops frames above the screen's refresh rate.")).About("f5-vulkan"),
+        new IniOptionViewModel("Vulkan: latency gate", "F5Low on a Vulkan game: keeps the game from running ahead of what is shown.", "F5Low", "VulkanLatencyGate", o,
+            C("Default · on", null, "Needs VK_KHR_present_wait on the device."),
+            C("On", "true", "Needs VK_KHR_present_wait on the device."),
+            C("Off", "false", "No gate; to compare.")).About("f5-vulkan"),
+        new IniOptionViewModel("Vulkan: F5Low pacer", "F5Low on a Vulkan game: how the frames are spaced.", "F5Low", "VulkanPacer", o,
+            C("Default · on", null, "F5Low's own pacer (needs a newer f5low.dll)."),
+            C("On", "true", "F5Low's own pacer (needs a newer f5low.dll)."),
+            C("Off", "false", "Plain even spacing.")).About("f5-vulkan"),
+        new IniOptionViewModel("Vulkan: flip metering", "F5Low on a Vulkan game: hardware flip metering (VK_NV_present_metering). Experimental, RTX 50 only.", "F5Low", "VulkanFlipMetering", o,
+            C("Default · off", null, "Not used."),
+            C("Off", "false", "Not used."),
+            C("On", "true", "Experimental: the GPU meters the flips (RTX 50 only).")).About("f5-vulkan"),
+        new IniOptionViewModel("XeSS depth in Unreal Engine", "Unreal Engine games with Intel's XeSS plugin: take depth and motion vectors from the plugin.", "XeSS", "UnrealDepth", o,
+            C("Default · on", null, "OptiScaler takes the scene depth and render resolution motion vectors from the plugin."),
+            C("On", "true", "OptiScaler takes the scene depth and render resolution motion vectors from the plugin."),
+            C("Off", "false", "Leave the plugin's data alone; for a game that misbehaves with it.")).About("f5-unreal-xess"),
     ];
 
     public static IniOptionViewModel[] Tonemap(ObservableCollection<IniOverride> o) =>

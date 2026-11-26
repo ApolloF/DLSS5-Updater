@@ -40,6 +40,31 @@ public static class ComponentTable
     };
 
     public sealed record RowRule(bool Visible, bool Editable, bool? On);
+
+    /// <summary>The NR add-ons: one neural consumer per game (<see cref="NrAddons"/>), each loaded by ReShade.</summary>
+    public static readonly IReadOnlyList<string> NrAddonIds = [ComponentRegistry.RenoDx, ComponentRegistry.Lecram, ComponentRegistry.Uplift];
+
+    /// <summary>
+    /// The rows that follow when row <paramref name="id"/> goes on or off in <paramref name="mode"/>, by hand or from a card. An NR add-on
+    /// needs ReShade and the NR runtime. MFG Unlock is a ReShade add-on: next to OptiScaler, OptiScaler loads ReShade64.dll (LoadReshade),
+    /// so MFG Unlock brings the ReShade row on, and as it can't load there without ReShade, unticking ReShade takes it off.
+    /// </summary>
+    public static IReadOnlyList<(string Id, bool On)> Follow(string id, bool on, InstallMode mode)
+    {
+        if (on && NrAddonIds.Contains(id, StringComparer.OrdinalIgnoreCase)) return [(ComponentRegistry.DlssNr, true), (ComponentRegistry.ReShade, true)];
+        if (mode != InstallMode.OptiScaler) return [];
+        if (on && id.Equals(ComponentRegistry.MfgUnlock, StringComparison.OrdinalIgnoreCase)) return [(ComponentRegistry.ReShade, true)];
+        if (!on && id.Equals(ComponentRegistry.ReShade, StringComparison.OrdinalIgnoreCase)) return [(ComponentRegistry.MfgUnlock, false)];
+        return [];
+    }
+
+    /// <summary>The rows <paramref name="ids"/> bring on with them in <paramref name="mode"/> (<see cref="Follow"/>), the ids themselves first.</summary>
+    public static IReadOnlyList<string> WithFollowers(IEnumerable<string> ids, InstallMode mode)
+    {
+        var list = ids.ToList();
+        return list.Concat(list.SelectMany(id => Follow(id, true, mode)).Where(f => f.On).Select(f => f.Id))
+            .Distinct(StringComparer.OrdinalIgnoreCase).ToList();
+    }
 }
 
 /// <summary>One component row as the picker sees it.</summary>
@@ -64,13 +89,42 @@ public static class MethodMatch
     /// of another's (the DLSS update inside every DLSS game) loses to it. A tie goes to <paramref name="clicked"/>, else to the
     /// higher-ranked card. Null: no card matches, the user made their own selection.
     /// </summary>
-    public static MethodOption? Picked(IEnumerable<MethodOption> choices, IReadOnlyDictionary<string, TableRow> table, InstallMode mode, Method? clicked = null)
+    public static MethodOption? Picked(IEnumerable<MethodOption> choices, IReadOnlyDictionary<string, TableRow> table, InstallMode mode, MethodOption? clicked = null)
     {
         var matching = choices.Where(m => Matches(m, table, mode)).ToList();
         if (matching.Count == 0) return null;
         var most = matching.Max(m => m.Components.Count);
         var best = matching.Where(m => m.Components.Count == most).ToList();
-        return best.FirstOrDefault(m => m.Method == clicked) ?? best[0];
+        return best.FirstOrDefault(m => SameCard(m, clicked)) ?? best[0];
+    }
+
+    /// <summary>The same card of the panel, also across a refresh of the advice: a method can have several cards (one per NR add-on), told apart by title.</summary>
+    public static bool SameCard(MethodOption? a, MethodOption? b) => a is not null && b is not null && a.Method == b.Method && a.Title == b.Title;
+
+    /// <summary>
+    /// The rows picking <paramref name="next"/> turns off, besides the mode's own rules: the rows only the <paramref name="previous"/> card
+    /// used, and the other NR add-ons when the card brings one (one neural consumer). A row the card needs, or an add-on that stays on
+    /// (<paramref name="addOnsOn"/>, with what it brings in the card's mode, such as ReShade for MFG Unlock next to OptiScaler), stays on.
+    /// </summary>
+    public static IReadOnlyList<string> TurnsOff(MethodOption next, MethodOption? previous, IEnumerable<MethodOption> addOnsOn, InstallMode mode)
+    {
+        var cardMode = next.Mode ?? mode;
+        var keep = new HashSet<string>(ComponentTable.WithFollowers(next.Components, cardMode), StringComparer.OrdinalIgnoreCase);
+        foreach (var a in addOnsOn) keep.UnionWith(ComponentTable.WithFollowers(a.Components, cardMode));
+        var off = new List<string>(previous?.Components ?? []);
+        if (next.Components.Any(id => ComponentTable.NrAddonIds.Contains(id, StringComparer.OrdinalIgnoreCase))) off.AddRange(ComponentTable.NrAddonIds);
+        return [.. off.Where(id => !keep.Contains(id)).Distinct(StringComparer.OrdinalIgnoreCase)];
+    }
+
+    /// <summary>
+    /// The card's "Turns on: ..." line with the table's names: its rows and the rows they bring in the card's mode (ReShade for MFG Unlock
+    /// next to OptiScaler), and the OptiScaler row going off for a card that needs ReShade + add-ons. Empty for a card that can't be picked.
+    /// </summary>
+    public static string TurnsOnText(MethodOption m, InstallMode mode, Func<string, string>? nameOf = null)
+    {
+        if (!m.Selectable) return "";
+        var text = "Turns on: " + Names(ComponentTable.WithFollowers(m.Components, m.Mode ?? mode), nameOf);
+        return m.Mode == InstallMode.ReShadeOnly ? $"{text}. Turns off: {(nameOf ?? ComponentTable.NameOf)(ComponentRegistry.OptiScaler)}" : text;
     }
 
     /// <summary>The components on in the table (shown rows only, table order) that neither <paramref name="picked"/> nor an add-on brings.</summary>

@@ -23,6 +23,7 @@ public sealed partial class Installer
                 var m = InstallManifest.Read(targetDir) ?? new InstallManifest();
                 m.Contain(targetDir, game.Root);
                 var ctx = new Ctx(FileUtil.Normalize(game.Root), targetDir, m, null, game);
+                MigrateBackups(ctx);
                 try
                 {
                     var undo = ApplyPlan(ctx, plan);

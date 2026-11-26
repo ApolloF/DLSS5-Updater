@@ -179,11 +179,18 @@ public sealed partial class Installer(ComponentStore store)
         var mfgPlan = o.Mfg ? PlanMfg(game, o, dlss, FileUtil.ParseTag(store.Streamline?.Tag)) : null;
         if (mfgPlan?.Skip is { } skip) Log.Info($"{game.Name}: MFG Unlock skipped. {skip}");
         foreach (var w in mfgPlan?.Warnings ?? []) Log.Warn($"{game.Name}: {w}");
+        if (mfgPlan?.Install == true && MfgConfig.Warning(o.MfgTag ?? store.Mfg?.Tag) is { } mfgWarning) Log.Warn($"{game.Name}: {mfgWarning}");
         if (mfgPlan?.SwapStreamline == true) Log.Info($"{game.Name}: Dynamic MFG needs the matching Streamline set, so the game's sl.*.dll files are replaced too");
         var mfg = mfgPlan?.Install == true ? await store.EnsureMfgAsync(o.MfgTag, progress, ct) : null;
         var swapSl = o.Streamline || mfgPlan?.SwapStreamline == true;
         var sl = swapSl && game.Streamline.Count > 0 ? await store.EnsureStreamlineAsync(progress, ct) : null;
         if (o.Streamline && game.Streamline.Count == 0) Log.Info($"{game.Name}: no Streamline files in this game, skipped");
+        // MFG Unlock is a ReShade add-on: next to OptiScaler only the ReShade64.dll it loads (LoadReshade) brings the add-on in.
+        if (o.Opti && !o.ReShadeOnly && !o.ReShade && (mfgPlan?.Install == true || (o.KeepMfg && InstallManifest.Read(targetDir)?.Mfg == true)))
+        {
+            o = o with { ReShade = true };
+            Log.Info($"{game.Name}: MFG Unlock is a ReShade add-on, so ReShade is installed with it (OptiScaler loads it)");
+        }
         // ReShade32.dll for a 32-bit game when ReShade is the proxy; beside OptiScaler it is always the 64-bit ReShade64.dll it loads.
         var reshadeFile = o.ReShade ? await store.EnsureReShadeAsync(o.ReShadeBuildPick, o.ReShadeOnly && game.Effective.Bits == 32 ? 32 : 64, progress, ct) : null;
         var reshade = reshadeFile?.Path;
@@ -211,6 +218,7 @@ public sealed partial class Installer(ComponentStore store)
         var m = InstallManifest.Read(targetDir) ?? new InstallManifest();
         m.Contain(targetDir, game.Root);
         var ctx = new Ctx(FileUtil.Normalize(game.Root), targetDir, m, KeptAddonFiles(o), game);
+        MigrateBackups(ctx);
         if (lecramHost is not null)
             foreach (var full in ComponentStore.LecramHostFiles.Select(f => Path.Combine(targetDir, f)))
                 if (FileUtil.LinkBelow(targetDir, full) is { } link)
@@ -387,7 +395,7 @@ public sealed partial class Installer(ComponentStore store)
     /// Why this selection is a poor mix, one line each; empty when it is fine. Never blocks by itself: the user confirms the
     /// lines (<see cref="InstallOptions.ConfirmedConflict"/>), the install goes ahead and the warning stays on the game.
     /// Covers the one-neural-consumer rule (docs/advisor.md, decision table row 18) and OptiScaler's built-in MFG unlock next to
-    /// the MFG Unlock add-on.
+    /// the MFG Unlock add-on, and OptiScaler in a folder the game's exe doesn't run from (<see cref="GameProcess"/>).
     /// </summary>
     /// <param name="latestOptiTag">The newest OptiScaler release, which a run without a pinned build installs.</param>
     public static IReadOnlyList<string> Conflicts(string targetDir, InstallOptions o, string? latestOptiTag = null)
@@ -396,6 +404,7 @@ public sealed partial class Installer(ComponentStore store)
         var found = new List<string>(NrAddons.Conflicts(routes));
         var optiTag = o.OptiTag ?? latestOptiTag;
         if (MfgUnlockConflict(targetDir, WithMfgDefaults(targetDir, o, optiTag), optiTag) is { } mfg) found.Add(mfg);
+        if (o.Opti && !o.ReShadeOnly && GameProcess.OptiScalerFolderWarning(targetDir) is { } folder) found.Add(folder);
         if (InjectsFiles(o) && IsStorePath(targetDir)) found.Add(MethodAdvisor.StoreCaution);
         return found;
     }
@@ -1207,20 +1216,57 @@ public sealed partial class Installer(ComponentStore store)
         Persist(ctx);
     }
 
+    /// <summary>
+    /// Stored backups end in this, so no loader or search (OptiScaler looks through every folder below its dll, dot folders
+    /// included) takes the game's old nvngx_dlss.dll or any other backed-up dll for a live one.
+    /// </summary>
+    internal const string BackupSuffix = ".dlssbak";
+
     /// <summary>The entry as a path inside the backup folder: install-folder entries go under "_install".</summary>
     private static string BackupName(string rel) =>
         rel.StartsWith(InstallManifest.InstallTag, StringComparison.Ordinal)
             ? "_install" + rel[InstallManifest.InstallTag.Length..]
             : rel.Replace("..", "_up");
 
-    /// <summary>A backup name no entry uses and no file holds, so a new backup never overwrites a saved original.</summary>
+    /// <summary>A backup name (<paramref name="name"/> + suffix) no entry uses and no file holds, so a new backup never overwrites a saved original. Collisions become "name.N.dlssbak".</summary>
     private static string FreeBackupName(Ctx ctx, string name)
     {
-        var candidate = name;
+        var candidate = name + BackupSuffix;
         for (var i = 1; File.Exists(Path.Combine(ctx.BackupDir, candidate))
                         || ctx.M.Backups.Any(b => b.Backup.Equals(candidate, StringComparison.OrdinalIgnoreCase)); i++)
-            candidate = $"{name}.{i}";
+            candidate = $"{name}.{i}{BackupSuffix}";
         return candidate;
+    }
+
+    /// <summary>
+    /// Records from before the suffix hold the backups under the original's name. Each such file is renamed (never over
+    /// another file) and its entry follows; the record is saved right after. A missing file only renames the entry.
+    /// </summary>
+    private static void MigrateBackups(Ctx ctx)
+    {
+        var changed = false;
+        foreach (var b in ctx.M.Backups.Where(b => b.Backup.Length > 0 && !InstallManifest.IsFullPath(b.Backup)
+                     && !b.Backup.EndsWith(BackupSuffix, StringComparison.OrdinalIgnoreCase)).ToList())
+        {
+            var old = b.Backup;
+            var next = FreeBackupName(ctx, old);
+            var src = Path.Combine(ctx.BackupDir, old);
+            try
+            {
+                if (File.Exists(src)) File.Move(src, Path.Combine(ctx.BackupDir, next), false);
+            }
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+            {
+                Log.Warn($"  backup {old} could not be renamed: {ex.Message}");
+                continue;
+            }
+            b.Backup = next;
+            foreach (var c in ctx.M.Components)
+                foreach (var key in c.Backups.Where(kv => kv.Value.Equals(old, StringComparison.OrdinalIgnoreCase)).Select(kv => kv.Key).ToList())
+                    c.Backups[key] = next;
+            changed = true;
+        }
+        if (changed) Persist(ctx);
     }
 
     private void PlaceDlssNr(Ctx ctx, string source)

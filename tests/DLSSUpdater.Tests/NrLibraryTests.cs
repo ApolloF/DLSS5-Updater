@@ -95,7 +95,7 @@ public sealed class NrLibraryTests : IDisposable
     [Fact]
     public void PresetOptions_WriteTheDllPresetScaleForBothHosts()
     {
-        var opti = ViewModels.SettingsOptions.Nr([]).Single(x => x.Key == "Preset");
+        var opti = ViewModels.SettingsOptions.Nr([]).Single(x => x.Section == "DlssNr" && x.Key == "Preset");
         var renodx = ViewModels.SettingsOptions.RenoDx([]).Single(x => x.Key == "DirectNeuralRenderingPreset");
         Assert.Equal("DlssNr", opti.Section);
         Assert.Equal([null, "1", "2"], opti.Choices.Select(c => c.Value));

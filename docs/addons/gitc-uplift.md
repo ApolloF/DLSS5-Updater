@@ -12,6 +12,16 @@ matter here: `SHA256SUMS.txt` now uses the binary-mode marker (`<hash> *<name>`)
 (`src/addon/host_common.hpp`, `ApplyStartEnabled`); and Uplift now runs beside a DLSS 5 game's own `nvngx_dlssnr.dll`
 instead of refusing to start.
 
+## Known issue: Before FG probe (1.8.0 to 2.0.0)
+
+From 1.8.0, Uplift's Before FG start-up probe (`streamline_present.cpp`, `Poll`) creates a DXGI factory through Streamline's
+own `CreateDXGIFactory1` export and hooks it, whatever the settings. When another layer also wraps Streamline's factory
+(MFG Unlocker, or Unreal's FSR plugin with `r.FidelityFX.FI.OverrideSwapChainDX12=1`), DLSS-G's hooks run twice and the game
+faults at swap-chain creation: Phantom Blade Zero (2026-11-26) crashed in `dxgi.dll` with Uplift, `sl.interposer.dll` and
+NVIDIA's OTA `sl_dlss_g_override` on the stack, with and without MFG Unlock. Upstream issues 18 and 26; fixed in 29f0d43
+("Probe Streamline's factories without calling its export"), after 2.0.0. Avatar: Frontiers of Pandora runs 2.0.0 fine.
+The app warns at install for 1.8.0 to 2.0.0 and names 1.7.0, the last build without the probe, as the per-game pick.
+
 ## Release package
 
 - Asset `GITC-Uplift-<version>.zip` plus `SHA256SUMS.txt` on GitHub releases (tag `v<version>`).

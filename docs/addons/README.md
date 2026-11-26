@@ -11,6 +11,7 @@ checked, and keep the "Checked builds" table current.
 | ReShade | crosire | `ReShade64.dll`, `ReShade32.dll` | [reshade.md](reshade.md) (open source: sources, verification, DLL names, Vulkan layer, foreign-dll signs) |
 | HSF (frame generation, preview) | Capt-Hunter | `hsf.addon64`, `hsf.addon32`, `HSF_streamline\`, `reshade-shaders\` | [hsf.md](hsf.md) (private licence, import only; only what the README and the file layout say) |
 | DLSS5 Neural Rendering | Lecram | `renodx-dlss5.addon64` (≤ v10.x), `dlss5-nr.addon64` (v11+) | [lecram-dlss5.md](lecram-dlss5.md) |
+| MFG Unlock | mavismmg | `renodx-mfgunlock.addon64` | [mfg-unlock.md](mfg-unlock.md) (open source, MIT; checked builds, config keys by version, DLSS 5 NR rule) |
 | OptiScaler F5 | janblade | `OptiScaler.dll` + `OptiScaler\` folder | [optiscaler-f5.md](optiscaler-f5.md) (open source; checked builds, keys by version, not-exposed keys) |
 
 HSF's licence is private (no sharing of builds), so none of the methods below apply to it.
