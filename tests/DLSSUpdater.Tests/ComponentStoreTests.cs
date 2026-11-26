@@ -211,14 +211,15 @@ public class ComponentStoreTests
     }
 
     [Theory]
-    [InlineData("v0.1.34-f5", false, false, false)]
-    [InlineData("v0.1.35.1-f5", true, false, false)]
-    [InlineData("v0.1.36-f5", true, true, false)]
-    [InlineData("v0.1.37-f5", true, true, true)]
-    [InlineData("v0.1.37.2-f5", true, true, true)]
-    [InlineData("v0.1.38-f5", true, true, true)]
-    [InlineData(null, true, true, true)]
-    public void F5NewKeys_AppearWithTheBuildThatAddedThem(string? tag, bool multiView, bool f5Low, bool depthFade)
+    [InlineData("v0.1.34-f5", false, false, false, false)]
+    [InlineData("v0.1.35.1-f5", true, false, false, false)]
+    [InlineData("v0.1.36-f5", true, true, false, false)]
+    [InlineData("v0.1.37-f5", true, true, true, false)]
+    [InlineData("v0.1.37.2-f5", true, true, true, false)]
+    [InlineData("v0.1.38-f5", true, true, true, false)]
+    [InlineData("v0.1.39-f5", true, true, true, true)]
+    [InlineData(null, true, true, true, true)]
+    public void F5NewKeys_AppearWithTheBuildThatAddedThem(string? tag, bool multiView, bool f5Low, bool depthFade, bool v039)
     {
         var f5 = OptiSources.F5;
         Assert.Equal(!multiView, f5.Lacks("DlssNr", "MultiViewScreens", tag));
@@ -227,13 +228,15 @@ public class ComponentStoreTests
         Assert.Equal(!f5Low, f5.Lacks("DlssNr", "SecondaryFeatures", tag));
         foreach (var key in new[] { "DepthFade", "DepthFadeFarStart", "DepthFadeFarEnd", "DepthFadeFarStrength", "DepthFadeNearStart", "DepthFadeNearEnd", "DepthFadeNearStrength", "DepthFadeSkyStrength" })
             Assert.Equal(!depthFade, f5.Lacks("DlssNr", key, tag));
+        foreach (var (section, key) in new[] { ("F5Low", "VulkanLatencyGate"), ("F5Low", "VulkanTearing"), ("F5Low", "VulkanFlipMetering"), ("F5Low", "VulkanPacer"), ("DLSSG", "Preset"), ("Memory", "ProtectMemory"), ("XeSS", "UnrealDepth") })
+            Assert.Equal(!v039, f5.Lacks(section, key, tag));
     }
 
     [Fact]
     public void F5Options_ShowFromTheirBuild_AndNeverWriteFrameGenerationOutputKeys()
     {
         var options = DLSSUpdater.ViewModels.SettingsOptions.Nr([]);
-        DLSSUpdater.ViewModels.IniOptionViewModel Opt(string key) => options.Single(o => o.Key == key);
+        DLSSUpdater.ViewModels.IniOptionViewModel Opt(string key, string? section = null) => options.Single(o => o.Key == key && (section is null || o.Section == section));
 
         foreach (var o in options) o.ApplySource(OptiSources.F5, "v0.1.36-f5");
         Assert.True(Opt("FrameGenerator").IsAvailable);
@@ -242,6 +245,21 @@ public class ComponentStoreTests
 
         foreach (var o in options) o.ApplySource(OptiSources.F5, "v0.1.38-f5");
         Assert.True(Opt("DepthFadeSkyStrength").IsAvailable);
+        Assert.False(Opt("ProtectMemory").IsAvailable);
+        Assert.False(Opt("Preset", "DLSSG").IsAvailable);
+        Assert.False(Opt("UnrealDepth").IsAvailable);
+        Assert.False(Opt("VulkanTearing").IsAvailable);
+
+        foreach (var o in options) o.ApplySource(OptiSources.F5, "v0.1.39-f5");
+        Assert.True(Opt("ProtectMemory").IsAvailable);
+        Assert.True(Opt("Preset", "DLSSG").IsAvailable);
+        Assert.True(Opt("UnrealDepth").IsAvailable);
+        Assert.True(Opt("VulkanTearing").IsAvailable);
+        // The Preset key also exists under [DlssNr] (a different option): only the [DLSSG] one is new.
+        Assert.True(Opt("Preset", "DlssNr").IsAvailable);
+        Assert.Equal(["A", "B", "C"], Opt("Preset", "DLSSG").Choices.Select(c => c.Value).Where(v => v is not null));
+        Assert.Equal(["off", "fg", "all"], Opt("ProtectMemory").Choices.Select(c => c.Value).Where(v => v is not null));
+        Assert.Equal(["true", "false"], Opt("VulkanPacer").Choices.Select(c => c.Value).Where(v => v is not null).OrderByDescending(v => v));
 
         Assert.Equal(["xefg_tensor", "dlssg", "intel"], Opt("FrameGenerator").Choices.Select(c => c.Value).Where(v => v is not null));
         Assert.Equal(["0", "1", "2"], Opt("SecondaryFeatures").Choices.Select(c => c.Value).Where(v => v is not null));

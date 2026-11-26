@@ -1424,6 +1424,63 @@ public class InstallerTests : IDisposable
         Assert.Null(ini.Get("DLSSG", "AdaMfgUnlock"));
     }
 
+    private const string F5Ini039 = ReleaseIni + "[F5Low]\nVulkanTearing=auto\nVulkanPacer=auto\n[DLSSG]\nPreset=auto\n[Memory]\nProtectMemory=auto\n[XeSS]\nUnrealDepth=auto\n";
+
+    private static readonly IniOverride[] F5Keys039 =
+    [
+        new("F5Low", "VulkanTearing", "false"), new("F5Low", "VulkanPacer", "false"), new("DLSSG", "Preset", "C"),
+        new("Memory", "ProtectMemory", "all"), new("XeSS", "UnrealDepth", "false"),
+    ];
+
+    [Fact]
+    public async Task F5Keys039_AreWrittenFromThatBuild_AndGoWhenAnOlderBuildIsInstalled()
+    {
+        var installer = new Installer(_store);
+        var o = Full with { Overrides = [.. TestProfiles.Recommended(), .. F5Keys039] };
+
+        SeedF5("v0.1.38-f5", ReleaseIni, bundledStreamline: false);
+        await installer.InstallAsync(Game(), _target, o, null, default);
+        var ini = IniFile.Load(Path.Combine(_target, "OptiScaler.ini"));
+        foreach (var k in F5Keys039) Assert.Null(ini.Get(k.Section, k.Key));
+
+        SeedF5("v0.1.39-f5", F5Ini039, bundledStreamline: false);
+        await installer.InstallAsync(Game(), _target, o, null, default);
+        ini = IniFile.Load(Path.Combine(_target, "OptiScaler.ini"));
+        foreach (var k in F5Keys039) Assert.Equal(k.Value, ini.Get(k.Section, k.Key));
+        Assert.Equal("v0.1.39-f5", InstallManifest.Load(_target)!.OptiTag);
+        Assert.All(F5Keys039, k => Assert.Contains(k.Id, InstallManifest.Load(_target)!.OptiIni.Keys, StringComparer.OrdinalIgnoreCase));
+
+        await installer.InstallAsync(Game(), _target, o with { OptiTag = "v0.1.38-f5" }, null, default);
+        ini = IniFile.Load(Path.Combine(_target, "OptiScaler.ini"));
+        foreach (var k in F5Keys039) Assert.Null(ini.Get(k.Section, k.Key));
+        Assert.DoesNotContain(InstallManifest.Load(_target)!.OptiIni.Keys, k => F5Keys039.Any(f => f.Id.Equals(k, StringComparison.OrdinalIgnoreCase)));
+    }
+
+    [Fact]
+    public async Task F5Build039_MirrorsTheRenamedVulkanFfxDlls_AndUninstallRemovesThem()
+    {
+        var before = Snapshot();
+        var installer = new Installer(_store);
+        SeedF5Low("v0.1.39-f5");
+        var pkg = Path.Combine(ComponentStore.TagDir(Component.OptiScaler, "v0.1.39-f5"), "pkg", "OptiScaler");
+        foreach (var f in new[] { "amd_fidelityfx_upscaler_vk.dll", "amd_fidelityfx_loader_vk.dll", "amd_fidelityfx_framegeneration_vk.dll" })
+            Write(Path.Combine(pkg, f), f);
+
+        await installer.InstallAsync(Game(), _target, new InstallOptions { Opti = true, Proxy = "dxgi.dll" }, null, default);
+
+        var m = InstallManifest.Load(_target)!;
+        Assert.Equal("v0.1.39-f5", m.OptiTag);
+        foreach (var f in new[] { "amd_fidelityfx_upscaler_vk.dll", "amd_fidelityfx_loader_vk.dll", "amd_fidelityfx_framegeneration_vk.dll" })
+        {
+            Assert.Equal(f, T(Path.Combine("OptiScaler", f)));
+            Assert.Contains(m.Dirs, d => d.EndsWith("OptiScaler", StringComparison.OrdinalIgnoreCase));
+        }
+        Assert.Equal("F5LOW", T(@"OptiScaler\plugins\f5low.dll"));
+
+        await installer.UninstallAsync(Game(), _target, default);
+        Assert.Equal(before, Snapshot());
+    }
+
     [Theory]
     [InlineData("detect", true)]
     [InlineData("true", true)]
