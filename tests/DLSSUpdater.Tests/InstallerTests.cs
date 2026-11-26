@@ -1744,7 +1744,7 @@ public class InstallerTests : IDisposable
         var files = Directory.EnumerateFiles(InstallManifest.BackupDirFor(_target), "*", SearchOption.AllDirectories).ToList();
         Assert.NotEmpty(files);
         Assert.All(files, f => Assert.EndsWith(Installer.BackupSuffix, f));
-        Assert.Empty(files.Where(f => f.EndsWith(".dll", StringComparison.OrdinalIgnoreCase)));
+        Assert.DoesNotContain(files, f => f.EndsWith(".dll", StringComparison.OrdinalIgnoreCase));
 
         await installer.UninstallAsync(Game(), _target, default);
         Assert.Equal(before.OrderBy(k => k.Key), Snapshot().OrderBy(k => k.Key));
