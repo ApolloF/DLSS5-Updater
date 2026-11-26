@@ -293,6 +293,22 @@ public static class HelpTopics
         new("f5-keep-dlssg", "OptiScaler F5", "Keep the game's DLSS-G", "OptiScaler F5 0.1.36+: with DLSS-G as the frame generator, lets the game's own DLSS-G load.",
             "OptiScaler F5 0.1.36 and newer. With the frame generator set to DLSS-G, the game's own nvngx_dlssg.dll is kept from loading: a second DLSS-G next to F5Low's faulted the GPU at level load. " +
             "On also stops OptiScaler from forcing the game's DLSS-G off. Not used while the frame generation input is DLSS-G (then the game's DLSS-G is the input). Default (auto) is off."),
+        new("f5-dlssg-preset", "OptiScaler F5", "DLSS-G preset", "OptiScaler F5 0.1.39+: which DLSS-G frame generation model runs, A, B or C (FG Lite).",
+            "OptiScaler F5 0.1.39 and newer. Answers the DLSS-G preset inside this game; the NVIDIA driver profile is not changed. Auto uses what the driver profile says; A is the default model, " +
+            "B is UI focus (UI recomposition), C is NVIDIA's lighter FG Lite (faster generation, slightly lower quality; about 12% more real fps in one game F5's author tested) and needs nvngx_dlssg.dll 310.9.16 or newer. " +
+            "DLSS-G reads it when it starts, so a change applies at the next game start. F5Low uses it too when DLSS-G is its frame generator. A custom DLSS-G replacement only gets the presets its dll knows."),
+        new("f5-memory", "OptiScaler F5", "Protect video memory", "OptiScaler F5 0.1.39+: asks Windows to keep OptiScaler's video memory on the graphics card.",
+            "OptiScaler F5 0.1.39 and newer. Gives the video memory of OptiScaler's modules a high residency priority, so when the card runs full the game's own memory is moved out first. " +
+            "That kept F5Low's frame rate from dropping after a few minutes on 6 to 8 GB cards. Off does nothing; frame generator (default) covers f5low.dll only, as Intel's frame generation library does for its own memory; " +
+            "everything also covers OptiScaler itself and the NVIDIA runtimes. Read once at start, so restart the game. The F5 release notes say it is not yet tested on RTX 20 and 30 cards."),
+        new("f5-vulkan", "OptiScaler F5", "Vulkan frame generation", "OptiScaler F5 0.1.39+: F5Low settings for games that use Vulkan.",
+            "OptiScaler F5 0.1.39 and newer, NVIDIA only. F5Low frame generation runs on the game's own Vulkan swapchain from 0.1.39. Show every generated frame (VulkanTearing, default on) matters with V-Sync off: every generated frame reaches the screen and may tear, like DirectX 12; off keeps the game's no-tearing mode, where the driver drops frames above the refresh rate. " +
+            "The mode is chosen when the swapchain is made. Latency gate (VulkanLatencyGate, default on) keeps the game from running ahead of what is shown; it needs VK_KHR_present_wait on the device. " +
+            "F5Low pacer (VulkanPacer, default on) paces the frames with f5low's own pacer and needs a newer f5low.dll; off is plain even spacing. Flip metering (VulkanFlipMetering, default off) uses VK_NV_present_metering: experimental, RTX 50 only. " +
+            "The F5 release notes call Vulkan frame generation new and ask for a log with issues."),
+        new("f5-unreal-xess", "OptiScaler F5", "XeSS depth in Unreal Engine", "OptiScaler F5 0.1.39+: takes depth and motion vectors from Intel's XeSS plugin in Unreal Engine games.",
+            "OptiScaler F5 0.1.39 and newer, ported from upstream OptiScaler. Unreal Engine games with Intel's XeSS plugin give XeSS no depth and display resolution motion vectors. " +
+            "OptiScaler takes the scene depth and render resolution motion vectors from the plugin instead, so picking XeSS in the game also works with DLSS, FSR 2/3 and frame generation. On by default; turn it off if a game misbehaves with it."),
         new("nr-finished", "DLSSNR", "Apply to finished picture", "Applies the model after the game's post-processing; it can also change the HUD.",
             "Applies NR after the game's post-processing (bloom, grading) instead of at the upscaler. DX12 and the D3D11 bridge only. " +
             "Can also alter the HUD and menus. With Run before upscaling on, the edit is made early and carried to the final image."),
@@ -709,6 +725,10 @@ public static class HelpTopics
         ["nr-depthfade"] = "Off. Try it when NR changes the sky, distant scenery or a first-person weapon too much: far strength 0.25 to 0.5, lower sky strength, near strength under 1. It does nothing in games that give no depth.",
         ["f5-framegen"] = "Leave on auto. DLSS-G only on an RTX GPU with the streamline files in place; Intel XeFG if the tensor-core path misbehaves. Restart the game after changing it.",
         ["f5-keep-dlssg"] = "Leave on auto. Only try On if the game's own DLSS-G has to stay, and expect a possible GPU fault at level load.",
+        ["f5-dlssg-preset"] = "Leave on auto. Try C (FG Lite) when frame generation costs too much and DLSS 310.9.16 or newer is in place; B if the UI breaks up.",
+        ["f5-memory"] = "Leave it. Switch to everything only if the frame rate still drops when video memory is full; off only to compare.",
+        ["f5-vulkan"] = "Leave all four on their defaults. Turn the tearing option off if a Vulkan game tears with V-Sync off and you prefer none. Flip metering only on an RTX 50 card and to compare.",
+        ["f5-unreal-xess"] = "Leave it on. Turn it off only when an Unreal Engine game with the XeSS plugin misbehaves while XeSS is picked.",
         ["nr-colour"] = "Low (0.2) keeps the game's art direction. Raise toward 1 only if you like the model's colour grading.",
         ["tm-mode"] = "SDR games: leave it, it doesn't apply. HDR games: Hybrid composed as the safe default; Neutwo composed if highlights look dull; " +
                       "replace modes only if composed looks too weak.",

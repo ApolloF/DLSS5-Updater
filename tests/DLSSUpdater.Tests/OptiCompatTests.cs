@@ -36,6 +36,10 @@ public sealed class OptiCompatTests
     }
 
     [Theory]
+    [InlineData("v0.1.39", "v0.1.39", false)]
+    [InlineData("v0.1.38", "v0.1.39", false)]
+    [InlineData("v0.1.40", "v0.1.39", true)]
+    [InlineData("v0.1.39.1", "v0.1.39", true)]
     [InlineData("v0.1.38", "v0.1.38", false)]
     [InlineData("v0.1.37.2", "v0.1.38", false)]
     [InlineData("v0.1.39", "v0.1.38", true)]
