@@ -329,9 +329,20 @@ public sealed class UpliftTests : IDisposable
     [Theory]
     [InlineData("v1.6.2", false)]
     [InlineData("1.4.2", false)]
-    [InlineData("v2.0.0", false)]
+    [InlineData("v1.7.0", false)]
     [InlineData("v2.0.1", true)]
     public void TestedVersion_WarnsOnlyForNewerTags(string tag, bool warns) => Assert.Equal(warns, UpliftConfig.Warning(tag) is not null);
+
+    [Theory]
+    [InlineData("v1.7.0", false)]
+    [InlineData("v1.8.0", true)]
+    [InlineData("v2.0.0", true)]
+    public void StreamlineProbeBug_WarnsFor180To200_AndNamesTheWorkingBuild(string tag, bool warns)
+    {
+        var warning = UpliftConfig.Warning(tag);
+        Assert.Equal(warns, warning is not null);
+        if (warns) Assert.Contains("1.7.0", warning);
+    }
 
     [Fact]
     public void Options_ExposeExactlyTheDocumentedKeysAndDefaults()
