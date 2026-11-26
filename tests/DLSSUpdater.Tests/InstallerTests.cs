@@ -1501,6 +1501,31 @@ public class InstallerTests : IDisposable
         Assert.Null(m.ReShadeSha);
     }
 
+    [Fact]
+    public async Task OptiScalerMode_MfgUnlockWithoutReShade_InstallsTheReShadeThatLoadsIt()
+    {
+        // MFG Unlock is a ReShade add-on: next to OptiScaler nothing loads it unless OptiScaler loads ReShade64.dll.
+        await new Installer(_store).InstallAsync(Game(), _target, Full with { ReShade = false }, null, default);
+
+        var m = InstallManifest.Read(_target)!;
+        Assert.Equal("MFG-1", T(ComponentStore.MfgFile));
+        Assert.Equal("RESHADE", T(ComponentStore.ReShadeFile));
+        Assert.Equal("true", IniFile.Load(Path.Combine(_target, "OptiScaler.ini")).Get("Plugins", "LoadReshade"));
+        Assert.True(m.Mfg);
+        Assert.True(m.ReShade);
+        Assert.Equal(InstallMode.OptiScaler, m.Mode);
+    }
+
+    [Fact]
+    public void UpliftWithMfgUnlock_IsAConflictToConfirm()
+    {
+        var o = new InstallOptions { Mode = InstallMode.ReShadeOnly, ReShade = true, Uplift = true, DlssNr = true, Mfg = true, Proxy = "dxgi.dll" };
+
+        Assert.Contains(Installer.UpliftMfgConflict, Installer.Conflicts(_target, o));
+        Assert.DoesNotContain(Installer.UpliftMfgConflict, Installer.Conflicts(_target, o with { Mfg = false }));
+        Assert.DoesNotContain(Installer.UpliftMfgConflict, Installer.Conflicts(_target, o with { Uplift = false }));
+    }
+
     [Theory]
     [InlineData(false)]
     [InlineData(true)]
@@ -1512,7 +1537,7 @@ public class InstallerTests : IDisposable
         Assert.Equal("RESHADE", T(ComponentStore.ReShadeFile));
         Assert.Equal("true", IniFile.Load(Path.Combine(_target, "OptiScaler.ini")).Get("Plugins", "LoadReshade"));
 
-        await installer.InstallAsync(Game(), _target, Full with { ReShade = false }, null, default);
+        await installer.InstallAsync(Game(), _target, Full with { ReShade = false, Mfg = false }, null, default);
         var m = InstallManifest.Read(_target)!;
         Assert.False(m.ReShade);
         Assert.Null(m.ReShadeSha);
@@ -1523,7 +1548,7 @@ public class InstallerTests : IDisposable
         Assert.Equal(gameHadReShade ? "true" : "auto", IniFile.Load(Path.Combine(_target, "OptiScaler.ini")).Get("Plugins", "LoadReshade"));
 
         // "Update all" reproduces the record and doesn't bring ReShade back.
-        await installer.InstallAsync(Game(), _target, Full with { ReShade = m.ReShade }, null, default);
+        await installer.InstallAsync(Game(), _target, Full with { ReShade = m.ReShade, Mfg = m.Mfg }, null, default);
         Assert.False(InstallManifest.Read(_target)!.ReShade);
         if (!gameHadReShade) Assert.False(File.Exists(Path.Combine(_target, ComponentStore.ReShadeFile)));
     }

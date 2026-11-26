@@ -184,6 +184,12 @@ public sealed partial class Installer(ComponentStore store)
         var swapSl = o.Streamline || mfgPlan?.SwapStreamline == true;
         var sl = swapSl && game.Streamline.Count > 0 ? await store.EnsureStreamlineAsync(progress, ct) : null;
         if (o.Streamline && game.Streamline.Count == 0) Log.Info($"{game.Name}: no Streamline files in this game, skipped");
+        // MFG Unlock is a ReShade add-on: next to OptiScaler only the ReShade64.dll it loads (LoadReshade) brings the add-on in.
+        if (o.Opti && !o.ReShadeOnly && !o.ReShade && (mfgPlan?.Install == true || (o.KeepMfg && InstallManifest.Read(targetDir)?.Mfg == true)))
+        {
+            o = o with { ReShade = true };
+            Log.Info($"{game.Name}: MFG Unlock is a ReShade add-on, so ReShade is installed with it (OptiScaler loads it)");
+        }
         // ReShade32.dll for a 32-bit game when ReShade is the proxy; beside OptiScaler it is always the 64-bit ReShade64.dll it loads.
         var reshadeFile = o.ReShade ? await store.EnsureReShadeAsync(o.ReShadeBuildPick, o.ReShadeOnly && game.Effective.Bits == 32 ? 32 : 64, progress, ct) : null;
         var reshade = reshadeFile?.Path;
@@ -386,8 +392,8 @@ public sealed partial class Installer(ComponentStore store)
     /// <summary>
     /// Why this selection is a poor mix, one line each; empty when it is fine. Never blocks by itself: the user confirms the
     /// lines (<see cref="InstallOptions.ConfirmedConflict"/>), the install goes ahead and the warning stays on the game.
-    /// Covers the one-neural-consumer rule (docs/advisor.md, decision table row 18) and OptiScaler's built-in MFG unlock next to
-    /// the MFG Unlock add-on.
+    /// Covers the one-neural-consumer rule (docs/advisor.md, decision table row 18), OptiScaler's built-in MFG unlock next to
+    /// the MFG Unlock add-on, and GITC Uplift next to the MFG Unlock add-on (<see cref="UpliftMfgConflict"/>).
     /// </summary>
     /// <param name="latestOptiTag">The newest OptiScaler release, which a run without a pinned build installs.</param>
     public static IReadOnlyList<string> Conflicts(string targetDir, InstallOptions o, string? latestOptiTag = null)
@@ -396,9 +402,18 @@ public sealed partial class Installer(ComponentStore store)
         var found = new List<string>(NrAddons.Conflicts(routes));
         var optiTag = o.OptiTag ?? latestOptiTag;
         if (MfgUnlockConflict(targetDir, WithMfgDefaults(targetDir, o, optiTag), optiTag) is { } mfg) found.Add(mfg);
+        if (o.Uplift && (o.Mfg || (o.KeepMfg && InstallManifest.Read(targetDir)?.Mfg == true))) found.Add(UpliftMfgConflict);
         if (InjectsFiles(o) && IsStorePath(targetDir)) found.Add(MethodAdvisor.StoreCaution);
         return found;
     }
+
+    /// <summary>
+    /// GITC Uplift hooks swap-chain creation, so the game's swap chain goes past Streamline: MFG Unlock's frame generation stops
+    /// (MFG Unlock 1.12.1 notes, Kingdom Come: Deliverance II) and Unreal Engine games with their own Streamline can fail to
+    /// create it at all (Phantom Blade Zero: "Failed to create swap chain", 887A0002, then a crash at start).
+    /// </summary>
+    public const string UpliftMfgConflict =
+        "GITC Uplift and the MFG Unlock add-on don't work together: Uplift creates the game's swap chain past Streamline, so MFG Unlock's frame generation breaks and some Unreal Engine games crash at start. Leave MFG Unlock off with GITC Uplift.";
 
     private static bool InjectsFiles(InstallOptions o) => o.Opti || o.ReShade || o.Mfg || o.DlssNr || o.RenoDx || o.Lecram || o.Uplift;
 
