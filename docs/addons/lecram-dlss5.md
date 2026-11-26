@@ -18,13 +18,18 @@
 | v12.9.9 (regular channel) | `dlss5-nr.addon64` (sha256 `d8561030015e…`) | **12.9.9.3000** (product `v12.9.9 (12.9.9)`, OriginalFilename `dlss5-nr.addon64`, internal name `nr-addon`) | `v12.9.9` | 2026-11-17 (static only, probe not run) | Extracted from `DLSS5-NR-Setup-v12.9.9.exe` (`package.json` `version` `v12.9.9`, `kind` `v11`). Settings schema still 12. Adds the per-pass hook point and resolution, frame buffering, NR's own DLSS upscaler and preset, halo removal, and Input-lab keys; retires `NRLookDetail`, `NRLookDetailRadius` and `NRLookHaloBrightSide`; the `NRSkinStructure` default moves from 0 to 1. First build that also ships a 32-bit add-on and NR's host (see "Host and 32-bit"). |
 | v13.4.0 (Early Access, dev channel) | `dlss5-nr.addon64` (sha256 `f3ecd69e137c…`) | **13.4.0.3000** (product `v13.4 (13.4.0)`, OriginalFilename `dlss5-nr.addon64`, internal name `nr-addon`) | `v13.4.0` | 2026-11-17 (static only, probe not run) | The same file in `DLSS5-NR-Dev-Setup-v13.4.0.exe` (`package.json` adds `"channel": "dev"`), in the hand-install zip `DLSS5 NR Add-on v13.4.0.zip` and in that zip's `dlss5-nr-host` folder. Everything of v12.9.9 plus NR's own frame generation (`NRFrameGen*`), HDR and experimental keys. Settings schema still 12. |
 | v14.0.0 Dev3 (dev channel) | `dlss5-nr.addon64` (sha256 `56c5303448fb…`) | **14.0.0** (FileVersion `14.0.0`, product `v14.0.0 Dev3 (14.0.0)`, OriginalFilename `dlss5-nr.addon64`, internal name `nr-addon`) | `v14.0.0` | 2026-11-18 (static only, probe not run) | Extracted from `DLSS5-NR-Dev-Setup-v14.0.0.exe` (`package.json` `version` `v14.0.0`, `kind` `v11`, `channel` `dev`). Retires `NRHdrScreen`; adds VSync for frame generation, DLSS mode, SDR to HDR, Safe mode and more (see "v14.0.0"). The setup also ships NR's own Vulkan layer. The dev number (Dev3) is no part of the label, so a later v14.0.0 dev build gets the same label. |
+| v15.2.0 Dev11 (dev channel) | `dlss5-nr.addon64` (sha256 `d42d6c25855e…`) | **15.2.0.3000** as the app reads it (FileVersion string `15.2.0`, product `v15.2.0 Dev (15.2.0)`, OriginalFilename `dlss5-nr.addon64`, internal name `nr-addon`) | `v15.2.0` | 2026-11-26 (static + probe) | The same file in the hand-install zip `DLSS5 NR Add-on v15.2.0.zip` (root and `dlss5-nr-host`) the dev folder lists; build line `NR-HOST v1 event=build version=v15.2.0 patch="v15.2.0 Dev" commit=8ada33738d built=2026-11-25T19:45Z`, the dev changelog names it "v15.2.0 Dev11". 19.8 MB. Adds the frame generator (NVIDIA DLSS / Intel XeSS gate / NVIDIA VFG), "In game" frame generation, optical flow input size and a new-model lab; `NRInputCurve` and `NRPresentShoulder` change default (see "v15.2.0"). Layout, ReShade requirement and file names unchanged (see "Host and 32-bit"). |
+| v15.2.0 (an earlier dev build) | `dlss5-nr.addon64` (sha256 `72d85a89fe21…`) | same resource strings | `v15.2.0` | 2026-11-26 (probe, bare run only) | `commit=5e83712d05 built=2026-11-25T14:03Z`, five and a half hours before Dev11; a bare run writes the same keys. Same label as Dev11: the app can't tell them apart except by hash and date. Not read beyond that. |
 
 The author's own names (from the beta.18 installer's `sources.json`): `v11.0.0-beta.5`..`beta.11` = "v11 Patch 3",
 `beta.12`..`beta.18` = "v11 Patch 4" (C). The beta.29 installer's `sources.json` adds beta.22 = "v11 Patch 5", beta.24 = "Patch 6",
 beta.26 = "Patch 7", beta.29 = "Patch 8" (C). The beta.48 installer's `sources.json` adds beta.40 = "v11 Patch 9", beta.45 = "v11 Patch 10" and
 beta.48 = "v11 Patch 11" (C). The v12.9.9 installer's `sources.json` names `v12.5.0`..`v12.6.1`, `v12.9.0`..`v12.9.9` by their own number and
 `v13.0.0-alpha.1`..`alpha.15` "v13 Alpha N"; the v13.4.0 Early Access installer's adds `v13.0.0-alpha.60`..`alpha.78` and `v13.0.0-rc.1` (all
-"v13 Alpha") and `v13.1.0`..`v13.4.0` = "v13.1".."v13.4" (C); the v14.0.0 dev installer's adds `v14.0.0` = "v14.0.0 Dev3" (C). None of the builds between v12.0.0 and v12.9.9, between v12.9.9 and v13.4.0, or between v13.4.0 and v14.0.0 Dev3 (v13.5, v14.0.0 Dev1 and Dev2) was checked.
+"v13 Alpha") and `v13.1.0`..`v13.4.0` = "v13.1".."v13.4" (C); the v14.0.0 dev installer's adds `v14.0.0` = "v14.0.0 Dev3" (C). v15.2.0 is on both channels (see "v15.2.0 packages"): the regular folder lists `DLSS5-NR-Setup-v15.2.0.exe` (its changelog is headed "v15.2.0 Dev2"), the dev folder
+the zip and `DLSS5-NR-Dev-Setup-v15.2.0.exe` (changelog "v15.2.0 Dev11"), so the label can't tell a regular from an Early Access build; only the product
+string (`v15.2.0 Dev (15.2.0)`) and the changelog heading say which Dev it is. None of the builds between v12.0.0 and v12.9.9, between v12.9.9 and v13.4.0,
+between v13.4.0 and v14.0.0 Dev3 (v13.5, v14.0.0 Dev1 and Dev2) or between v14.0.0 Dev3 and v15.2.0 (v15.0, v15.1, v15.2.0 Dev1..Dev10 but the one hash above) was checked.
 
 The detected build label is the app's own name for a build (the add-ons publish none): the highest `vX.Y.Z[-pre]` ASCII string in
 the binary. Every build also carries the RenoDX framework strings `v6.1.0` / `v6.1.2`, which lose by being lower. The v10.7
@@ -121,6 +126,34 @@ build) and notices (C). From README, release notes and strings (C/D):
   the setup exe and `sources.json` (`logs.url`), not in `dlss5-nr.addon64`, `dlss5-nr.addon32` or `nr-host64.exe` (C, string search). A game
   the app installs Lecram into, without the author's setup, sends nothing.
 
+### v15.2.0 packages (2026-11-26)
+
+- **`DLSS5 NR Add-on v15.2.0.zip`** (dev folder, 17,996,571 bytes, sha256 `665ecafc7517…`, downloaded from the author's public MediaFire link, nothing run): `INSTALL.txt`,
+  `RELEASE-NOTES.md` (one line: "DLSS5 NR v15.2.0 Dev."), `THIRD-PARTY-NOTICES.txt`, `dlss5-nr.addon64` (`d42d6c25855e…`), `dlss5-nr.addon32`
+  (`1455bddf7fba…`) and `dlss5-nr-host\` with `dlss5-nr.addon64` (the root file again), `nr-host64.exe` (`8881be26cf4c…`) and `ReShade64.dll`
+  (`bb6c6757e9be…`, FileVersion 6.8.0.19, product "6.8.0 UNOFFICIAL": the author's fixed build again, a newer one than v13.4/v14's 6.8.0.1). Layout identical to v13.4.0's zip.
+  What the app keeps with the build (`dlss5-nr.addon32` and the host folder) is exactly these files.
+- **`INSTALL.txt`** is rewritten but asks for the same things: "Needs ReShade 6.8 or newer with add-on support in the game"; copy everything beside the game's
+  ReShade, the host folder as it is; host for Direct3D 9, Direct3D 10, OpenGL, every 32-bit game and 64-bit Direct3D 11 games with in-game MSAA. New in it: the
+  runtime search (`nvngx_dlssnr.dll` beside the exe or in `%LOCALAPPDATA%\DLSS5-NR\runtime`, and "NR loads the one whose kernels fit your card before one that does
+  not"), NVIDIA's files for the features used (`nvngx_dlss.dll` 310.9.1 or newer, from the driver's store or `runtime\dlss\310.9.16\`; for frame generation the five
+  Streamline **2.14.16** plugins `sl.interposer.dll`, `sl.common.dll`, `sl.dlss_g.dll`, `sl.reflex.dll`, `sl.pcl.dll` and `nvngx_dlssg.dll` 310.7.0 or newer in
+  `runtime\streamline\2.14.16\`; v13.4 and v14 named 2.12.0), **`NRNvidiaPath=<folder>`** in a game's ReShade.ini for another folder with that layout, an anti-cheat
+  warning, and "No Feeder, Lumenite or depth add-on is needed". The app brings none of NVIDIA's files (help text says so).
+- **Both channels carry v15.2.0.** Listings of 2026-11-25 (cached by the app): the regular folder `r1xp6x0i043wx` lists `DLSS5-NR-Setup-v15.2.0.exe`
+  (20,273,892 bytes, 2026-11-22), `changelog-v15.2.0.txt` (13,600 bytes, headed "v15.2.0 Dev2 (15.2.0)", "New since v12.9"), `licenses.txt` and `mods.json`; the dev
+  folder `uh4x7j5f7fj2y` lists `DLSS5-NR-Dev-Setup-v15.2.0.exe` (20,844,224 bytes), the zip above, `changelog-v15.2.0.txt` (3,181 bytes, "v15.2.0 Dev11 (15.2.0)",
+  published 2026-11-25), `features.json` (65 bytes) and `mods.json`. The setups were not opened. The v12 folder's changelog (C): "New since v12.9" is NR's own DLSS and
+  DLAA in games without DLSS, frame generation in more games with VSync and NVIDIA's Dynamic Multi Frame Generation, motion and depth read at the game's TAA pass and
+  from the engine in Unity games, SDR to HDR, and setup keeping NR up to date; also Desktop mode and Console mode (experimental, started from setup: the host's description now
+  says "relayed games and desktop mode"), "Present runs on DLSS frames or Always on, chosen in the Hook point menu" (`NRPresentGuides`), "NR and frame generation each run
+  Always on or In game" (`NRFrameGenRealInputs`), "HDR highlights default to Extended", setup installs OptiScaler 0.9.5, and setup names ReShade's official 6.8.0.2155 "where you or
+  another mod put it, since it can hang games with frame generation" and replaces it with NR's fixed build on a Yes; a ReShade older than 6.7 beside NR "cannot load NR".
+  Setup no longer replaces ReShade's standard Vulkan layer. The app installs neither; its own ReShade is the one in the game (`docs/addons/reshade.md`), so an official 6.8.0.2155 in a
+  game the app set up for Lecram with frame generation on is the case the author warns about (open: whether the app should say so).
+- **Early Access or released?** Neither the label nor the file says. Both folders carry v15.2.0 and the product string says "Dev" in every build; the app has no
+  Early Access flag, so v15.2.0 is handled like every build: by its label, newest date first among equal labels (three Dev builds of 2026-11-24, 11-25 and 11-26 went through the library).
+
 ### Host and 32-bit
 
 From v12.9 the add-on runs NR in a 64-bit host process for the games it can't serve in-process. What the app does with it is under "App
@@ -149,6 +182,12 @@ support"; the facts (C unless marked):
   `NRResumeTakeover`, and in v13.4.0 also `NRRelayTwins`, `NRRelayVelocity`; none has a catalog entry (undocumented). `NRFrameBuffering`
   acts on relayed games too.
 - **Logs.** The host writes its own `dlss5-nr-host\ReShade.log` (release page).
+- **v15.2.0 Dev11 (2026-11-26).** Same layout and names: `dlss5-nr.addon32` (version resource OriginalFilename `dlss5-nr.addon32`, internal name `relay32`, "DLSS5 NR for 32-bit
+  games (v15.2.0 Dev (15.2.0)): each frame goes to NR in the 64-bit host beside it"), `dlss5-nr-host\nr-host64.exe` (internal name `nr-host`, now "DLSS5 NR host for relayed games and
+  desktop mode") with its own `dlss5-nr.addon64` (byte for byte the root add-on) and `ReShade64.dll` (6.8.0.19). The files the app keeps with the build are the ones it kept for v13.4.0
+  (`ComponentStore.Lecram32File`, `LecramHostDir`). INSTALL.txt's ReShade requirement is unchanged (6.8), so `LecramRoute.HostReShade` stays. The 32-bit add-on logs
+  `NR-RELAY v1 event=addon32 version=v15.2.0 ... commit=8ada33738d built=2026-11-25T19:50Z`; a bare 64-bit run without the host folder logs
+  `NR-RELAY v1 event=no_host relay=off why=dlss5-nr-host_missing` and reads `NRRelayVelocity` and `NRMotionSource` first (probe).
 - **Not checked** (open): which `[RenoDX.DLSS5]` keys a relayed game takes from the game's ReShade.ini and which from the host's own;
   how NR tells a 64-bit Direct3D 11 game with in-game MSAA; what the host keys above do.
 
@@ -296,10 +335,41 @@ Runtime (probe, `tools/addon-probe`):
     `NRJitterDrive`, `NRMipBias`, `NRMotionFill`, `NROptimizerLoad`, `NROptimizerFgTier`, `NROptimizerSrTier`, `NRSdrHdrHost`, `NRUpscalerSaved`,
     `NRRelayTwinsIdle` (C names, meanings undocumented). Gone from the binary: `NRFrameGenNoTear`, `NRFgCrashGuard`, `NRPresentShoulderSkin`
     (API-only keys of v13.4, never offered).
-  - **Offered by the app** (version-gated in `LecramIni`, v12.9.9 keys from `v12.9.9`, v13 keys from `v13.4.0`, v14 keys from `v14.0.0`): the pass hook points and
+  - **v15.2.0 Dev11** (the same catalog method, C, diffed against what this file records for v14.0.0 Dev3; v14.0.0's own binary is not at hand, so "new" means not in the notes above;
+    plus a probe: `tools/addon-probe/host` rebuilt from ReShade's current headers, the add-on loaded in the fake host in a scratch folder, no game, device or driver
+    profile touched). Schema text unchanged (12). **Probe (C):** a bare run writes only `UiWelcomed=0`, `ConfigVersion=12`, `NRScreenshotKey=0`, `NRShotKey=0` and
+    `[OVERLAY] TutorialProgress=4`, logs `NR-SETTINGS ... NRHookPoint=0 NRPasses=1 NRResolutionScale=1 NRStyle=0 NRIntensity=1 NRVramBuffering=0`, and reads (API) `NRRelayVelocity`,
+    `NRMotionSource`, `NRSafeMode`, `NRQueueHeal`, `NRExperimental`, `NRExpCamera`, `NRExpTaaInputs`, `NRExpTaaDeferred`, `NREngineInputs`, `NRPresentCallGuides`, `NRResumeTakeover`,
+    `NRPresentFgPath`, `NRQueueOrder`, `NROptimizerFgTier`/`SrTier`, `NRVramBudgetGuard`/`Margin`. A file the app writes (`ConfigVersion=11`, `NRHookPoint=2`, every v14 and v15 key)
+    loads as `file_version=11 migrated=ConfigVersion=12`: `NRHookPoint=2` is kept (`NR-HOOK chosen=present`), `NRFrameGen=1`, `NRFrameGenMultiplier=2`, `NRFrameGenUi=1`,
+    `NRFrameGenVSync=1`, `NRUpscaler=1`, `NRUpscalerMode=4`, `NRSdrHdr=1`, `NRSafeMode=1`, `NRFrameGenEngine=2`, `NRFrameGenRealInputs=1`, `NRPresentGuides=1`, `NRFrameBuffering=2`,
+    `NRLookHaloRemoval=0.5` all show in `event=nondefault`, and `NRHdrScreen=1` is logged `retired settings ignored`. Out of range (`NRFrameGen=3`, `NRFrameGenVSync=5`, `NRUpscalerMode=9`,
+    `NRSdrHdr=7`, `NRSafeMode=3`, `NRFrameGenRealInputs=2`) reads as the default, not logged as nondefault; `NRFrameGenEngine=1` is kept (the Intel gate is checked at runtime).
+    The add-on writes the API key `NRFrameGenHost=1` once frame generation is on. Not probed: what any value does in a game.
+    **Every key the app writes is still in the catalog with its entry, or read through the API, and none is newly retired.** `NRFrameGenVSync` and the v14 keys read as in v14.0.0.
+    **Changed defaults** (none of them a key the app offers): `NRInputCurve` (Match game tones) is **0 Off** again since 2026-11-18 (v14.0.0 Dev3: 2 Same hue; values 0 Off / 1 Per channel
+    / 2 Same hue; marker `NRInputCurveOffAdopted`: every file NR wrote turns it off once), `NRPresentShoulder` (HDR highlights) is **2 Extended** since 2026-11-20 (was 6 Auto from v13 to
+    v15.0; marker `NRPresentShoulderExtendedAdopted`: a stored 6 adopts 2 once; values 0..7, the panel lists eight). **New keys with a catalog entry:**
+    `NRFrameGenEngine` (which frame generation NR runs, read at the game's start: **0 NVIDIA DLSS Frame Generation, default**; 1 Intel XeSS frame generation, only where the ini holds
+    `NRXeFg`, "the owner's installs"; **2 NVIDIA Video Frame Generation (VFG)**, on RTX 40 and 50 cards where its files are in NR's store, "setup fetches them from NVIDIA"; a choice that cannot run
+    gives way to DLSS-G, else frame generation is off, log and panel say why (`generator= why=`); 0 under Safe mode; the panel lists "NVIDIA DLSS|Intel XeSS|NVIDIA VFG" and its help names only
+    DLSS and VFG), `NRXeFg` (the gate: absent in a player's ini, "nothing of XeSS exists, in the panel, the log or setup"; a file of before 2026-11-22 with `NRXeFg=1` and no `NRFrameGenEngine` adopts
+    engine 1 once), `NRFrameGenRealInputs` (where frame generation runs: **0 Always on, default**, DLSS-G is given every frame and a frame without the game's camera gets NR's stand-in; 1 In game,
+    generated frames only from frames whose camera and motion are the game's own, the rest go with no tags so the game's own frame shows and the panel says why; Safe mode turns it to 0;
+    applies at the next frame), `NROpticalFlowHalf` (optical flow input size, in the popup on the motion row: 0 Full size default, 1 Half size for a picture 2560 or more wide; "no game has
+    measured it"; a change remakes the flow at the next present) and the model lab's new-model set (`NRModelLabMode` 0 Simple / 1 Advanced remembered per game, `NRModelLiveWeights` ini-only
+    live weights, `NRModelPresetAdopted`, the per-block `NRModelNewBlock0..30Strength` / `PositionBias` / `Temperature`, `NRModelBlock0..70*` and about thirty `NRModelNew*` axes beside the v11
+    ones; "Old, the 71-block model" and "New, the 31-block model"). Migration markers: `NRInputsAdopted` (I: by its place in the key list; the catalog's marker for the inputs NR turns on by its own evidence says a file that stored the old 0 of
+    `NRExpCamera`, `NRExpTaaInputs` or `NRPresentCallGuides` adopts the new on-by-default once). Defaults the catalog now states for the inputs: `NRExpCamera`, `NRExpTaaInputs`,
+    `NRExpTaaDeferred` and `NRPresentCallGuides` on, `NREngineInputs` 1 Auto (0 Off, ini only, Safe mode reads 0), `NRQueueHeal` 1 Auto (0 Off, 2 On). API-only keys without a catalog
+    entry that the probe saw read (not in this file's earlier lists; C names, meanings undocumented): `NRPresentScrgbAbsolute`, `NRPresentToe`, `NRMeterAttackStops`,
+    `NRMeterReleaseStops`, `NRSourceEncodingOverride`, `NRVramBudgetGuard`, `NRVramBudgetMargin` (the log line says budget guard on, margin 512 MB by default).
+  - **Offered by the app** (version-gated in `LecramIni`, v12.9.9 keys from `v12.9.9`, v13 keys from `v13.4.0`, v14 keys from `v14.0.0`, v15 keys from `v15.2.0`): the pass hook points and
     resolutions, `NRFrameBuffering`, `NRUpscaler`, `NRUpscalerPreset`, `NRLookHaloRemoval`, `NRFrameGen`, `NRFrameGenMultiplier`,
     `NRFrameGenUi`, `NRHdrScreen` (v13.4 only: retired from `v14.0.0`, so the app hides it there and removes a value it wrote), and from v14
-    `NRFrameGenVSync`, `NRUpscalerMode`, `NRSdrHdr` and `NRSafeMode`. **Not offered:** v14's SDR to HDR popup values (the panel's sliders),
+    `NRFrameGenVSync`, `NRUpscalerMode`, `NRSdrHdr` and `NRSafeMode`; from v15.2.0 `NRFrameGenEngine` (offered 0 and 2; 1 is the owner-gated Intel XeSS) and
+    `NRFrameGenRealInputs` (0/1). **Not offered:** v15's `NROpticalFlowHalf`, `NRXeFg`, the new-model lab keys and the migration markers (`NRInputsAdopted`, `NRInputCurveOffAdopted`,
+    `NRPresentShoulderExtendedAdopted`); v14's SDR to HDR popup values (the panel's sliders),
     `NROpticalFlowLevel` / `NROpticalFlowGrid` (they act beside `NROpticalFlow`, which isn't offered), `NRCallDepth` / `NRCallMotion` (Input lab),
     `NRExpTaaDeferred`, `NREngineInputs` and `NRTaaGameLook` (experimental, ini only or "off until the owner has tried it"), the new hotkeys
     (the app offers none of NR's keys) and the migration markers; also `NRLookTexture` / `NRLookClarity` (they act only with Fine-tune, `NRLookMode`, on, and the
@@ -355,6 +425,9 @@ Runtime (probe, `tools/addon-probe`):
 | `NRUpscalerMode` | int | — | v14.0.0+, 0 | 0 the game's choice, 1 DLAA, 2 Ultra Quality, 3 Quality, 4 Balanced, 5 Performance, 6 Ultra Performance (with `NRUpscaler=1`) | C |
 | `NRSdrHdr` | int | — | v14.0.0+, 0 | 0 Off, 1 Balanced, 2 Bright (SDR game on a Windows HDR display); read at start | C |
 | `NRSafeMode` | int | — | v14.0.0+, 0 | 1 turns off every addition beyond NR's core, each key's value kept; read at start | C |
+| `NRFrameGenEngine` | int | — | v15.2.0+, 0 | 0 NVIDIA DLSS Frame Generation, 1 Intel XeSS (only with the owner's `NRXeFg` gate), 2 NVIDIA VFG (RTX 40/50, files in NR's store); read at start, falls back to DLSS-G; 3 and up not probed | C / probe (1 and 2 kept, no gate check at load) |
+| `NRFrameGenRealInputs` | int | — | v15.2.0+, 0 | 0 Always on (DLSS-G is given every frame), 1 In game (only frames with the game's own camera and motion); 2 reads as 0 | C / probe |
+| `NROpticalFlowHalf` | int | — | v15.2.0+, 0 | 0 Full size, 1 Half size (optical flow input size for pictures 2560 or more wide); not offered | C |
 | `NRToggleKey` / `NRScreenshotKey` / `NRShotKey` | VK | 117 F6 / 116 F5 / 118 F7 | unbound when absent | | D/C |
 
 v10.7 also has Present/HDR keys (`NRPresentEncoding` Auto/SDR/HDR10/scRGB, `NRPresentWhiteSource` Auto/Windows/Game,
@@ -443,6 +516,9 @@ Since the builds went behind the author's Buy Me a Coffee, the public DLSS5 Upda
   `changelog-v12.0.0.txt`, `licenses.txt` and an `addon` subfolder. The setup holds one root `dlss5-nr.addon64` (sha256 `124cd5a76b71…`,
   the checked v12.0.0 build) with the three strings the app recognises v11+ by (C). Release 3.1.0 only read the `v11` folder, so it
   stayed at v11.9.0.
+- **Live state (2026-11-26).** The listings the app cached on 2026-11-25 (above, "v15.2.0 packages") and the live MediaFire page of the dev zip (its sha256 matches the listing)
+  were read; the setups were not downloaded. Three v15.2.0 Dev builds went through the app's library (2026-11-24, 11-25 and 11-26 fetches, same label), and the automatic cleanup deleted the
+  oldest. Open: whether the regular folder's v15.2.0 Dev2 and the dev folder's Dev11 are the same file under another name (the regular setup was not opened).
 - **Live state (2026-11-18): not checked.** The v14.0.0 Dev3 setup is the owner's copy; MediaFire was not called.
 - **Live state (2026-11-17): not checked.** The v12.9.9 and v13.4.0 packages were checked from copies the owner provided; MediaFire was not
   called. Which files the regular and the dev folder list now (setup exes only, or also zips or raw add-ons, and whether either has a
@@ -525,9 +601,9 @@ NR then uses the game's motion vectors where it finds them, else optical flow). 
   generation (0, or 1 as a test) from beta.48; from v12.9.9 the pass hook points (0..3) and resolutions (0, 0.33..1), frame buffering
   (0..2), the upscaler (0/1) and its DLSS preset (0..4) and halo removal (0..1); from v13.4.0 NR's frame generation (0..2), its multiplier
   (0..4 = 2x..6x), the UI in generated frames (0/1) and frame generation on HDR screens (0/1), so a v12 build never gets the frame
-  generation keys; from v14.0.0 VSync for frame generation (0/1), the DLSS mode (0..6), SDR to HDR (0..2) and Safe mode (0/1). Keys a later
+  generation keys; from v14.0.0 VSync for frame generation (0/1), the DLSS mode (0..6), SDR to HDR (0..2) and Safe mode (0/1); from v15.2.0 the frame generator (0 NVIDIA DLSS, 2 NVIDIA VFG) and where frame generation runs (0 Always on, 1 In game). Keys a later
   build retired are tied to that build the same way (Present with frame generation is retired from v12.0.0, frame generation on HDR screens
-  from v14.0.0; nothing else the app writes is retired in v12.9.9, v13.4.0 or v14.0.0). For an older build (by its detected label), or one that retired the key, the option is hidden
+  from v14.0.0; nothing else the app writes is retired in v12.9.9, v13.4.0, v14.0.0 or v15.2.0). For an older build (by its detected label), or one that retired the key, the option is hidden
   and the key is not written; a key the app wrote is removed when the game moves to a build that doesn't read it, unless you changed
   it since. A build
   without a readable label gets every v11 key. Because v11 resets `NRHookPoint` once in a v10-era ini, a hook point set here has to be applied again

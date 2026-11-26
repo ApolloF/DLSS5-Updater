@@ -25,7 +25,7 @@ public static class LecramRoute
     /// <summary>The first checked build that ships NR's host and the 32-bit add-on; named in the texts that ask for one.</summary>
     public const string FirstHostBuild = "v12.9.9";
 
-    /// <summary>INSTALL.txt (v13.4.0): "Needs ReShade 6.8 or newer with add-on support in the game".</summary>
+    /// <summary>INSTALL.txt (v13.4.0 to v15.2.0, unchanged): "Needs ReShade 6.8 or newer with add-on support in the game".</summary>
     public static readonly Version HostReShade = new(6, 8);
 
     /// <summary>Whether a build of <paramref name="generation"/> labelled <paramref name="label"/> runs in a game without its own DLSS; a v11 build without a readable label doesn't.</summary>
