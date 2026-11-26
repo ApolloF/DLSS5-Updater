@@ -218,6 +218,7 @@ public sealed partial class Installer(ComponentStore store)
         var m = InstallManifest.Read(targetDir) ?? new InstallManifest();
         m.Contain(targetDir, game.Root);
         var ctx = new Ctx(FileUtil.Normalize(game.Root), targetDir, m, KeptAddonFiles(o), game);
+        MigrateBackups(ctx);
         if (lecramHost is not null)
             foreach (var full in ComponentStore.LecramHostFiles.Select(f => Path.Combine(targetDir, f)))
                 if (FileUtil.LinkBelow(targetDir, full) is { } link)
@@ -1214,20 +1215,57 @@ public sealed partial class Installer(ComponentStore store)
         Persist(ctx);
     }
 
+    /// <summary>
+    /// Stored backups end in this, so no loader or search (OptiScaler looks through every folder below its dll, dot folders
+    /// included) takes the game's old nvngx_dlss.dll or any other backed-up dll for a live one.
+    /// </summary>
+    internal const string BackupSuffix = ".dlssbak";
+
     /// <summary>The entry as a path inside the backup folder: install-folder entries go under "_install".</summary>
     private static string BackupName(string rel) =>
         rel.StartsWith(InstallManifest.InstallTag, StringComparison.Ordinal)
             ? "_install" + rel[InstallManifest.InstallTag.Length..]
             : rel.Replace("..", "_up");
 
-    /// <summary>A backup name no entry uses and no file holds, so a new backup never overwrites a saved original.</summary>
+    /// <summary>A backup name (<paramref name="name"/> + suffix) no entry uses and no file holds, so a new backup never overwrites a saved original. Collisions become "name.N.dlssbak".</summary>
     private static string FreeBackupName(Ctx ctx, string name)
     {
-        var candidate = name;
+        var candidate = name + BackupSuffix;
         for (var i = 1; File.Exists(Path.Combine(ctx.BackupDir, candidate))
                         || ctx.M.Backups.Any(b => b.Backup.Equals(candidate, StringComparison.OrdinalIgnoreCase)); i++)
-            candidate = $"{name}.{i}";
+            candidate = $"{name}.{i}{BackupSuffix}";
         return candidate;
+    }
+
+    /// <summary>
+    /// Records from before the suffix hold the backups under the original's name. Each such file is renamed (never over
+    /// another file) and its entry follows; the record is saved right after. A missing file only renames the entry.
+    /// </summary>
+    private static void MigrateBackups(Ctx ctx)
+    {
+        var changed = false;
+        foreach (var b in ctx.M.Backups.Where(b => b.Backup.Length > 0 && !InstallManifest.IsFullPath(b.Backup)
+                     && !b.Backup.EndsWith(BackupSuffix, StringComparison.OrdinalIgnoreCase)).ToList())
+        {
+            var old = b.Backup;
+            var next = FreeBackupName(ctx, old);
+            var src = Path.Combine(ctx.BackupDir, old);
+            try
+            {
+                if (File.Exists(src)) File.Move(src, Path.Combine(ctx.BackupDir, next), false);
+            }
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+            {
+                Log.Warn($"  backup {old} could not be renamed: {ex.Message}");
+                continue;
+            }
+            b.Backup = next;
+            foreach (var c in ctx.M.Components)
+                foreach (var key in c.Backups.Where(kv => kv.Value.Equals(old, StringComparison.OrdinalIgnoreCase)).Select(kv => kv.Key).ToList())
+                    c.Backups[key] = next;
+            changed = true;
+        }
+        if (changed) Persist(ctx);
     }
 
     private void PlaceDlssNr(Ctx ctx, string source)

@@ -1730,6 +1730,109 @@ public class InstallerTests : IDisposable
     }
 
     [Fact]
+    public async Task Backups_CarryTheSuffix_AndNoDllLivesInTheBackupFolder()
+    {
+        var installer = new Installer(_store);
+        var before = Snapshot();
+        await installer.InstallAsync(Game(), _target, Full, null, default);
+        SeedDlss("v310.10.0", "NEWER");
+        await installer.InstallAsync(Game(), _target, new InstallOptions { Dlss = true }, null, default);
+
+        var backups = InstallManifest.Read(_target)!.Backups;
+        Assert.NotEmpty(backups);
+        Assert.All(backups, b => Assert.EndsWith(Installer.BackupSuffix, b.Backup));
+        var files = Directory.EnumerateFiles(InstallManifest.BackupDirFor(_target), "*", SearchOption.AllDirectories).ToList();
+        Assert.NotEmpty(files);
+        Assert.All(files, f => Assert.EndsWith(Installer.BackupSuffix, f));
+        Assert.Empty(files.Where(f => f.EndsWith(".dll", StringComparison.OrdinalIgnoreCase)));
+
+        await installer.UninstallAsync(Game(), _target, default);
+        Assert.Equal(before.OrderBy(k => k.Key), Snapshot().OrderBy(k => k.Key));
+    }
+
+    [Fact]
+    public async Task BackupNameTaken_GetsANumberBeforeTheSuffix()
+    {
+        var taken = Path.Combine(InstallManifest.BackupDirFor(_target), @"Game\Binaries\Win64\dxgi.dll" + Installer.BackupSuffix);
+        Write(taken, "STRAY");
+        var installer = new Installer(_store);
+        await installer.InstallAsync(Game(), _target, Full, null, default);
+
+        var entry = InstallManifest.Read(_target)!.BackupOf(Rel(Path.Combine(_target, "dxgi.dll")))!;
+        Assert.EndsWith(".1" + Installer.BackupSuffix, entry.Backup);
+        Assert.Equal("OTHER-MOD", File.ReadAllText(Path.Combine(InstallManifest.BackupDirFor(_target), entry.Backup)));
+        Assert.Equal("STRAY", File.ReadAllText(taken));
+
+        await installer.UninstallAsync(Game(), _target, default);
+        Assert.Equal("OTHER-MOD", T("dxgi.dll"));
+    }
+
+    /// <summary>Puts an installed record back the way versions before the suffix wrote it.</summary>
+    private void MakeBackupsLegacy()
+    {
+        var m = InstallManifest.Read(_target)!;
+        var dir = InstallManifest.BackupDirFor(_target);
+        foreach (var b in m.Backups)
+        {
+            var legacy = b.Backup[..^Installer.BackupSuffix.Length];
+            File.Move(Path.Combine(dir, b.Backup), Path.Combine(dir, legacy));
+            foreach (var c in m.Components)
+                foreach (var k in c.Backups.Where(kv => kv.Value == b.Backup).Select(kv => kv.Key).ToList()) c.Backups[k] = legacy;
+            b.Backup = legacy;
+        }
+        m.Save(_target);
+    }
+
+    [Fact]
+    public async Task RecordFromBeforeTheSuffix_IsMigratedOnTheNextInstall_AndStillUninstalls()
+    {
+        var installer = new Installer(_store);
+        var before = Snapshot();
+        await installer.InstallAsync(Game(), _target, Full, null, default);
+        MakeBackupsLegacy();
+        var dir = InstallManifest.BackupDirFor(_target);
+        Assert.Contains(Directory.EnumerateFiles(dir, "*", SearchOption.AllDirectories), f => f.EndsWith(".dll"));
+
+        SeedDlss("v310.10.0", "NEWER");
+        await installer.InstallAsync(Game(), _target, new InstallOptions { Dlss = true }, null, default);
+
+        var m = InstallManifest.Read(_target)!;
+        Assert.All(m.Backups, b => Assert.EndsWith(Installer.BackupSuffix, b.Backup));
+        Assert.All(m.Components.SelectMany(c => c.Backups.Values), v => Assert.EndsWith(Installer.BackupSuffix, v));
+        Assert.All(Directory.EnumerateFiles(dir, "*", SearchOption.AllDirectories), f => Assert.EndsWith(Installer.BackupSuffix, f));
+
+        await installer.UninstallAsync(Game(), _target, default);
+        Assert.Equal(before.OrderBy(k => k.Key), Snapshot().OrderBy(k => k.Key));
+    }
+
+    [Fact]
+    public async Task RecordFromBeforeTheSuffix_MissingBackupFile_DoesNotStopTheMigration()
+    {
+        var installer = new Installer(_store);
+        await installer.InstallAsync(Game(), _target, Full, null, default);
+        MakeBackupsLegacy();
+        var dir = InstallManifest.BackupDirFor(_target);
+        File.Delete(Path.Combine(dir, InstallManifest.Read(_target)!.Backups[0].Backup));
+
+        await installer.InstallAsync(Game(), _target, Full, null, default);
+
+        Assert.All(InstallManifest.Read(_target)!.Backups, b => Assert.EndsWith(Installer.BackupSuffix, b.Backup));
+        Assert.All(Directory.EnumerateFiles(dir, "*", SearchOption.AllDirectories), f => Assert.EndsWith(Installer.BackupSuffix, f));
+    }
+
+    [Fact]
+    public async Task RecordFromBeforeTheSuffix_UninstallsWithoutAnInstallFirst()
+    {
+        var installer = new Installer(_store);
+        var before = Snapshot();
+        await installer.InstallAsync(Game(), _target, Full, null, default);
+        MakeBackupsLegacy();
+
+        await installer.UninstallAsync(Game(), _target, default);
+        Assert.Equal(before.OrderBy(k => k.Key), Snapshot().OrderBy(k => k.Key));
+    }
+
+    [Fact]
     public async Task OtherInstallRecordUnreadable_DlssSwapSkipped()
     {
         var installer = new Installer(_store);

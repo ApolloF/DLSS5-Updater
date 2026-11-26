@@ -395,7 +395,7 @@ public sealed class InstallManifest
         !string.IsNullOrWhiteSpace(rel) && !Path.IsPathRooted(rel) && !rel.Contains(':');
 
     /// <summary>A drive or UNC path with no stream (':') after its root. Device paths (\\?\, \\.\) are not accepted.</summary>
-    private static bool IsFullPath(string? path) =>
+    internal static bool IsFullPath(string? path) =>
         !string.IsNullOrWhiteSpace(path) && Path.IsPathFullyQualified(path)
         && !(path.Length > 2 && path[0] is '\\' or '/' && path[1] is '\\' or '/' && path[2] is '?' or '.')
         && !path[Path.GetPathRoot(path)!.Length..].Contains(':');
