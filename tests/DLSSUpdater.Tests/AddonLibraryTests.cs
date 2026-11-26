@@ -188,6 +188,17 @@ public sealed class AddonLibraryTests : IDisposable
     }
 
     [Fact]
+    public void Label_ReadsTheV15Dev11Layout()
+    {
+        // v15.2.0 Dev11 (and the Dev builds before it) carries v15.2.0 six times, bare, glued to "NR on" or followed by " Dev" / " Dev (15.2.0)",
+        // plus a code fragment "v15." and a "v15.3" with no patch part; neither is a three-part label, and nothing is higher than v15.2.0.
+        Assert.Equal("v15.2.0", Label("D$ v15.\0.2.0\0v15.2.0NR onNR off\0v15.2.0 Dev (15.2.0)\0patch=\"v15.2.0 Dev\" observe_only=0 label=\"\0" +
+                                      "v15.3\0v15.2.0\0v15.2.0 Dev\0v15.2.0 Dev (15.2.0): ReShade's menu key\0v4.0.30319\0"));
+        var v1520 = LecramV11("v15.2.0NR on\0v15.2.0 Dev\0v15.2.0", frameworkNoise: false);
+        Assert.Equal((LecramGeneration.V11, "v15.2.0"), (v1520.Generation, v1520.DetectedLabel));
+    }
+
+    [Fact]
     public void Label_IsNeverTheDlssSdkVersion()
     {
         // Older v10 builds hold no label of their own, only the DLSS SDK's v310.8.0.

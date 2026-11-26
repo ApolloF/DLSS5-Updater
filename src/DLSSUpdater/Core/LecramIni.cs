@@ -43,6 +43,8 @@ public static class LecramIni
         ["NRUpscalerMode"] = "v14.0.0",
         ["NRSafeMode"] = "v14.0.0",
         ["NRSdrHdr"] = "v14.0.0",
+        ["NRFrameGenEngine"] = "v15.2.0",
+        ["NRFrameGenRealInputs"] = "v15.2.0",
     };
 
     /// <summary>v11 only: v10.7 does not read these (every key a later v11-generation build added included).</summary>

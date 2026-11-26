@@ -200,18 +200,19 @@ public static partial class SettingsOptions
     ];
 
     // Keys, defaults and ranges from docs/addons/lecram-dlss5.md (v10.7 and v11.0.0-beta.6 / beta.18 / beta.22 / beta.29 / beta.45 /
-    // beta.48 read from the binaries and probed; v11.9.0, v12.0.0, v12.9.9, v13.4.0 and v14.0.0 from their settings catalog and panel texts).
+    // beta.48 read from the binaries and probed; v11.9.0, v12.0.0, v12.9.9, v13.4.0, v14.0.0 and v15.2.0 from their settings catalog and panel texts).
     // Values the docs don't confirm are not offered. Options of one generation only are hidden for the other (LecramIni.IsAvailable) and
     // keys whose choices differ per generation carry a variant (IniOptionViewModel.In). Within v11 only values that mean the same in
     // beta.6 and beta.18+ are offered (NRPresentGuides 0 flipped meaning, so it is not), so no per-build choice variant is needed; keys an
     // older v11 build lacks (NRGpuCrashWitness before beta.22, NRPass2..4Preset before beta.29, NRPresentFgPath before beta.48, the
     // per-pass hook point and resolution, frame buffering, the upscaler and halo removal before v12.9.9, frame generation before v13.4.0,
-    // VSync, DLSS mode, SDR to HDR and Safe mode before v14.0.0) are hidden and not written for it, and so are keys a later build retired
+    // VSync, DLSS mode, SDR to HDR and Safe mode before v14.0.0, the frame generator and where frame generation runs before v15.2.0) are hidden and not written for it, and so are keys a later build retired
     // (NRPresentFgPath from v12.0.0, NRHdrScreen from v14.0.0). NRMaskBlendMode (raw NGX
     // value, undocumented) and v12's NROpticalFlow (unprobed; the app writes ConfigVersion=11) are not offered.
     // Not exposed: the other Present/HDR, normalisation, Look (Fine-tune), model-lab, layer, per-pass look, Input lab, experimental and
     // screenshot keys, which are tuned in the add-on's own overlay; v14's SDR to HDR sliders, optical flow level and grid, Engine inputs,
-    // Game mode, the new hotkeys and its migration markers likewise.
+    // Game mode, the new hotkeys and its migration markers likewise; v15's optical flow input size, the Intel XeSS gate (NRXeFg, the author's
+    // own installs only), the model lab's new-model keys and its migration markers.
     public static IniOptionViewModel[] Lecram(ObservableCollection<IniOverride> rs) =>
     [
         new IniOptionViewModel("Neural rendering", "Master switch of the neural model (v11 and newer).", LecramIni.Section, "NeuralUplift", rs,
@@ -391,6 +392,14 @@ public static partial class SettingsOptions
             C("Add-on default", null, "Leave the add-on's own choice (0, off)."),
             C("Off", "0", "The add-on's default."),
             C("On", "1", "The camera finder, the TAA pass input, extended DLSS, call-time guides, frame pairing repair, engine inputs, Game mode and the overlay key off; their own values kept.")).About("lc-safe"),
+        new IniOptionViewModel("Frame generator", "Which frame generation NR runs (v15.2.0 and newer). Read when the game starts.", LecramIni.Section, "NRFrameGenEngine", rs,
+            C("Add-on default", null, "Leave the add-on's own choice (0, NVIDIA DLSS)."),
+            C("NVIDIA DLSS", "0", "NVIDIA's DLSS Frame Generation, made from the game's own motion and depth. The add-on's default."),
+            C("NVIDIA VFG", "2", "NVIDIA's Video Frame Generation, made from the picture alone, on RTX 40 and 50 cards. Needs files in NR's store that the author's setup fetches; where they are missing the add-on falls back to DLSS and logs why.")).About("lc-framegen"),
+        new IniOptionViewModel("Frame generation runs", "Which frames NR's frame generation is given (v15.2.0 and newer).", LecramIni.Section, "NRFrameGenRealInputs", rs,
+            C("Add-on default", null, "Leave the add-on's own choice (0, Always on)."),
+            C("Always on", "0", "Every frame, menus and loading screens too; a frame without the game's camera gets NR's stand-in. The add-on's default."),
+            C("In game", "1", "Only frames with the game's own camera and motion; menus, loading screens and the like show only the game's own frames.")).About("lc-framegen"),
     ];
 
     private static IniOptionViewModel LecramPassHookPoint(int pass, ObservableCollection<IniOverride> rs) =>
